@@ -83,6 +83,38 @@ def resolve_tessdata_dir() -> Path | None:
     return None
 
 
+def ocr_runtime_status() -> dict:
+    tesseract_cmd = resolve_tesseract_executable()
+    tessdata_dir = resolve_tessdata_dir()
+    languages_ready = bool(tessdata_dir)
+    ready = bool(tesseract_cmd and languages_ready)
+    if ready:
+        message = "Tesseract OCR 실행 파일과 kor+eng 언어팩이 연결되어 있습니다."
+        next_action = "이미지와 스캔 PDF 본문 추출을 사용할 수 있습니다."
+    elif not tesseract_cmd:
+        message = "Tesseract OCR 실행 파일을 찾지 못했습니다."
+        next_action = "Windows용 Tesseract를 설치하거나 TESSERACT_CMD 환경변수로 실행 파일 경로를 지정하세요."
+    else:
+        message = "Tesseract 실행 파일은 있지만 kor+eng 언어팩을 찾지 못했습니다."
+        next_action = "kor.traineddata와 eng.traineddata가 있는 tessdata 경로를 TESSDATA_PREFIX로 지정하세요."
+    return {
+        "status": "success" if ready else "warning",
+        "ready": ready,
+        "engine": "tesseract",
+        "executable_found": bool(tesseract_cmd),
+        "executable_path": tesseract_cmd,
+        "languages_ready": languages_ready,
+        "required_languages": ["kor", "eng"],
+        "tessdata_dir": str(tessdata_dir) if tessdata_dir else None,
+        "message": message,
+        "next_action": next_action,
+        "image_upload_behavior": (
+            "OCR 미연결 상태에서 이미지를 업로드하면 원본 파일과 파일명/크기/이미지 크기 메타데이터는 저장하지만, "
+            "이미지 속 글자는 분석 본문으로 쓰지 않습니다. 결과에는 OCR 미연결과 보강 필요 경고가 표시됩니다."
+        ),
+    }
+
+
 def extract_pdf_text_with_ocr(file_bytes: bytes) -> tuple[str, str]:
     tesseract_cmd = resolve_tesseract_executable()
     if not tesseract_cmd:
@@ -689,9 +721,15 @@ def extract_uploaded_file_text(
             source_path,
         )
         if not extracted_text:
-            warnings.append(
-                "이미지 본문을 읽지 못했습니다. OCR 실행 파일 또는 이미지 선명도를 확인하세요."
-            )
+            if image_profile.get("ocr_status") == "unavailable":
+                warnings.append(
+                    "이미지 OCR 미연결: 원본 이미지는 저장했지만 이미지 속 글자는 분석 본문으로 쓰지 않았습니다. "
+                    "Tesseract 설치 후 다시 업로드하거나 본문을 직접 입력하세요."
+                )
+            else:
+                warnings.append(
+                    "이미지 본문을 읽지 못했습니다. OCR 실행 파일 또는 이미지 선명도를 확인하세요."
+                )
     elif extension == ".docx" or lower_mime.endswith("wordprocessingml.document"):
         document_type = "Word 문서"
         extracted_text, extraction_note = extract_docx_text(file_bytes)
@@ -737,6 +775,12 @@ def extract_uploaded_file_text(
         extraction_profile["ocr_available"] = image_profile.get("ocr_available")
         extraction_profile["ocr_status"] = image_profile.get("ocr_status")
         extraction_profile["ocr_language"] = image_profile.get("ocr_language")
+        extraction_profile["ocr_missing_reason"] = image_profile.get("ocr_missing_reason")
+        extraction_profile["ocr_next_action"] = (
+            "Tesseract 설치 또는 TESSERACT_CMD 지정 후 다시 업로드"
+            if image_profile.get("ocr_status") == "unavailable"
+            else None
+        )
         if image_profile.get("width") and image_profile.get("height"):
             extraction_profile["image_size"] = f"{image_profile.get('width')}x{image_profile.get('height')}"
     quality = float(extraction_profile.get("recommended_quality") or 0.35)

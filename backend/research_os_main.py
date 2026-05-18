@@ -35,6 +35,7 @@ from research_os.file_extraction import (
     extract_pdf_text,
     extract_uploaded_file_text,
     is_pdf_attachment,
+    ocr_runtime_status,
     safe_attachment_file_name,
 )
 from research_os.kiwoom_auth import KiwoomAuthClient, KiwoomMaskedTokenStatus
@@ -10647,8 +10648,15 @@ def capture_quality_status(
     warnings: list[str] = []
     if url_status in {"fetch_failed", "invalid", "empty_text"}:
         warnings.append("웹사이트 본문 추출 실패")
+    attachment_profile = (attachment_info or {}).get("extraction_profile") or {}
+    if attachment_profile.get("ocr_status") == "unavailable":
+        warnings.append("이미지 OCR 미연결")
     if attachment_info and not attachment_text and not (attachment_info or {}).get("extraction_char_count"):
-        warnings.append("첨부 파일 본문 추출 확인 필요")
+        warnings.append(
+            "첨부 파일 본문 추출 확인 필요"
+            if attachment_profile.get("ocr_status") != "unavailable"
+            else "이미지 원본은 저장됐지만 OCR 미연결로 본문 분석은 제외"
+        )
     if text_length >= 1000 and not warnings:
         status = "정상"
     elif text_length >= 250:
@@ -13760,8 +13768,14 @@ def read_data_provider_status(settings: Settings = Depends(get_settings)) -> dic
         "earnings_calendar_on_demand_refresh": settings.earnings_calendar_on_demand_refresh,
         "resolved_research_vault_dir": str(vault_dir),
         "onedrive_excluded": "onedrive" not in str(vault_dir).lower(),
+        "ocr": ocr_runtime_status(),
         "providers": provider.status(),
     }
+
+
+@app.get("/api/v1/ocr/status")
+def read_ocr_runtime_status() -> dict:
+    return ocr_runtime_status()
 
 
 CUSTOMS_STRATEGIC_ITEMS = [

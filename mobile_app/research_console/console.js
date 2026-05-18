@@ -1,6 +1,7 @@
 import {
   setApiBaseUrl,
   fetchDataProviderStatus,
+  fetchOcrStatus,
   fetchDartFilingWatchStatus,
   reportBackendHealthAlert,
   fetchTickerDashboard,
@@ -64,7 +65,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=20260518-memory-supplement";
+} from "./api.js?v=20260518-ocr-status";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -4339,6 +4340,13 @@ function summarizeSystemCheckValue(label, value) {
       : 0;
     return `다음 액션 ${nextActions}개 · 우선 검토 ${priorityReviews}개`;
   }
+  if (label.includes("OCR")) {
+    const state = value?.ready ? "연결됨" : "미연결";
+    const languages = value?.languages_ready ? "kor+eng 확인" : "언어팩 확인 필요";
+    return `${state} · ${languages} · ${value?.message || value?.next_action || "상태 미확인"} ${
+      value?.ready ? "" : `· 조치: ${value?.next_action || "Tesseract 설치 상태 확인"}`
+    }`.trim();
+  }
   if (label.includes("대표 대시보드")) {
     return `${value.ticker || "대상 미확인"} · 저장 데이터 ${value.file_count || 0}개 · 경고 ${(value.data_warnings || []).length}개`;
   }
@@ -4348,6 +4356,7 @@ function summarizeSystemCheckValue(label, value) {
 function formatConsoleSystemCheckResult(payload) {
   const checks = payload.checks || [];
   const failed = checks.filter((item) => item.status !== "성공");
+  const ocrCheck = checks.find((item) => item.label.includes("OCR"));
   const okCount = checks.length - failed.length;
   return [
     `# 전체 시스템 점검 완료`,
@@ -4361,6 +4370,13 @@ function formatConsoleSystemCheckResult(payload) {
       (item, index) =>
         `${index + 1}. **${item.label}** - ${item.status} (${item.elapsed_ms}ms)\n   ${compactOutputText(item.summary, 220)}`
     ),
+    ``,
+    `## OCR/이미지 업로드 상태`,
+    ocrCheck
+      ? `- **현재 상태:** ${ocrCheck.status} · ${ocrCheck.summary}`
+      : `- **현재 상태:** OCR 점검 결과를 불러오지 못했습니다.`,
+    `- **미연결 시 저장 방식:** 이미지는 원본 파일과 파일명/크기/이미지 크기 메타데이터로 저장됩니다. 이미지 속 글자는 분석 본문으로 쓰지 않고, 결과에는 OCR 미연결/보강 필요 경고가 표시됩니다.`,
+    `- **권장 조치:** Tesseract와 kor+eng 언어팩 설치 여부를 먼저 확인하고, 설치 전에는 이미지 속 본문을 텍스트로 함께 붙여넣으세요.`,
     ``,
     `## 1번~5번 처리 상태`,
     `- **1. 버튼/화면 회귀 점검:** 상태, 저장 데이터, 포트폴리오, 관심종목/섹터, 자동화, 일일 브리핑, 대표 대시보드를 한 번에 확인했습니다.`,
@@ -4383,6 +4399,7 @@ async function runConsoleSystemCheck() {
   startOutputLoading("전체 시스템 점검 실행 중", [
     "백엔드와 데이터 프로바이더 확인",
     "저장 데이터와 RAG 상태 확인",
+    "OCR/Tesseract 연결 상태 확인",
     "포트폴리오와 관심종목/섹터 후보 갱신",
     "리서치 자동화와 일일 브리핑 확인",
     "대표 종목 대시보드 연결 점검",
@@ -4393,9 +4410,13 @@ async function runConsoleSystemCheck() {
     const started = performance.now();
     try {
       const value = await callback();
+      const derivedStatus =
+        !value || value?.ready === false || value?.ok === false || value?.status === "warning"
+          ? "확인 필요"
+          : "성공";
       checks.push({
         label,
-        status: "성공",
+        status: derivedStatus,
         elapsed_ms: Math.max(1, Math.round(performance.now() - started)),
         summary: summarizeSystemCheckValue(label, value),
       });
@@ -4420,6 +4441,7 @@ async function runConsoleSystemCheck() {
   }
 
   await runCheck("저장 데이터/RAG Manifest", () => fetchResearchManifest(token()));
+  await runCheck("OCR/Tesseract 연결", () => fetchOcrStatus());
   await runCheck("포트폴리오 저장소", async () => {
     const result = await fetchPortfolios(token());
     savedPortfolios = [...(result?.portfolios || [])].sort((a, b) =>

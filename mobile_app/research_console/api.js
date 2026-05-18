@@ -163,6 +163,22 @@ export async function fetchDataProviderStatus() {
 }
 
 /**
+ * 이미지/PDF OCR 런타임 연결 상태를 확인합니다.
+ *
+ * @returns {Promise<Object|null>} Tesseract 실행 파일과 언어팩 연결 상태
+ */
+export async function fetchOcrStatus() {
+  try {
+    return request("/api/v1/ocr/status", {
+      method: "GET",
+    });
+  } catch (error) {
+    console.error("OCR 연결 상태를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
  * DART 신규 공시 자동 감시 상태를 확인합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
