@@ -764,6 +764,28 @@ export async function archiveResearchMemoryFile(accessToken, ticker, fileName, p
 }
 
 /**
+ * 레거시 저장 파일을 삭제하지 않고 일괄 소프트 보관합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {string} ticker 조회할 티커 또는 저장 키
+ * @param {{ reason?: string }} [payload] 보관 사유
+ * @returns {Promise<Object>} 일괄 보관 결과
+ */
+export async function archiveLegacyResearchMemoryFiles(accessToken, ticker, payload = {}) {
+  return request(
+    `/api/v1/research-memory/${encodeURIComponent(ticker)}/legacy/archive`,
+    {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({
+        archived: true,
+        reason: payload.reason || "레거시 파일 처리 정책에 따라 소프트 보관",
+      }),
+    }
+  );
+}
+
+/**
  * 저장된 Markdown 리포트 본문을 불러옵니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰

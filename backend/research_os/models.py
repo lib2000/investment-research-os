@@ -529,6 +529,7 @@ class ResearchMemoryListResponse(BaseModel):
     legacy_file_count: int = 0
     archived_file_count: int = 0
     include_archived: bool = False
+    legacy_policy: Optional[dict] = None
     data_warnings: List[str] = Field(default_factory=list)
 
 

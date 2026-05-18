@@ -5926,6 +5926,30 @@ def is_archived_research_entry(manifest_entry: dict | None, json_payload: dict |
     )
 
 
+def research_memory_legacy_policy(
+    *,
+    ticker: str | None = None,
+    legacy_file_count: int = 0,
+    archived_file_count: int = 0,
+) -> dict:
+    return {
+        "policy": "soft_archive",
+        "hard_delete_allowed": False,
+        "default_visibility": "collapsed_legacy_group",
+        "archive_behavior": "레거시 파일은 삭제하지 않고 status=archived, is_deleted=true 메타데이터로 기본 목록과 자동 주입 후보에서 숨깁니다.",
+        "restore_behavior": "보관 문서 포함 옵션으로 다시 표시하고 개별 파일을 복원할 수 있습니다.",
+        "decision": "공식 인증 리포트를 새 판단 기준으로 사용하고, 레거시 파일은 원문 추적/감사용으로 보관합니다.",
+        "ticker": ticker,
+        "legacy_file_count": legacy_file_count,
+        "archived_file_count": archived_file_count,
+        "recommended_action": (
+            "공식 인증 파일이 충분하면 레거시 일괄 보관을 실행하세요."
+            if legacy_file_count
+            else "현재 기본 목록에 보관할 레거시 파일이 없습니다."
+        ),
+    }
+
+
 def research_memory_entry_quality_metadata(
     manifest_entry: dict | None,
     json_payload: dict | None = None,
@@ -6280,6 +6304,72 @@ def set_research_memory_archive_status(
         full_text=target_path.read_text(encoding="utf-8"),
     )
     return read_research_memory_file(ticker, safe_name, vault_dir)
+
+
+def archive_legacy_research_memory_files(
+    ticker: str,
+    vault_dir: Path,
+    reason: str | None = None,
+) -> dict:
+    candidates = [
+        file
+        for file in list_research_memory_files(ticker, vault_dir, include_archived=False)
+        if file.legacy and not file.archived and not file.is_deleted
+    ]
+    archived_files = []
+    errors = []
+    archive_reason = (
+        reason
+        or "레거시 파일 처리 정책에 따라 삭제하지 않고 소프트 보관 처리했습니다."
+    )
+    for file in candidates:
+        try:
+            result = set_research_memory_archive_status(
+                ticker,
+                file.file_name,
+                ResearchMemoryArchiveRequest(
+                    archived=True,
+                    reason=archive_reason,
+                ),
+                vault_dir,
+            )
+            archived_files.append(
+                {
+                    "file_name": result.file_name,
+                    "relative_path": result.relative_path,
+                    "archived_at": result.archived_at,
+                    "archive_reason": result.archive_reason,
+                }
+            )
+        except Exception as exc:
+            errors.append({"file_name": file.file_name, "error": str(exc)})
+    all_files = list_research_memory_files(ticker, vault_dir, include_archived=True)
+    active_legacy_count = sum(
+        1
+        for file in all_files
+        if file.legacy and not file.archived and not file.is_deleted
+    )
+    archived_file_count = sum(1 for file in all_files if file.archived or file.is_deleted)
+    return {
+        "status": "success" if not errors else "partial_success",
+        "module": "research_memory_legacy_archive",
+        "ticker": ticker,
+        "policy": research_memory_legacy_policy(
+            ticker=ticker,
+            legacy_file_count=active_legacy_count,
+            archived_file_count=archived_file_count,
+        ),
+        "candidate_count": len(candidates),
+        "archived_count": len(archived_files),
+        "error_count": len(errors),
+        "archived_files": archived_files,
+        "errors": errors,
+        "message": (
+            f"레거시 파일 {len(archived_files)}개를 삭제하지 않고 소프트 보관했습니다."
+            if archived_files
+            else "보관할 활성 레거시 파일이 없습니다."
+        ),
+    }
 
 
 def supplement_research_memory_file(
@@ -14681,7 +14771,7 @@ def get_research_memory_files(
     if legacy_file_count:
         data_warnings.append(
             f"{normalized_ticker} 저장 파일 중 공식 티커 인증 도입 전 생성된 레거시 파일 {legacy_file_count}개가 있습니다. "
-            "파일 본문은 열 수 있지만 투자 판단에는 새로 생성한 공식 인증 리포트를 우선 사용하세요."
+            "정책상 하드 삭제하지 않고 소프트 보관으로 숨깁니다. 공식 인증 파일이 충분하면 레거시 일괄 보관을 실행하세요."
         )
     if archived_file_count and not include_archived:
         data_warnings.append(
@@ -14697,6 +14787,11 @@ def get_research_memory_files(
         legacy_file_count=legacy_file_count,
         archived_file_count=archived_file_count,
         include_archived=include_archived,
+        legacy_policy=research_memory_legacy_policy(
+            ticker=normalized_ticker,
+            legacy_file_count=legacy_file_count,
+            archived_file_count=archived_file_count,
+        ),
         data_warnings=data_warnings,
     )
 
@@ -15607,6 +15702,33 @@ def patch_research_memory_file_archive_status(
     normalized_ticker = resolve_research_memory_key(ticker, settings)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     return set_research_memory_archive_status(normalized_ticker, file_name, request, vault_dir)
+
+
+@app.patch(
+    "/api/v1/research-memory/{ticker}/legacy/archive",
+    dependencies=[Depends(verify_user_token)],
+)
+def patch_research_memory_legacy_archive_status(
+    ticker: str,
+    request: ResearchMemoryArchiveRequest = Body(default_factory=ResearchMemoryArchiveRequest),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    레거시 파일을 물리 삭제하지 않고 일괄 소프트 보관합니다.
+    복원은 보관 문서 포함 목록에서 개별 파일 단위로 수행합니다.
+    """
+    if request.archived is False:
+        raise HTTPException(
+            status_code=422,
+            detail="레거시 일괄 작업은 보관만 지원합니다. 복원은 개별 파일에서 실행하세요.",
+        )
+    normalized_ticker = resolve_research_memory_key(ticker, settings)
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    return archive_legacy_research_memory_files(
+        normalized_ticker,
+        vault_dir,
+        request.reason,
+    )
 
 
 @app.get(

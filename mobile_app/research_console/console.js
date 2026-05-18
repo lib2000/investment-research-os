@@ -9,6 +9,7 @@ import {
   fetchResearchMemoryFile,
   fetchResearchMemoryFiles,
   archiveResearchMemoryFile,
+  archiveLegacyResearchMemoryFiles,
   supplementResearchMemoryFile,
   backfillRagMemoryDocuments,
   synthesizeDossier,
@@ -65,7 +66,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=20260518-ocr-status";
+} from "./api.js?v=20260518-legacy-policy";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -4921,6 +4922,26 @@ async function handleMemoryArchiveAction(button) {
   await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
 }
 
+async function handleLegacyArchiveAction(button) {
+  const ticker = button?.dataset?.memoryArchiveLegacy || activeTicker || "";
+  if (!ticker) {
+    throw new Error("레거시 보관을 실행할 저장 데이터 키가 비어 있습니다.");
+  }
+  startOutputLoading("레거시 파일 일괄 보관 중", [
+    "레거시 후보 확인",
+    "하드 삭제 없이 보관 플래그 기록",
+    "manifest와 RAG 색인 갱신",
+    "저장 데이터 목록 다시 불러오기",
+  ]);
+  const result = await archiveLegacyResearchMemoryFiles(token(), ticker, {
+    reason: "레거시 파일 처리 정책에 따라 사용자가 일괄 소프트 보관 실행",
+  });
+  const memoryResponse = await fetchResearchMemoryFiles(token(), ticker, memoryListFetchOptions());
+  renderMemoryList(memoryResponse, ticker);
+  setOutput(result);
+  await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+}
+
 function portfolioDashboardCard() {
   const portfolio = activePortfolioSnapshot || savedPortfolios[0];
   if (!portfolio) {
@@ -6122,6 +6143,7 @@ function renderMemoryList(memoryResponse, ticker) {
   const legacyFiles = activeFiles.filter((file) => file.legacy);
   const includeArchived = Boolean(memoryResponse?.include_archived);
   const archivedCount = Number(memoryResponse?.archived_file_count || archivedFiles.length || 0);
+  const legacyPolicy = memoryResponse?.legacy_policy || {};
   if (elements.memoryForm?.elements?.ticker) {
     elements.memoryForm.elements.ticker.value = memoryKey;
   }
@@ -6136,9 +6158,16 @@ function renderMemoryList(memoryResponse, ticker) {
       <p>공식 인증 ${officialFiles.length}개 · 레거시 ${legacyFiles.length}개 · 보관 ${archivedCount}개 · 본문 보강 필요 ${bodyMissingCount}개${bodyMissingOnly ? ` · 필터 적용 ${files.length}개` : ""} · ${isTickerLikeMemoryKey(memoryKey) ? "종목 저장소" : "시스템/포트폴리오 저장소"}</p>
     </div>
   `;
+  const policyHtml = legacyPolicy.policy
+    ? `<div class="dashboard-card ${legacyFiles.length ? "warning" : "ok"}">
+        <span>레거시 처리 정책</span>
+        <strong>${legacyPolicy.hard_delete_allowed === false ? "삭제 금지 · 소프트 보관" : "정책 확인"}</strong>
+        <p>${escapeHtml(legacyPolicy.archive_behavior || "레거시 파일은 삭제하지 않고 보관 플래그로 기본 목록에서 숨깁니다.")}</p>
+      </div>`
+    : "";
 
   if (!activeFiles.length && !archivedFiles.length) {
-    elements.memoryList.innerHTML = `${summaryHtml}
+    elements.memoryList.innerHTML = `${summaryHtml}${policyHtml}
       <div class="dashboard-card warning">
         <span>${bodyMissingOnly && allFiles.length ? "본문 보강 필요 자료" : "저장 리포트"}</span>
         <strong>${bodyMissingOnly && allFiles.length ? "없음" : "없음"}</strong>
@@ -6221,7 +6250,10 @@ function renderMemoryList(memoryResponse, ticker) {
   const legacyHtml = legacyFiles.length
     ? `<details class="memory-legacy-group"${officialFiles.length ? "" : " open"}>
         <summary>레거시/검증 전 파일 ${legacyFiles.length}개 ${officialFiles.length ? "보기" : "열기"}</summary>
-        <p>이 파일들은 과거 형식입니다. 본문 확인은 가능하지만 투자 판단에는 공식 인증 리포트를 우선 사용하세요.</p>
+        <p>정책: 레거시 파일은 하드 삭제하지 않고 소프트 보관으로 기본 목록에서 숨깁니다. 본문 확인은 가능하지만 투자 판단에는 공식 인증 리포트를 우선 사용하세요.</p>
+        <div class="memory-card-actions">
+          <button class="secondary" data-memory-archive-legacy="${escapeHtml(memoryKey)}" type="button">레거시 일괄 보관</button>
+        </div>
         <div class="memory-card-list">${legacyFiles.map(renderMemoryFileCard).join("")}</div>
       </details>`
     : "";
@@ -6233,7 +6265,7 @@ function renderMemoryList(memoryResponse, ticker) {
       </details>`
     : "";
 
-  elements.memoryList.innerHTML = `${summaryHtml}${warningHtml}${officialHtml}${legacyHtml}${archivedHtml}`;
+  elements.memoryList.innerHTML = `${summaryHtml}${policyHtml}${warningHtml}${officialHtml}${legacyHtml}${archivedHtml}`;
 }
 
 function memoryListFetchOptions() {
@@ -7368,7 +7400,7 @@ elements.dashboardCards.addEventListener("click", (event) => {
 
 elements.memoryList.addEventListener("click", (event) => {
   const feedbackButton = event.target.closest(
-    "[data-interest-board-action], [data-rag-action], [data-brief-action], [data-memory-file], [data-rag-file], [data-memory-archive]"
+    "[data-interest-board-action], [data-rag-action], [data-brief-action], [data-memory-file], [data-rag-file], [data-memory-archive], [data-memory-archive-legacy]"
   );
   if (feedbackButton) {
     const message = `${actionLabelFromButton(feedbackButton)} 작업을 시작했습니다.`;
@@ -7410,6 +7442,11 @@ elements.memoryList.addEventListener("click", (event) => {
   const archiveButton = event.target.closest("[data-memory-archive]");
   if (archiveButton) {
     handleMemoryArchiveAction(archiveButton).catch(setError);
+    return;
+  }
+  const legacyArchiveButton = event.target.closest("[data-memory-archive-legacy]");
+  if (legacyArchiveButton) {
+    handleLegacyArchiveAction(legacyArchiveButton).catch(setError);
     return;
   }
   const button = event.target.closest("[data-memory-file]");
@@ -10185,6 +10222,32 @@ function formatKoreanResult(value) {
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  if (value.module === "research_memory_legacy_archive") {
+    const policy = value.policy || {};
+    const files = value.archived_files || [];
+    return [
+      `### 레거시 파일 소프트 보관`,
+      ``,
+      `- **저장 키:** ${value.ticker || "미확인"}`,
+      `- **정책:** ${policy.policy === "soft_archive" ? "삭제 금지 · 소프트 보관" : policy.policy || "정책 미확인"}`,
+      `- **보관 후보:** ${formatNumber(value.candidate_count || 0)}개`,
+      `- **보관 완료:** ${formatNumber(value.archived_count || 0)}개`,
+      `- **오류:** ${formatNumber(value.error_count || 0)}개`,
+      `- **메시지:** ${value.message || "처리 결과 없음"}`,
+      ``,
+      `### 보관 처리 파일`,
+      ...formatBulletList(
+        files.slice(0, 12),
+        (item) => `${item.file_name} · ${item.archive_reason || "소프트 보관"}`,
+        "보관 처리된 레거시 파일이 없습니다."
+      ),
+      ``,
+      `### 운영 규칙`,
+      `- ${policy.archive_behavior || "레거시 파일은 삭제하지 않고 보관 플래그로 숨깁니다."}`,
+      `- ${policy.restore_behavior || "보관 문서 포함 옵션으로 다시 확인하고 복원할 수 있습니다."}`,
+    ].join("\n");
   }
 
   if (value.module === "deduped_dossier_refresh_queue") {
