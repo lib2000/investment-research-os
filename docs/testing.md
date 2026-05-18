@@ -25,6 +25,7 @@ python -m py_compile backend\research_os_main.py backend\research_os\web_capture
 ## 기존 콘솔 검증
 
 ```powershell
+python tools\update_console_asset_hashes.py --check
 node --check mobile_app\research_console\console.js
 ```
 

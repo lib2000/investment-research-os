@@ -1,6 +1,7 @@
 import sys
 import unittest
 from datetime import date
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,6 +10,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+
+def load_console_hash_tool():
+    tool_path = PROJECT_ROOT / "tools" / "update_console_asset_hashes.py"
+    spec = spec_from_file_location("update_console_asset_hashes", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
 
 
 class WebCaptureRenderingTests(unittest.TestCase):
@@ -137,6 +147,41 @@ class CredentialPolicyTests(unittest.TestCase):
         self.assertEqual(mask_secret("short"), "********")
         self.assertEqual(mask_secret(""), "********")
         self.assertEqual(mask_secret("1234567890abcdef"), "1234****cdef")
+
+
+class ConsoleAssetHashTests(unittest.TestCase):
+    def test_html_and_js_refs_use_file_hash_versions(self):
+        tool = load_console_hash_tool()
+        versions = {
+            "styles.css": "stylehash123",
+            "console.js": "consolehash1",
+            "api.js": "apihash12345",
+        }
+
+        html = (
+            '<link rel="stylesheet" href="./styles.css" />\n'
+            '<script type="module" src="./console.js?v=manual-version"></script>\n'
+        )
+        js = 'import { request } from "./api.js?v=manual-version";\n'
+
+        updated_html = tool.update_html_content(html, versions)
+        updated_js = tool.update_console_js_content(js, versions)
+
+        self.assertIn('href="./styles.css?v=stylehash123"', updated_html)
+        self.assertIn('src="./console.js?v=consolehash1"', updated_html)
+        self.assertNotIn("manual-version", updated_html)
+        self.assertEqual(
+            updated_js,
+            'import { request } from "./api.js?v=apihash12345";\n',
+        )
+
+    def test_asset_hash_rewrite_reaches_fixed_point(self):
+        tool = load_console_hash_tool()
+        project_root = PROJECT_ROOT
+
+        pending = tool.changed_update_paths(project_root)
+
+        self.assertEqual(pending, [])
 
 
 class PortfolioPerformanceTests(unittest.TestCase):

@@ -66,7 +66,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=20260518-legacy-policy";
+} from "./api.js?v=1272038d77a8";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
