@@ -1885,6 +1885,20 @@ function renderPortfolioPerformanceOverview(result) {
     .filter((period) => Number.isFinite(Number(period.net_profit)))
     .sort((a, b) => Number(b.net_profit) - Number(a.net_profit))[0];
   const skipped = result.skipped_holdings || [];
+  const unsupportedCount = Number(result.unsupported_history_count || 0);
+  const unsupportedMarketValue = Number(result.unsupported_history_market_value || 0);
+  const priceCache = result.price_history_cache || {};
+  const resultCache = result.result_cache || {};
+  const calculationText = result.calculation_mode === "recomputed_on_request"
+    ? "요청 시 재계산"
+    : result.calculation_mode || "계산 방식 미확인";
+  const cacheText = resultCache.enabled
+    ? "결과 캐시 사용"
+    : `결과 캐시 없음 · 가격 히스토리 ${priceCache.enabled ? "메모리 캐시" : "캐시 없음"}${
+        priceCache.enabled
+          ? ` (hit ${formatNumber(priceCache.hit_count || 0)} / miss ${formatNumber(priceCache.miss_count || 0)})`
+          : ""
+      }`;
   const skippedText = skipped.length
     ? `제외 ${skipped.length}개: ${skipped.slice(0, 4).map((item) => item.name || item.ticker).join(", ")}${skipped.length > 4 ? " 외" : ""}`
     : "제외 종목 없음";
@@ -1896,7 +1910,7 @@ function renderPortfolioPerformanceOverview(result) {
             .slice(0, 12)
             .map(
               (item) =>
-                `<li>${escapeHtml(item.name || item.ticker || "종목 미확인")} · ${escapeHtml(item.ticker || "티커 없음")} · ${escapeHtml(item.reason || "가격 히스토리 없음")}</li>`
+                `<li>${escapeHtml(item.name || item.ticker || "종목 미확인")} · ${escapeHtml(item.ticker || "티커 없음")} · ${escapeHtml(item.reason || "가격 히스토리 없음")} · ${escapeHtml(item.impact || "기간 비교에서 제외")}</li>`
             )
             .join("")}
         </ul>
@@ -1912,12 +1926,15 @@ function renderPortfolioPerformanceOverview(result) {
           <span><b>현재 미실현 손익</b>${escapeHtml(formatMoney(result.current_unrealized_gain, "KRW", "n/a"))}</span>
           <span><b>현재 미실현 수익률</b>${escapeHtml(toPercent(result.current_unrealized_return))}</span>
           <span><b>비교 상태</b>${escapeHtml(skippedText)}</span>
+          <span><b>계산/캐시</b>${escapeHtml(calculationText)} · ${escapeHtml(cacheText)}</span>
+          <span><b>해외/미지원 제외</b>${escapeHtml(formatNumber(unsupportedCount))}개 · ${escapeHtml(formatMoney(unsupportedMarketValue, "KRW", "0원"))}</span>
         </div>
       </div>
       <b>${escapeHtml(bestPeriod ? `최고 구간 ${bestPeriod.label}` : "구간 비교 대기")}</b>
     </div>
     <div class="portfolio-performance-grid">${periodCards}</div>
     <p class="portfolio-performance-note">${escapeHtml(result.coverage_note || "")}</p>
+    <p class="portfolio-performance-note">${escapeHtml(result.data_limitations?.join(" ") || "기간 수익 비교는 확보된 가격 히스토리 범위 안에서 계산됩니다.")}</p>
     ${skippedDetails}
   `;
 }
@@ -11404,8 +11421,13 @@ function formatKoreanResult(value) {
       ].join("\n");
     });
     const skippedLines = (value.skipped_holdings || []).slice(0, 8).map(
-      (item) => `- ${item.name || item.ticker}: ${item.reason || "기간 가격 데이터 없음"}`
+      (item) => `- ${item.name || item.ticker}: ${item.reason || "기간 가격 데이터 없음"} / ${item.impact || "기간 비교에서 제외"}`
     );
+    const priceCache = value.price_history_cache || {};
+    const resultCache = value.result_cache || {};
+    const cacheLine = resultCache.enabled
+      ? `결과 캐시 사용`
+      : `결과 캐시 없음, 가격 히스토리 ${priceCache.enabled ? `메모리 캐시 사용(hit ${priceCache.hit_count || 0}, miss ${priceCache.miss_count || 0})` : "캐시 없음"}`;
     return [
       `포트폴리오 기간 수익 비교`,
       ``,
@@ -11420,6 +11442,9 @@ function formatKoreanResult(value) {
       `계산 방식`,
       `- ${value.method || "현재 수량과 기간별 과거 종가를 비교했습니다."}`,
       `- ${value.coverage_note || "가격 히스토리가 확인된 종목만 기간 수익률에 반영했습니다."}`,
+      `- 계산/캐시: ${value.calculation_mode === "recomputed_on_request" ? "요청 시 현재 저장 포트폴리오 기준으로 재계산" : value.calculation_mode || "미확인"} / ${cacheLine}`,
+      `- 해외/미지원 제외: ${value.unsupported_history_count || 0}개, ${formatMoney(value.unsupported_history_market_value, "KRW", "0원")}`,
+      ...((value.data_limitations || []).map((item) => `- 한계: ${item}`)),
       ``,
       `제외/보류 종목`,
       ...(skippedLines.length ? skippedLines : ["- 없음"]),

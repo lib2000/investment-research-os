@@ -17157,7 +17157,7 @@ def portfolio_history_rows_for_ticker(
     ticker: str,
     settings: Settings,
     page_size: int = 280,
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], dict]:
     code = normalize_kr_stock_code(ticker)
     if not is_naver_domestic_stock_code(code):
         try:
@@ -17167,10 +17167,16 @@ def portfolio_history_rows_for_ticker(
     if not is_naver_domestic_stock_code(code):
         raise ValueError("국내 가격 히스토리 지원 대상이 아닙니다.")
     cache_key = f"{code}:{page_size}"
-    if cache_key not in PORTFOLIO_HISTORY_CACHE:
+    cache_hit = cache_key in PORTFOLIO_HISTORY_CACHE
+    if not cache_hit:
         _, rows = fetch_naver_domestic_price_history(code, settings, page_size=page_size)
         PORTFOLIO_HISTORY_CACHE[cache_key] = rows
-    return code, PORTFOLIO_HISTORY_CACHE[cache_key]
+    return code, PORTFOLIO_HISTORY_CACHE[cache_key], {
+        "cache_key": cache_key,
+        "cache_hit": cache_hit,
+        "cache_scope": "process_memory",
+        "history_provider": "naver_finance_mobile_price_api",
+    }
 
 
 def historical_close_on_or_before(rows: list[dict], target_date: date) -> tuple[float | None, str | None]:
@@ -17235,6 +17241,10 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
     current_cost_basis = 0.0
     current_unrealized_gain = 0.0
     price_as_of_dates: list[str] = []
+    history_cache_hits = 0
+    history_cache_misses = 0
+    overseas_unsupported_count = 0
+    unsupported_market_value = 0.0
 
     for holding in portfolio.holdings:
         ticker = normalize_ticker(holding.ticker)
@@ -17274,13 +17284,28 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
             continue
 
         try:
-            official_symbol, history_rows = portfolio_history_rows_for_ticker(ticker, settings)
+            official_symbol, history_rows, history_cache_info = portfolio_history_rows_for_ticker(ticker, settings)
+            if history_cache_info.get("cache_hit"):
+                history_cache_hits += 1
+            else:
+                history_cache_misses += 1
         except Exception as exc:
+            reason = str(exc)
+            unsupported_history = "국내 가격 히스토리 지원 대상" in reason
+            if unsupported_history:
+                overseas_unsupported_count += 1
+                unsupported_market_value += current_value_for_total
             skipped.append({
                 "ticker": ticker,
                 "name": holding.name,
                 "market_value": round(current_value_for_total, 2) if current_value_for_total else None,
-                "reason": str(exc),
+                "reason": reason,
+                "category": "overseas_or_unsupported_history" if unsupported_history else "price_history_unavailable",
+                "impact": (
+                    "현재 평가금액과 미실현 손익에는 포함하지만, 1주/1개월/6개월/1년 기간 수익 비교에서는 제외했습니다."
+                    if unsupported_history
+                    else "기간 가격 히스토리가 없어 해당 종목을 기간 비교에서 제외했습니다."
+                ),
             })
             continue
 
@@ -17304,6 +17329,8 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
                 "name": holding.name,
                 "market_value": round(current_value_for_total, 2) if current_value_for_total else None,
                 "reason": "수량 또는 현재 평가금액이 없어 기간 수익을 계산하지 못했습니다.",
+                "category": "missing_position_value",
+                "impact": "현재 수량 또는 평가금액이 비어 있어 기간별 평가금액 차이를 계산하지 않았습니다.",
             })
             continue
 
@@ -17407,6 +17434,19 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
         "module": "portfolio_performance_comparison",
         "portfolio_name": portfolio.portfolio_name,
         "as_of": current_storage_timestamp(),
+        "calculation_mode": "recomputed_on_request",
+        "result_cache": {
+            "enabled": False,
+            "description": "기간 수익 비교 결과 자체는 저장 캐시하지 않고 요청할 때마다 현재 저장 포트폴리오 기준으로 다시 계산합니다.",
+        },
+        "price_history_cache": {
+            "enabled": True,
+            "scope": "process_memory",
+            "provider": "naver_finance_mobile_price_api",
+            "hit_count": history_cache_hits,
+            "miss_count": history_cache_misses,
+            "description": "국내 종목 가격 히스토리 원천 조회만 서버 프로세스 메모리에 임시 캐시합니다. 서버 재시작 시 초기화됩니다.",
+        },
         "price_data_as_of": sorted(price_as_of_dates)[-1] if price_as_of_dates else None,
         "method": "현재 저장 수량과 가격 히스토리의 최신 종가를 기준으로, 기간별 과거 종가 대비 평가금액 차이를 계산했습니다.",
         "portfolio_value": round(current_portfolio_value or portfolio.portfolio_value or 0, 2),
@@ -17417,6 +17457,13 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
         "periods": periods,
         "holdings": holding_rows,
         "skipped_holdings": skipped,
+        "unsupported_history_count": overseas_unsupported_count,
+        "unsupported_history_market_value": round(unsupported_market_value, 2),
+        "data_limitations": [
+            "현재 기간 가격 히스토리는 네이버 국내 종목 코드만 지원합니다.",
+            "해외 주식/ETF/기타 비국내 종목은 현재 평가금액과 미실현 손익에는 포함하지만, 기간별 순수익/수익률 계산에서는 제외됩니다.",
+            "커버리지가 100% 미만이면 기간 수익률은 전체 포트폴리오 수익률이 아니라 가격 히스토리가 확보된 일부 보유분 기준입니다.",
+        ],
         "coverage_note": "국내 가격 히스토리가 확인된 종목과 현금만 기간 수익률에 반영했습니다. 해외 종목은 현재 저장 손익에는 포함되지만 기간별 가격 비교에서는 제외될 수 있습니다.",
     }
 
