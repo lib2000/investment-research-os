@@ -9,7 +9,7 @@ $ProjectRootPath = & (Join-Path $ProjectRoot "tools\assert_project_root.ps1") -P
 $ConsoleRoot = Join-Path $ProjectRootPath "mobile_app\research_console"
 
 if (-not (Test-Path (Join-Path $ConsoleRoot "index.html"))) {
-  throw "리서치 콘솔 index.html을 찾을 수 없습니다: $ConsoleRoot"
+  throw "Classic Research Console index.html을 찾을 수 없습니다: $ConsoleRoot"
 }
 
 Push-Location $ConsoleRoot

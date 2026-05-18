@@ -21,6 +21,22 @@ if (-not (Test-Path -LiteralPath (Join-Path $rootPath "backend\main.py"))) {
   throw "투자일지 백엔드 진입점을 찾을 수 없습니다: $rootPath"
 }
 
+if (-not (Test-Path -LiteralPath (Join-Path $rootPath "backend\research_os_main.py"))) {
+  throw "Research OS 백엔드 진입점을 찾을 수 없습니다: $rootPath"
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $rootPath "backend\research_os"))) {
+  throw "Research OS 도메인 모듈 경로를 찾을 수 없습니다: $rootPath"
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $rootPath "mobile_app\research_console\index.html"))) {
+  throw "Classic Research Console 경로를 찾을 수 없습니다: $rootPath"
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $rootPath "apps\research-console\package.json"))) {
+  throw "React Research Console 경로를 찾을 수 없습니다: $rootPath"
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $rootPath "apps\mobile\package.json"))) {
   throw "Expo 모바일 앱 경로를 찾을 수 없습니다: $rootPath"
 }

@@ -1,8 +1,22 @@
-# Investment Journal App
+# Investment Research OS
 
-개인 투자자를 위한 모바일 주식 매매일지 및 투자 분석 앱 설계 초안입니다.
+개인 투자자를 위한 투자 리서치, 포트폴리오 점검, 매매일지, 저장 데이터/RAG 관리 앱입니다.
 
-현재 범위는 모바일 앱과 증권사 OpenAPI를 안전하게 연결하기 위한 초기 서버 아키텍처, API 계약, 보안 원칙, 백엔드/모바일 통신 보일러플레이트입니다.
+현재 운영 제품은 Python FastAPI 백엔드와 정적 HTML/JavaScript 리서치 콘솔로 구성됩니다. React/Vite 콘솔과 Expo 모바일 앱은 점진 이관 대상입니다.
+
+## 구조 명칭
+
+혼동을 줄이기 위해 이 저장소에서는 아래 명칭을 기준으로 사용합니다.
+
+| 명칭 | 경로 | 상태 | 설명 |
+|---|---|---|---|
+| Research OS Backend | `backend\research_os_main.py`, `backend\research_os\` | 운영 | 현재 FastAPI 백엔드와 투자 리서치 도메인 모듈 |
+| Classic Research Console | `mobile_app\research_console\` | 운영 | 현재 사용 중인 정적 웹 콘솔. 폴더명에 `mobile_app`이 있지만 실제 역할은 데스크톱/브라우저 웹 콘솔 |
+| React Research Console | `apps\research-console\` | 이관 대상 | 장기 React/Vite 웹 콘솔 |
+| Expo Mobile App | `apps\mobile\` | 이관 대상 | 장기 모바일 앱 |
+| Research Vault | `research_vault\` | 로컬 데이터 | 저장 리포트, RAG, 첨부, 사용자 리서치 데이터. Git에는 올리지 않음 |
+
+경로별 역할과 이관 순서는 [docs/structure-map.md](docs/structure-map.md)와 [docs/long-term-architecture.md](docs/long-term-architecture.md)를 기준으로 합니다.
 
 ## 현재 구조
 
@@ -38,7 +52,7 @@ InvestmentJournalApp/
   scripts/
 ```
 
-현재 운영 콘솔은 `mobile_app\research_console`입니다. `apps\research-console`은 장기 React 전환 대상이며, 기존 화면을 깨지 않기 위한 이관 공간입니다.
+현재 운영 콘솔은 **Classic Research Console**인 `mobile_app\research_console`입니다. `apps\research-console`은 **React Research Console**이며, 기존 화면을 깨지 않기 위한 이관 공간입니다.
 
 장기 구조와 이관 기준은 [docs/long-term-architecture.md](docs/long-term-architecture.md)를 기준으로 합니다.
 
@@ -80,6 +94,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 ```text
 http://127.0.0.1:5500/index.html
 ```
+
+이 주소는 Classic Research Console입니다. React Research Console 개발 서버는 `apps\research-console`에서 별도로 실행합니다.
 
 ## 모바일 앱 실행
 

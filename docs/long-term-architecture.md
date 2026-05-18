@@ -40,9 +40,11 @@ InvestmentJournalApp/
 
 ## 현재 구조와 장기 구조의 연결
 
-현재 운영 화면은 `mobile_app/research_console`입니다. 이 폴더는 당분간 운영판으로 유지합니다.
+현재 운영 화면은 `mobile_app/research_console`입니다. 이 폴더의 공식 명칭은 **Classic Research Console**입니다. 폴더명에 `mobile_app`이 들어 있지만, 현재 역할은 데스크톱/브라우저 웹 콘솔입니다.
 
-장기 React 전환은 `apps/research-console`에서 시작합니다. 새 화면을 만들 때는 기존 API 계약을 바꾸지 않고, `mobile_app/research_console/api.js`의 호출 흐름을 새 API 클라이언트로 옮깁니다.
+장기 React 전환은 `apps/research-console`에서 시작합니다. 이 폴더의 공식 명칭은 **React Research Console**입니다. 새 화면을 만들 때는 기존 API 계약을 바꾸지 않고, `mobile_app/research_console/api.js`의 호출 흐름을 새 API 클라이언트로 옮깁니다.
+
+경로별 공식 명칭과 변경 정책은 [structure-map.md](structure-map.md)를 기준으로 합니다.
 
 ## 프론트엔드 이관 순서
 
@@ -54,11 +56,14 @@ InvestmentJournalApp/
 
 ## 백엔드 정리 순서
 
-1. `research_os_main.py`의 라우터를 도메인별 파일로 분리
-2. 데이터 프로바이더를 `providers/` 계층으로 분리
-3. 포트폴리오, 시장일지, RAG, 파일 처리 로직을 서비스 계층으로 정리
-4. SQLite 로컬 저장은 유지하되 운영 전환 시 PostgreSQL 어댑터를 추가
-5. 스케줄러는 별도 모듈에서 관리하고 실행 여부를 설정으로 통제
+1. `research_os_main.py`의 Pydantic 모델과 순수 유틸리티를 기존 `backend/research_os/` 모듈로 이동
+2. `research-memory`, `portfolio`, `market-close`, `capture/file` 라우터를 도메인별 파일로 분리
+3. 데이터 프로바이더를 `providers/` 계층으로 분리
+4. 포트폴리오, 시장일지, RAG, 파일 처리 로직을 서비스 계층으로 정리
+5. SQLite 로컬 저장은 유지하되 운영 전환 시 PostgreSQL 어댑터를 추가
+6. 스케줄러는 별도 모듈에서 관리하고 실행 여부를 설정으로 통제
+
+`research_os_main.py`는 현재 운영 진입점이므로 한 번에 대체하지 않습니다. 각 분리 단계는 Classic Research Console의 기존 API 호출을 통과시킨 뒤 다음 단계로 넘어갑니다.
 
 ## API 경계
 

@@ -1,8 +1,8 @@
-# Research Console App
+# React Research Console
 
-이 폴더는 장기 React/Vite 웹 콘솔 이관 대상입니다.
+이 폴더는 장기 React/Vite 웹 콘솔 이관 대상입니다. 공식 명칭은 **React Research Console**입니다.
 
-현재 운영 화면은 아직 `mobile_app/research_console`에 있습니다. 새 화면을 만들 때는 기존 콘솔을 바로 삭제하지 않고, 이 폴더에서 화면 단위로 옮깁니다.
+현재 운영 화면은 아직 `mobile_app/research_console`의 **Classic Research Console**에 있습니다. 새 화면을 만들 때는 기존 콘솔을 바로 삭제하지 않고, 이 폴더에서 화면 단위로 옮깁니다.
 
 ## 이관 원칙
 
