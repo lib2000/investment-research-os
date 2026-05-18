@@ -48,7 +48,7 @@ class Settings(BaseModel):
     dart_timeout_seconds: float = 10.0
     dart_filing_auto_refresh: bool = True
     dart_filing_refresh_hours: float = 6.0
-    dart_filing_lookback_days: int = 14
+    dart_filing_lookback_days: int = 45
     dart_filing_max_items_per_ticker: int = 20
     financial_datasets_api_key: str = Field(default="")
     financial_datasets_base_url: str = "https://api.financialdatasets.ai"
@@ -162,7 +162,7 @@ class Settings(BaseModel):
             dart_timeout_seconds=float(os.getenv("DART_TIMEOUT_SECONDS", "10")),
             dart_filing_auto_refresh=_read_bool("DART_FILING_AUTO_REFRESH", True),
             dart_filing_refresh_hours=float(os.getenv("DART_FILING_REFRESH_HOURS", "6")),
-            dart_filing_lookback_days=int(os.getenv("DART_FILING_LOOKBACK_DAYS", "14")),
+            dart_filing_lookback_days=int(os.getenv("DART_FILING_LOOKBACK_DAYS", "45")),
             dart_filing_max_items_per_ticker=int(
                 os.getenv("DART_FILING_MAX_ITEMS_PER_TICKER", "20")
             ),

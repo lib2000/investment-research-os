@@ -1,5 +1,6 @@
 import sys
 import unittest
+import copy
 from datetime import date
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -182,6 +183,129 @@ class ConsoleAssetHashTests(unittest.TestCase):
         pending = tool.changed_update_paths(project_root)
 
         self.assertEqual(pending, [])
+
+
+class DartFilingWatchTests(unittest.TestCase):
+    def test_dart_watch_universe_includes_portfolio_and_interest_korean_tickers(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio_store = {
+            "portfolios": {
+                "DEFAULT": {
+                    "holdings": [
+                        {"ticker": "003230", "name": "삼양식품"},
+                        {"ticker": "PL", "name": "Planet Labs"},
+                        {"ticker": "CASH", "name": "현금"},
+                    ]
+                }
+            }
+        }
+        interest_store = {
+            "tickers": [
+                {"ticker": "071050", "name": "한국금융지주"},
+                {"ticker": "AAPL", "name": "Apple"},
+            ],
+            "sectors": [],
+        }
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=portfolio_store),
+            patch.object(main, "read_interest_list", return_value=interest_store),
+        ):
+            universe = main.dart_watch_universe(settings)
+
+        self.assertEqual(universe["target_tickers"], ["003230", "071050"])
+        self.assertEqual(universe["portfolio_tickers"], ["003230"])
+        self.assertEqual(universe["interest_tickers"], ["071050"])
+        self.assertEqual(universe["target_count"], 2)
+        self.assertIn(
+            {"ticker": "PL", "source": "portfolio", "reason": "non_kr_ticker"},
+            universe["excluded_tickers"],
+        )
+        self.assertIn(
+            {"ticker": "AAPL", "source": "interest", "reason": "non_kr_ticker"},
+            universe["excluded_tickers"],
+        )
+
+    def test_daily_dart_refresh_records_full_portfolio_interest_coverage(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(
+            research_vault_dir="../research_vault",
+            dart_api_key="FAKE_DART_KEY",
+            dart_filing_lookback_days=45,
+        )
+        portfolio_store = {
+            "portfolios": {
+                "DEFAULT": {
+                    "holdings": [
+                        {"ticker": "003230", "name": "삼양식품"},
+                    ]
+                }
+            }
+        }
+        interest_store = {
+            "tickers": [
+                {"ticker": "071050", "name": "한국금융지주"},
+            ],
+            "sectors": [],
+        }
+        cache_store = {"updated_at": None, "entries": {}, "last_run": None}
+        requested_tickers = []
+
+        class FakeOpenDartClient:
+            is_configured = True
+
+            def __init__(self, _settings):
+                pass
+
+            def fetch_recent_filings(self, ticker, *, lookback_days, page_count):
+                requested_tickers.append((ticker, lookback_days, page_count))
+                return (
+                    {"corp_name": f"{ticker} 회사"},
+                    [
+                        {
+                            "corp_name": f"{ticker} 회사",
+                            "stock_code": ticker,
+                            "rcept_no": f"{ticker}202605150001",
+                            "report_name": "분기보고서 (2026.03)",
+                            "receipt_date": "20260515",
+                            "source_url": f"https://dart.fss.or.kr/{ticker}",
+                        }
+                    ],
+                )
+
+        def fake_read_cache(_settings):
+            return copy.deepcopy(cache_store)
+
+        def fake_write_cache(_settings, payload):
+            cache_store.clear()
+            cache_store.update(copy.deepcopy(payload))
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=portfolio_store),
+            patch.object(main, "read_interest_list", return_value=interest_store),
+            patch.object(main, "OpenDartClient", FakeOpenDartClient),
+            patch.object(main, "read_dart_filing_cache", side_effect=fake_read_cache),
+            patch.object(main, "write_dart_filing_cache", side_effect=fake_write_cache),
+            patch.object(main, "current_storage_date", return_value=date(2026, 5, 18)),
+            patch.object(main, "current_storage_timestamp", return_value="2026-05-18T09:00:00+09:00"),
+        ):
+            result = main.refresh_dart_filing_watch(settings, save_result=False)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["target_count"], 2)
+        self.assertEqual(result["target_universe"]["portfolio_tickers"], ["003230"])
+        self.assertEqual(result["target_universe"]["interest_tickers"], ["071050"])
+        self.assertEqual(sorted(ticker for ticker, _lookback, _page_count in requested_tickers), ["003230", "071050"])
+        self.assertTrue(all(lookback == 45 for _ticker, lookback, _page_count in requested_tickers))
+        self.assertEqual(cache_store["daily_check"]["date"], "2026-05-18")
+        self.assertEqual(cache_store["daily_check"]["checked_tickers"], ["003230", "071050"])
+        self.assertFalse(result["daily_check"]["due"])
+        self.assertEqual(result["saved_count"], 2)
 
 
 class PortfolioPerformanceTests(unittest.TestCase):

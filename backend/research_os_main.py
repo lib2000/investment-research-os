@@ -1618,8 +1618,10 @@ def merge_dart_latest_earnings_calendar(ticker: str, profile: dict, settings: Se
     return enriched
 
 
-def dart_watch_tickers(settings: Settings) -> list[str]:
-    tickers: set[str] = set()
+def dart_watch_universe(settings: Settings) -> dict:
+    portfolio_tickers: set[str] = set()
+    interest_tickers: set[str] = set()
+    excluded_tickers: list[dict] = []
     try:
         store = read_portfolio_store(settings)
         for portfolio in (store.get("portfolios") or {}).values():
@@ -1628,7 +1630,11 @@ def dart_watch_tickers(settings: Settings) -> list[str]:
             for holding in portfolio.get("holdings") or []:
                 ticker = normalize_ticker(str((holding or {}).get("ticker") or ""))
                 if fullmatch(r"\d{6}", ticker):
-                    tickers.add(ticker)
+                    portfolio_tickers.add(ticker)
+                elif ticker and ticker not in {"UNKNOWN", "CASH"}:
+                    excluded_tickers.append(
+                        {"ticker": ticker, "source": "portfolio", "reason": "non_kr_ticker"}
+                    )
     except Exception:
         pass
     try:
@@ -1638,10 +1644,51 @@ def dart_watch_tickers(settings: Settings) -> list[str]:
                 continue
             ticker = normalize_ticker(str(item.get("ticker") or ""))
             if fullmatch(r"\d{6}", ticker):
-                tickers.add(ticker)
+                interest_tickers.add(ticker)
+            elif ticker and ticker not in {"UNKNOWN", "CASH"}:
+                excluded_tickers.append(
+                    {"ticker": ticker, "source": "interest", "reason": "non_kr_ticker"}
+                )
     except Exception:
         pass
-    return sorted(tickers)
+    target_tickers = sorted(portfolio_tickers | interest_tickers)
+    return {
+        "target_tickers": target_tickers,
+        "portfolio_tickers": sorted(portfolio_tickers),
+        "interest_tickers": sorted(interest_tickers),
+        "excluded_tickers": excluded_tickers,
+        "target_count": len(target_tickers),
+        "portfolio_count": len(portfolio_tickers),
+        "interest_count": len(interest_tickers),
+    }
+
+
+def dart_watch_tickers(settings: Settings) -> list[str]:
+    return list(dart_watch_universe(settings).get("target_tickers") or [])
+
+
+def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
+    today = current_storage_date().isoformat()
+    daily_check = cache.get("daily_check") if isinstance(cache, dict) else {}
+    if not isinstance(daily_check, dict):
+        daily_check = {}
+    checked_date = str(daily_check.get("date") or "")
+    target_universe = dart_watch_universe(settings)
+    missing_today = checked_date != today
+    missing_targets = sorted(
+        set(target_universe.get("target_tickers") or [])
+        - set(daily_check.get("checked_tickers") or [])
+    ) if not missing_today else list(target_universe.get("target_tickers") or [])
+    return {
+        "date": today,
+        "due": bool(missing_today or missing_targets),
+        "last_checked_date": checked_date or None,
+        "last_checked_at": daily_check.get("checked_at"),
+        "last_target_count": daily_check.get("target_count", 0),
+        "current_target_count": target_universe.get("target_count", 0),
+        "missing_tickers": missing_targets,
+        "target_universe": target_universe,
+    }
 
 
 def dart_filing_importance(report_name: str) -> tuple[str, str, list[str]]:
@@ -1754,11 +1801,14 @@ def refresh_dart_filing_watch(
 ) -> dict:
     cache = read_dart_filing_cache(settings)
     entries = cache.setdefault("entries", {})
+    full_universe_refresh = tickers is None
+    target_universe = dart_watch_universe(settings)
     selected_tickers = [
         normalize_ticker(item)
-        for item in (tickers or dart_watch_tickers(settings))
+        for item in (tickers or target_universe.get("target_tickers") or [])
         if fullmatch(r"\d{6}", normalize_ticker(item))
     ]
+    selected_tickers = list(dict.fromkeys(selected_tickers))
     client = OpenDartClient(settings)
     saved: list[dict] = []
     skipped: list[dict] = []
@@ -1769,6 +1819,8 @@ def refresh_dart_filing_watch(
             "module": "dart_filing_watch",
             "reason": "DART_API_KEY가 없어 DART 신규 공시 자동 감시를 건너뜁니다.",
             "target_count": len(selected_tickers),
+            "target_universe": target_universe,
+            "daily_check": dart_daily_check_status(cache, settings),
             "cache_path": str(dart_filing_cache_path(settings)),
         }
 
@@ -1804,14 +1856,29 @@ def refresh_dart_filing_watch(
     cache["updated_at"] = current_storage_timestamp()
     cache["last_run"] = current_storage_timestamp()
     cache["target_tickers"] = selected_tickers
+    cache["target_universe"] = target_universe
     cache["source"] = "OpenDART list.json"
     cache["last_failures"] = failed
     cache["entries"] = dict(list(entries.items())[-800:])
+    if full_universe_refresh:
+        cache["daily_check"] = {
+            "date": current_storage_date().isoformat(),
+            "checked_at": current_storage_timestamp(),
+            "target_count": len(selected_tickers),
+            "checked_tickers": selected_tickers,
+            "failed_tickers": [item.get("ticker") for item in failed if item.get("ticker")],
+            "saved_count": len(saved),
+            "skipped_count": len(skipped),
+            "lookback_days": settings.dart_filing_lookback_days,
+            "source": "portfolio_and_interest_daily_watch",
+        }
     write_dart_filing_cache(settings, cache)
     return {
         "status": "success" if not failed else "partial_success",
         "module": "dart_filing_watch",
         "target_count": len(selected_tickers),
+        "target_universe": target_universe,
+        "daily_check": dart_daily_check_status(cache, settings),
         "saved_count": len(saved),
         "skipped_count": len(skipped),
         "failed_count": len(failed),
@@ -15534,6 +15601,8 @@ def get_dart_filing_watch_status(
         "refresh_hours": settings.dart_filing_refresh_hours,
         "lookback_days": settings.dart_filing_lookback_days,
         "target_tickers": dart_watch_tickers(settings),
+        "target_universe": dart_watch_universe(settings),
+        "daily_check": dart_daily_check_status(cache, settings),
         "updated_at": cache.get("updated_at"),
         "entry_count": len(entries or {}),
         "recent_entries": recent_entries,

@@ -4345,7 +4345,12 @@ function summarizeSystemCheckValue(label, value) {
   }
   if (label.includes("DART")) {
     const failures = Array.isArray(value.last_failures) ? value.last_failures.length : 0;
-    return `감시 대상 ${value.target_tickers?.length || 0}개 · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건`;
+    const daily = value.daily_check || {};
+    const universe = value.target_universe || {};
+    const dailyState = daily.due ? "오늘 점검 필요" : "오늘 점검 완료";
+    const portfolioCount = universe.portfolio_tickers?.length || 0;
+    const interestCount = universe.interest_tickers?.length || 0;
+    return `감시 대상 ${value.target_tickers?.length || 0}개(보유 ${portfolioCount} · 관심 ${interestCount}) · ${dailyState} · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건`;
   }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
