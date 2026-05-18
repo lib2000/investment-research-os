@@ -9,7 +9,7 @@
 | 공식 명칭 | 경로 | 현재 역할 | 변경 정책 |
 |---|---|---|---|
 | Research OS Backend | `backend\research_os_main.py` | 현재 FastAPI 앱 진입점 | 즉시 삭제하지 않고 라우터/서비스를 단계적으로 분리 |
-| Research OS Domain | `backend\research_os\` | 데이터 프로바이더, RAG, 리서치 메모리, 엑셀 내보내기 유틸, 설정 | 새 백엔드 도메인 로직은 이 하위로 이동 |
+| Research OS Domain | `backend\research_os\` | 데이터 프로바이더, RAG, 리서치 메모리, 웹 캡처 유틸, 엑셀 내보내기 유틸, 설정 | 새 백엔드 도메인 로직은 이 하위로 이동 |
 | Journal/Brokerage Domain | `backend\app\` | 기존 매매일지, 증권사 연동 도메인 | Research OS와 섞지 않고 유지 |
 | Classic Research Console | `mobile_app\research_console\` | 현재 운영 정적 웹 콘솔 | 기능 안정성 우선. 이동은 별도 단계에서만 수행 |
 | React Research Console | `apps\research-console\` | 장기 React/Vite 이관 대상 | 새 화면/리팩터링의 목표 위치 |
