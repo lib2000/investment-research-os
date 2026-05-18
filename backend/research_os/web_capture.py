@@ -1039,6 +1039,33 @@ def render_source_url_body(url_info: dict | None) -> str:
     return ""
 
 
+def render_source_url_context(url_info: dict | None) -> str:
+    if not url_info:
+        return ""
+    lines = [
+        "[웹사이트 입력]",
+        f"원본 URL: {url_info.get('source_url') or '미입력'}",
+        f"최종 URL: {url_info.get('final_url') or url_info.get('source_url') or '미확인'}",
+        f"처리 상태: {url_info.get('status') or 'unknown'}",
+        f"처리 메모: {url_info.get('note') or '없음'}",
+    ]
+    if url_info.get("title"):
+        lines.append(f"웹페이지 제목: {url_info['title']}")
+    if url_info.get("language"):
+        lines.append(
+            f"원문 언어: {translation_language_label(str(url_info.get('language') or 'unknown'))}"
+        )
+    if url_info.get("translation_status"):
+        lines.append(
+            f"한국어 변환: {url_info.get('translation_status')} - {url_info.get('translation_note') or '메모 없음'}"
+        )
+    if url_info.get("content_type"):
+        lines.append(f"콘텐츠 유형: {url_info['content_type']}")
+    if url_info.get("text"):
+        lines.extend(["", "[웹사이트 본문 추출]", url_info["text"][:30000]])
+    return "\n".join(lines)
+
+
 def render_url_only_capture_context(source_url: str, url_info: dict | None) -> str:
     """
     Preserve paywalled or script-rendered URLs even when the backend cannot extract article text.
