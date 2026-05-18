@@ -186,6 +186,122 @@ class ConsoleAssetHashTests(unittest.TestCase):
 
 
 class DartFilingWatchTests(unittest.TestCase):
+    def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
+        import research_os_main as main
+
+        cache = {
+            "entries": {
+                "old-discovered-today": {
+                    "ticker": "361610",
+                    "detected_at": "2026-05-18T15:38:43+09:00",
+                    "filing": {
+                        "report_name": "유상증자결정",
+                        "receipt_date": "20260429",
+                        "rcept_no": "20260429800839",
+                    },
+                },
+                "latest-discovered-earlier": {
+                    "ticker": "361610",
+                    "detected_at": "2026-05-17T10:00:00+09:00",
+                    "filing": {
+                        "report_name": "분기보고서 (2026.03)",
+                        "receipt_date": "20260515",
+                        "rcept_no": "20260515002149",
+                    },
+                },
+            }
+        }
+
+        recent = main.recent_dart_cache_entries(cache, "361610", limit=2)
+
+        self.assertEqual(recent[0]["filing"]["rcept_no"], "20260515002149")
+
+    def test_dart_periodic_filing_overrides_schedule_fallback_for_same_quarter(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        profile = {
+            "ticker": "033500",
+            "company_name": "동성화인텍",
+            "country": "KR",
+            "latest_reported_quarter": "FY2026 Q1",
+            "latest_reported_earnings_date": "2026-05-15",
+            "earnings_calendar_source": "DART 정기보고서 제출 기한 기준 자동 산출",
+            "latest_earnings_profile": {
+                "quarter": "FY2026 Q1",
+                "earnings_report_date": "2026-05-15",
+            },
+        }
+        signal = {
+            "recent_entries": [
+                {
+                    "filing": {
+                        "corp_name": "동성화인텍",
+                        "stock_code": "033500",
+                        "rcept_no": "20260514001136",
+                        "report_name": "분기보고서 (2026.03)",
+                        "receipt_date": "20260514",
+                        "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260514001136",
+                    }
+                }
+            ]
+        }
+
+        with (
+            patch.object(main, "refresh_dart_filing_for_ticker_if_stale") as refresh_mock,
+            patch.object(main, "build_dart_filing_signal", return_value=signal),
+        ):
+            enriched = main.merge_dart_latest_earnings_calendar("033500", profile, settings)
+
+        refresh_mock.assert_called_once()
+        self.assertEqual(enriched["latest_reported_quarter"], "FY2026 Q1")
+        self.assertEqual(enriched["latest_reported_earnings_date"], "2026-05-14")
+        self.assertIn("OpenDART 신규 공시 목록", enriched["earnings_calendar_source"])
+        self.assertEqual(enriched["latest_earnings_profile"]["earnings_report_date"], "2026-05-14")
+
+    def test_cached_dart_periodic_filing_is_used_without_external_refresh(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+
+        def fake_profile(_ticker, _settings):
+            return {
+                "ticker": "361610",
+                "company_name": "SK아이이테크놀로지",
+                "country": "KR",
+            }
+
+        signal = {
+            "recent_entries": [
+                {
+                    "filing": {
+                        "corp_name": "SK아이이테크놀로지",
+                        "stock_code": "361610",
+                        "rcept_no": "20260515002149",
+                        "report_name": "분기보고서 (2026.03)",
+                        "receipt_date": "20260515",
+                        "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260515002149",
+                    }
+                }
+            ]
+        }
+
+        with (
+            patch.object(main, "current_storage_date", return_value=date(2026, 5, 18)),
+            patch.object(main, "verified_profile_for_ticker", side_effect=fake_profile),
+            patch.object(main, "refresh_dart_filing_for_ticker_if_stale") as refresh_mock,
+            patch.object(main, "build_dart_filing_signal", return_value=signal),
+            patch.object(main, "merge_cached_earnings_calendar", side_effect=lambda _ticker, profile, *_args, **_kwargs: profile),
+        ):
+            profile = main.official_ticker_profile("361610", settings, refresh_external=False)
+
+        refresh_mock.assert_not_called()
+        self.assertEqual(profile["latest_reported_quarter"], "FY2026 Q1")
+        self.assertEqual(profile["latest_reported_earnings_date"], "2026-05-15")
+        self.assertIn("OpenDART 신규 공시 목록", profile["earnings_calendar_source"])
+
     def test_dart_watch_universe_includes_portfolio_and_interest_korean_tickers(self):
         import research_os_main as main
         from research_os.settings import Settings
@@ -304,8 +420,43 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertTrue(all(lookback == 45 for _ticker, lookback, _page_count in requested_tickers))
         self.assertEqual(cache_store["daily_check"]["date"], "2026-05-18")
         self.assertEqual(cache_store["daily_check"]["checked_tickers"], ["003230", "071050"])
+        self.assertEqual(result["daily_check"]["status"], "complete")
+        self.assertEqual(result["daily_check"]["failure_count"], 0)
         self.assertFalse(result["daily_check"]["due"])
         self.assertEqual(result["saved_count"], 2)
+
+    def test_daily_dart_status_surfaces_partial_success_failures(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        cache = {
+            "daily_check": {
+                "date": "2026-05-18",
+                "checked_at": "2026-05-18T09:00:00+09:00",
+                "target_count": 2,
+                "checked_tickers": ["003230", "071050"],
+                "failed_tickers": ["071050"],
+            }
+        }
+        target_universe = {
+            "target_tickers": ["003230", "071050"],
+            "portfolio_tickers": ["003230"],
+            "interest_tickers": ["071050"],
+            "excluded_tickers": [],
+            "target_count": 2,
+        }
+
+        with (
+            patch.object(main, "current_storage_date", return_value=date(2026, 5, 18)),
+            patch.object(main, "dart_watch_universe", return_value=target_universe),
+        ):
+            status = main.dart_daily_check_status(cache, settings)
+
+        self.assertFalse(status["due"])
+        self.assertEqual(status["status"], "partial_success")
+        self.assertEqual(status["failed_tickers"], ["071050"])
+        self.assertEqual(status["failure_count"], 1)
 
 
 class PortfolioPerformanceTests(unittest.TestCase):

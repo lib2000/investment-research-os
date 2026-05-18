@@ -1385,8 +1385,8 @@ def recent_dart_cache_entries(cache: dict, ticker: str | None = None, limit: int
         entries = [entry for entry in entries if normalize_ticker(entry.get("ticker") or "") == normalized_ticker]
     entries.sort(
         key=lambda entry: (
-            str(entry.get("detected_at") or ""),
             str(((entry.get("filing") or {}).get("receipt_date")) or ""),
+            str(entry.get("detected_at") or ""),
         ),
         reverse=True,
     )
@@ -1558,11 +1558,18 @@ def korean_earnings_neighbor_dates(quarter_label: str | None) -> tuple[str | Non
     return None, None
 
 
-def merge_dart_latest_earnings_calendar(ticker: str, profile: dict, settings: Settings | None) -> dict:
+def merge_dart_latest_earnings_calendar(
+    ticker: str,
+    profile: dict,
+    settings: Settings | None,
+    *,
+    refresh_if_stale: bool = True,
+) -> dict:
     if not settings or not profile or profile.get("country") != "KR":
         return profile
     normalized_ticker = normalize_ticker(ticker)
-    refresh_dart_filing_for_ticker_if_stale(normalized_ticker, settings)
+    if refresh_if_stale:
+        refresh_dart_filing_for_ticker_if_stale(normalized_ticker, settings)
     signal = build_dart_filing_signal(normalized_ticker, settings)
     entries = []
     for entry in signal.get("recent_entries") or []:
@@ -1577,7 +1584,17 @@ def merge_dart_latest_earnings_calendar(ticker: str, profile: dict, settings: Se
     receipt_date, quarter_label, filing = sorted(entries, key=lambda item: item[0], reverse=True)[0]
     latest_date = datetime.strptime(receipt_date, "%Y%m%d").date().isoformat()
     current_latest = parse_iso_date(profile.get("latest_reported_earnings_date"))
-    if current_latest and parse_iso_date(latest_date) and parse_iso_date(latest_date) < current_latest:
+    latest_parsed = parse_iso_date(latest_date)
+    current_source = str(profile.get("earnings_calendar_source") or "")
+    current_quarter = normalize_quarter_label(profile.get("latest_reported_quarter"))
+    dart_quarter = normalize_quarter_label(quarter_label)
+    schedule_fallback = "DART 정기보고서 제출 기한 기준" in current_source
+    if (
+        current_latest
+        and latest_parsed
+        and latest_parsed < current_latest
+        and not (schedule_fallback and current_quarter == dart_quarter)
+    ):
         return profile
     previous_date, next_date = korean_earnings_neighbor_dates(quarter_label)
     enriched = dict(profile)
@@ -1679,14 +1696,25 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
         set(target_universe.get("target_tickers") or [])
         - set(daily_check.get("checked_tickers") or [])
     ) if not missing_today else list(target_universe.get("target_tickers") or [])
+    failed_tickers = sorted(
+        {
+            normalize_ticker(str(item))
+            for item in (daily_check.get("failed_tickers") or [])
+            if normalize_ticker(str(item))
+        }
+    )
+    due = bool(missing_today or missing_targets)
     return {
         "date": today,
-        "due": bool(missing_today or missing_targets),
+        "status": "due" if due else "partial_success" if failed_tickers else "complete",
+        "due": due,
         "last_checked_date": checked_date or None,
         "last_checked_at": daily_check.get("checked_at"),
         "last_target_count": daily_check.get("target_count", 0),
         "current_target_count": target_universe.get("target_count", 0),
         "missing_tickers": missing_targets,
+        "failed_tickers": failed_tickers,
+        "failure_count": len(failed_tickers),
         "target_universe": target_universe,
     }
 
@@ -3438,8 +3466,12 @@ def official_ticker_profile(
 ) -> dict:
     profile = verified_profile_for_ticker(ticker, settings) or {}
     profile = with_earnings_calendar_defaults(ticker, profile)
-    if refresh_external:
-        profile = merge_dart_latest_earnings_calendar(ticker, profile, settings)
+    profile = merge_dart_latest_earnings_calendar(
+        ticker,
+        profile,
+        settings,
+        refresh_if_stale=refresh_external,
+    )
     return merge_cached_earnings_calendar(ticker, profile, settings, refresh=refresh_external)
 
 def ticker_company_name(ticker: str) -> str:
