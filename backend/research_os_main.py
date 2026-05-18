@@ -140,13 +140,9 @@ from research_os.security import verify_user_token
 from research_os.settings import Settings, get_settings, mask_secret
 from research_os.web_capture import (
     clean_web_article_text,
-    extract_webpage_text,
-    fetch_url_with_retry,
+    fetch_capture_source_url,
     foreign_text_korean_digest,
-    is_safe_capture_url,
     is_unusable_source_url,
-    local_glossary_translate_line,
-    official_url_fallback_summary,
     render_source_url_body,
     render_url_only_capture_context,
     translation_language_label,
@@ -12726,83 +12722,6 @@ def build_interest_automation_board(settings: Settings, *, save_result: bool = T
         )
         payload["storage_path"] = str(interest_collection_targets_path(settings))
     return payload
-
-
-def fetch_capture_source_url(source_url: str) -> dict:
-    cleaned_url = source_url.strip()
-    if not cleaned_url:
-        return {}
-    if not is_safe_capture_url(cleaned_url):
-        return {
-            "source_url": cleaned_url,
-            "final_url": cleaned_url,
-            "status": "invalid",
-            "note": "http/https 형식의 외부 웹사이트 주소만 입력할 수 있습니다.",
-            "text": "",
-        }
-    response, attempts = fetch_url_with_retry(cleaned_url)
-    if response is None:
-        fallback = official_url_fallback_summary(cleaned_url, attempts)
-        if fallback:
-            return fallback
-        return {
-            "source_url": cleaned_url,
-            "final_url": cleaned_url,
-            "status": "fetch_failed",
-            "note": "웹사이트 본문 수집 실패: " + " | ".join(attempts[:4]),
-            "text": "",
-            "fetch_attempts": attempts,
-        }
-
-    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-    body_bytes = response.content[:4_000_000]
-    text = ""
-    title = ""
-    note = "웹사이트 본문 텍스트를 추출했습니다."
-    if content_type == "application/pdf" or cleaned_url.lower().endswith(".pdf"):
-        text, pdf_note = extract_pdf_text(body_bytes)
-        note = f"URL PDF 텍스트 추출: {pdf_note}"
-    else:
-        response.encoding = response.encoding or "utf-8"
-        raw_text = response.text[:2_000_000]
-        if "html" in content_type or "<html" in raw_text[:1000].lower():
-            title, text = extract_webpage_text(raw_text)
-        else:
-            text = "\n".join(line.strip() for line in raw_text.splitlines() if line.strip())[:30000]
-            title = ""
-    text = clean_web_article_text(text)
-    original_text = text
-    translation_info = foreign_text_korean_digest(text, title) if text else {
-        "language": "unknown",
-        "status": "empty",
-        "text": "",
-        "note": "변환할 본문이 없습니다.",
-    }
-    if translation_info.get("text"):
-        text = translation_info["text"]
-    translated_title = (
-        local_glossary_translate_line(title, translation_info.get("language") or "unknown")
-        if title and translation_info.get("language") not in {"ko", "unknown"}
-        else title
-    )
-    return {
-        "source_url": cleaned_url,
-        "final_url": str(response.url),
-        "status": "success" if text else "empty_text",
-        "content_type": content_type or "unknown",
-        "title": translated_title,
-        "original_title": title if translated_title != title else "",
-        "language": translation_info.get("language") or "unknown",
-        "translation_status": translation_info.get("status") or "unknown",
-        "translation_note": translation_info.get("note") or "",
-        "note": (
-            f"{note} {translation_info.get('note') or ''}".strip()
-            if text
-            else "웹사이트에 접속했지만 본문 텍스트를 충분히 추출하지 못했습니다."
-        ),
-        "text": text[:30000],
-        "original_text": original_text[:30000] if original_text and original_text != text else "",
-    }
 
 
 def render_source_url_context(url_info: dict | None) -> str:
