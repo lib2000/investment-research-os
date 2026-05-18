@@ -137,10 +137,12 @@ from research_os.settings import Settings, get_settings, mask_secret
 from research_os.web_capture import (
     clean_web_article_text,
     extract_webpage_text,
+    fetch_url_with_retry,
     foreign_text_korean_digest,
     is_safe_capture_url,
     is_unusable_source_url,
     local_glossary_translate_line,
+    official_url_fallback_summary,
     render_source_url_body,
     render_url_only_capture_context,
     translation_language_label,
@@ -12720,93 +12722,6 @@ def build_interest_automation_board(settings: Settings, *, save_result: bool = T
         )
         payload["storage_path"] = str(interest_collection_targets_path(settings))
     return payload
-
-
-def capture_url_headers(cleaned_url: str) -> dict[str, str]:
-    parsed = urlparse(cleaned_url)
-    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else cleaned_url
-    return {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0 Safari/537.36 InvestmentResearchOS/1.0"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,text/plain,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Referer": origin,
-    }
-
-
-def fetch_url_with_retry(cleaned_url: str) -> tuple[httpx.Response | None, list[str]]:
-    attempts: list[str] = []
-    headers = capture_url_headers(cleaned_url)
-    for trust_env in [False, True]:
-        mode = "direct" if not trust_env else "system_proxy"
-        try:
-            with httpx.Client(
-                follow_redirects=True,
-                timeout=httpx.Timeout(18.0, connect=8.0),
-                headers=headers,
-                trust_env=trust_env,
-            ) as client:
-                response = client.get(cleaned_url)
-                response.raise_for_status()
-                attempts.append(f"{mode}: success {response.status_code}")
-                return response, attempts
-        except Exception as error:
-            attempts.append(f"{mode}: {error}")
-    return None, attempts
-
-
-def official_url_fallback_summary(cleaned_url: str, attempts: list[str] | None = None) -> dict | None:
-    parsed = urlparse(cleaned_url)
-    host = (parsed.hostname or "").lower()
-    path = (parsed.path or "").lower()
-    if host.endswith("isomorphiclabs.com") and "isomorphic-labs-announces-series-b-investment-round" in path:
-        title = "Isomorphic Labs Series B 투자 라운드 발표"
-        text = "\n".join(
-            [
-                title,
-                "",
-                "공식 발표일: 2026-05-12",
-                "자료 성격: 비상장 AI 신약개발 기업의 대규모 자금조달 발표",
-                "",
-                "핵심 내용",
-                "- Isomorphic Labs가 Series B 라운드에서 21억 달러 규모의 자금을 조달했다고 발표했습니다.",
-                "- 라운드는 Thrive Capital이 주도했고 Alphabet, GV, MGX, Temasek, CapitalG, UK Sovereign AI Fund 등이 참여했습니다.",
-                "- 조달 목적은 AI 신약 설계 엔진 IsoDDE 확장, 글로벌 사업 확대, 후보 파이프라인 진전입니다.",
-                "",
-                "투자 활용 포인트",
-                "- 직접 상장 종목이 아니므로 개별 티커 자료가 아니라 AI 신약개발·바이오 플랫폼 섹터 자료로 분류합니다.",
-                "- Alphabet 생태계의 AI 헬스케어 확장, 대형 사모 자금의 AI 바이오 선호, 신약개발 자동화 테마를 점검할 근거입니다.",
-                "- 관련 비교군은 AI 신약개발, 바이오 플랫폼, 빅테크 헬스케어 투자, CRO/제약 R&D 생산성 테마입니다.",
-                "",
-                "주의점",
-                "- 매출·임상 성과가 아니라 자금조달 이벤트이므로 투자 논거에는 기술 검증, 파트너십, 파이프라인 진전 확인이 필요합니다.",
-            ]
-        )
-        attempt_note = "; ".join(attempts or [])[:800]
-        return {
-            "source_url": cleaned_url,
-            "final_url": cleaned_url,
-            "status": "official_fallback_summary",
-            "content_type": "text/html",
-            "title": title,
-            "original_title": "Isomorphic Labs announces Series B investment round",
-            "language": "en",
-            "translation_status": "official_korean_summary",
-            "translation_note": "직접 수집이 실패해 공식 발표의 핵심 사실을 한국어 투자 메모로 정리했습니다.",
-            "note": (
-                "백엔드 직접 접속이 거부되어 공식 URL 전용 보조 요약을 사용했습니다. "
-                f"재시도 로그: {attempt_note}"
-            ).strip(),
-            "text": text[:30000],
-            "original_text": "",
-            "fetch_attempts": attempts or [],
-        }
-    return None
 
 
 def fetch_capture_source_url(source_url: str) -> dict:

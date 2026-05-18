@@ -18,7 +18,7 @@
 - `rag_memory.py`: RAG 문서와 thesis snapshot 색인/검색
 - `data_providers.py`: 외부 데이터 프로바이더 클라이언트
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
-- `web_capture.py`: 웹 URL 안전성, HTML 본문 추출, 언어 감지, 로컬 한국어 분석 메모 변환, URL-only 보관 문구 유틸
+- `web_capture.py`: 웹 URL 안전성, HTML 본문 추출, 네트워크 재시도/fallback, 언어 감지, 로컬 한국어 분석 메모 변환, URL-only 보관 문구 유틸
 
 ## 장기 분리 기준
 
