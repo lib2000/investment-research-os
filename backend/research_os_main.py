@@ -13774,6 +13774,55 @@ def read_root() -> dict:
     return {"message": "매매일지 백엔드 서버가 정상 작동 중입니다."}
 
 
+def _configured_secret(value: str | None) -> bool:
+    normalized = str(value or "").strip()
+    return bool(normalized and normalized != "********")
+
+
+def credential_storage_policy(settings: Settings) -> dict:
+    return {
+        "runtime_source": "환경변수와 로컬 .env 파일은 python-dotenv로 로드합니다.",
+        "local_secret_files": [
+            ".env",
+            "backend/.env",
+            "mobile_app/.env",
+            "apps/mobile/.env",
+        ],
+        "gitignore_required": True,
+        "frontend_rule": (
+            "EXPO_PUBLIC_* 값은 앱 번들에 노출될 수 있으므로 API Base URL과 개발용 토큰 외의 "
+            "증권사/API 키를 넣지 않습니다."
+        ),
+        "backend_rule": "증권사/API 키, 접근 토큰, SECRET_SALT는 백엔드 환경변수 또는 무시된 로컬 파일에만 둡니다.",
+        "token_cache": {
+            "kis_allow_token_issue": settings.kis_allow_token_issue,
+            "kis_access_token_file_configured": bool(settings.kis_access_token_file.strip()),
+            "kis_token_cache_file": settings.kis_token_cache_file,
+            "default_location": "../research_vault/_system/kis_access_token.json",
+            "gitignored_by_default": True,
+            "note": "KIS tokenP 신규 발급은 기본 비활성화이며, 기존 토큰 재사용 또는 무시된 캐시 파일을 우선합니다.",
+        },
+        "configured_secrets": {
+            "kiwoom_api_key": _configured_secret(settings.brokerage_api_key),
+            "kiwoom_api_secret": _configured_secret(settings.brokerage_api_secret),
+            "secret_salt": _configured_secret(settings.secret_salt),
+            "kis_app_key": _configured_secret(settings.kis_app_key),
+            "kis_app_secret": _configured_secret(settings.kis_app_secret),
+            "kis_access_token": _configured_secret(settings.kis_access_token),
+            "dart_api_key": _configured_secret(settings.dart_api_key),
+            "financial_datasets_api_key": _configured_secret(settings.financial_datasets_api_key),
+            "finnhub_api_key": _configured_secret(settings.finnhub_api_key),
+            "tiingo_api_key": _configured_secret(settings.tiingo_api_key),
+            "alpha_vantage_api_key": _configured_secret(settings.alpha_vantage_api_key),
+            "tavily_api_key": _configured_secret(settings.tavily_api_key),
+            "brave_api_key": _configured_secret(settings.brave_api_key),
+            "nps_odcloud_api_key": _configured_secret(settings.nps_odcloud_api_key),
+            "customs_trade_api_key": _configured_secret(settings.customs_trade_api_key),
+        },
+        "response_rule": "상태/점검 API는 실제 값을 반환하지 않고 마스킹 값 또는 설정 여부만 반환합니다.",
+    }
+
+
 @app.get("/api/v1/config/safety")
 def read_safety_config(settings: Settings = Depends(get_settings)) -> dict:
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
@@ -13818,6 +13867,7 @@ def read_safety_config(settings: Settings = Depends(get_settings)) -> dict:
         "customs_trade_api_key": mask_secret(settings.customs_trade_api_key),
         "customs_trade_api_url": settings.customs_trade_api_url,
         "customs_trade_release_days": settings.customs_trade_release_days,
+        "credential_policy": credential_storage_policy(settings),
         "secrets_are_masked": True,
     }
 

@@ -141,6 +141,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 
 발급받은 키는 채팅이나 코드에 붙이지 말고 `backend\.env`에만 넣으세요. 토큰 발급 확인은 `/api/v1/brokerage/kiwoom/token-test`에서 마스킹된 응답으로 확인합니다.
 
+API 키, 접근 토큰, `.env` 파일, KIS 토큰 캐시의 보관 원칙은 [docs/credential-management.md](docs/credential-management.md)를 기준으로 관리합니다.
+
 계좌번호 조회 확인은 `/api/v1/brokerage/kiwoom/accounts-test`에서 마스킹된 계좌번호로 확인합니다.
 
 계좌번호는 원문을 저장하지 않는다. 표시가 필요한 경우에는 `1234****90` 형식의 마스킹 값만 사용하고, 식별/중복 제거가 필요한 경우에는 `SECRET_SALT` 기반 SHA-256 해시 앞 16자리만 사용한다.

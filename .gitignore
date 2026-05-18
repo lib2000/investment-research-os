@@ -11,6 +11,17 @@ apps/*/.env.*
 !backend/.env.example
 !mobile_app/.env.example
 !apps/*/.env.example
+secrets/
+credentials/
+backend/secrets/
+backend/credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*_access_token.json
+*_token_cache.json
+*access-token*.json
 
 # Python/runtime caches
 **/__pycache__/

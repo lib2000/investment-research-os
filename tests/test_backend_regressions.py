@@ -102,6 +102,43 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertIn("보관할 레거시 파일이 없습니다", policy["recommended_action"])
 
 
+class CredentialPolicyTests(unittest.TestCase):
+    def test_safety_config_masks_secrets_and_reports_policy_only(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(
+            brokerage_api_key="FAKEKEY123456789",
+            brokerage_api_secret="FAKESECRET123456789",
+            secret_salt="local-secret-salt",
+            kis_app_key="FAKEKISKEY123456789",
+            kis_app_secret="FAKEKISSECRET123456789",
+            kis_access_token="Bearer fake-token-for-test",
+            dart_api_key="FAKEDARTKEY123456789",
+            research_vault_dir="../research_vault",
+        )
+
+        response = main.read_safety_config(settings)
+        policy = response["credential_policy"]
+
+        self.assertTrue(response["secrets_are_masked"])
+        self.assertEqual(response["brokerage_api_key"], "FAKE****6789")
+        self.assertEqual(response["kis_access_token"] if "kis_access_token" in response else "********", "********")
+        self.assertTrue(policy["gitignore_required"])
+        self.assertTrue(policy["configured_secrets"]["kis_access_token"])
+        self.assertTrue(policy["configured_secrets"]["dart_api_key"])
+        self.assertIn("EXPO_PUBLIC_*", policy["frontend_rule"])
+        self.assertNotIn("fake-token-for-test", str(response))
+        self.assertNotIn("FAKEKISSECRET123456789", str(response))
+
+    def test_mask_secret_never_returns_short_secret_values(self):
+        from research_os.settings import mask_secret
+
+        self.assertEqual(mask_secret("short"), "********")
+        self.assertEqual(mask_secret(""), "********")
+        self.assertEqual(mask_secret("1234567890abcdef"), "1234****cdef")
+
+
 class PortfolioPerformanceTests(unittest.TestCase):
     def test_performance_marks_overseas_history_limits_and_cache_mode(self):
         import research_os_main as main
