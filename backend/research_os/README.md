@@ -11,6 +11,14 @@
 - 외부 데이터 프로바이더 연동
 - 비용/쿼터 가드
 
+## 현재 분리된 모듈
+
+- `models.py`: API 입출력 모델과 도메인 스키마
+- `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
+- `rag_memory.py`: RAG 문서와 thesis snapshot 색인/검색
+- `data_providers.py`: 외부 데이터 프로바이더 클라이언트
+- `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
+
 ## 장기 분리 기준
 
 ```text
