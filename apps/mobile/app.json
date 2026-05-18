@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "InvestLog",
+    "slug": "invest-log",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "investlog",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://127.0.0.1:8010"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "investment-research-console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5173",
+    "check": "node --check vite.config.js && node --check src/shared/api/client.js && node --check src/shared/api/portfolioApi.js && node --check src/shared/api/researchApi.js && node --check src/shared/format/money.js && node --check src/shared/format/percent.js && node --check src/features/portfolio/portfolioModel.js && node --check src/features/portfolio/portfolioApi.integration.test.js",
+    "test:portfolio": "node src/features/portfolio/portfolioModel.test.js",
+    "test:portfolio-api": "node src/features/portfolio/portfolioApi.integration.test.js",
+    "verify": "npm run check && npm run test:portfolio && npm run test:portfolio-api && npm run build"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {}
+}

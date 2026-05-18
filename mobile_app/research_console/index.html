@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>투자 리서치 콘솔</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">투자 리서치 OS</p>
+          <h1>리서치 콘솔</h1>
+        </div>
+        <div class="connection-panel">
+          <label>
+            API 주소
+            <input id="apiBaseUrl" type="url" value="http://127.0.0.1:8001" />
+          </label>
+          <label>
+            개발 토큰
+            <input id="accessToken" type="text" value="dev-local-token" />
+          </label>
+          <button id="statusButton" type="button">상태 확인</button>
+        </div>
+      </header>
+
+      <section class="status-grid" aria-live="polite">
+        <div>
+          <span>백엔드</span>
+          <strong id="backendStatus">대기</strong>
+        </div>
+        <div>
+          <span>데이터 프로바이더</span>
+          <strong id="providerStatus">대기</strong>
+        </div>
+        <div>
+          <span>저장된 보고서</span>
+          <strong id="manifestStatus">대기</strong>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="Research modules">
+        <button class="tab active" data-tab="dashboard" type="button">대시보드</button>
+        <button class="tab" data-tab="team" type="button">팀 리포트</button>
+        <button class="tab" data-tab="trade" type="button">매매 전략</button>
+        <button class="tab" data-tab="chart" type="button">차트 분석</button>
+        <button class="tab" data-tab="earnings" type="button">실적 분석</button>
+        <button class="tab" data-tab="sector" type="button">섹터 발굴</button>
+        <button class="tab" data-tab="compounder" type="button">복리 성장주</button>
+        <button class="tab" data-tab="capture" type="button">정보 입력</button>
+        <button class="tab" data-tab="news" type="button">뉴스</button>
+        <button class="tab" data-tab="llmBridge" type="button">LLM 연동</button>
+        <button class="tab" data-tab="reportAutomation" type="button">보고 자동화</button>
+        <button class="tab" data-tab="marketClose" type="button">시장 일지</button>
+        <button class="tab" data-tab="portfolio" type="button">포트폴리오</button>
+        <button class="tab" data-tab="interests" type="button">관심종목/섹터</button>
+        <button class="tab" data-tab="checklist" type="button">체크리스트</button>
+        <button class="tab" data-tab="memory" type="button">저장 데이터</button>
+      </nav>
+      <div id="actionFeedback" class="action-feedback" aria-live="assertive" hidden></div>
+
+      <section id="dashboard" class="panel active">
+        <form id="dashboardForm" class="dashboard-form">
+          <div class="dashboard-inputs">
+            <label>
+              티커 또는 회사명
+              <input name="ticker" list="dashboardTickerOptions" placeholder="선택하거나 직접 입력" autocomplete="off" />
+              <datalist id="dashboardTickerOptions"></datalist>
+            </label>
+            <label>
+              최근 사용 10개
+              <select id="dashboardTickerSelect">
+                <option value="">최근 사용 종목 선택</option>
+              </select>
+            </label>
+          </div>
+          <div class="dashboard-command-bar" aria-label="대시보드 실행 메뉴">
+            <button type="submit">대시보드 조회</button>
+            <button data-workflow-action="refresh-data" type="button">최신 데이터 조회</button>
+            <button data-workflow-action="run-team" type="button">리포트 실행</button>
+            <button data-workflow-action="diagnose-ticker" class="secondary" type="button">티커 진단</button>
+            <button data-workflow-action="chart" class="secondary" type="button">차트 분석</button>
+            <button data-workflow-action="capture" class="secondary" type="button">정보 입력</button>
+            <button data-workflow-action="memory" class="secondary" type="button">저장 데이터 보기</button>
+            <button data-workflow-action="system-check" class="secondary" type="button">시스템 점검</button>
+          </div>
+        </form>
+        <div id="dashboardTickerQuickList" class="dashboard-ticker-quick-list" aria-live="polite"></div>
+        <div id="dashboardCards" class="dashboard-grid" aria-live="polite">
+          <article class="dashboard-card">
+            <span>워크플로우</span>
+            <strong>대기</strong>
+            <p>기준 리포트, 체크리스트, 매매 전략, 실적 분석을 순서대로 연결합니다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="team" class="panel">
+        <form id="teamForm" class="form-grid">
+          <label>
+            티커
+            <input name="ticker" required value="삼양식품" />
+          </label>
+          <label>
+            투자 기간
+            <input name="investmentPeriod" value="3년" />
+          </label>
+          <label>
+            지역
+            <input name="region" value="KR" />
+          </label>
+          <label>
+            스타일
+            <select name="style">
+              <option value="growth">성장주</option>
+              <option value="balanced" selected>균형형</option>
+              <option value="value">가치주</option>
+              <option value="trading">트레이딩</option>
+            </select>
+          </label>
+          <label class="wide">
+            중점 분석
+            <input
+              name="focusArea"
+              value="사업 모델, 매출 성장, 마진, 밸류에이션, 주요 리스크"
+            />
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/재무 데이터 자동 주입
+          </label>
+          <button type="submit">7개 스킬 팀 리포트 실행</button>
+        </form>
+      </section>
+
+      <section id="trade" class="panel">
+        <form id="tradeForm" class="form-grid">
+          <label>
+            티커
+            <input name="ticker" required value="삼양식품" />
+          </label>
+          <label>
+            현재가
+            <input name="currentPrice" type="number" min="0.01" step="0.01" placeholder="KIS 현재가 자동 조회 가능" />
+          </label>
+          <label>
+            스타일
+            <select name="style">
+              <option value="scalp">아주 짧게 매매</option>
+              <option value="day">하루 안에 매매</option>
+              <option value="swing" selected>단기 보유(며칠~몇 주)</option>
+              <option value="position">중기 보유(몇 주~몇 달)</option>
+            </select>
+          </label>
+          <label>
+            허용 리스크
+            <select name="riskTolerance">
+              <option value="낮음">낮음</option>
+              <option value="보통" selected>보통</option>
+              <option value="높음">높음</option>
+            </select>
+          </label>
+          <label>
+            기준 포트폴리오
+            <select name="tradePortfolioName" id="tradePortfolioSelect">
+              <option value="">저장 포트폴리오 자동 선택</option>
+              <option value="__manual__">직접 입력</option>
+            </select>
+          </label>
+          <label>
+            포트폴리오 규모 (원)
+            <input name="portfolioSize" type="number" min="0" step="100000" placeholder="저장 포트폴리오 총액 자동 사용" />
+          </label>
+          <label>
+            1회 거래 리스크 (%)
+            <input name="riskPerTradePct" type="number" min="0.1" max="10" step="0.1" value="1" />
+          </label>
+          <label>
+            주의 비중 기준 (%)
+            <input name="warningWeightThreshold" type="number" min="0" max="100" step="1" value="10" />
+          </label>
+          <label>
+            고위험 비중 기준 (%)
+            <input name="highWeightThreshold" type="number" min="0" max="100" step="1" value="20" />
+          </label>
+          <label>
+            손실 경고 기준 (%)
+            <input name="lossWarningThreshold" type="number" min="-100" max="0" step="1" value="-15" />
+          </label>
+          <label class="wide">
+            시장 구조
+            <input name="marketStructure" value="중립 박스권" />
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/재무 데이터 자동 주입
+          </label>
+          <button type="submit">스마트 매매 전략 생성</button>
+        </form>
+      </section>
+
+      <section id="chart" class="panel">
+        <form id="chartForm" class="form-grid">
+          <label>
+            국내 종목명 또는 코드
+            <input name="ticker" required value="삼양식품" placeholder="예: 삼양식품 또는 003230" />
+          </label>
+          <label>
+            데이터 출처
+            <input value="네이버 증권 일별 시세" disabled />
+          </label>
+          <label class="switch">
+            <input name="saveResult" type="checkbox" checked />
+            분석 결과 저장
+          </label>
+          <button type="submit">6개 지표 차트 분석</button>
+          <p class="wide helper-text">
+            거래량, 볼린저 밴드, 이동평균선, MACD, RSI 14, DMI를 서버에서 자동 계산합니다.
+          </p>
+        </form>
+        <div id="chartVisualization" class="chart-visualization" aria-live="polite">
+          <p class="empty-state">차트 분석을 실행하면 가격 흐름, 거래량, 보조지표 요약 그래프가 표시됩니다.</p>
+        </div>
+      </section>
+
+      <section id="earnings" class="panel">
+        <form id="earningsForm" class="form-grid">
+          <label>
+            티커
+            <input name="ticker" required value="삼양식품" />
+          </label>
+          <label>
+            분기
+            <input name="quarter" required value="최신 발표 실적" placeholder="공식 최신 발표 실적을 기본 사용" />
+          </label>
+          <label>
+            실적 발표일
+            <input name="earningsReportDate" type="date" />
+          </label>
+          <label>
+            주가 반응
+            <input name="priceReaction" placeholder="예: +5.2%, -3.1%, 보합. 모르면 비워두기" />
+          </label>
+          <label>
+            다음 실적 예정일
+            <input name="nextEarningsDate" type="date" />
+          </label>
+          <label>
+            가이던스 변화
+            <select name="guidanceChange">
+              <option value="상향">상향</option>
+              <option value="유지" selected>유지</option>
+              <option value="하향">하향</option>
+              <option value="혼합">혼합</option>
+            </select>
+          </label>
+          <label>
+            EPS 발표
+            <input name="epsReported" type="number" step="0.01" placeholder="실제 발표 EPS" />
+          </label>
+          <label>
+            EPS 예상
+            <input name="epsExpected" type="number" step="0.01" placeholder="컨센서스 EPS" />
+          </label>
+          <label>
+            매출 발표
+            <input name="revenueReported" type="number" step="0.01" placeholder="실제 발표 매출" />
+          </label>
+          <label>
+            매출 예상
+            <input name="revenueExpected" type="number" step="0.01" placeholder="컨센서스 매출" />
+          </label>
+          <label class="wide">
+            경영진 톤
+            <input name="managementTone" placeholder="실적 콜에서 확인한 경영진 톤 입력" />
+          </label>
+          <label class="wide">
+            시장 맥락
+            <input name="marketContext" placeholder="예: 실적 전 기대치, 섹터 흐름, 주가 위치" />
+          </label>
+          <label>
+            직전 실적일
+            <input name="previousEarningsDate" type="date" />
+          </label>
+          <label class="wide">
+            직전 실적 주요 내용
+            <textarea name="previousEarningsSummary" class="small-code" placeholder="직전 실적의 매출, 마진, 현금흐름, 고객/계약, 가이던스 핵심 내용을 입력"></textarea>
+          </label>
+          <label class="wide">
+            다음 실적 가이던스
+            <textarea name="nextEarningsGuidance" class="small-code" placeholder="다음 실적에서 확인할 회사별 핵심 KPI와 가이던스 범위를 입력"></textarea>
+          </label>
+          <label class="wide">
+            추가 핵심 수치 JSON
+            <textarea name="keyNumbers" class="code-input small-code" placeholder='예: {"매출": "상회", "조정 EBITDA": "개선", "현금 소진": "축소"}'></textarea>
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/재무 데이터 자동 주입
+          </label>
+          <button type="submit">실적 반응 분석</button>
+        </form>
+      </section>
+
+      <section id="sector" class="panel">
+        <form id="sectorForm" class="form-grid">
+          <label>
+            지역
+            <select name="region">
+              <option value="US" selected>미국</option>
+              <option value="KR">한국</option>
+            </select>
+          </label>
+          <label>
+            기간
+            <input name="period" value="6개월" />
+          </label>
+          <label>
+            스타일
+            <select name="style">
+              <option value="성장">성장</option>
+              <option value="균형형" selected>균형형</option>
+              <option value="가치">가치</option>
+              <option value="방어">방어</option>
+            </select>
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/재무 데이터 자동 주입
+          </label>
+          <label class="wide">
+            섹터 또는 테마
+            <input name="focusTheme" placeholder="예: AI 인프라, 전력기기, 우주항공, 불닭 수출, 로봇" />
+          </label>
+          <label class="wide">
+            매크로 환경
+            <textarea name="macroEnvironment" required>AI CAPEX가 강하고 금리 인하 기대가 살아 있으며, 전력 인프라 수요와 에너지 가격 변동성이 함께 커지고 있습니다.</textarea>
+          </label>
+          <button type="submit">산업군 동향 리포트 생성</button>
+        </form>
+      </section>
+
+      <section id="compounder" class="panel">
+        <form id="compounderForm" class="form-grid">
+          <label>
+            지역
+            <select name="region">
+              <option value="US" selected>미국</option>
+              <option value="KR">한국</option>
+            </select>
+          </label>
+          <label>
+            섹터
+            <select name="sector">
+              <option value="전체" selected>전체</option>
+              <option value="기술">기술</option>
+              <option value="헬스케어">헬스케어</option>
+              <option value="소비재">소비재</option>
+              <option value="금융">금융</option>
+              <option value="산업재">산업재</option>
+            </select>
+          </label>
+          <label>
+            스타일
+            <select name="style">
+              <option value="퀄리티 성장" selected>퀄리티 성장</option>
+              <option value="고성장">고성장</option>
+              <option value="방어 성장">방어 성장</option>
+            </select>
+          </label>
+          <label>
+            최소 시가총액 (한국: 억원 / 미국: 백만 달러)
+            <input name="minMarketCap" type="number" min="0" step="100" value="5000" />
+          </label>
+          <label>
+            최대 시가총액 (한국: 억원 / 미국: 백만 달러)
+            <input name="maxMarketCap" type="number" min="0" step="1000" />
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/재무 데이터 자동 주입
+          </label>
+          <label class="wide">
+            스크리닝 기준
+            <textarea name="screeningCriteria" required>강력한 매출 성장, 높은 매출총이익률, 높은 FCF 마진, 지속 가능한 경쟁 우위, 확장 가능한 플랫폼 모델을 가진 기업을 찾습니다.</textarea>
+          </label>
+          <button type="submit">복리 성장주 발굴</button>
+        </form>
+      </section>
+
+      <section id="capture" class="panel">
+        <form id="captureForm" class="form-stack">
+        <label class="wide">
+          텍스트 입력
+          <textarea name="rawContent" placeholder="뉴스, 보고서 요약, 직접 메모, 거시경제 전망, 투자 동향 등을 그대로 붙여넣으세요. 티커가 있으면 자동 연결하고, 없으면 거시/섹터/시장/정책/금리/수급/미분류로 자동 분류합니다."></textarea>
+        </label>
+        <label class="wide">
+          웹사이트 주소
+          <input name="sourceUrl" type="url" placeholder="https://example.com/news-or-report" />
+        </label>
+        <div class="form-grid">
+          <label>
+            저장 위치
+            <select name="destination">
+              <option value="auto" selected>자동 분류 저장 데이터</option>
+              <option value="news">뉴스 인박스</option>
+              <option value="market">시장일지</option>
+            </select>
+          </label>
+          <button id="captureUrlPreviewButton" class="secondary" type="button">본문 미리보기</button>
+        </div>
+        <label>
+          파일 입력 (모든 파일)
+          <input name="researchFile" type="file" />
+          </label>
+          <div id="captureFileStatus" class="file-processing-status" aria-live="polite" hidden></div>
+          <label class="switch">
+            <input name="runThesisImpact" type="checkbox" checked />
+            종목이 확인되면 기존 투자 논거 영향도까지 분석
+          </label>
+          <button type="submit">자동 분류 저장</button>
+        </form>
+      </section>
+
+      <section id="news" class="panel">
+        <div class="panel-intro">
+          <h2>뉴스 인박스</h2>
+          <p>뉴스와 기사 링크는 먼저 독립 인박스에 저장한 뒤, 중복과 본문 품질을 확인하고 필요한 자료만 투자 논거로 승격합니다.</p>
+        </div>
+        <form id="newsForm" class="form-stack">
+          <label class="wide">
+            뉴스 본문
+            <textarea name="rawContent" placeholder="기사 본문, 뉴스 요약, 헤드라인 메모를 붙여넣으세요. 링크만 넣어도 서버에서 본문 추출을 시도합니다."></textarea>
+          </label>
+          <label class="wide">
+            뉴스 URL
+            <input name="sourceUrl" type="url" placeholder="https://example.com/news/article" />
+          </label>
+          <div class="button-row">
+            <button type="submit">뉴스 저장</button>
+            <button id="newsUrlPreviewButton" class="secondary" type="button">본문 미리보기</button>
+            <button id="newsInboxButton" class="secondary" type="button">뉴스 인박스 조회</button>
+            <button id="newsPromoteLatestButton" class="secondary" type="button">최근 뉴스 승격</button>
+          </div>
+        </form>
+        <div id="newsInboxList" class="news-inbox-list" aria-live="polite">
+          <div class="news-inbox-empty">뉴스 인박스를 조회하면 미승격 뉴스와 품질 확인 항목이 여기에 표시됩니다.</div>
+        </div>
+      </section>
+
+      <section id="llmBridge" class="panel">
+        <div class="panel-intro">
+          <h2>수동 LLM 연동</h2>
+          <p>ChatGPT, Gemini 등 웹 채팅창은 직접 사용하고, 이 콘솔은 프롬프트 생성과 응답 저장/분석만 담당합니다.</p>
+        </div>
+        <form id="llmPromptForm" class="form-grid">
+          <label>
+            대상
+            <input name="target" value="삼양식품" placeholder="티커, 종목명, 시장/섹터 주제" />
+          </label>
+          <label>
+            사용할 LLM
+            <select name="provider">
+              <option value="ChatGPT" selected>ChatGPT</option>
+              <option value="Gemini">Gemini</option>
+              <option value="Other">기타</option>
+            </select>
+          </label>
+          <label>
+            작업 유형
+            <select name="taskType">
+              <option value="종합 투자 분석" selected>종합 투자 분석</option>
+              <option value="실적 반응 분석">실적 반응 분석</option>
+              <option value="매매 전략 점검">매매 전략 점검</option>
+              <option value="시장 일지 분석">시장 일지 분석</option>
+              <option value="포트폴리오 리스크 점검">포트폴리오 리스크 점검</option>
+              <option value="정보 자동 분류">정보 자동 분류</option>
+            </select>
+          </label>
+          <label>
+            응답 형식
+            <select name="outputStyle">
+              <option value="요약+근거+다음 액션" selected>요약+근거+다음 액션</option>
+              <option value="Bull/Base/Bear 시나리오">Bull/Base/Bear 시나리오</option>
+              <option value="체크리스트">체크리스트</option>
+              <option value="리스크 중심">리스크 중심</option>
+            </select>
+          </label>
+          <label class="wide">
+            입력 자료
+            <textarea name="sourceContext" placeholder="분석할 뉴스, 리포트 요약, 실적 콜 메모, 시장 요약 등을 붙여넣으세요."></textarea>
+          </label>
+          <button type="submit">프롬프트 생성</button>
+          <button id="copyLlmPromptButton" class="secondary" type="button">프롬프트 복사</button>
+          <label class="wide">
+            생성된 프롬프트
+            <textarea id="llmPromptOutput" class="code-input small-code" readonly placeholder="프롬프트 생성 버튼을 누르면 여기에 표시됩니다."></textarea>
+          </label>
+        </form>
+        <form id="llmResultForm" class="form-stack">
+          <label class="wide">
+            LLM 응답 붙여넣기
+            <textarea name="llmResult" placeholder="ChatGPT/Gemini에서 생성된 답변을 그대로 붙여넣으세요."></textarea>
+          </label>
+          <label class="switch">
+            <input name="runThesisImpact" type="checkbox" checked />
+            종목이 확인되면 기존 투자 논거 영향도까지 분석
+          </label>
+          <button type="submit">응답 저장 및 분석</button>
+          <div class="form-hint">자동 로그인, 자동 전송, 웹 채팅창 자동 수집은 하지 않습니다. 응답을 붙여넣으면 저장 데이터와 RAG 메모리에 연결됩니다.</div>
+        </form>
+      </section>
+
+      <section id="reportAutomation" class="panel">
+        <div class="panel-intro">
+          <h2>보고 자동화</h2>
+          <p>어닝 콜, 공시, GP 패키지를 정리해 모델 업데이트 노트와 LP 보고 스테이징 초안을 만듭니다.</p>
+        </div>
+        <form id="earningsFilingNoteForm" class="form-grid">
+          <label>
+            종목
+            <input name="ticker" value="삼양식품" placeholder="티커 또는 회사명" required />
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            저장 데이터/공시/실적 데이터 함께 반영
+          </label>
+          <label class="wide">
+            어닝 콜 메모
+            <textarea name="earningsCall" placeholder="어닝 콜 주요 발언, Q&A, 가이던스 코멘트를 붙여넣으세요."></textarea>
+          </label>
+          <label class="wide">
+            어닝 콜/공시/리포트 파일
+            <input name="earningsFile" type="file" />
+          </label>
+          <label class="wide">
+            공시/리포트 핵심 내용
+            <textarea name="filingMaterial" placeholder="DART, SEC, 사업보고서, IR 자료 핵심 내용을 붙여넣으세요."></textarea>
+          </label>
+          <label class="wide">
+            기존 모델 메모
+            <textarea name="modelNotes" placeholder="기존 매출, 마진, FCF, 멀티플 가정 또는 수정할 항목을 적으세요."></textarea>
+          </label>
+          <button type="submit">모델 업데이트 노트 작성</button>
+        </form>
+
+        <form id="gpLpStagingForm" class="form-grid stacked-subform">
+          <label>
+            펀드/패키지 이름
+            <input name="fundName" value="GP 패키지" />
+          </label>
+          <label>
+            밸류에이션 템플릿
+            <select name="valuationMethod">
+              <option value="멀티플/DCF 혼합" selected>멀티플/DCF 혼합</option>
+              <option value="거래사례 비교">거래사례 비교</option>
+              <option value="상장 피어 비교">상장 피어 비교</option>
+              <option value="DCF">DCF</option>
+            </select>
+          </label>
+          <label>
+            기준 시나리오
+            <input name="baseCase" value="기준 시나리오" />
+          </label>
+          <label class="wide">
+            GP 패키지 본문
+            <textarea name="gpPackage" placeholder="GP 패키지, 운용보고서, 포트폴리오 업데이트, 밸류에이션 변경 사유를 붙여넣으세요."></textarea>
+          </label>
+          <label class="wide">
+            GP 패키지 파일
+            <input name="gpPackageFile" type="file" />
+          </label>
+          <button type="submit">LP 보고 스테이징 생성</button>
+        </form>
+      </section>
+
+      <section id="marketClose" class="panel">
+        <form id="marketCloseForm" class="form-stack">
+          <div class="form-grid">
+            <label>
+              시장
+              <select name="market">
+                <option value="US" selected>미국</option>
+                <option value="KR">한국</option>
+                <option value="GLOBAL">글로벌</option>
+              </select>
+            </label>
+            <label>
+              폐장 기준일
+              <input name="sessionDate" type="date" />
+            </label>
+          </div>
+          <label>
+            폐장 후 시장 요약
+            <textarea name="rawSummary" placeholder="한국/미국 증시 폐장 후 지수 흐름, 금리/환율/유가, 수급, 주도 섹터, 주요 뉴스, 내 투자 판단 메모를 그대로 입력하세요. 파일만 넣어도 저장할 수 있습니다."></textarea>
+          </label>
+          <label>
+            웹사이트 주소
+            <input name="sourceUrl" type="url" placeholder="https://example.com/market-summary-or-news" />
+          </label>
+          <button id="marketCloseUrlPreviewButton" class="secondary" type="button">본문 미리보기</button>
+          <label>
+            파일 입력 (모든 파일)
+            <input name="marketCloseFile" type="file" />
+          </label>
+          <div class="form-hint">웹사이트 주소는 서버에서 본문만 추출해 시장 요약에 반영합니다. PDF는 텍스트 추출/OCR을 시도하고, 텍스트·CSV·JSON 파일은 본문을 함께 반영합니다.</div>
+          <div class="dashboard-actions">
+            <button type="submit">시장 상황 평가 저장</button>
+            <button id="customsTradeSnapshotButton" class="secondary" type="button">관세청 수출입 동향</button>
+            <button id="marketCloseHistoryButton" class="secondary" type="button">누적 시장 일지 조회</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="portfolio" class="panel">
+        <div class="panel-intro">
+          <h2>내 포트폴리오</h2>
+          <p>현재 매수해서 보유 중인 종목을 저장, 편집하고 같은 데이터로 리스크 스캔을 실행합니다.</p>
+          <a class="react-portfolio-link" href="http://127.0.0.1:5173" target="_blank" rel="noreferrer">
+            새 포트폴리오 화면 열기
+          </a>
+        </div>
+        <div class="portfolio-manager">
+          <div class="form-grid">
+            <label>
+              저장된 내 포트폴리오
+              <select id="portfolioSelect">
+                <option value="">저장된 내 포트폴리오 없음</option>
+              </select>
+            </label>
+            <button id="portfolioLoadButton" class="secondary" type="button">불러오기</button>
+            <button id="portfolioConnectivityButton" class="secondary" type="button">전체 연결 점검</button>
+            <button id="portfolioNpsFlowButton" class="secondary" type="button">국민연금 수급</button>
+            <button id="portfolioAnalysisStatusButton" class="secondary" type="button">전체 분석 현황</button>
+            <button id="portfolioTeamQueueButton" class="secondary" type="button">기준 리포트 큐</button>
+            <button id="portfolioRunTopTeamButton" type="button">상위 1개 리포트 실행</button>
+            <button id="portfolioPerformanceButton" class="secondary" type="button">기간 수익 비교</button>
+            <button id="portfolioQuickRiskButton" class="secondary" type="button">선택 리스크 스캔</button>
+            <button id="portfolioSaveButton" type="button">내 포트폴리오 저장</button>
+            <button id="portfolioDeleteButton" class="secondary" type="button">삭제</button>
+          </div>
+        </div>
+        <div id="portfolioLoadedAt" class="portfolio-loaded-at" aria-live="polite">
+          최근 불러온 일시: 아직 없음
+        </div>
+        <div id="portfolioAnalysisOverview" class="portfolio-analysis-overview" aria-live="polite">
+          <div>
+            <span>전체 연결 상태</span>
+            <strong>확인 전</strong>
+            <p>저장된 포트폴리오를 불러오면 분석 연결 상태를 자동으로 보여줍니다.</p>
+          </div>
+        </div>
+        <div id="portfolioPerformanceOverview" class="portfolio-performance-overview" aria-live="polite">
+          <p class="empty-state">기간 수익 비교를 실행하면 최근 1주일, 1개월, 6개월, 1년 기준 순수익과 수익률이 표시됩니다.</p>
+        </div>
+        <form id="portfolioForm" class="form-stack">
+          <div class="form-grid">
+            <label>
+              포트폴리오 이름
+              <input name="portfolioName" value="Core Growth" />
+            </label>
+            <label>
+              총액
+              <input name="portfolioValue" inputmode="decimal" value="100,000원" />
+            </label>
+            <label>
+              단일 종목 한도
+              <input name="maxSinglePositionWeight" type="number" min="0" max="1" step="0.01" value="0.2" />
+            </label>
+            <label>
+              섹터 한도
+              <input name="maxSectorWeight" type="number" min="0" max="1" step="0.01" value="0.35" />
+            </label>
+          </div>
+          <label>
+            포트폴리오 메모
+            <input name="portfolioNotes" placeholder="현재 보유 전략, 현금 비중 원칙, 리밸런싱 기준 등을 적어두세요." />
+          </label>
+          <div class="editor-block">
+            <div class="editor-header">
+              <strong>정책 최적화</strong>
+              <button id="portfolioOptimizeButton" class="secondary" type="button">강화학습형 정책 최적화 실행</button>
+            </div>
+            <div class="form-grid">
+              <label>
+                목표 함수
+                <select id="policyObjective" name="policyObjective">
+                  <option value="risk_adjusted_return">위험조정수익률</option>
+                  <option value="drawdown_control">낙폭 통제</option>
+                  <option value="compound_growth">장기 복리 성장</option>
+                </select>
+              </label>
+              <label>
+                위험 성향
+                <select id="policyRiskProfile" name="policyRiskProfile">
+                  <option value="balanced">균형형</option>
+                  <option value="conservative">보수적</option>
+                  <option value="aggressive">공격적</option>
+                </select>
+              </label>
+              <label>
+                학습 관찰 기간
+                <input id="policyLearningHorizonDays" name="policyLearningHorizonDays" type="number" min="7" max="730" step="1" value="90" />
+              </label>
+              <label class="checkbox-row">
+                <input id="policySaveResult" name="policySaveResult" type="checkbox" checked />
+                결과 저장
+              </label>
+            </div>
+            <label>
+              현재 시장 상태
+              <textarea id="policyMarketState" name="policyMarketState" rows="3" placeholder="비워두면 최근 시장일지를 자동 사용합니다. 예: 한국 시장은 AI·반도체 주도, 금리 부담은 보통, 위험 선호 확대"></textarea>
+            </label>
+          </div>
+          <div class="editor-block">
+            <div class="editor-header">
+              <strong>현재 보유 종목</strong>
+              <div class="editor-actions">
+                <input id="portfolioImportFile" class="visually-hidden" type="file" />
+                <button id="portfolioImportPickButton" class="secondary" type="button">파일 선택</button>
+                <button id="portfolioImportButton" class="secondary" type="button">파일 불러오기</button>
+                <button id="recalculatePortfolioButton" class="secondary" type="button">총액 자동 계산</button>
+                <button id="addCashButton" class="secondary" type="button">CASH 추가</button>
+                <button id="addHoldingButton" class="secondary" type="button">보유 종목 추가</button>
+              </div>
+            </div>
+            <div id="portfolioImportStatus" class="editor-hint">텍스트, CSV, TSV, JSON, XLSX 형식의 보유 종목 파일을 불러올 수 있습니다. 사진은 OCR 연결 전까지 안내만 표시합니다.</div>
+            <div class="portfolio-toolbar">
+              <label>
+                종목 검색
+                <input id="portfolioFilter" type="search" placeholder="티커, 회사명, 섹터 검색" />
+              </label>
+              <label>
+                정렬
+                <select id="portfolioSort">
+                  <option value="market_value_desc">평가금액 높은 순</option>
+                  <option value="market_value_asc">평가금액 낮은 순</option>
+                  <option value="gain_desc">평가손익 높은 순</option>
+                  <option value="return_desc">수익률 높은 순</option>
+                  <option value="ticker_asc">티커 가나다순</option>
+                  <option value="sector_asc">섹터 가나다순</option>
+                </select>
+              </label>
+            </div>
+            <div id="portfolioSummary" class="editor-summary">보유 종목을 입력하면 총액을 자동 계산합니다.</div>
+            <div id="holdingsEditor" class="editor-list"></div>
+          </div>
+          <div class="editor-block intelligent-portfolio-block">
+            <div class="editor-header">
+              <div>
+                <strong>그래프 & 지능형 데이터 테이블</strong>
+                <p class="helper-text">서버가 현재가, 52주 최고가 근접도, 목표주가 근접도를 계산하고 화면에서는 정렬과 컬럼 폭 조절을 할 수 있습니다.</p>
+              </div>
+              <button id="portfolioSmartRefreshButton" class="secondary" type="button">테이블 새로고침</button>
+              <button id="portfolioConsensusScanButton" class="secondary" type="button">컨센서스 저평가 스캔</button>
+            </div>
+            <div id="portfolioSmartChart" class="portfolio-smart-chart" aria-live="polite"></div>
+            <div id="portfolioSmartTable" class="smart-table-wrap" aria-live="polite"></div>
+            <div id="portfolioConsensusTable" class="smart-table-wrap consensus-table-wrap" aria-live="polite"></div>
+          </div>
+          <button type="submit">포트폴리오 리스크 스캔</button>
+        </form>
+      </section>
+
+      <section id="interests" class="panel">
+        <div class="panel-intro">
+          <h2>관심종목/섹터</h2>
+          <p>보유 포트폴리오와 분리해서, 앞으로 매수 후보로 지켜볼 종목과 섹터를 저장하고 편집합니다.</p>
+        </div>
+        <form id="interestsForm" class="form-stack">
+          <div id="interestsSummary" class="interest-summary">
+            저장된 관심종목과 관심섹터를 불러오면 여기에 요약됩니다.
+          </div>
+          <div class="editor-block">
+            <div class="editor-header">
+              <div>
+                <strong>관심종목</strong>
+                <p class="helper-text">회사명 중심의 카드 목록으로 확인하고, 카드를 열어 우선순위와 메모를 조정합니다.</p>
+              </div>
+            </div>
+            <div class="interest-list-heading">관심종목 목록</div>
+            <div id="interestTickerEditor" class="editor-list"></div>
+            <details class="interest-add-panel">
+              <summary>새 종목 추가</summary>
+              <div class="interest-add-card">
+                <div id="interestTickerDraft" class="editor-list single-add-list"></div>
+                <button id="addInterestTickerButton" class="secondary" type="button">추가</button>
+              </div>
+            </details>
+          </div>
+          <div class="editor-block">
+            <div class="editor-header">
+              <div>
+                <strong>관심 섹터</strong>
+                <p class="helper-text">추적할 테마를 카드로 모아 보고, 카드를 열어 지역과 확인 포인트를 정리합니다.</p>
+              </div>
+            </div>
+            <div class="interest-list-heading">관심섹터 목록</div>
+            <div id="interestSectorEditor" class="editor-list"></div>
+            <details class="interest-add-panel">
+              <summary>새 섹터 추가</summary>
+              <div class="interest-add-card">
+                <div id="interestSectorDraft" class="editor-list single-add-list"></div>
+                <button id="addInterestSectorButton" class="secondary" type="button">추가</button>
+              </div>
+            </details>
+          </div>
+          <div class="dashboard-actions">
+            <button id="interestsSaveButton" type="submit">전체 저장</button>
+            <button id="interestsLoadButton" class="secondary" type="button">저장 목록 불러오기</button>
+            <button id="interestAutomationButton" class="secondary" type="button">자동 수집 보드 생성</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="checklist" class="panel">
+        <form id="checklistForm" class="form-stack">
+          <div class="form-grid">
+            <label>
+              티커
+              <input name="ticker" required value="삼양식품" />
+            </label>
+            <label class="wide">
+              보충 메모
+              <input
+                name="notes"
+                value="투자 전 핵심 리서치가 충분한지 점검합니다."
+              />
+            </label>
+          </div>
+
+          <div class="progress-block" aria-live="polite">
+            <div class="progress-meta">
+              <strong id="checklistProgressText">0/16 완료</strong>
+              <span id="checklistProgressPercent">0%</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div id="checklistProgressBar" class="progress-bar"></div>
+            </div>
+          </div>
+
+          <div class="checklist-grid">
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="business_model" />
+              비즈니스 모델 이해
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="revenue_drivers" />
+              수익 동력
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="market_size" />
+              시장 규모와 성장성
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="competitive_advantage" />
+              경쟁 우위
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="financial_growth" />
+              매출/이익 성장률
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="margin_quality" />
+              마진 구조
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="cash_flow" />
+              현금흐름과 FCF
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="balance_sheet" />
+              재무 건전성
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="capital_allocation" />
+              자본 배분
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="management_quality" />
+              경영진 평가
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="valuation" />
+              밸류에이션
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="ownership_flow" />
+              수급과 주주 구조
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="industry_cycle" />
+              산업 사이클
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="regulatory_risk" />
+              규제 리스크
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="red_flags" />
+              위험 신호
+            </label>
+            <label class="check-item">
+              <input type="checkbox" name="checkedItems" value="exit_criteria" />
+              투자 철회 기준
+            </label>
+          </div>
+
+          <button type="submit">완성된 항목 분석</button>
+        </form>
+      </section>
+
+      <section id="memory" class="panel">
+        <form id="memoryForm" class="form-grid">
+          <label>
+            티커/포트폴리오 키
+            <input name="ticker" value="삼양식품" />
+          </label>
+          <label>
+            RAG 검색어
+            <input name="ragQuery" placeholder="예: 삼양식품 수출, PL 악재, AI 전력기기 수급" />
+          </label>
+          <label class="switch">
+            <input name="includeLowQuality" type="checkbox" />
+            격리 문서 포함
+          </label>
+          <label class="switch">
+            <input name="includeArchived" type="checkbox" />
+            보관 문서 포함
+          </label>
+          <button type="submit">저장 데이터 조회</button>
+          <button id="ragNaturalSearchButton" type="button">전체 자연어 검색</button>
+          <button id="ragSynthesisButton" type="button">검색 결과 합성</button>
+          <button id="ragSearchButton" type="button">현재 키 RAG 검색</button>
+          <button id="dossierButton" type="button">Dossier 합성</button>
+          <button id="todayResearchUpdateButton" type="button">오늘 리서치 업데이트</button>
+          <button id="dailyBriefButton" type="button">일일 브리핑</button>
+          <button id="researchAutomationButton" type="button">전체 자동화 실행</button>
+          <button id="researchAutomationStatusButton" type="button">자동화 상태</button>
+          <button id="ragBackfillButton" type="button">RAG 색인 갱신</button>
+          <button id="storageCleanupButton" type="button">저장 데이터 정리</button>
+          <button id="dedupedDossierRefreshButton" type="button">중복 종목 Dossier 갱신</button>
+          <button id="manifestButton" type="button">전체 목록 조회</button>
+          <button id="tickerCacheButton" type="button">티커 캐시 조회</button>
+        </form>
+        <div id="tickerCacheList" class="ticker-cache-list" aria-live="polite"></div>
+        <div id="memoryList" class="memory-list" aria-live="polite"></div>
+        <article id="memoryPreview" class="memory-preview" hidden>
+          <div class="memory-preview-header">
+            <div>
+              <span id="memoryPreviewMeta">선택된 파일 없음</span>
+              <h3 id="memoryPreviewTitle">저장 리포트 미리보기</h3>
+            </div>
+            <button data-workflow-action="capture" type="button">새 정보로 보강</button>
+          </div>
+          <pre id="memoryPreviewContent"></pre>
+          <form id="memorySupplementForm" class="memory-supplement-form" hidden>
+            <div>
+              <strong>본문 보강</strong>
+              <p id="memorySupplementHelp">웹 본문 추출이 제한된 자료입니다. 원문을 복사해 붙여 넣으면 기존 저장 데이터와 RAG 색인을 함께 갱신합니다.</p>
+            </div>
+            <label>
+              복사한 본문
+              <textarea id="memorySupplementBody" name="bodyText" rows="8" placeholder="제한된 웹페이지에서 직접 복사한 본문을 붙여 넣으세요."></textarea>
+            </label>
+            <label>
+              보강 메모
+              <input id="memorySupplementNote" name="note" placeholder="예: 네이버 프리미엄 본문 직접 복사" />
+            </label>
+            <button type="submit">본문 보강 저장</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="output-panel">
+        <div class="output-header">
+          <div class="output-title">
+            <h2>결과</h2>
+            <span id="outputStatus" class="output-status" hidden>처리 중</span>
+          </div>
+          <div class="output-actions">
+            <button id="exportResultExcel" type="button">엑셀 다운로드</button>
+            <button id="clearOutput" type="button">지우기</button>
+          </div>
+        </div>
+        <div id="output" class="markdown-output plain-mode">대기 중입니다.</div>
+      </section>
+    </main>
+
+  <script type="module" src="./console.js?v=20260518-soft-archive"></script>
+</body>
+</html>

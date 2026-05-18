@@ -1,0 +1,1992 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InvestLog Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, "Noto Sans KR", sans-serif;
+        background: #f5f7fb;
+        color: #111827;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 24px 18px 40px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      .subtitle {
+        color: #64748b;
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 4px;
+        background: #e5eaf1;
+        border-radius: 8px;
+        padding: 4px;
+        margin-bottom: 16px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        min-height: 42px;
+      }
+
+      .secondary,
+      .danger-button {
+        border: 1px solid #cbd5e1;
+        min-height: 34px;
+        padding: 8px 10px;
+        width: 100%;
+      }
+
+      .secondary {
+        background: #fff;
+        color: #0f172a;
+      }
+
+      .danger-button {
+        background: #fef2f2;
+        color: #b91c1c;
+        margin-top: 6px;
+      }
+
+      input,
+      select,
+      textarea {
+        box-sizing: border-box;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        display: block;
+        font: inherit;
+        margin: 6px 0 12px;
+        padding: 10px;
+        width: 100%;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .period-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .period-choice {
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        min-height: 40px;
+      }
+
+      .period-choice.active {
+        background: #0f766e;
+        border-color: #0f766e;
+        color: #fff;
+      }
+
+      textarea {
+        resize: vertical;
+      }
+
+      .tab {
+        background: transparent;
+        color: #64748b;
+      }
+
+      .tab.active {
+        background: #fff;
+        color: #0f172a;
+      }
+
+      .primary {
+        width: 100%;
+        background: #0f766e;
+        color: #fff;
+        margin-top: 14px;
+      }
+
+      .primary:disabled {
+        background: #94a3b8;
+      }
+
+      .panel {
+        background: #fff;
+        border: 1px solid #dbe3ef;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        padding: 16px;
+      }
+
+      .panel-title {
+        font-size: 17px;
+        font-weight: 800;
+        margin-bottom: 12px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        min-height: 72px;
+        padding: 12px;
+      }
+
+      .metric-label,
+      .muted {
+        color: #64748b;
+        font-size: 12px;
+      }
+
+      .metric-label {
+        font-weight: 700;
+      }
+
+      .metric-value {
+        font-size: 17px;
+        font-weight: 800;
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+      }
+
+      .row {
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        padding: 12px 0;
+      }
+
+      .row-main {
+        min-width: 0;
+      }
+
+      .row-title {
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .row-side {
+        max-width: 150px;
+        text-align: right;
+      }
+
+      .good {
+        color: #0f766e;
+      }
+
+      .danger {
+        color: #dc2626;
+      }
+
+      .error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        color: #b91c1c;
+        margin-bottom: 14px;
+        padding: 10px;
+      }
+
+      .bar-track {
+        background: #e5e7eb;
+        border-radius: 999px;
+        height: 8px;
+        margin-top: 8px;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        background: #0f766e;
+        height: 100%;
+      }
+
+      .bar-fill.negative {
+        background: #dc2626;
+      }
+
+      .chart {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        padding: 12px;
+      }
+
+      .chart svg {
+        display: block;
+        height: auto;
+        width: 100%;
+      }
+
+      .chart-labels {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .chart-legend {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .legend-main {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .legend-dot {
+        border-radius: 999px;
+        flex: 0 0 10px;
+        height: 10px;
+        width: 10px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 520px) {
+        .grid,
+        .form-grid,
+        .period-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div>
+          <h1>InvestLog</h1>
+          <div class="subtitle">KIWOOM · http://127.0.0.1:8010</div>
+        </div>
+        <div id="loading" class="subtitle">준비됨</div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="portfolio">포트폴리오</button>
+        <button class="tab" data-tab="sync">동기화</button>
+        <button class="tab" data-tab="drafts">일지 초안</button>
+        <button class="tab" data-tab="manual">수동입력</button>
+        <button class="tab" data-tab="analytics">분석</button>
+      </nav>
+
+      <div id="error" class="error hidden"></div>
+      <section id="content"></section>
+    </main>
+
+    <script>
+      const API_BASE_URL = "http://127.0.0.1:8010";
+      const ACCESS_TOKEN = "dev-local-token";
+      const FIRST_HISTORY_YEAR = 2020;
+      const CURRENT_YEAR = new Date().getFullYear();
+      const CHART_LIMITS = {
+        periodBars: 12,
+        profitTrendPoints: 24,
+        allocationSegments: 6,
+      };
+      const HISTORY_PERIODS = [
+        ...Array.from(
+          { length: CURRENT_YEAR - FIRST_HISTORY_YEAR + 1 },
+          (_, index) => {
+            const year = CURRENT_YEAR - index;
+            return { key: `year-${year}`, label: `${year}년`, year };
+          }
+        ),
+        { key: "custom", label: "직접", months: null },
+      ];
+      const state = {
+        tab: "portfolio",
+        portfolio: null,
+        latestSync: null,
+        historySyncResult: null,
+        historyJob: null,
+        historyPeriod: `year-${CURRENT_YEAR}`,
+        historyCustomStart: `${CURRENT_YEAR}-01-01`,
+        historyCustomEnd: localDateInput(new Date()),
+        isHistorySyncing: false,
+        drafts: [],
+        entries: [],
+        manualTransactions: [],
+        manualImportResult: null,
+        analytics: null,
+        selectedDraft: null,
+        selectedEntry: null,
+        entryFilters: {
+          search: "",
+          ticker: "",
+          strategy_name: "",
+          setup_tag: "",
+          result: "",
+          rule_status: "",
+        },
+      };
+
+      const content = document.getElementById("content");
+      const loading = document.getElementById("loading");
+      const errorBox = document.getElementById("error");
+
+      document.querySelectorAll(".tab").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.tab = button.dataset.tab;
+          document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item.dataset.tab === state.tab);
+          });
+          render();
+        });
+      });
+
+      async function request(path, options = {}) {
+        const response = await fetch(`${API_BASE_URL}${path}`, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+            ...(options.headers || {}),
+          },
+        });
+
+        if (!response.ok) {
+          let message = `HTTP ${response.status}`;
+          try {
+            const payload = await response.json();
+            message = payload?.error?.message || payload?.detail || message;
+          } catch (error) {
+            // Keep the HTTP status fallback when the response body is not JSON.
+          }
+          throw new Error(message);
+        }
+
+        return response.json();
+      }
+
+      async function requestAnalytics() {
+        try {
+          return await request("/api/v1/journal/analytics");
+        } catch (error) {
+          console.warn("분석 API를 불러오지 못했습니다.", error);
+          return {};
+        }
+      }
+
+      async function loadAll() {
+        setLoading(true);
+        setError("");
+        try {
+          const [portfolio, latestSync, latestHistory, drafts, entries, manualTransactions, analytics] = await Promise.all([
+            request("/api/v1/portfolio"),
+            request("/api/v1/sync/latest"),
+            request("/api/v1/sync/kiwoom/history/latest"),
+            request("/api/v1/journal/drafts"),
+            request(`/api/v1/journal/entries${entryFilterQuery()}`),
+            request("/api/v1/manual-transactions"),
+            requestAnalytics(),
+          ]);
+          state.portfolio = portfolio;
+          state.latestSync = latestSync.sync_run;
+          if (latestHistory.job?.id) {
+            state.historyJob = latestHistory.job;
+            state.isHistorySyncing = isActiveHistoryJob(latestHistory.job);
+          }
+          state.drafts = drafts.drafts || [];
+          state.entries = entries.entries || [];
+          state.manualTransactions = manualTransactions.transactions || [];
+          state.analytics = analytics;
+          render();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function runSync() {
+        setLoading(true);
+        setError("");
+        try {
+          await request("/api/v1/sync/kiwoom", { method: "POST" });
+          await loadAll();
+          state.tab = "drafts";
+          document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item.dataset.tab === state.tab);
+          });
+          render();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function runHistorySync() {
+        if (state.historyPeriod === "custom") {
+          state.historyCustomStart = document.getElementById("history-custom-start").value;
+          state.historyCustomEnd = document.getElementById("history-custom-end").value;
+        }
+        const range = historyDateRange(state.historyPeriod);
+
+        setLoading(true);
+        setError("");
+        state.historySyncResult = null;
+        state.historyJob = null;
+        state.isHistorySyncing = true;
+        render();
+        try {
+          const accepted = await request(
+            `/api/v1/sync/kiwoom/history/start?start_date=${encodeURIComponent(range.startDate)}&end_date=${encodeURIComponent(range.endDate)}`,
+            { method: "POST" }
+          );
+          state.historyJob = accepted.job;
+          pollHistoryJob(accepted.job.id);
+        } catch (error) {
+          setError(error.message);
+          state.isHistorySyncing = false;
+        } finally {
+          setLoading(false);
+          render();
+        }
+      }
+
+      async function pollHistoryJob(jobId) {
+        if (!jobId) return;
+        try {
+          const response = await request(`/api/v1/sync/kiwoom/history/jobs/${jobId}`);
+          state.historyJob = response.job;
+          state.isHistorySyncing = isActiveHistoryJob(response.job);
+          if (state.tab === "sync") renderSync();
+          if (state.isHistorySyncing) {
+            window.setTimeout(() => pollHistoryJob(jobId), 2500);
+          } else {
+            await loadAll();
+          }
+        } catch (error) {
+          setError(error.message);
+          state.isHistorySyncing = false;
+          if (state.tab === "sync") renderSync();
+        }
+      }
+
+      async function cancelHistorySync() {
+        const jobId = state.historyJob?.id;
+        if (!jobId) return;
+        setLoading(true);
+        setError("");
+        try {
+          const response = await request(`/api/v1/sync/kiwoom/history/jobs/${jobId}/cancel`, {
+            method: "POST",
+          });
+          state.historyJob = response.job;
+          state.isHistorySyncing = isActiveHistoryJob(response.job);
+          renderSync();
+          pollHistoryJob(jobId);
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function clearHistoryRecords() {
+        setLoading(true);
+        setError("");
+        try {
+          const preview = await request("/api/v1/sync/kiwoom/history/records", { method: "DELETE" });
+          if (preview.requires_confirm) {
+            const ok = window.confirm(`불러온 초안과 동기화 기록 ${preview.record_count || 0}건을 삭제할까요? 작성 완료한 매매일지는 유지됩니다.`);
+            if (!ok) {
+              return;
+            }
+            await request("/api/v1/sync/kiwoom/history/records?confirm=true", { method: "DELETE" });
+          }
+          state.historyJob = null;
+          state.historySyncResult = null;
+          state.isHistorySyncing = false;
+          await loadAll();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function render() {
+        if (state.tab === "portfolio") {
+          renderPortfolio();
+        } else if (state.tab === "sync") {
+          renderSync();
+        } else if (state.tab === "drafts") {
+          renderDrafts();
+        } else if (state.tab === "manual") {
+          renderManualTransactions();
+        } else {
+          renderAnalytics();
+        }
+      }
+
+      function renderPortfolio() {
+        const portfolio = state.portfolio || {};
+        const summary = portfolio.summary || {};
+        const holdings = portfolio.holdings || [];
+        content.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">자산 요약</div>
+            <div class="grid">
+              ${metric("평가금액", krw(summary.total_evaluation_amount))}
+              ${metric("매입금액", krw(summary.total_purchase_amount))}
+              ${metric("평가손익", krw(summary.total_evaluation_profit_loss), summary.total_evaluation_profit_loss < 0 ? "danger" : "good")}
+              ${metric("수익률", pct(summary.total_profit_rate), summary.total_profit_rate < 0 ? "danger" : "good")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">보유 종목 ${portfolio.holdings_count || 0}</div>
+            ${
+              holdings.length
+                ? holdings.map(holdingRow).join("")
+                : '<div class="muted">보유 종목이 없습니다.</div>'
+            }
+          </div>
+        `;
+      }
+
+      function renderSync() {
+        const sync = state.latestSync || {};
+        const historyResult = state.historySyncResult;
+        const historyJob = state.historyJob || {};
+        const historyRange = historyDateRange(state.historyPeriod);
+        const isHistoryRunning = state.isHistorySyncing || isActiveHistoryJob(historyJob);
+        content.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">최근 동기화</div>
+            <div class="metric-value good">${sync.status || "기록 없음"}</div>
+            <div class="muted">${sync.finished_at ? dateTime(sync.finished_at) : "아직 저장된 동기화가 없습니다."}</div>
+            <div class="grid" style="margin-top:14px">
+              ${metric("보유종목", String(sync.portfolio_holdings_count || 0))}
+              ${metric("일지초안", String(state.drafts.length || 0))}
+            </div>
+          </div>
+          <button id="sync-button" class="primary">키움 데이터 동기화</button>
+          <div class="panel" style="margin-top:14px">
+            <div class="panel-title">과거 거래 불러오기</div>
+            <div class="period-grid">
+              ${HISTORY_PERIODS.map(historyPeriodButton).join("")}
+            </div>
+            ${
+              state.historyPeriod === "custom"
+                ? `<div class="form-grid" style="margin-top:10px">
+                    <div>
+                      <label class="muted">시작일</label>
+                      <input id="history-custom-start" type="date" value="${state.historyCustomStart}" />
+                    </div>
+                    <div>
+                      <label class="muted">종료일</label>
+                      <input id="history-custom-end" type="date" value="${state.historyCustomEnd}" />
+                    </div>
+                  </div>`
+                : ""
+            }
+            <div class="muted" style="margin-top:10px">${formatSyncDate(historyRange.startDate.replaceAll("-", ""))}부터 ${formatSyncDate(historyRange.endDate.replaceAll("-", ""))}까지 불러옵니다.</div>
+            <button id="history-sync-button" class="primary" ${isHistoryRunning ? "disabled" : ""}>${isHistoryRunning ? "불러오는 중" : "과거 거래 불러오기"}</button>
+            <div class="form-grid">
+              <button id="history-cancel-button" class="secondary" ${isHistoryRunning ? "" : "disabled"}>멈춤</button>
+              <button id="history-clear-button" class="danger-button" ${isHistoryRunning ? "disabled" : ""}>기록 삭제</button>
+            </div>
+            ${
+              isHistoryRunning || historyJob.id
+                ? `<div style="margin-top:14px">
+                    <div class="grid">
+                      ${metric("진행률", historyJob.progress_rate == null ? "준비 중" : `${historyJob.progress_rate}%`)}
+                      ${metric("처리 일수", `${historyJob.processed_days || 0}/${historyJob.total_days || 0}일`)}
+                      ${metric("생성 초안", `${historyJob.total_needs_review_count || 0}건`)}
+                      ${metric("상태", historyJob.status || "running")}
+                      ${metric("현재 처리일", historyJob.current_date ? formatSyncDate(historyJob.current_date) : "-")}
+                      ${metric("마지막 성공일", historyJob.last_success_date ? formatSyncDate(historyJob.last_success_date) : "-")}
+                      ${metric("다음 재개일", historyJob.next_date ? formatSyncDate(historyJob.next_date) : "-")}
+                      ${metric("재시도/대기", `${historyJob.retry_count || 0}회 · ${historyJob.last_backoff_seconds || 0}초`)}
+                    </div>
+                    <div class="bar-track">
+                      <div class="bar-fill" style="width:${Math.max(Number(historyJob.progress_rate || 0), isHistoryRunning ? 4 : 0)}%"></div>
+                    </div>
+                    <div class="muted" style="margin-top:8px">${historyJob.status === "cancel_requested" ? "멈춤 요청을 보냈습니다. 현재 날짜 처리가 끝나면 중단됩니다." : historyJob.status === "paused" ? "서버 재시작으로 일시정지되었습니다. 같은 기간으로 다시 불러오면 다음 재개일부터 이어받습니다." : isHistoryRunning ? "서버에서 백그라운드로 처리 중입니다. 다른 화면으로 이동해도 계속 진행됩니다." : "과거 거래 불러오기가 종료되었습니다."}</div>
+                  </div>`
+                : historyResult
+                ? `<div style="margin-top:14px">
+                    <div class="grid">
+                      ${metric("조회 일수", `${historyResult.days_synced || 0}일`)}
+                      ${metric("생성 초안", `${historyResult.total_needs_review_count || 0}건`)}
+                      ${metric("매매 요약", `${historyResult.total_journal_items_count || 0}건`)}
+                      ${metric("체결 상세", `${historyResult.total_order_executions_count || 0}건`)}
+                    </div>
+                    ${(historyResult.results || []).map(historyResultRow).join("")}
+                  </div>`
+                : '<div class="muted" style="margin-top:10px">최대 1년까지 한 번에 불러올 수 있습니다.</div>'
+            }
+          </div>
+        `;
+        document.getElementById("sync-button").addEventListener("click", runSync);
+        document.getElementById("history-sync-button").addEventListener("click", runHistorySync);
+        document.getElementById("history-cancel-button").addEventListener("click", cancelHistorySync);
+        document.getElementById("history-clear-button").addEventListener("click", clearHistoryRecords);
+        document.querySelectorAll("[data-history-period]").forEach((button) => {
+          button.addEventListener("click", () => {
+            if (state.historyPeriod === "custom") {
+              state.historyCustomStart = document.getElementById("history-custom-start")?.value || state.historyCustomStart;
+              state.historyCustomEnd = document.getElementById("history-custom-end")?.value || state.historyCustomEnd;
+            }
+            state.historyPeriod = button.dataset.historyPeriod;
+            state.historySyncResult = null;
+            renderSync();
+          });
+        });
+        document.getElementById("history-custom-start")?.addEventListener("change", (event) => {
+          state.historyCustomStart = event.target.value;
+          renderSync();
+        });
+        document.getElementById("history-custom-end")?.addEventListener("change", (event) => {
+          state.historyCustomEnd = event.target.value;
+          renderSync();
+        });
+      }
+
+      function renderDrafts() {
+        content.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">복기 대기 ${state.drafts.length}</div>
+            ${
+              state.drafts.length
+                ? state.drafts.map(draftRow).join("")
+                : '<div class="muted">복기할 초안이 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">작성 완료 ${state.entries.length}</div>
+            <div class="form-grid">
+              <div>
+                <label class="muted">검색</label>
+                <input id="entry-filter-search" placeholder="종목명, 근거, 메모" value="${escapeAttr(state.entryFilters.search)}" />
+              </div>
+              <div>
+                <label class="muted">종목코드</label>
+                <input id="entry-filter-ticker" placeholder="예: 005930" value="${escapeAttr(state.entryFilters.ticker)}" />
+              </div>
+              <div>
+                <label class="muted">전략명</label>
+                <input id="entry-filter-strategy-name" placeholder="예: ORB" value="${escapeAttr(state.entryFilters.strategy_name)}" />
+              </div>
+              <div>
+                <label class="muted">셋업 태그</label>
+                <input id="entry-filter-setup-tag" placeholder="예: gap-up" value="${escapeAttr(state.entryFilters.setup_tag)}" />
+              </div>
+              <div>
+                <label class="muted">성과</label>
+                <select id="entry-filter-result">
+                  <option value="" ${state.entryFilters.result === "" ? "selected" : ""}>전체</option>
+                  <option value="profit" ${state.entryFilters.result === "profit" ? "selected" : ""}>수익</option>
+                  <option value="loss" ${state.entryFilters.result === "loss" ? "selected" : ""}>손실</option>
+                  <option value="breakeven" ${state.entryFilters.result === "breakeven" ? "selected" : ""}>본전</option>
+                  <option value="unknown" ${state.entryFilters.result === "unknown" ? "selected" : ""}>미입력</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">원칙</label>
+                <select id="entry-filter-rule-status">
+                  <option value="" ${state.entryFilters.rule_status === "" ? "selected" : ""}>전체</option>
+                  <option value="followed" ${state.entryFilters.rule_status === "followed" ? "selected" : ""}>준수</option>
+                  <option value="broken" ${state.entryFilters.rule_status === "broken" ? "selected" : ""}>위반</option>
+                  <option value="unknown" ${state.entryFilters.rule_status === "unknown" ? "selected" : ""}>미확인</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid">
+              <button id="apply-entry-filters" class="secondary">필터 적용</button>
+              <button id="reset-entry-filters" class="secondary">초기화</button>
+            </div>
+            <button id="export-entry-csv" class="primary">CSV 내보내기</button>
+            ${
+              state.entries.length
+                ? state.entries.map(entryRow).join("")
+                : '<div class="muted">작성된 매매일지가 없습니다.</div>'
+            }
+          </div>
+          <div id="journal-form"></div>
+        `;
+        document.querySelectorAll("[data-draft-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const draftId = Number(button.dataset.draftId);
+            state.selectedDraft = state.drafts.find((item) => item.id === draftId);
+            state.selectedEntry = null;
+            renderJournalForm();
+          });
+        });
+        document.querySelectorAll("[data-entry-edit-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const entryId = Number(button.dataset.entryEditId);
+            state.selectedEntry = state.entries.find((item) => item.id === entryId);
+            state.selectedDraft = null;
+            renderJournalForm();
+          });
+        });
+        document.querySelectorAll("[data-entry-delete-id]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            const entryId = Number(button.dataset.entryDeleteId);
+            await deleteJournalEntry(entryId);
+          });
+        });
+        document.getElementById("apply-entry-filters").addEventListener("click", async () => {
+          readEntryFiltersFromForm();
+          await loadAll();
+        });
+        document.getElementById("reset-entry-filters").addEventListener("click", async () => {
+          state.entryFilters = {
+            search: "",
+            ticker: "",
+            strategy_name: "",
+            setup_tag: "",
+            result: "",
+            rule_status: "",
+          };
+          await loadAll();
+        });
+        document.getElementById("export-entry-csv").addEventListener("click", async () => {
+          readEntryFiltersFromForm();
+          await exportJournalEntriesCsv();
+        });
+        document.getElementById("entry-filter-search").addEventListener("keydown", async (event) => {
+          if (event.key === "Enter") {
+            readEntryFiltersFromForm();
+            await loadAll();
+          }
+        });
+        document.getElementById("entry-filter-ticker").addEventListener("keydown", async (event) => {
+          if (event.key === "Enter") {
+            readEntryFiltersFromForm();
+            await loadAll();
+          }
+        });
+        document.getElementById("entry-filter-strategy-name").addEventListener("keydown", async (event) => {
+          if (event.key === "Enter") {
+            readEntryFiltersFromForm();
+            await loadAll();
+          }
+        });
+        document.getElementById("entry-filter-setup-tag").addEventListener("keydown", async (event) => {
+          if (event.key === "Enter") {
+            readEntryFiltersFromForm();
+            await loadAll();
+          }
+        });
+        if (state.selectedDraft) {
+          renderJournalForm();
+        } else if (state.selectedEntry) {
+          renderJournalForm();
+        }
+      }
+
+      function renderManualTransactions() {
+        content.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">타 증권사 거래 수동 입력</div>
+            <div class="form-grid">
+              <div>
+                <label class="muted">거래일</label>
+                <input id="manual-trade-date" type="date" value="${localDateInput(new Date())}" />
+              </div>
+              <div>
+                <label class="muted">증권사</label>
+                <input id="manual-broker" placeholder="예: 한국투자증권, 미래에셋" value="기타" />
+              </div>
+              <div>
+                <label class="muted">계좌</label>
+                <input id="manual-account-name" placeholder="예: 국내주식, ISA, 연금" value="기타" />
+              </div>
+              <div>
+                <label class="muted">유형</label>
+                <select id="manual-transaction-type">
+                  <option value="trade">매매손익</option>
+                  <option value="buy">매수</option>
+                  <option value="sell">매도</option>
+                  <option value="dividend">배당</option>
+                  <option value="tax">세금</option>
+                  <option value="fee">수수료</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">통화</label>
+                <select id="manual-currency">
+                  <option value="KRW">KRW 원화</option>
+                  <option value="USD">USD 달러</option>
+                  <option value="JPY">JPY 엔화</option>
+                  <option value="EUR">EUR 유로</option>
+                  <option value="CNY">CNY 위안</option>
+                  <option value="HKD">HKD 홍콩달러</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">환율</label>
+                <input id="manual-fx-rate-krw" type="number" step="0.0001" placeholder="예: 1350.5" />
+              </div>
+              <div>
+                <label class="muted">종목코드</label>
+                <input id="manual-ticker" placeholder="예: 005930" />
+              </div>
+              <div>
+                <label class="muted">종목명</label>
+                <input id="manual-name" placeholder="예: 삼성전자" />
+              </div>
+              <div>
+                <label class="muted">수량</label>
+                <input id="manual-quantity" type="number" step="0.0001" placeholder="예: 10" />
+              </div>
+              <div>
+                <label class="muted">가격</label>
+                <input id="manual-price" type="number" step="0.01" placeholder="예: 80000" />
+              </div>
+              <div>
+                <label class="muted">분할 보정비율</label>
+                <input id="manual-split-adjustment-ratio" type="number" step="0.0001" value="1" placeholder="예: 5" />
+              </div>
+              <div>
+                <label class="muted">매수금액</label>
+                <input id="manual-buy-amount-input" type="number" placeholder="예: 800000" />
+              </div>
+              <div>
+                <label class="muted">매도금액</label>
+                <input id="manual-sell-amount-input" type="number" placeholder="예: 850000" />
+              </div>
+              <div>
+                <label class="muted">매매손익</label>
+                <input id="manual-profit-loss-amount-input" type="number" placeholder="예: 50000" />
+              </div>
+              <div>
+                <label class="muted">배당</label>
+                <input id="manual-dividend-amount" type="number" placeholder="예: 12000" />
+              </div>
+              <div>
+                <label class="muted">세금</label>
+                <input id="manual-tax-amount" type="number" placeholder="예: 1800" />
+              </div>
+              <div>
+                <label class="muted">수수료</label>
+                <input id="manual-commission-amount" type="number" placeholder="예: 500" />
+              </div>
+            </div>
+            <label class="muted">액면분할/권리락 메모</label>
+            <textarea id="manual-adjustment-note" rows="2" placeholder="예: 5:1 액면분할 반영, 보정 전 단가 기준 입력"></textarea>
+            <label class="muted">메모</label>
+            <textarea id="manual-memo" rows="2" placeholder="거래 설명"></textarea>
+            <button id="save-manual-transaction" class="primary">수동 거래 저장</button>
+          </div>
+          <div class="panel">
+            <div class="panel-title">CSV 가져오기</div>
+            <div class="form-grid">
+              <div>
+                <label class="muted">거래내역 CSV</label>
+                <input id="manual-csv-file" type="file" accept=".csv,text/csv" />
+              </div>
+              <div>
+                <label class="muted">지원 컬럼</label>
+                <div class="muted">거래일, 증권사, 계좌, 유형, 종목코드, 종목명, 수량, 가격, 매수금액, 매도금액, 매매손익, 배당, 세금, 수수료, 통화, 환율</div>
+              </div>
+            </div>
+            <button id="import-manual-csv" class="secondary">CSV 가져오기</button>
+            ${manualImportResultBox()}
+          </div>
+          <div class="panel">
+            <div class="panel-title">수동 입력 내역 ${state.manualTransactions.length}</div>
+            ${
+              state.manualTransactions.length
+                ? state.manualTransactions.map(manualTransactionRow).join("")
+                : '<div class="muted">수동 입력 내역이 없습니다.</div>'
+            }
+          </div>
+        `;
+        document.getElementById("save-manual-transaction").addEventListener("click", saveManualTransaction);
+        document.getElementById("import-manual-csv").addEventListener("click", importManualTransactionsCsv);
+        document.querySelectorAll("[data-manual-delete-id]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            await deleteManualTransaction(Number(button.dataset.manualDeleteId));
+          });
+        });
+      }
+
+      function renderAnalytics() {
+        const analytics = state.analytics || {};
+        const strategyPerformance = analytics.strategy_performance || [];
+        const curve = analytics.cumulative_profit_curve || [];
+        const annualProfit = analytics.annual_profit || [];
+        const quarterlyProfit = analytics.quarterly_profit || [];
+        const monthlyProfit = analytics.monthly_profit || [];
+        const profitTrend = analytics.profit_trend || [];
+        const tickerAllocation = analytics.ticker_allocation || [];
+        const typeAllocation = analytics.type_allocation || [];
+        const accountAllocation = analytics.account_allocation || [];
+        const dividendByYear = analytics.dividend_by_year || [];
+        const taxByYear = analytics.tax_by_year || [];
+        const commissionByYear = analytics.commission_by_year || [];
+        const currencyBreakdown = analytics.currency_breakdown || [];
+        const topTickers = analytics.top_tickers || [];
+        const latestCurvePoint = curve.length ? curve[curve.length - 1] : null;
+        content.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">핵심 성과</div>
+            <div class="grid">
+              ${metric("총손익", krw(analytics.realized_profit_loss_total), analytics.realized_profit_loss_total < 0 ? "danger" : "good")}
+              ${metric("승률", analytics.win_rate == null ? "-" : pct(analytics.win_rate))}
+              ${metric("거래 수", String(analytics.total_entries || 0))}
+              ${metric("평균 손익", analytics.average_profit_loss == null ? "-" : krw(analytics.average_profit_loss), analytics.average_profit_loss < 0 ? "danger" : "good")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">손익 요약</div>
+            <div class="grid">
+              ${metric("총수익", krw(analytics.gross_profit_total), "good")}
+              ${metric("총손실", krw(analytics.gross_loss_total), "danger")}
+              ${metric("손익비", analytics.profit_factor == null ? "-" : String(analytics.profit_factor))}
+              ${metric("기대값", analytics.expectancy_per_trade == null ? "-" : krw(analytics.expectancy_per_trade), analytics.expectancy_per_trade < 0 ? "danger" : "good")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">통화/보정</div>
+            <div class="grid">
+              ${metric("환율 미적용", `${analytics.fx_unconverted_count || 0}건`, analytics.fx_unconverted_count ? "danger" : "")}
+              ${metric("분할 보정", `${analytics.corporate_action_adjusted_count || 0}건`)}
+              ${metric("중복 제외", `${analytics.duplicate_manual_transactions_count || 0}건`)}
+              ${metric("수동 입력", `${analytics.manual_transactions_count || 0}건`)}
+            </div>
+            ${
+              currencyBreakdown.length
+                ? currencyBreakdown.map(currencyBreakdownRow).join("")
+                : '<div class="muted">통화별 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">연간 수익</div>
+            ${periodBarChart(annualProfit, "profit_loss_total")}
+            ${
+              annualProfit.length
+                ? annualProfit.map(periodProfitRow).join("")
+                : '<div class="muted">연간 수익 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">분기 수익</div>
+            ${periodBarChart(quarterlyProfit.slice(0, 8), "profit_loss_total")}
+            ${
+              quarterlyProfit.length
+                ? quarterlyProfit.slice(0, 8).map(periodProfitRow).join("")
+                : '<div class="muted">분기 수익 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">월간 수익</div>
+            ${periodBarChart(monthlyProfit.slice(0, 12), "profit_loss_total")}
+            ${
+              monthlyProfit.length
+                ? monthlyProfit.slice(0, 12).map(periodProfitRow).join("")
+                : '<div class="muted">월간 수익 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">수익 추이</div>
+            <div class="grid">
+              ${metric("누적손익", latestCurvePoint ? krw(latestCurvePoint.cumulative_profit_loss) : "-", latestCurvePoint?.cumulative_profit_loss < 0 ? "danger" : "good")}
+              ${metric("최대낙폭", krw(analytics.max_drawdown_amount), analytics.max_drawdown_amount < 0 ? "danger" : "good")}
+              ${metric("최대낙폭률", analytics.max_drawdown_rate == null ? "-" : pct(analytics.max_drawdown_rate), analytics.max_drawdown_amount < 0 ? "danger" : "good")}
+              ${metric("추이 데이터", `${profitTrend.length || 0}건`)}
+            </div>
+            ${profitLineChart(profitTrend)}
+            ${profitTrend.length ? profitTrend.slice(-5).map(trendRow).join("") : '<div class="muted">수익 추이 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">종목별 비중</div>
+            ${allocationDonutChart(tickerAllocation, "ticker")}
+            ${tickerAllocation.length ? tickerAllocation.map((item) => allocationRow(item.ticker, item)).join("") : '<div class="muted">종목별 비중 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">유형별 비중</div>
+            ${allocationDonutChart(typeAllocation, "transaction_type")}
+            ${typeAllocation.length ? typeAllocation.map((item) => allocationRow(transactionTypeLabel(item.transaction_type), item)).join("") : '<div class="muted">유형별 비중 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">계좌별 비중</div>
+            ${allocationDonutChart(accountAllocation, "account_name")}
+            ${accountAllocation.length ? accountAllocation.map((item) => allocationRow(item.account_name, item)).join("") : '<div class="muted">계좌별 비중 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">배당</div>
+            <div class="grid">
+              ${metric("배당 합계", krw(analytics.dividend_total), "good")}
+              ${metric("배당 기록", `${dividendByYear.reduce((sum, item) => sum + Number(item.count || 0), 0)}건`)}
+            </div>
+            ${periodBarChart(dividendByYear, "amount")}
+            ${dividendByYear.length ? dividendByYear.map(amountYearRow).join("") : '<div class="muted">배당 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">세금</div>
+            <div class="grid">
+              ${metric("세금 합계", krw(analytics.tax_total), "danger")}
+              ${metric("세금 기록", `${taxByYear.reduce((sum, item) => sum + Number(item.count || 0), 0)}건`)}
+            </div>
+            ${periodBarChart(taxByYear, "amount")}
+            ${taxByYear.length ? taxByYear.map(amountYearRow).join("") : '<div class="muted">세금 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">수수료</div>
+            <div class="grid">
+              ${metric("수수료 합계", krw(analytics.commission_total), "danger")}
+              ${metric("수수료 기록", `${commissionByYear.reduce((sum, item) => sum + Number(item.count || 0), 0)}건`)}
+            </div>
+            ${periodBarChart(commissionByYear, "amount")}
+            ${commissionByYear.length ? commissionByYear.map(amountYearRow).join("") : '<div class="muted">수수료 데이터가 없습니다.</div>'}
+          </div>
+          <div class="panel">
+            <div class="panel-title">전략 성과</div>
+            ${
+              strategyPerformance.length
+                ? strategyPerformance.map((item) => performanceRow(item.strategy_name, item)).join("")
+                : '<div class="muted">전략 성과 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">종목별 거래</div>
+            ${
+              topTickers.length
+                ? topTickers.map((item) => `<div class="row"><div class="row-title">${item.ticker}</div><div>${item.count}건</div></div>`).join("")
+                : '<div class="muted">종목별 거래 데이터가 없습니다.</div>'
+            }
+          </div>
+          <div class="panel">
+            <div class="panel-title">베스트/워스트 거래</div>
+            ${analyticsEntryRow("베스트", analytics.best_entry, "good")}
+            ${analyticsEntryRow("워스트", analytics.worst_entry, "danger")}
+          </div>
+          <div class="panel">
+            <div class="panel-title">연속 손익</div>
+            <div class="grid">
+              ${metric("현재 연승", `${analytics.current_win_streak || 0}회`, "good")}
+              ${metric("현재 연패", `${analytics.current_loss_streak || 0}회`, "danger")}
+              ${metric("최장 연승", `${analytics.longest_win_streak || 0}회`, "good")}
+              ${metric("최장 연패", `${analytics.longest_loss_streak || 0}회`, "danger")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">일지 현황</div>
+            <div class="grid">
+              ${metric("작성 완료", String(analytics.total_entries || 0))}
+              ${metric("대기 초안", String(analytics.pending_drafts || 0))}
+              ${metric("최근 작성", analytics.latest_entry_at ? dateTime(analytics.latest_entry_at) : "-")}
+              ${metric("평균 수익률", analytics.average_profit_rate == null ? "-" : pct(analytics.average_profit_rate), analytics.average_profit_rate < 0 ? "danger" : "good")}
+            </div>
+          </div>
+        `;
+      }
+
+      function analyticsEntryRow(label, item, tone) {
+        if (!item) {
+          return `<div class="row"><div class="row-title">${label}</div><div class="muted">데이터 없음</div></div>`;
+        }
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${label} · ${item.name || item.ticker || "미분류"}</div>
+              <div class="muted">${item.ticker || "-"} · ${item.entry_reason || "진입 근거 없음"}</div>
+            </div>
+            <div class="row-side">
+              <div class="${tone}">${krw(item.profit_loss_amount)}</div>
+              <div class="muted">${pct(item.profit_rate)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function performanceRow(label, item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${label || "미지정"}</div>
+              <div class="muted">${item.count}건 · 승률 ${pct(item.win_rate)} · 평균 ${krw(item.average_profit_loss)}</div>
+            </div>
+            <div class="${item.profit_loss_total < 0 ? "danger" : "good"}">${krw(item.profit_loss_total)}</div>
+          </div>
+        `;
+      }
+
+      // Preview-only SVG charts. When this screen moves to React Native, replace
+      // these helpers with a maintained chart library for tooltips, zoom, and touch.
+      function periodBarChart(items, valueKey) {
+        const rows = (items || []).filter((item) => Number.isFinite(Number(item[valueKey])));
+        if (!rows.length) return "";
+        const chartRows = rows.slice(0, CHART_LIMITS.periodBars).reverse();
+        const width = 320;
+        const height = 150;
+        const padding = 28;
+        const baseline = 76;
+        const graphWidth = width - padding * 2;
+        const maxAbs = Math.max(...chartRows.map((item) => Math.abs(Number(item[valueKey] || 0))), 1);
+        const slot = graphWidth / chartRows.length;
+        const barWidth = Math.max(Math.min(slot * 0.54, 22), 8);
+        const bars = chartRows
+          .map((item, index) => {
+            const value = Number(item[valueKey] || 0);
+            const magnitude = Math.abs(value) / maxAbs;
+            const barHeight = Math.max(magnitude * 54, value === 0 ? 1 : 3);
+            const x = padding + index * slot + (slot - barWidth) / 2;
+            const y = value >= 0 ? baseline - barHeight : baseline;
+            const color = value >= 0 ? "#0f766e" : "#dc2626";
+            const label = String(item.period || item.month || item.date || "").replace(/^20/, "");
+            return `
+              <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="${color}"></rect>
+              <text x="${(x + barWidth / 2).toFixed(1)}" y="134" text-anchor="middle" font-size="9" fill="#64748b">${escapeSvg(label)}</text>
+            `;
+          })
+          .join("");
+        return `
+          <div class="chart">
+            <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="기간별 수익 그래프">
+              <line x1="${padding}" y1="${baseline}" x2="${width - padding}" y2="${baseline}" stroke="#cbd5e1" stroke-width="1"></line>
+              ${bars}
+            </svg>
+          </div>
+        `;
+      }
+
+      function profitLineChart(items) {
+        const rows = (items || []).filter((item) => Number.isFinite(Number(item.cumulative_profit_loss)));
+        if (!rows.length) return "";
+        const chartRows = rows.slice(-CHART_LIMITS.profitTrendPoints);
+        const width = 320;
+        const height = 170;
+        const paddingX = 28;
+        const paddingY = 22;
+        const values = chartRows.map((item) => Number(item.cumulative_profit_loss || 0));
+        const minValue = Math.min(...values, 0);
+        const maxValue = Math.max(...values, 0);
+        const range = Math.max(maxValue - minValue, 1);
+        const xStep = chartRows.length > 1 ? (width - paddingX * 2) / (chartRows.length - 1) : 0;
+        const yFor = (value) => paddingY + ((maxValue - value) / range) * (height - paddingY * 2 - 28);
+        const points = chartRows
+          .map((item, index) => {
+            const x = chartRows.length > 1 ? paddingX + index * xStep : width / 2;
+            return `${x.toFixed(1)},${yFor(Number(item.cumulative_profit_loss || 0)).toFixed(1)}`;
+          })
+          .join(" ");
+        const zeroY = yFor(0);
+        const markers = chartRows
+          .map((item, index) => {
+            const x = chartRows.length > 1 ? paddingX + index * xStep : width / 2;
+            const y = yFor(Number(item.cumulative_profit_loss || 0));
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.7" fill="#0f766e"></circle>`;
+          })
+          .join("");
+        const firstLabel = chartRows[0]?.date || "";
+        const lastLabel = chartRows[chartRows.length - 1]?.date || "";
+        return `
+          <div class="chart">
+            <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="누적 수익 추이 그래프">
+              <line x1="${paddingX}" y1="${zeroY.toFixed(1)}" x2="${width - paddingX}" y2="${zeroY.toFixed(1)}" stroke="#cbd5e1" stroke-width="1"></line>
+              <polyline points="${points}" fill="none" stroke="#0f766e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></polyline>
+              ${markers}
+              <text x="${paddingX}" y="${height - 8}" font-size="10" fill="#64748b">${escapeSvg(firstLabel)}</text>
+              <text x="${width - paddingX}" y="${height - 8}" text-anchor="end" font-size="10" fill="#64748b">${escapeSvg(lastLabel)}</text>
+            </svg>
+          </div>
+        `;
+      }
+
+      function allocationDonutChart(items, labelKey) {
+        const rows = (items || [])
+          .filter((item) => Number(item.weight || 0) > 0)
+          .slice(0, CHART_LIMITS.allocationSegments);
+        if (!rows.length) return "";
+        const colors = ["#0f766e", "#2563eb", "#7c3aed", "#d97706", "#dc2626", "#64748b"];
+        const radius = 44;
+        const circumference = 2 * Math.PI * radius;
+        let offset = 0;
+        const segments = rows
+          .map((item, index) => {
+            const weight = Math.max(Number(item.weight || 0), 0);
+            const length = (weight / 100) * circumference;
+            const segment = `
+              <circle cx="60" cy="60" r="${radius}" fill="none" stroke="${colors[index % colors.length]}" stroke-width="18"
+                stroke-dasharray="${length.toFixed(2)} ${(circumference - length).toFixed(2)}"
+                stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)"></circle>
+            `;
+            offset += length;
+            return segment;
+          })
+          .join("");
+        const legends = rows
+          .map((item, index) => {
+            const rawLabel = labelKey === "transaction_type" ? transactionTypeLabel(item[labelKey]) : item[labelKey];
+            return `
+              <div class="chart-legend">
+                <div class="legend-main">
+                  <span class="legend-dot" style="background:${colors[index % colors.length]}"></span>
+                  <span class="row-title">${escapeHtml(rawLabel || "미지정")}</span>
+                </div>
+                <span class="${item.profit_loss_total < 0 ? "danger" : "good"}">${item.weight == null ? "-" : pct(item.weight)}</span>
+              </div>
+            `;
+          })
+          .join("");
+        return `
+          <div class="chart">
+            <svg viewBox="0 0 120 120" role="img" aria-label="비중 그래프">
+              <circle cx="60" cy="60" r="${radius}" fill="none" stroke="#e5e7eb" stroke-width="18"></circle>
+              ${segments}
+              <text x="60" y="58" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">${rows.length}</text>
+              <text x="60" y="74" text-anchor="middle" font-size="10" fill="#64748b">분류</text>
+            </svg>
+            <div class="chart-labels">${legends}</div>
+          </div>
+        `;
+      }
+
+      function periodProfitRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.period}</div>
+              <div class="muted">${item.count}건 · 배당 ${krw(item.dividend_total)} · 세금 ${krw(item.tax_total)}</div>
+            </div>
+            <div class="${item.profit_loss_total < 0 ? "danger" : "good"}">${krw(item.profit_loss_total)}</div>
+          </div>
+        `;
+      }
+
+      function trendRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.date} · ${item.ticker || "-"}</div>
+              <div class="muted">${transactionTypeLabel(item.transaction_type)} · 단일 ${krw(item.profit_loss_amount)}</div>
+            </div>
+            <div class="${item.cumulative_profit_loss < 0 ? "danger" : "good"}">${krw(item.cumulative_profit_loss)}</div>
+          </div>
+        `;
+      }
+
+      function allocationRow(label, item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${label || "미지정"}</div>
+              <div class="muted">${item.count}건 · 비중 ${item.weight == null ? "-" : pct(item.weight)}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${Math.max(Number(item.weight || 0), item.weight ? 4 : 0)}%"></div>
+              </div>
+            </div>
+            <div class="${item.profit_loss_total < 0 ? "danger" : "good"}">${krw(item.profit_loss_total)}</div>
+          </div>
+        `;
+      }
+
+      function currencyBreakdownRow(item) {
+        const unconvertedText = item.unconverted_count ? ` · 환율 필요 ${item.unconverted_count}건` : "";
+        const fxText = item.latest_fx_rate_krw ? ` · 최근 환율 ${Number(item.latest_fx_rate_krw).toLocaleString("ko-KR")}` : "";
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.currency}</div>
+              <div class="muted">${item.count}건 · 환산 ${item.converted_count}건${unconvertedText}${fxText}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${item.activity_amount_krw ? 100 : 4}%"></div>
+              </div>
+            </div>
+            <div class="${item.profit_loss_total_krw < 0 ? "danger" : "good"}">${krw(item.profit_loss_total_krw)}</div>
+          </div>
+        `;
+      }
+
+      function amountYearRow(item) {
+        return `
+          <div class="row">
+            <div class="row-title">${item.period}</div>
+            <div>${krw(item.amount)} · ${item.count}건</div>
+          </div>
+        `;
+      }
+
+      function curveRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.sequence}. ${item.name || item.ticker || "미분류"}</div>
+              <div class="muted">${dateTime(item.updated_at)} · 단일 ${krw(item.profit_loss_amount)}</div>
+            </div>
+            <div class="row-side">
+              <div class="${item.cumulative_profit_loss < 0 ? "danger" : "good"}">${krw(item.cumulative_profit_loss)}</div>
+              <div class="muted">낙폭 ${krw(item.drawdown_amount)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function monthRow(item) {
+        const magnitude = Math.min(Math.abs(item.profit_loss_total) / 1000000 * 100, 100);
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.month}</div>
+              <div class="muted">${item.entries_count}건 · 승률 ${pct(item.win_rate)}</div>
+              <div class="bar-track">
+                <div class="bar-fill ${item.profit_loss_total < 0 ? "negative" : ""}" style="width:${Math.max(magnitude, 4)}%"></div>
+              </div>
+            </div>
+            <div class="${item.profit_loss_total < 0 ? "danger" : "good"}">${krw(item.profit_loss_total)}</div>
+          </div>
+        `;
+      }
+
+      function transactionTypeLabel(value) {
+        const labels = {
+          trade: "매매손익",
+          buy: "매수",
+          sell: "매도",
+          dividend: "배당",
+          tax: "세금",
+          fee: "수수료",
+        };
+        return labels[value] || value || "기타";
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function escapeSvg(value) {
+        return escapeHtml(value);
+      }
+
+      function metric(label, value, tone = "") {
+        return `
+          <div class="metric">
+            <div class="metric-label">${label}</div>
+            <div class="metric-value ${tone}">${value}</div>
+          </div>
+        `;
+      }
+
+      function holdingRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.name || item.ticker || "-"}</div>
+              <div class="muted">${item.ticker || "-"} · ${item.quantity || 0}주 · 평균 ${krw(item.average_price)}</div>
+            </div>
+            <div class="row-side">
+              <div class="${item.evaluation_profit_loss < 0 ? "danger" : "good"}">${pct(item.profit_rate)}</div>
+              <div class="muted">${krw(item.evaluation_amount)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function historyPeriodButton(item) {
+        return `
+          <button class="period-choice ${state.historyPeriod === item.key ? "active" : ""}" data-history-period="${item.key}">
+            ${item.label}
+          </button>
+        `;
+      }
+
+      function historyResultRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${formatSyncDate(item.date)}</div>
+              <div class="muted">매매 요약 ${item.journal_items_count || 0}건 · 체결 상세 ${item.order_executions_count || 0}건</div>
+            </div>
+            <div class="row-side">
+              <div>${item.needs_review_count || 0}건</div>
+              <div class="muted">${item.has_next ? "추가 페이지 있음" : `run ${item.sync_run_id}`}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function manualTransactionRow(item) {
+        const netProfit = Number(item.profit_loss_amount_krw ?? item.profit_loss_amount ?? 0)
+          + Number(item.dividend_amount_krw ?? item.dividend_amount ?? 0)
+          - Number(item.tax_amount_krw ?? item.tax_amount ?? 0)
+          - Number(item.commission_amount_krw ?? item.commission_amount ?? 0);
+        const currency = item.currency || "KRW";
+        const fxMissing = currency !== "KRW" && !item.fx_rate_krw;
+        const duplicateText = item.dedup_status === "duplicate_kiwoom" ? " · 키움 중복 제외" : "";
+        const originalMoney = currency === "KRW"
+          ? `매수 ${krw(item.buy_amount)} · 매도 ${krw(item.sell_amount)} · 배당 ${krw(item.dividend_amount)} · 세금 ${krw(item.tax_amount)} · 수수료 ${krw(item.commission_amount)}`
+          : `원통화 ${currency} · 환율 ${item.fx_rate_krw ? Number(item.fx_rate_krw).toLocaleString("ko-KR") : "필요"} · 매수 ${money(item.buy_amount, currency)} · 매도 ${money(item.sell_amount, currency)} · 수수료 ${money(item.commission_amount, currency)}`;
+        const splitText = Number(item.split_adjustment_ratio || 1) === 1
+          ? ""
+          : ` · 보정수량 ${numberValue(item.adjusted_quantity)} · 보정단가 ${numberValue(item.adjusted_price)}`;
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.name || item.ticker || item.broker || "수동 거래"}</div>
+              <div class="muted">${item.trade_date} · ${item.broker} · ${item.account_name} · ${transactionTypeLabel(item.transaction_type)}</div>
+              <div class="muted">${originalMoney}</div>
+              <div class="muted">KRW 환산 손익 ${fxMissing ? "환율 입력 필요" : krw(netProfit)}${splitText}${duplicateText}</div>
+              <div class="muted">${item.adjustment_note || item.memo || ""}</div>
+            </div>
+            <div class="row-side">
+              <div>${item.ticker || "-"}</div>
+              <div class="${netProfit < 0 || fxMissing ? "danger" : "good"}">${fxMissing ? "환율 필요" : krw(netProfit)}</div>
+              <button class="danger-button" data-manual-delete-id="${item.id}">삭제</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function manualImportResultBox() {
+        const result = state.manualImportResult;
+        if (!result) return "";
+        const errors = result.errors || [];
+        return `
+          <div class="notice" style="margin-top:12px">
+            <strong>${escapeHtml(result.file_name || "CSV")}</strong>
+            <div class="muted">총 ${result.total_rows || 0}행 · 성공 ${result.imported_count || 0}건 · 실패 ${result.failed_count || 0}건 · 건너뜀 ${result.skipped_count || 0}건</div>
+            ${
+              errors.length
+                ? `<div style="margin-top:8px">${errors.slice(0, 5).map((item) => `<div class="danger">행 ${item.row}: ${escapeHtml(item.message || "")}</div>`).join("")}</div>`
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      function draftRow(item) {
+        const payload = item.payload || {};
+        const meta = draftMeta(item, payload);
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.name || payload.name || item.ticker || "미분류"}</div>
+              <div class="muted">일자: ${meta.tradeDate} · 원천: ${meta.sourceLabel} · 상태: ${item.draft_status}</div>
+              <div class="muted">수량: ${meta.quantityText}</div>
+              <div class="muted">가격: ${meta.priceText}</div>
+              <div class="muted">금액/시간: ${meta.valueText}</div>
+            </div>
+            <div class="row-side">
+              <div>${item.ticker || payload.ticker || "-"}</div>
+              <div class="${meta.resultTone}">${meta.resultText}</div>
+              <button class="primary" data-draft-id="${item.id}" style="min-height:34px;margin-top:6px">작성</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function draftMeta(item, payload) {
+        const sourceLabel = item.source_type === "trade_journal" ? "매매 요약" : "체결 상세";
+        const tradeDate = draftDate(item.source_key);
+        if (item.source_type === "trade_journal") {
+          const amount = Number(payload.profit_loss_amount || 0);
+          return {
+            sourceLabel,
+            tradeDate,
+            quantityText: `매수 ${payload.buy_quantity || 0}주 / 매도 ${payload.sell_quantity || 0}주`,
+            priceText: `매수평균 ${krw(payload.buy_average_price)} / 매도평균 ${krw(payload.sell_average_price)}`,
+            valueText: `매수 ${krw(payload.buy_amount)} / 매도 ${krw(payload.sell_amount)}`,
+            resultText: `${krw(payload.profit_loss_amount)} · ${pct(payload.profit_rate)}`,
+            resultTone: amount < 0 ? "danger" : "good",
+          };
+        }
+
+        return {
+          sourceLabel,
+          tradeDate,
+          quantityText: `주문 ${payload.order_quantity || 0}주 / 체결 ${payload.filled_quantity || 0}주 / 잔량 ${payload.remaining_quantity || 0}주`,
+          priceText: `주문가 ${krw(payload.order_price)} / 체결가 ${krw(payload.filled_price)}`,
+          valueText: `주문 ${payload.order_time || "-"} / 확인 ${payload.confirm_time || "-"}`,
+          resultText: payload.trade_side_name || payload.order_type_name || payload.order_status || "-",
+          resultTone: "",
+        };
+      }
+
+      function draftDate(sourceKey) {
+        const match = String(sourceKey || "").match(/:(\d{8})(?=:)/);
+        return match ? formatSyncDate(match[1]) : "-";
+      }
+
+      function entryRow(item) {
+        return `
+          <div class="row">
+            <div class="row-main">
+              <div class="row-title">${item.name || item.ticker || "미분류"}</div>
+              <div class="muted">${item.entry_reason || "진입 근거 없음"}</div>
+              <div class="muted">${item.strategy_name || "전략 미지정"} · ${krw(item.manual_profit_loss_amount)} · ${pct(item.manual_profit_rate)}</div>
+            </div>
+            <div class="row-side">
+              <div>${item.rule_followed === true ? "원칙 준수" : item.rule_followed === false ? "원칙 위반" : "미확인"}</div>
+              <div class="muted">${dateTime(item.updated_at)}</div>
+              <button class="secondary" data-entry-edit-id="${item.id}" style="margin-top:6px">수정</button>
+              <button class="danger-button" data-entry-delete-id="${item.id}">삭제</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderJournalForm() {
+        const target = document.getElementById("journal-form");
+        const draft = state.selectedDraft;
+        const entry = state.selectedEntry;
+        if (!target || (!draft && !entry)) return;
+
+        const payload = draft?.payload || entry?.source_payload || {};
+        const title = draft?.name || entry?.name || payload.name || draft?.ticker || entry?.ticker || "미분류";
+        target.innerHTML = `
+          <div class="panel">
+            <div class="panel-title">${title} 복기</div>
+            <div class="form-grid">
+              <div>
+                <label class="muted">전략명</label>
+                <input id="strategy-name" placeholder="예: ORB" value="${escapeAttr(entry?.strategy_name || "")}" />
+              </div>
+              <div>
+                <label class="muted">셋업 태그</label>
+                <input id="setup-tags" placeholder="gap-up, first-pullback" value="${escapeAttr((entry?.setup_tags || []).join(", "))}" />
+              </div>
+            </div>
+            <label class="muted">진입 근거</label>
+            <textarea id="entry-reason" rows="3">${escapeHtml(entry?.entry_reason || "")}</textarea>
+            <label class="muted">청산 근거</label>
+            <textarea id="exit-reason" rows="3">${escapeHtml(entry?.exit_reason || "")}</textarea>
+            <label class="muted">원칙 준수</label>
+            <select id="rule-followed">
+              <option value="" ${entry?.rule_followed == null ? "selected" : ""}>미확인</option>
+              <option value="true" ${entry?.rule_followed === true ? "selected" : ""}>준수</option>
+              <option value="false" ${entry?.rule_followed === false ? "selected" : ""}>위반</option>
+            </select>
+            <div class="form-grid">
+              <div>
+                <label class="muted">계획 진입가</label>
+                <input id="planned-entry-price" inputmode="decimal" type="number" step="0.01" placeholder="예: 80000" value="${numberValue(entry?.planned_entry_price)}" />
+              </div>
+              <div>
+                <label class="muted">실제 진입가</label>
+                <input id="actual-entry-price" inputmode="decimal" type="number" step="0.01" placeholder="예: 80100" value="${numberValue(entry?.actual_entry_price)}" />
+              </div>
+              <div>
+                <label class="muted">손절가</label>
+                <input id="stop-loss-price" inputmode="decimal" type="number" step="0.01" placeholder="예: 79000" value="${numberValue(entry?.stop_loss_price)}" />
+              </div>
+              <div>
+                <label class="muted">목표가</label>
+                <input id="target-price" inputmode="decimal" type="number" step="0.01" placeholder="예: 82000" value="${numberValue(entry?.target_price)}" />
+              </div>
+              <div>
+                <label class="muted">청산가</label>
+                <input id="exit-price" inputmode="decimal" type="number" step="0.01" placeholder="예: 81800" value="${numberValue(entry?.exit_price)}" />
+              </div>
+            </div>
+            <div class="form-grid">
+              <div>
+                <label class="muted">손익금액</label>
+                <input id="manual-profit-loss-amount" inputmode="numeric" type="number" placeholder="예: 125000" value="${numberValue(entry?.manual_profit_loss_amount)}" />
+              </div>
+              <div>
+                <label class="muted">수익률</label>
+                <input id="manual-profit-rate" inputmode="decimal" type="number" step="0.01" placeholder="예: 2.35" value="${numberValue(entry?.manual_profit_rate)}" />
+              </div>
+              <div>
+                <label class="muted">매수금액</label>
+                <input id="manual-buy-amount" inputmode="numeric" type="number" placeholder="예: 5000000" value="${numberValue(entry?.manual_buy_amount)}" />
+              </div>
+              <div>
+                <label class="muted">매도금액</label>
+                <input id="manual-sell-amount" inputmode="numeric" type="number" placeholder="예: 5125000" value="${numberValue(entry?.manual_sell_amount)}" />
+              </div>
+              <div>
+                <label class="muted">계획 리스크</label>
+                <input id="planned-risk-amount" inputmode="numeric" type="number" placeholder="예: 100000" value="${numberValue(entry?.planned_risk_amount)}" />
+              </div>
+              <div>
+                <label class="muted">실현 R</label>
+                <input id="realized-r-multiple" inputmode="decimal" type="number" step="0.01" placeholder="비우면 손익/리스크로 계산" value="${numberValue(entry?.realized_r_multiple)}" />
+              </div>
+            </div>
+            <label class="muted">잘한 점</label>
+            <textarea id="good-points" rows="2">${escapeHtml(entry?.good_points || "")}</textarea>
+            <label class="muted">개선점</label>
+            <textarea id="improvement-points" rows="2">${escapeHtml(entry?.improvement_points || "")}</textarea>
+            <label class="muted">메모</label>
+            <textarea id="memo" rows="3">${escapeHtml(entry?.memo || "")}</textarea>
+            <button id="save-entry" class="primary">${entry ? "매매일지 수정 저장" : "매매일지 저장"}</button>
+          </div>
+        `;
+
+        document.getElementById("save-entry").addEventListener("click", async () => {
+          const ruleValue = document.getElementById("rule-followed").value;
+          await saveJournalEntry({
+            draft_id: draft?.id || entry.draft_id,
+            strategy_name: document.getElementById("strategy-name").value,
+            setup_tags: document
+              .getElementById("setup-tags")
+              .value.split(",")
+              .map((item) => item.trim())
+              .filter(Boolean),
+            entry_reason: document.getElementById("entry-reason").value,
+            exit_reason: document.getElementById("exit-reason").value,
+            rule_followed: ruleValue === "" ? null : ruleValue === "true",
+            good_points: document.getElementById("good-points").value,
+            improvement_points: document.getElementById("improvement-points").value,
+            memo: document.getElementById("memo").value,
+            manual_profit_loss_amount: intOrNull("manual-profit-loss-amount"),
+            manual_profit_rate: floatOrNull("manual-profit-rate"),
+            manual_buy_amount: intOrNull("manual-buy-amount"),
+            manual_sell_amount: intOrNull("manual-sell-amount"),
+            planned_entry_price: floatOrNull("planned-entry-price"),
+            actual_entry_price: floatOrNull("actual-entry-price"),
+            stop_loss_price: floatOrNull("stop-loss-price"),
+            target_price: floatOrNull("target-price"),
+            exit_price: floatOrNull("exit-price"),
+            planned_risk_amount: intOrNull("planned-risk-amount"),
+            realized_r_multiple: floatOrNull("realized-r-multiple"),
+          });
+        });
+      }
+
+      function intOrNull(id) {
+        const value = document.getElementById(id).value.trim();
+        return value === "" ? null : Number.parseInt(value, 10);
+      }
+
+      function floatOrNull(id) {
+        const value = document.getElementById(id).value.trim();
+        return value === "" ? null : Number.parseFloat(value);
+      }
+
+      async function saveJournalEntry(payload) {
+        setLoading(true);
+        setError("");
+        try {
+          await request("/api/v1/journal/entries", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          state.selectedDraft = null;
+          state.selectedEntry = null;
+          await loadAll();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function deleteJournalEntry(entryId) {
+        setLoading(true);
+        setError("");
+        try {
+          await request(`/api/v1/journal/entries/${entryId}`, { method: "DELETE" });
+          if (state.selectedEntry?.id === entryId) {
+            state.selectedEntry = null;
+          }
+          await loadAll();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function saveManualTransaction() {
+        setLoading(true);
+        setError("");
+        try {
+          await request("/api/v1/manual-transactions", {
+            method: "POST",
+            body: JSON.stringify({
+              trade_date: document.getElementById("manual-trade-date").value,
+              broker: document.getElementById("manual-broker").value,
+              account_name: document.getElementById("manual-account-name").value,
+              transaction_type: document.getElementById("manual-transaction-type").value,
+              currency: document.getElementById("manual-currency").value,
+              fx_rate_krw: floatOrNull("manual-fx-rate-krw"),
+              ticker: document.getElementById("manual-ticker").value,
+              name: document.getElementById("manual-name").value,
+              quantity: floatOrNull("manual-quantity"),
+              price: floatOrNull("manual-price"),
+              split_adjustment_ratio: floatOrNull("manual-split-adjustment-ratio") || 1,
+              buy_amount: intOrNull("manual-buy-amount-input"),
+              sell_amount: intOrNull("manual-sell-amount-input"),
+              profit_loss_amount: intOrNull("manual-profit-loss-amount-input"),
+              dividend_amount: intOrNull("manual-dividend-amount"),
+              tax_amount: intOrNull("manual-tax-amount"),
+              commission_amount: intOrNull("manual-commission-amount"),
+              adjustment_note: document.getElementById("manual-adjustment-note").value,
+              memo: document.getElementById("manual-memo").value,
+            }),
+          });
+          await loadAll();
+          state.tab = "manual";
+          document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item.dataset.tab === state.tab);
+          });
+          renderManualTransactions();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function importManualTransactionsCsv() {
+        const file = document.getElementById("manual-csv-file")?.files?.[0];
+        if (!file) {
+          setError("가져올 CSV 파일을 선택하세요.");
+          return;
+        }
+        setLoading(true);
+        setError("");
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const response = await fetch(`${API_BASE_URL}/api/v1/manual-transactions/import.csv`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+            body: formData,
+          });
+          if (!response.ok) {
+            let message = `HTTP ${response.status}`;
+            try {
+              const payload = await response.json();
+              message = payload?.error?.message || payload?.detail || message;
+            } catch (error) {
+              // Keep the HTTP status fallback when the response body is not JSON.
+            }
+            throw new Error(message);
+          }
+          state.manualImportResult = await response.json();
+          await loadAll();
+          state.tab = "manual";
+          document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item.dataset.tab === state.tab);
+          });
+          renderManualTransactions();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function deleteManualTransaction(transactionId) {
+        setLoading(true);
+        setError("");
+        try {
+          await request(`/api/v1/manual-transactions/${transactionId}`, { method: "DELETE" });
+          await loadAll();
+          state.tab = "manual";
+          document.querySelectorAll(".tab").forEach((item) => {
+            item.classList.toggle("active", item.dataset.tab === state.tab);
+          });
+          renderManualTransactions();
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function exportJournalEntriesCsv() {
+        setLoading(true);
+        setError("");
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/journal/entries/export.csv${entryFilterQuery()}`, {
+            headers: {
+              Authorization: `Bearer ${ACCESS_TOKEN}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = `investment-journal-${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function readEntryFiltersFromForm() {
+        state.entryFilters = {
+          search: document.getElementById("entry-filter-search").value.trim(),
+          ticker: document.getElementById("entry-filter-ticker").value.trim(),
+          strategy_name: document.getElementById("entry-filter-strategy-name").value.trim(),
+          setup_tag: document.getElementById("entry-filter-setup-tag").value.trim(),
+          result: document.getElementById("entry-filter-result").value,
+          rule_status: document.getElementById("entry-filter-rule-status").value,
+        };
+      }
+
+      function entryFilterQuery() {
+        const params = new URLSearchParams();
+        Object.entries(state.entryFilters).forEach(([key, value]) => {
+          if (value) params.set(key, value);
+        });
+        const query = params.toString();
+        return query ? `?${query}` : "";
+      }
+
+      function numberValue(value) {
+        return value === null || value === undefined ? "" : String(value);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value).replaceAll('"', "&quot;");
+      }
+
+      function krw(value) {
+        if (value === null || value === undefined) return "-";
+        return `${Number(value).toLocaleString("ko-KR")}원`;
+      }
+
+      function money(value, currency) {
+        if (value === null || value === undefined) return "-";
+        return `${Number(value).toLocaleString("ko-KR")} ${currency || ""}`.trim();
+      }
+
+      function pct(value) {
+        if (value === null || value === undefined) return "-";
+        return `${Number(value).toFixed(2)}%`;
+      }
+
+      function rValue(value) {
+        if (value === null || value === undefined) return "-";
+        return `${Number(value).toFixed(2)}R`;
+      }
+
+      function dateTime(value) {
+        if (!value) return "-";
+        return new Date(value).toLocaleString("ko-KR", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function localDateInput(value) {
+        const offset = value.getTimezoneOffset();
+        const localDate = new Date(value.getTime() - offset * 60 * 1000);
+        return localDate.toISOString().slice(0, 10);
+      }
+
+      function historyDateRange(periodKey) {
+        const period = HISTORY_PERIODS.find((item) => item.key === periodKey) || HISTORY_PERIODS[1];
+        if (period.key === "custom") {
+          return {
+            startDate: state.historyCustomStart,
+            endDate: state.historyCustomEnd,
+          };
+        }
+        if (period.year) {
+          const currentYear = new Date().getFullYear();
+          return {
+            startDate: `${period.year}-01-01`,
+            endDate: period.year === currentYear
+              ? localDateInput(new Date())
+              : `${period.year}-12-31`,
+          };
+        }
+        const end = new Date();
+        const start = new Date(end);
+        start.setMonth(start.getMonth() - period.months);
+        start.setDate(start.getDate() + 1);
+        return {
+          startDate: localDateInput(start),
+          endDate: localDateInput(end),
+        };
+      }
+
+      function isActiveHistoryJob(job) {
+        return job?.status === "running" || job?.status === "cancel_requested";
+      }
+
+      function formatSyncDate(value) {
+        if (!value || value.length !== 8) return value || "-";
+        return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+      }
+
+      function setLoading(value) {
+        loading.textContent = value ? "불러오는 중" : "준비됨";
+      }
+
+      function setError(message) {
+        errorBox.textContent = message;
+        errorBox.classList.toggle("hidden", !message);
+      }
+
+      render();
+      loadAll();
+    </script>
+  </body>
+</html>

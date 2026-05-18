@@ -1,0 +1,47 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+mobile_app/.env
+mobile_app/.env.*
+apps/*/.env
+apps/*/.env.*
+!backend/.env.example
+!mobile_app/.env.example
+!apps/*/.env.example
+
+# Python/runtime caches
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node/build outputs
+**/node_modules/
+dist/
+build/
+.expo/
+.expo-shared/
+coverage/
+apps/research-console/dist/
+
+# Local data, generated research, and private DBs
+research_vault/
+research_vault_*_tmp/
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+backend/backups/
+
+# Logs and temporary local artifacts
+*.log
+*.out.log
+*.err.log
+.codex_migration_backup_*/
