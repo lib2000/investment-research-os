@@ -6031,9 +6031,51 @@ function renderDashboardCards(dashboard) {
   `);
 }
 
+function memoryFileNeedsBodySupplement(file) {
+  const tags = [
+    ...(Array.isArray(file?.tags) ? file.tags : []),
+    ...(Array.isArray(file?.json_payload?.tags) ? file.json_payload.tags : []),
+    ...(Array.isArray(file?.json_payload?.captured_item?.tags)
+      ? file.json_payload.captured_item.tags
+      : []),
+  ]
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean);
+  const sourceStatus = String(
+    file?.source_url_processing?.status ||
+      file?.json_payload?.source_url_processing?.status ||
+      ""
+  );
+  const bodySupplemented = Boolean(
+    tags.includes("body_supplemented") ||
+      file?.json_payload?.body_supplemented_at ||
+      file?.capture_quality?.body_supplemented ||
+      file?.json_payload?.capture_quality?.body_supplemented ||
+      (Array.isArray(file?.json_payload?.body_supplements) &&
+        file.json_payload.body_supplements.length)
+  );
+  if (bodySupplemented) {
+    return false;
+  }
+  return Boolean(
+    file?.needs_body_copy ||
+      file?.url_text_unavailable ||
+      tags.includes("needs_body_copy") ||
+      tags.includes("url_text_unavailable") ||
+      ["fetch_failed", "invalid", "empty_text"].includes(sourceStatus)
+  );
+}
+
 function renderMemoryList(memoryResponse, ticker) {
   const memoryKey = normalizeStorageKey(ticker);
-  const files = Array.isArray(memoryResponse) ? memoryResponse : memoryResponse.files || [];
+  const allFiles = Array.isArray(memoryResponse) ? memoryResponse : memoryResponse.files || [];
+  const bodyMissingOnly = Boolean(
+    elements.memoryForm?.querySelector('input[name="showBodyMissingOnly"]')?.checked
+  );
+  const bodyMissingCount = allFiles.filter(memoryFileNeedsBodySupplement).length;
+  const files = bodyMissingOnly
+    ? allFiles.filter(memoryFileNeedsBodySupplement)
+    : allFiles;
   const warnings = Array.isArray(memoryResponse) ? [] : memoryResponse.data_warnings || [];
   const archivedFiles = files.filter((file) => file.archived || file.is_deleted);
   const activeFiles = files.filter((file) => !file.archived && !file.is_deleted);
@@ -6049,19 +6091,21 @@ function renderMemoryList(memoryResponse, ticker) {
   }
 
   const summaryHtml = `
-    <div class="dashboard-card ${files.length ? "ok" : "warning"}">
+    <div class="dashboard-card ${allFiles.length ? "ok" : "warning"}">
       <span>저장 데이터 키</span>
       <strong>${escapeHtml(memoryKey)}</strong>
-      <p>공식 인증 ${officialFiles.length}개 · 레거시 ${legacyFiles.length}개 · 보관 ${archivedCount}개 · ${isTickerLikeMemoryKey(memoryKey) ? "종목 저장소" : "시스템/포트폴리오 저장소"}</p>
+      <p>공식 인증 ${officialFiles.length}개 · 레거시 ${legacyFiles.length}개 · 보관 ${archivedCount}개 · 본문 보강 필요 ${bodyMissingCount}개${bodyMissingOnly ? ` · 필터 적용 ${files.length}개` : ""} · ${isTickerLikeMemoryKey(memoryKey) ? "종목 저장소" : "시스템/포트폴리오 저장소"}</p>
     </div>
   `;
 
   if (!activeFiles.length && !archivedFiles.length) {
     elements.memoryList.innerHTML = `${summaryHtml}
       <div class="dashboard-card warning">
-        <span>저장 리포트</span>
-        <strong>없음</strong>
-        <p>${escapeHtml(memoryKey)}에 저장된 Markdown 리포트가 아직 없습니다.</p>
+        <span>${bodyMissingOnly && allFiles.length ? "본문 보강 필요 자료" : "저장 리포트"}</span>
+        <strong>${bodyMissingOnly && allFiles.length ? "없음" : "없음"}</strong>
+        <p>${bodyMissingOnly && allFiles.length
+          ? `${escapeHtml(memoryKey)}에는 현재 본문 보강이 필요한 URL-only 자료가 없습니다.`
+          : `${escapeHtml(memoryKey)}에 저장된 Markdown 리포트가 아직 없습니다.`}</p>
       </div>
     `;
     activeMemoryPreviewFile = null;
@@ -6082,10 +6126,16 @@ function renderMemoryList(memoryResponse, ticker) {
   const renderMemoryFileCard = (file) => {
     const statusLabel = file.status_label || (file.legacy ? "검증 전" : "공식 인증");
     const archived = Boolean(file.archived || file.is_deleted);
+    const bodyMissing = memoryFileNeedsBodySupplement(file);
+    const sourceStatus = String(
+      file.source_url_processing?.status ||
+        file.json_payload?.source_url_processing?.status ||
+        ""
+    );
     const quality = file.capture_quality || {};
     const attachment = file.attachment || {};
     const extractionBadge = attachmentExtractionBadge(attachment);
-    const qualityStatus = quality.status;
+    const qualityStatus = file.data_quality_status || quality.status;
     const documentType = attachment.document_type || (attachment.file_name ? "첨부 파일" : "");
     const charCount = Number(attachment.extraction_char_count || attachment.extraction_profile?.char_count || 0);
     return `
@@ -6098,6 +6148,8 @@ function renderMemoryList(memoryResponse, ticker) {
           <span class="memory-card-meta">
             ${memoryBadge(statusLabel, archived ? "neutral" : file.legacy ? "warning" : "success")}
             ${memoryBadge(translateReportType(file.report_type), "info")}
+            ${bodyMissing ? memoryBadge("본문 보강 필요", "danger") : ""}
+            ${sourceStatus && sourceStatus !== "success" ? memoryBadge(`URL ${sourceStatus}`, "warning") : ""}
             ${archived ? memoryBadge("소프트 보관", "neutral") : ""}
             ${documentType ? memoryBadge(documentType, "neutral") : ""}
             ${extractionBadge ? memoryBadge(extractionBadge.label, extractionBadge.tone) : ""}
@@ -6459,7 +6511,11 @@ function isImageDocumentType(documentType) {
 }
 
 function needsMemoryBodySupplement(file) {
+  if (memoryFileNeedsBodySupplement(file)) {
+    return true;
+  }
   const tagValues = [
+    ...(Array.isArray(file?.tags) ? file.tags : []),
     ...(Array.isArray(file?.json_payload?.captured_item?.tags)
       ? file.json_payload.captured_item.tags
       : []),
@@ -6470,6 +6526,8 @@ function needsMemoryBodySupplement(file) {
     file?.content,
     file?.summary,
     file?.capture_quality?.status,
+    file?.source_url_processing?.status,
+    file?.data_quality_status,
     file?.json_payload?.capture_quality?.status,
     file?.json_payload?.source_url_processing?.status,
     ...tagValues,
@@ -9188,6 +9246,18 @@ elements.memoryForm.addEventListener("submit", async (event) => {
   } catch (error) {
     setError(error);
   }
+});
+
+elements.memoryForm.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  if (!["includeArchived", "showBodyMissingOnly"].includes(target.name)) {
+    return;
+  }
+  showActionAccepted("저장 데이터 필터를 다시 적용합니다.");
+  elements.memoryForm.requestSubmit();
 });
 
 if (elements.memorySupplementForm) {

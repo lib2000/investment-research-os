@@ -507,7 +507,12 @@ class ResearchMemoryFile(BaseModel):
     verified: bool = False
     legacy: bool = True
     status_label: str = "레거시"
+    tags: List[str] = Field(default_factory=list)
+    source_url_processing: Optional[dict] = None
     capture_quality: Optional[dict] = None
+    data_quality_status: Optional[str] = None
+    needs_body_copy: bool = False
+    url_text_unavailable: bool = False
     attachment: Optional[dict] = None
     archived: bool = False
     is_deleted: bool = False
@@ -540,7 +545,12 @@ class ResearchMemoryContentResponse(BaseModel):
     verified: bool = False
     legacy: bool = True
     status_label: str = "레거시"
+    tags: List[str] = Field(default_factory=list)
+    source_url_processing: Optional[dict] = None
     capture_quality: Optional[dict] = None
+    data_quality_status: Optional[str] = None
+    needs_body_copy: bool = False
+    url_text_unavailable: bool = False
     attachment: Optional[dict] = None
     archived: bool = False
     is_deleted: bool = False

@@ -5925,6 +5925,63 @@ def is_archived_research_entry(manifest_entry: dict | None, json_payload: dict |
     )
 
 
+def research_memory_entry_quality_metadata(
+    manifest_entry: dict | None,
+    json_payload: dict | None = None,
+    captured_item: dict | None = None,
+) -> dict:
+    payload = json_payload if isinstance(json_payload, dict) else {}
+    entry = manifest_entry if isinstance(manifest_entry, dict) else {}
+    captured = captured_item if isinstance(captured_item, dict) else {}
+    if not captured and isinstance(payload.get("captured_item"), dict):
+        captured = payload["captured_item"]
+
+    tag_values: list[str] = []
+    for candidate in (entry.get("tags"), captured.get("tags"), payload.get("tags")):
+        if isinstance(candidate, list):
+            tag_values.extend(str(tag).strip() for tag in candidate if str(tag or "").strip())
+    tags = list(dict.fromkeys(tag_values))
+
+    source_url_processing = (
+        entry.get("source_url_processing")
+        if isinstance(entry.get("source_url_processing"), dict)
+        else payload.get("source_url_processing")
+        if isinstance(payload.get("source_url_processing"), dict)
+        else None
+    )
+    capture_quality = (
+        entry.get("capture_quality")
+        if isinstance(entry.get("capture_quality"), dict)
+        else payload.get("capture_quality")
+        if isinstance(payload.get("capture_quality"), dict)
+        else None
+    )
+    source_status = str((source_url_processing or {}).get("status") or "")
+    url_text_unavailable = bool(
+        "url_text_unavailable" in tags
+        or source_status in {"fetch_failed", "invalid", "empty_text"}
+    )
+    body_supplemented = bool(
+        "body_supplemented" in tags
+        or payload.get("body_supplemented_at")
+        or (isinstance(payload.get("body_supplements"), list) and payload["body_supplements"])
+        or (isinstance(capture_quality, dict) and capture_quality.get("body_supplemented"))
+    )
+    needs_body_copy = bool(("needs_body_copy" in tags or url_text_unavailable) and not body_supplemented)
+    data_quality_status = (
+        str((capture_quality or {}).get("status") or "").strip()
+        or ("본문 미확보" if url_text_unavailable else None)
+    )
+    return {
+        "tags": tags,
+        "source_url_processing": source_url_processing,
+        "capture_quality": capture_quality,
+        "data_quality_status": data_quality_status,
+        "needs_body_copy": needs_body_copy,
+        "url_text_unavailable": url_text_unavailable,
+    }
+
+
 def list_research_memory_files(
     ticker: str,
     vault_dir: Path,
@@ -5992,6 +6049,11 @@ def build_research_memory_file(
         or sidecar_verified
     )
     status_label = "보관됨" if archived else "저장 메타 확인" if sidecar_verified else "공식 인증" if verified else "레거시/검증 전"
+    quality_metadata = research_memory_entry_quality_metadata(
+        manifest_entry,
+        json_payload,
+        captured_item,
+    )
     return ResearchMemoryFile(
         file_name=file_path.name,
         relative_path=file_path.relative_to(vault_dir.parent).as_posix(),
@@ -6016,11 +6078,12 @@ def build_research_memory_file(
         verified=verified,
         legacy=not verified,
         status_label=status_label,
-        capture_quality=(
-            manifest_entry.get("capture_quality")
-            if manifest_entry and manifest_entry.get("capture_quality")
-            else json_payload.get("capture_quality")
-        ),
+        tags=quality_metadata["tags"],
+        source_url_processing=quality_metadata["source_url_processing"],
+        capture_quality=quality_metadata["capture_quality"],
+        data_quality_status=quality_metadata["data_quality_status"],
+        needs_body_copy=quality_metadata["needs_body_copy"],
+        url_text_unavailable=quality_metadata["url_text_unavailable"],
         attachment=(
             manifest_entry.get("attachment")
             if manifest_entry and manifest_entry.get("attachment")
@@ -6089,6 +6152,11 @@ def read_research_memory_file(
     verified = bool(verified or sidecar_verified)
 
     status_label = "보관됨" if archived else "저장 메타 확인" if sidecar_verified else "공식 인증" if verified else "레거시/검증 전"
+    quality_metadata = research_memory_entry_quality_metadata(
+        manifest_entry,
+        json_payload,
+        captured_item,
+    )
     return ResearchMemoryContentResponse(
         ticker=ticker,
         file_name=target_path.name,
@@ -6107,13 +6175,12 @@ def read_research_memory_file(
         verified=verified,
         legacy=not verified,
         status_label=status_label,
-        capture_quality=(
-            manifest_entry.get("capture_quality")
-            if manifest_entry and manifest_entry.get("capture_quality")
-            else (json_payload or {}).get("capture_quality")
-            if isinstance(json_payload, dict)
-            else None
-        ),
+        tags=quality_metadata["tags"],
+        source_url_processing=quality_metadata["source_url_processing"],
+        capture_quality=quality_metadata["capture_quality"],
+        data_quality_status=quality_metadata["data_quality_status"],
+        needs_body_copy=quality_metadata["needs_body_copy"],
+        url_text_unavailable=quality_metadata["url_text_unavailable"],
         attachment=(
             manifest_entry.get("attachment")
             if manifest_entry and manifest_entry.get("attachment")
