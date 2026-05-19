@@ -216,6 +216,28 @@ class DartFilingWatchTests(unittest.TestCase):
 
         self.assertEqual(recent[0]["filing"]["rcept_no"], "20260515002149")
 
+    def test_recent_dart_entries_without_ticker_returns_all_recent_entries(self):
+        import research_os_main as main
+
+        cache = {
+            "entries": {
+                "a": {
+                    "ticker": "003230",
+                    "detected_at": "2026-05-18T09:00:00+09:00",
+                    "filing": {"receipt_date": "20260514", "rcept_no": "A"},
+                },
+                "b": {
+                    "ticker": "361610",
+                    "detected_at": "2026-05-18T09:00:00+09:00",
+                    "filing": {"receipt_date": "20260515", "rcept_no": "B"},
+                },
+            }
+        }
+
+        recent = main.recent_dart_cache_entries(cache, limit=5)
+
+        self.assertEqual([item["filing"]["rcept_no"] for item in recent], ["B", "A"])
+
     def test_dart_periodic_filing_overrides_schedule_fallback_for_same_quarter(self):
         import research_os_main as main
         from research_os.settings import Settings
@@ -336,14 +358,43 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(universe["portfolio_tickers"], ["003230"])
         self.assertEqual(universe["interest_tickers"], ["071050"])
         self.assertEqual(universe["target_count"], 2)
-        self.assertIn(
-            {"ticker": "PL", "source": "portfolio", "reason": "non_kr_ticker"},
-            universe["excluded_tickers"],
-        )
-        self.assertIn(
-            {"ticker": "AAPL", "source": "interest", "reason": "non_kr_ticker"},
-            universe["excluded_tickers"],
-        )
+        excluded_pairs = {
+            (item["ticker"], item["source"], item["reason"])
+            for item in universe["excluded_tickers"]
+        }
+        self.assertIn(("PL", "portfolio", "non_kr_ticker"), excluded_pairs)
+        self.assertIn(("AAPL", "interest", "non_kr_ticker"), excluded_pairs)
+
+    def test_dart_watch_universe_excludes_etfs_before_opendart_lookup(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio_store = {
+            "portfolios": {
+                "DEFAULT": {
+                    "holdings": [
+                        {"ticker": "360750", "name": "TIGER 미국S&P500 ETF", "sector": "ETF / US Equity"},
+                        {"ticker": "395160", "name": "KODEX AI반도체 ETF", "theme_tags": ["ETF", "AI"]},
+                        {"ticker": "033500", "name": "동성화인텍"},
+                    ]
+                }
+            }
+        }
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=portfolio_store),
+            patch.object(main, "read_interest_list", return_value={"tickers": [], "sectors": []}),
+        ):
+            universe = main.dart_watch_universe(settings)
+
+        self.assertEqual(universe["target_tickers"], ["033500"])
+        excluded_pairs = {
+            (item["ticker"], item["reason"])
+            for item in universe["excluded_tickers"]
+        }
+        self.assertIn(("360750", "etf_not_dart_corp"), excluded_pairs)
+        self.assertIn(("395160", "etf_not_dart_corp"), excluded_pairs)
 
     def test_daily_dart_refresh_records_full_portfolio_interest_coverage(self):
         import research_os_main as main
@@ -424,6 +475,69 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(result["daily_check"]["failure_count"], 0)
         self.assertFalse(result["daily_check"]["due"])
         self.assertEqual(result["saved_count"], 2)
+
+    def test_daily_dart_refresh_retries_transient_provider_errors(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(
+            research_vault_dir="../research_vault",
+            dart_api_key="FAKE_DART_KEY",
+            dart_filing_lookback_days=45,
+        )
+        cache_store = {"updated_at": None, "entries": {}, "last_run": None}
+        attempts = {"003230": 0}
+
+        class FakeOpenDartClient:
+            is_configured = True
+
+            def __init__(self, _settings):
+                pass
+
+            def fetch_recent_filings(self, ticker, *, lookback_days, page_count):
+                attempts[ticker] += 1
+                if attempts[ticker] == 1:
+                    raise TimeoutError("OpenDART timeout")
+                return (
+                    {"corp_name": "삼양식품"},
+                    [
+                        {
+                            "corp_name": "삼양식품",
+                            "stock_code": ticker,
+                            "rcept_no": "202605150001",
+                            "report_name": "분기보고서 (2026.03)",
+                            "receipt_date": "20260515",
+                            "source_url": "https://dart.fss.or.kr/003230",
+                        }
+                    ],
+                )
+
+        def fake_read_cache(_settings):
+            return copy.deepcopy(cache_store)
+
+        def fake_write_cache(_settings, payload):
+            cache_store.clear()
+            cache_store.update(copy.deepcopy(payload))
+
+        with (
+            patch.object(main, "dart_watch_universe", return_value={
+                "target_tickers": ["003230"],
+                "portfolio_tickers": ["003230"],
+                "interest_tickers": [],
+                "excluded_tickers": [],
+                "target_count": 1,
+            }),
+            patch.object(main, "OpenDartClient", FakeOpenDartClient),
+            patch.object(main, "read_dart_filing_cache", side_effect=fake_read_cache),
+            patch.object(main, "write_dart_filing_cache", side_effect=fake_write_cache),
+            patch.object(main, "current_storage_date", return_value=date(2026, 5, 18)),
+            patch.object(main, "current_storage_timestamp", return_value="2026-05-18T09:00:00+09:00"),
+        ):
+            result = main.refresh_dart_filing_watch(settings, save_result=False)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(attempts["003230"], 2)
+        self.assertEqual(result["failed_count"], 0)
 
     def test_daily_dart_status_surfaces_partial_success_failures(self):
         import research_os_main as main

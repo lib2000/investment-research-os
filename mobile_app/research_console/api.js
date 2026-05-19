@@ -196,6 +196,30 @@ export async function fetchDartFilingWatchStatus(accessToken) {
   }
 }
 
+/**
+ * DART 신규 공시 자동 감시를 즉시 재실행합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {{tickers?: string[], force?: boolean, saveResult?: boolean}} options 재점검 옵션
+ * @returns {Promise<Object|null>} 재점검 결과
+ */
+export async function refreshDartFilingWatch(accessToken, options = {}) {
+  try {
+    return request("/api/v1/dart/filings/refresh", {
+      method: "POST",
+      accessToken,
+      body: {
+        tickers: options.tickers || undefined,
+        force: Boolean(options.force),
+        save_result: options.saveResult !== false,
+      },
+    });
+  } catch (error) {
+    console.error("DART 신규 공시 감시를 재실행하는 중 오류 발생:", error);
+    return null;
+  }
+}
+
 
 /**
  * 백엔드 상태 이상을 서버 로그와 향후 모바일 푸시 훅에 기록합니다.

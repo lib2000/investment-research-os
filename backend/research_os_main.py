@@ -1379,7 +1379,7 @@ def write_dart_filing_cache(settings: Settings, payload: dict) -> None:
 
 
 def recent_dart_cache_entries(cache: dict, ticker: str | None = None, limit: int = 5) -> list[dict]:
-    normalized_ticker = normalize_ticker(ticker or "")
+    normalized_ticker = normalize_ticker(ticker) if ticker else ""
     entries = list((cache.get("entries") or {}).values())
     if normalized_ticker:
         entries = [entry for entry in entries if normalize_ticker(entry.get("ticker") or "") == normalized_ticker]
@@ -1635,6 +1635,58 @@ def merge_dart_latest_earnings_calendar(
     return enriched
 
 
+def dart_watch_exclusion_reason(item: dict | None) -> str | None:
+    if not isinstance(item, dict):
+        return None
+    text_parts = [
+        item.get("name"),
+        item.get("company_name"),
+        item.get("display_name"),
+        item.get("sector"),
+        " ".join(str(tag) for tag in (item.get("theme_tags") or [])),
+    ]
+    text = " ".join(str(part or "") for part in text_parts).upper()
+    if "ETF" in text or "ETN" in text or "상장지수" in text:
+        return "etf_not_dart_corp"
+    return None
+
+
+def dart_excluded_ticker_entry(ticker: str, source: str, reason: str, item: dict | None = None) -> dict:
+    name = ""
+    if isinstance(item, dict):
+        name = str(item.get("name") or item.get("company_name") or item.get("display_name") or "").strip()
+    messages = {
+        "non_kr_ticker": "국내 6자리 종목코드가 아니어서 DART 법인 공시 감시에서 제외했습니다.",
+        "etf_not_dart_corp": "ETF/ETN/펀드는 OpenDART 법인 corp_code 대상이 아니어서 감시에서 제외했습니다.",
+    }
+    return {
+        "ticker": ticker,
+        "name": name or None,
+        "source": source,
+        "reason": reason,
+        "message": messages.get(reason, "DART 법인 공시 감시 대상이 아니어서 제외했습니다."),
+    }
+
+
+def append_unique_dart_exclusion(excluded_tickers: list[dict], entry: dict) -> None:
+    key = (
+        normalize_ticker(str(entry.get("ticker") or "")),
+        str(entry.get("source") or ""),
+        str(entry.get("reason") or ""),
+    )
+    for existing in excluded_tickers:
+        existing_key = (
+            normalize_ticker(str(existing.get("ticker") or "")),
+            str(existing.get("source") or ""),
+            str(existing.get("reason") or ""),
+        )
+        if existing_key == key:
+            if not existing.get("name") and entry.get("name"):
+                existing["name"] = entry.get("name")
+            return
+    excluded_tickers.append(entry)
+
+
 def dart_watch_universe(settings: Settings) -> dict:
     portfolio_tickers: set[str] = set()
     interest_tickers: set[str] = set()
@@ -1646,11 +1698,18 @@ def dart_watch_universe(settings: Settings) -> dict:
                 continue
             for holding in portfolio.get("holdings") or []:
                 ticker = normalize_ticker(str((holding or {}).get("ticker") or ""))
-                if fullmatch(r"\d{6}", ticker):
+                exclusion_reason = dart_watch_exclusion_reason(holding)
+                if fullmatch(r"\d{6}", ticker) and not exclusion_reason:
                     portfolio_tickers.add(ticker)
                 elif ticker and ticker not in {"UNKNOWN", "CASH"}:
-                    excluded_tickers.append(
-                        {"ticker": ticker, "source": "portfolio", "reason": "non_kr_ticker"}
+                    append_unique_dart_exclusion(
+                        excluded_tickers,
+                        dart_excluded_ticker_entry(
+                            ticker,
+                            "portfolio",
+                            exclusion_reason or "non_kr_ticker",
+                            holding,
+                        ),
                     )
     except Exception:
         pass
@@ -1660,11 +1719,18 @@ def dart_watch_universe(settings: Settings) -> dict:
             if not isinstance(item, dict):
                 continue
             ticker = normalize_ticker(str(item.get("ticker") or ""))
-            if fullmatch(r"\d{6}", ticker):
+            exclusion_reason = dart_watch_exclusion_reason(item)
+            if fullmatch(r"\d{6}", ticker) and not exclusion_reason:
                 interest_tickers.add(ticker)
             elif ticker and ticker not in {"UNKNOWN", "CASH"}:
-                excluded_tickers.append(
-                    {"ticker": ticker, "source": "interest", "reason": "non_kr_ticker"}
+                append_unique_dart_exclusion(
+                    excluded_tickers,
+                    dart_excluded_ticker_entry(
+                        ticker,
+                        "interest",
+                        exclusion_reason or "non_kr_ticker",
+                        item,
+                    ),
                 )
     except Exception:
         pass
@@ -1703,6 +1769,7 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
             if normalize_ticker(str(item))
         }
     )
+    excluded_tickers = target_universe.get("excluded_tickers") or daily_check.get("excluded_tickers") or []
     due = bool(missing_today or missing_targets)
     return {
         "date": today,
@@ -1715,6 +1782,8 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
         "missing_tickers": missing_targets,
         "failed_tickers": failed_tickers,
         "failure_count": len(failed_tickers),
+        "excluded_tickers": excluded_tickers,
+        "excluded_count": len(excluded_tickers),
         "target_universe": target_universe,
     }
 
@@ -1820,6 +1889,38 @@ def save_dart_filing_watch_item(ticker: str, filing: dict, settings: Settings) -
     return storage
 
 
+def classify_dart_filing_refresh_error(exc: Exception) -> dict:
+    error_text = str(exc)
+    lowered = error_text.lower()
+    if "corp_code를 찾지 못했습니다" in error_text:
+        return {
+            "category": "needs_mapping_review",
+            "retryable": False,
+            "message": error_text,
+            "next_action": "OpenDART corp_code 매칭 대상인지 확인하세요. ETF/ETN이면 DART 감시 대상에서 제외해야 합니다.",
+        }
+    retryable = any(
+        keyword in lowered
+        for keyword in [
+            "timeout",
+            "timed out",
+            "connection",
+            "temporarily",
+            "429",
+            "rate",
+            "too many",
+            "service unavailable",
+            "bad gateway",
+        ]
+    )
+    return {
+        "category": "transient_provider_error" if retryable else "provider_error",
+        "retryable": retryable,
+        "message": error_text,
+        "next_action": "일시 오류로 판단되면 공시 재점검을 다시 실행하세요." if retryable else "오류 메시지와 OpenDART 응답 상태를 확인하세요.",
+    }
+
+
 def refresh_dart_filing_watch(
     settings: Settings,
     tickers: list[str] | None = None,
@@ -1853,12 +1954,22 @@ def refresh_dart_filing_watch(
         }
 
     for ticker in selected_tickers:
+        attempts = 0
         try:
-            corp, filings = client.fetch_recent_filings(
-                ticker,
-                lookback_days=settings.dart_filing_lookback_days,
-                page_count=settings.dart_filing_max_items_per_ticker,
-            )
+            while True:
+                attempts += 1
+                try:
+                    corp, filings = client.fetch_recent_filings(
+                        ticker,
+                        lookback_days=settings.dart_filing_lookback_days,
+                        page_count=settings.dart_filing_max_items_per_ticker,
+                    )
+                    break
+                except Exception as exc:
+                    failure_info = classify_dart_filing_refresh_error(exc)
+                    if attempts < 2 and failure_info.get("retryable"):
+                        continue
+                    raise
             for filing in filings:
                 key = dart_filing_cache_key(ticker, filing)
                 if key in entries and not force:
@@ -1879,7 +1990,17 @@ def refresh_dart_filing_watch(
                 entries[key] = entry
                 saved.append(entry)
         except Exception as exc:
-            failed.append({"ticker": ticker, "error": provider_error_message(exc, settings)})
+            failure_info = classify_dart_filing_refresh_error(exc)
+            failed.append(
+                {
+                    "ticker": ticker,
+                    "error": provider_error_message(exc, settings),
+                    "category": failure_info.get("category"),
+                    "retryable": failure_info.get("retryable"),
+                    "attempts": attempts or 1,
+                    "next_action": failure_info.get("next_action"),
+                }
+            )
 
     cache["updated_at"] = current_storage_timestamp()
     cache["last_run"] = current_storage_timestamp()
@@ -1895,6 +2016,7 @@ def refresh_dart_filing_watch(
             "target_count": len(selected_tickers),
             "checked_tickers": selected_tickers,
             "failed_tickers": [item.get("ticker") for item in failed if item.get("ticker")],
+            "excluded_tickers": target_universe.get("excluded_tickers") or [],
             "saved_count": len(saved),
             "skipped_count": len(skipped),
             "lookback_days": settings.dart_filing_lookback_days,
@@ -15616,15 +15738,7 @@ def get_dart_filing_watch_status(
 ) -> dict:
     cache = read_dart_filing_cache(settings)
     entries = cache.get("entries") if isinstance(cache, dict) else {}
-    recent_entries = sorted(
-        [
-            item
-            for item in (entries or {}).values()
-            if isinstance(item, dict)
-        ],
-        key=lambda item: str(item.get("detected_at") or ""),
-        reverse=True,
-    )[:20]
+    recent_entries = recent_dart_cache_entries(cache, limit=20)
     return {
         "status": "success",
         "module": "dart_filing_watch_status",

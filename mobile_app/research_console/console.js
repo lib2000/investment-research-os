@@ -3,6 +3,7 @@ import {
   fetchDataProviderStatus,
   fetchOcrStatus,
   fetchDartFilingWatchStatus,
+  refreshDartFilingWatch,
   reportBackendHealthAlert,
   fetchTickerDashboard,
   fetchResearchManifest,
@@ -66,7 +67,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1272038d77a8";
+} from "./api.js?v=25f4fd0356d7";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -4348,6 +4349,7 @@ function summarizeSystemCheckValue(label, value) {
     const daily = value.daily_check || {};
     const universe = value.target_universe || {};
     const dailyFailures = Number(daily.failure_count || daily.failed_tickers?.length || 0);
+    const excludedCount = Number(daily.excluded_count || universe.excluded_tickers?.length || 0);
     const dailyState = daily.due
       ? "오늘 점검 필요"
       : dailyFailures
@@ -4355,7 +4357,13 @@ function summarizeSystemCheckValue(label, value) {
       : "오늘 점검 완료";
     const portfolioCount = universe.portfolio_tickers?.length || 0;
     const interestCount = universe.interest_tickers?.length || 0;
-    return `감시 대상 ${value.target_tickers?.length || 0}개(보유 ${portfolioCount} · 관심 ${interestCount}) · ${dailyState} · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건`;
+    const failureNames = (value.last_failures || [])
+      .slice(0, 3)
+      .map((item) => `${item.ticker || "대상 미확인"} ${item.category ? `(${item.category})` : ""}`.trim())
+      .join(", ");
+    return `감시 대상 ${value.target_tickers?.length || 0}개(보유 ${portfolioCount} · 관심 ${interestCount}) · 제외 ${excludedCount}개 · ${dailyState} · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건${
+      failureNames ? ` · 확인: ${failureNames}` : ""
+    }`;
   }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
@@ -4385,6 +4393,11 @@ function formatConsoleSystemCheckResult(payload) {
   const checks = payload.checks || [];
   const failed = checks.filter((item) => item.status !== "성공");
   const ocrCheck = checks.find((item) => item.label.includes("OCR"));
+  const dartCheck = checks.find((item) => item.label.includes("DART"));
+  const dartValue = dartCheck?.value || {};
+  const dartDaily = dartValue.daily_check || {};
+  const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
+  const dartFailures = dartValue.last_failures || [];
   const okCount = checks.length - failed.length;
   return [
     `# 전체 시스템 점검 완료`,
@@ -4405,6 +4418,28 @@ function formatConsoleSystemCheckResult(payload) {
       : `- **현재 상태:** OCR 점검 결과를 불러오지 못했습니다.`,
     `- **미연결 시 저장 방식:** 이미지는 원본 파일과 파일명/크기/이미지 크기 메타데이터로 저장됩니다. 이미지 속 글자는 분석 본문으로 쓰지 않고, 결과에는 OCR 미연결/보강 필요 경고가 표시됩니다.`,
     `- **권장 조치:** Tesseract와 kor+eng 언어팩 설치 여부를 먼저 확인하고, 설치 전에는 이미지 속 본문을 텍스트로 함께 붙여넣으세요.`,
+    ``,
+    `## DART 공시 감시 상태`,
+    dartCheck
+      ? `- **현재 상태:** ${dartCheck.status} · ${dartCheck.summary}`
+      : `- **현재 상태:** DART 점검 결과를 불러오지 못했습니다.`,
+    `- **감시 제외:** ${formatNumber(dartExcluded.length)}개${
+      dartExcluded.length
+        ? ` · ${dartExcluded
+            .slice(0, 6)
+            .map((item) => `${item.name || item.ticker || "대상 미확인"}(${item.reason || "제외"})`)
+            .join(", ")}${dartExcluded.length > 6 ? " ..." : ""}`
+        : ""
+    }`,
+    `- **실패 상세:** ${
+      dartFailures.length
+        ? dartFailures
+            .slice(0, 6)
+            .map((item) => `${item.ticker || "대상 미확인"} · ${item.category || "provider_error"} · ${item.next_action || item.error || "확인 필요"}`)
+            .join(" / ")
+        : "최근 실패 없음"
+    }`,
+    `- **재점검:** 대시보드 DART 카드의 '공시 재점검' 버튼으로 즉시 다시 확인할 수 있습니다.`,
     ``,
     `## 1번~5번 처리 상태`,
     `- **1. 버튼/화면 회귀 점검:** 상태, 저장 데이터, 포트폴리오, 관심종목/섹터, 자동화, 일일 브리핑, 대표 대시보드를 한 번에 확인했습니다.`,
@@ -4439,7 +4474,12 @@ async function runConsoleSystemCheck() {
     try {
       const value = await callback();
       const derivedStatus =
-        !value || value?.ready === false || value?.ok === false || value?.status === "warning"
+        !value ||
+        value?.ready === false ||
+        value?.ok === false ||
+        value?.status === "warning" ||
+        value?.daily_check?.due ||
+        value?.daily_check?.status === "partial_success"
           ? "확인 필요"
           : "성공";
       checks.push({
@@ -4447,6 +4487,7 @@ async function runConsoleSystemCheck() {
         status: derivedStatus,
         elapsed_ms: Math.max(1, Math.round(performance.now() - started)),
         summary: summarizeSystemCheckValue(label, value),
+        value,
       });
       return value;
     } catch (error) {
@@ -4521,6 +4562,24 @@ async function handleWorkflowAction(action) {
 
   if (action === "system-check") {
     await runConsoleSystemCheck();
+    return;
+  }
+
+  if (action === "dart-refresh") {
+    startOutputLoading("DART 공시 재점검 중", [
+      "보유/관심종목 감시 대상 정리",
+      "ETF/ETN 등 제외 대상 분류",
+      "OpenDART 신규 공시 조회",
+      "저장 데이터와 상태 카드 갱신",
+    ]);
+    const result = await refreshDartFilingWatch(token(), { force: true, saveResult: true });
+    setOutput(result || "DART 공시 재점검 결과를 불러오지 못했습니다.");
+    await runSecondaryRefresh("시스템 상태 새로고침", () => refreshStatus(false));
+    if (lastDashboard?.ticker) {
+      await runSecondaryRefresh("대시보드 카드 새로고침", () =>
+        refreshDashboardCardsOnly(lastDashboard.ticker)
+      );
+    }
     return;
   }
 
@@ -5261,6 +5320,7 @@ function renderDartFilingSignalCard(signal) {
       </div>
       <ul class="dashboard-signal-list compact">${details}</ul>
       <div class="dashboard-card-actions">
+        <button data-workflow-action="dart-refresh" type="button">공시 재점검</button>
         <button data-workflow-action="system-check" type="button">상태 점검</button>
         <button data-workflow-action="memory" class="secondary" type="button">저장 데이터</button>
       </div>
@@ -7283,6 +7343,7 @@ attachButtonActionFeedback(elements.dashboardForm, {
   chart: "차트 분석 화면/작업을 열고 있습니다.",
   capture: "정보 입력 화면을 열고 있습니다.",
   memory: "저장 데이터 화면을 열고 있습니다.",
+  "dart-refresh": "DART 공시 재점검을 시작했습니다.",
   "system-check": "시스템 점검을 시작했습니다.",
 });
 
