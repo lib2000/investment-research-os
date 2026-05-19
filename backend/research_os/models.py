@@ -739,6 +739,8 @@ class PortfolioHolding(BaseModel):
     unrealized_gain: Optional[float] = None
     unrealized_return: Optional[float] = None
     price_source: Optional[str] = None
+    price_refresh_status: Optional[str] = None
+    price_checked_at: Optional[str] = None
     weight: Optional[float] = None
     sector: str = "Unknown"
     theme_tags: List[str] = Field(default_factory=list)

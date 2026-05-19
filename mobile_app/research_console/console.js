@@ -2558,6 +2558,32 @@ function fillPortfolioForm(portfolio) {
   refreshPortfolioSmartTable({ silent: true });
 }
 
+function portfolioRefreshStatusLines(portfolio) {
+  const holdings = Array.isArray(portfolio?.holdings) ? portfolio.holdings : [];
+  const counts = holdings.reduce(
+    (acc, holding) => {
+      const status = holding.price_refresh_status || "unknown";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    },
+    {}
+  );
+  const checkedCount = (counts.updated || 0) + (counts.confirmed || 0);
+  const checkedAt = holdings
+    .map((holding) => holding.price_checked_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  return [
+    `- 실시간 가격 확인: ${formatNumber(checkedCount)}개 / 갱신 ${formatNumber(counts.updated || 0)}개 / 동일 확인 ${formatNumber(counts.confirmed || 0)}개`,
+    counts.unavailable
+      ? `- 가격 미확인: ${formatNumber(counts.unavailable)}개는 기존 값을 유지했습니다.`
+      : "- 가격 미확인: 없음",
+    counts.skipped ? `- 가격 조회 제외: ${formatNumber(counts.skipped)}개` : "",
+    checkedAt ? `- 가격 확인 시각: ${formatDateTime(checkedAt)}` : "",
+  ].filter(Boolean);
+}
+
 function activePortfolioNameForSmartTable() {
   return (
     elements.portfolioSelect?.value ||
@@ -8738,6 +8764,7 @@ elements.portfolioLoadButton.addEventListener("click", async () => {
         `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
         `- 보유 종목: ${activePortfolio?.holding_count ?? activePortfolio?.holdings?.length ?? 0}개`,
         `- 총액: ${formatMoney(activePortfolio?.portfolio_value, "KRW", "n/a")}`,
+        ...portfolioRefreshStatusLines(activePortfolio),
         "- 저장된 현재가 캐시를 우회해 최신 데이터로 평가금액과 수익률을 다시 계산했습니다.",
       ].join("\n")
     );

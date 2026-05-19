@@ -4169,11 +4169,15 @@ def enrich_portfolio_holding(
     force_price_refresh: bool = False,
 ) -> PortfolioHolding:
     price_source = holding.price_source
+    price_refresh_status = holding.price_refresh_status
+    price_checked_at = holding.price_checked_at
     current_price = holding.current_price
     currency = (holding.currency or "USD").upper()
     ticker = normalize_ticker(holding.ticker)
 
     if refresh_price and ticker != "CASH" and currency in {"KRW", "USD"}:
+        previous_price = current_price
+        price_checked_at = current_storage_timestamp()
         provider_price, provider_source = latest_provider_price(
             ticker,
             settings,
@@ -4182,6 +4186,15 @@ def enrich_portfolio_holding(
         if provider_price is not None:
             current_price = provider_price
             price_source = provider_source or "data_provider"
+            price_refresh_status = (
+                "confirmed"
+                if previous_price is not None and round(previous_price, 4) == round(provider_price, 4)
+                else "updated"
+            )
+        else:
+            price_refresh_status = "unavailable"
+    elif refresh_price:
+        price_refresh_status = "skipped"
 
     if not refresh_price:
         market_value = holding.market_value
@@ -4217,6 +4230,8 @@ def enrich_portfolio_holding(
                 if unrealized_return is not None
                 else None,
                 "price_source": price_source,
+                "price_refresh_status": price_refresh_status,
+                "price_checked_at": price_checked_at,
             }
         )
 
@@ -4259,6 +4274,8 @@ def enrich_portfolio_holding(
             if unrealized_return is not None
             else None,
             "price_source": price_source,
+            "price_refresh_status": price_refresh_status,
+            "price_checked_at": price_checked_at,
         }
     )
 

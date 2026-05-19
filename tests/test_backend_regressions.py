@@ -654,11 +654,14 @@ class PortfolioPerformanceTests(unittest.TestCase):
         self.assertEqual(result.active_portfolio.holdings[0].market_value, 1200)
         self.assertEqual(result.active_portfolio.holdings[0].unrealized_gain, 400)
         self.assertEqual(result.active_portfolio.holdings[0].unrealized_return, 0.5)
+        self.assertEqual(result.active_portfolio.holdings[0].price_refresh_status, "updated")
+        self.assertEqual(result.active_portfolio.holdings[0].price_checked_at, "2026-05-19T09:00:00+09:00")
         self.assertEqual(result.active_portfolio.updated_at, "2026-05-19T09:00:00+09:00")
         self.assertTrue(write_json_store.called)
         persisted_store = write_json_store.call_args.args[1]
         persisted = persisted_store["portfolios"][main.portfolio_store_key("테스트")]
         self.assertEqual(persisted["holdings"][0]["current_price"], 120)
+        self.assertEqual(persisted["holdings"][0]["price_refresh_status"], "updated")
         self.assertEqual(persisted["portfolio_value"], 1200)
 
     def test_performance_marks_overseas_history_limits_and_cache_mode(self):
