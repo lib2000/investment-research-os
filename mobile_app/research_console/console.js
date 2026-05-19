@@ -2177,7 +2177,9 @@ function interestDashboardCandidates() {
   const rows = [];
   const seen = new Set();
   const tickers = lastInterestList?.tickers || collectInterestTickers();
-  tickers.forEach((item) => addDashboardCandidate(rows, seen, item, "관심종목"));
+  tickers
+    .filter((item) => item?.verification?.verified)
+    .forEach((item) => addDashboardCandidate(rows, seen, item, "관심종목"));
   return rows;
 }
 

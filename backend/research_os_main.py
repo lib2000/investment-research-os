@@ -1638,6 +1638,17 @@ def merge_dart_latest_earnings_calendar(
 def dart_watch_exclusion_reason(item: dict | None) -> str | None:
     if not isinstance(item, dict):
         return None
+    verification = item.get("verification")
+    tags = item.get("tags") or []
+    if (
+        isinstance(verification, dict)
+        and not verification.get("verified")
+        and (
+            "verification_pending" in tags
+            or verification.get("verification_source") == "save_first_pending_verification"
+        )
+    ):
+        return "verification_pending"
     text_parts = [
         item.get("name"),
         item.get("company_name"),
@@ -1658,6 +1669,7 @@ def dart_excluded_ticker_entry(ticker: str, source: str, reason: str, item: dict
     messages = {
         "non_kr_ticker": "국내 6자리 종목코드가 아니어서 DART 법인 공시 감시에서 제외했습니다.",
         "etf_not_dart_corp": "ETF/ETN/펀드는 OpenDART 법인 corp_code 대상이 아니어서 감시에서 제외했습니다.",
+        "verification_pending": "공식 티커 인증이 끝나지 않아 DART 법인 공시 감시에서 제외했습니다.",
     }
     return {
         "ticker": ticker,

@@ -396,6 +396,43 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertIn(("360750", "etf_not_dart_corp"), excluded_pairs)
         self.assertIn(("395160", "etf_not_dart_corp"), excluded_pairs)
 
+    def test_dart_watch_universe_marks_pending_interest_verification(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        interest_store = {
+            "tickers": [
+                {
+                    "ticker": "10",
+                    "tags": ["verification_pending"],
+                    "verification": {
+                        "verified": False,
+                        "company_name": "10",
+                        "verification_source": "save_first_pending_verification",
+                    },
+                },
+                {
+                    "ticker": "071050",
+                    "verification": {"verified": True, "company_name": "한국금융지주"},
+                },
+            ],
+            "sectors": [],
+        }
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value={"portfolios": {}}),
+            patch.object(main, "read_interest_list", return_value=interest_store),
+        ):
+            universe = main.dart_watch_universe(settings)
+
+        self.assertEqual(universe["target_tickers"], ["071050"])
+        excluded_pairs = {
+            (item["ticker"], item["source"], item["reason"])
+            for item in universe["excluded_tickers"]
+        }
+        self.assertIn(("10", "interest", "verification_pending"), excluded_pairs)
+
     def test_daily_dart_refresh_records_full_portfolio_interest_coverage(self):
         import research_os_main as main
         from research_os.settings import Settings
