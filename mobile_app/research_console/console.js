@@ -67,7 +67,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=8220717d2620";
+} from "./api.js?v=a89ee9cfe552";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -1204,6 +1204,47 @@ function createHoldingActionGroup() {
   return group;
 }
 
+function portfolioRefreshStatusMeta(status) {
+  const normalized = String(status || "unknown").trim().toLowerCase();
+  const map = {
+    updated: ["갱신됨", "success"],
+    confirmed: ["동일 확인", "info"],
+    unavailable: ["미확인", "warning"],
+    skipped: ["조회 제외", "muted"],
+    unknown: ["상태 없음", "muted"],
+  };
+  const [label, tone] = map[normalized] || map.unknown;
+  return { label, tone, normalized };
+}
+
+function portfolioRefreshStatusText(row = {}) {
+  const meta = portfolioRefreshStatusMeta(row.price_refresh_status);
+  const checkedAt = row.price_checked_at ? ` · ${formatDateTime(row.price_checked_at)}` : "";
+  return `${meta.label}${checkedAt}`;
+}
+
+function createPortfolioRefreshBadge(holding = {}) {
+  const badge = document.createElement("div");
+  const meta = portfolioRefreshStatusMeta(holding.price_refresh_status);
+  badge.className = `portfolio-refresh-badge ${meta.tone}`;
+  badge.title = [
+    `가격 상태: ${meta.label}`,
+    holding.price_checked_at ? `확인 시각: ${formatDateTime(holding.price_checked_at)}` : "",
+    holding.price_source ? `출처: ${holding.price_source}` : "",
+  ].filter(Boolean).join(" · ");
+  const label = document.createElement("span");
+  label.textContent = "가격 확인";
+  const strong = document.createElement("strong");
+  strong.textContent = meta.label;
+  badge.append(label, strong);
+  return badge;
+}
+
+function portfolioRefreshStatusBadgeHtml(row = {}) {
+  const meta = portfolioRefreshStatusMeta(row.price_refresh_status);
+  return `<span class="smart-status-badge ${escapeHtml(meta.tone)}" title="${escapeHtml(portfolioRefreshStatusText(row))}">${escapeHtml(meta.label)}</span>`;
+}
+
 function syncCompanyNameAlignment(row) {
   const field = row?.querySelector('[name="name"]');
   if (!field) {
@@ -1257,6 +1298,7 @@ function makePortfolioHoldingRow(holding = {}) {
       inputMode: "decimal",
       className: "money-field current-price-field",
     }),
+    createPortfolioRefreshBadge(holding),
     createInput({
       name: "average_cost",
       label: "매입가(평단)",
@@ -2560,6 +2602,16 @@ function fillPortfolioForm(portfolio) {
 
 function portfolioRefreshStatusLines(portfolio) {
   const holdings = Array.isArray(portfolio?.holdings) ? portfolio.holdings : [];
+  const unavailableTickers = holdings
+    .filter((holding) => holding.price_refresh_status === "unavailable")
+    .map((holding) => holding.name || holding.ticker)
+    .filter(Boolean)
+    .slice(0, 8);
+  const skippedTickers = holdings
+    .filter((holding) => holding.price_refresh_status === "skipped")
+    .map((holding) => holding.name || holding.ticker)
+    .filter(Boolean)
+    .slice(0, 8);
   const counts = holdings.reduce(
     (acc, holding) => {
       const status = holding.price_refresh_status || "unknown";
@@ -2577,10 +2629,29 @@ function portfolioRefreshStatusLines(portfolio) {
   return [
     `- 실시간 가격 확인: ${formatNumber(checkedCount)}개 / 갱신 ${formatNumber(counts.updated || 0)}개 / 동일 확인 ${formatNumber(counts.confirmed || 0)}개`,
     counts.unavailable
-      ? `- 가격 미확인: ${formatNumber(counts.unavailable)}개는 기존 값을 유지했습니다.`
+      ? `- 가격 미확인: ${formatNumber(counts.unavailable)}개는 기존 값을 유지했습니다. ${unavailableTickers.length ? `(${unavailableTickers.join(", ")}${counts.unavailable > unavailableTickers.length ? " 외" : ""})` : ""}`
       : "- 가격 미확인: 없음",
-    counts.skipped ? `- 가격 조회 제외: ${formatNumber(counts.skipped)}개` : "",
+    counts.skipped ? `- 가격 조회 제외: ${formatNumber(counts.skipped)}개 ${skippedTickers.length ? `(${skippedTickers.join(", ")}${counts.skipped > skippedTickers.length ? " 외" : ""})` : ""}` : "",
     checkedAt ? `- 가격 확인 시각: ${formatDateTime(checkedAt)}` : "",
+  ].filter(Boolean);
+}
+
+function portfolioTableRefreshStatusLines(result) {
+  const holdings = Array.isArray(result?.holdings) ? result.holdings : [];
+  return portfolioRefreshStatusLines({ holdings });
+}
+
+function portfolioCurrencyDiagnosticLines(holdings = []) {
+  const usdHoldings = holdings.filter((holding) => normalizeCurrency(holding.currency, holding.ticker) === "USD");
+  if (!usdHoldings.length) {
+    return [];
+  }
+  const missingFx = usdHoldings.filter((holding) => !Number.isFinite(Number(holding.fx_rate)) || Number(holding.fx_rate) <= 1);
+  return [
+    `- 해외 종목 환율 보정: ${formatNumber(usdHoldings.length)}개는 USD 현재가를 원화 평가금액으로 환산했습니다.`,
+    missingFx.length
+      ? `- 환율 추정 확인 필요: ${missingFx.map((holding) => holding.company_name || holding.name || holding.ticker).slice(0, 6).join(", ")}${missingFx.length > 6 ? " 외" : ""}`
+      : "",
   ].filter(Boolean);
 }
 
@@ -2720,6 +2791,15 @@ const PORTFOLIO_SMART_COLUMNS = [
     width: 112,
     align: "right",
     render: (row) => formatSmartPrice(row.current_price, row.currency, "n/a"),
+  },
+  {
+    key: "price_refresh_status",
+    label: "가격 확인",
+    width: 104,
+    align: "center",
+    html: true,
+    valueClass: (row) => `smart-status-${portfolioRefreshStatusMeta(row.price_refresh_status).tone}`,
+    render: (row) => portfolioRefreshStatusBadgeHtml(row),
   },
   {
     key: "average_cost",
@@ -2934,7 +3014,7 @@ function renderTargetConsensusTable(rows = consensusScanRows) {
         ].filter(Boolean).join(" · ");
         return `
           <td class="${smartTableCellClass(column)} ${valueClass}" title="${escapeHtml(title)}">
-            ${escapeHtml(column.render(row))}
+            ${column.html ? column.render(row) : escapeHtml(column.render(row))}
           </td>
         `;
       }).join("");
@@ -2978,6 +3058,11 @@ function renderPortfolioSmartTable(rows = portfolioSmartRows) {
           column.key === "week52_high_proximity" ? row.week52_status : "",
           column.key === "target_upside" ? row.target_status : "",
           column.key === "target_price" ? row.target_price_source_file : "",
+          column.key === "price_refresh_status" ? [
+            portfolioRefreshStatusText(row),
+            row.price_source ? `출처 ${row.price_source}` : "",
+            row.market_value_note || "",
+          ].filter(Boolean).join(" · ") : "",
           column.key === "rag_connected" ? row.thesis_summary : "",
           column.key === "next_action" ? row.thesis_summary : "",
         ]
@@ -2985,7 +3070,7 @@ function renderPortfolioSmartTable(rows = portfolioSmartRows) {
           .join(" · ");
         return `
           <td class="${smartTableCellClass(column)} ${valueClass}" title="${escapeHtml(title)}">
-            ${escapeHtml(column.render(row))}
+            ${column.html ? column.render(row) : escapeHtml(column.render(row))}
           </td>
         `;
       }).join("");
@@ -3171,7 +3256,11 @@ function resizeSmartTableColumn(event) {
   window.addEventListener("pointerup", onUp, { once: true });
 }
 
-async function refreshPortfolioSmartTable({ silent = false } = {}) {
+async function refreshPortfolioSmartTable({
+  silent = false,
+  forcePriceRefresh = false,
+  persistRefresh = false,
+} = {}) {
   if (!elements.portfolioSmartTable || !elements.portfolioSmartChart) {
     return null;
   }
@@ -3184,15 +3273,30 @@ async function refreshPortfolioSmartTable({ silent = false } = {}) {
   }
   syncApiBaseUrl();
   if (!silent) {
-    elements.portfolioSmartTable.innerHTML = '<p class="empty-state">서버에서 계산 지표를 불러오는 중입니다...</p>';
+    elements.portfolioSmartTable.innerHTML =
+      '<p class="empty-state">서버에서 최신 현재가와 계산 지표를 불러오는 중입니다...</p>';
   }
   try {
-    const result = await fetchPortfolioIntelligentTable(token(), portfolioName);
+    const result = await fetchPortfolioIntelligentTable(token(), portfolioName, {
+      refreshPrices: true,
+      forcePriceRefresh,
+      persistRefresh,
+    });
     portfolioSmartRows = result?.holdings || [];
     renderPortfolioSmartChart(portfolioSmartRows);
     renderPortfolioSmartTable(portfolioSmartRows);
     if (!silent) {
-      setOutput(result);
+      setOutput(
+        [
+          "# 지능형 테이블 새로고침 완료",
+          "",
+          `- 포트폴리오: ${result?.portfolio_name || portfolioName}`,
+          `- 보유 종목: ${formatNumber(result?.holding_count || portfolioSmartRows.length)}개`,
+          ...portfolioTableRefreshStatusLines(result),
+          ...portfolioCurrencyDiagnosticLines(portfolioSmartRows),
+          "- 현재가, 평가금액, 52주 최고가 근접도, 목표주가 근접도, RAG/논거 준비도를 다시 계산했습니다.",
+        ].join("\n")
+      );
     }
     return result;
   } catch (error) {
@@ -8876,12 +8980,17 @@ elements.portfolioSort?.addEventListener("change", () => {
 elements.portfolioSmartRefreshButton?.addEventListener("click", async () => {
   startOutputLoading("포트폴리오 지능형 테이블 계산 중", [
     "저장 포트폴리오 불러오기",
-    "현재가와 52주 최고가 조회",
+    "최신 현재가 캐시 우회 조회",
+    "52주 최고가 조회",
     "목표주가 근접도 계산",
     "그래프와 정렬 테이블 갱신",
   ]);
   try {
-    await refreshPortfolioSmartTable({ silent: false });
+    await refreshPortfolioSmartTable({
+      silent: false,
+      forcePriceRefresh: true,
+      persistRefresh: true,
+    });
   } catch (error) {
     setError(error);
   }

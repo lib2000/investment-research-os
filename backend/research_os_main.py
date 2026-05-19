@@ -17879,7 +17879,14 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
     }
 
 
-def build_portfolio_intelligent_table(portfolio_name: str, settings: Settings) -> dict:
+def build_portfolio_intelligent_table(
+    portfolio_name: str,
+    settings: Settings,
+    *,
+    refresh_prices: bool = True,
+    force_price_refresh: bool = False,
+    persist_refresh: bool = False,
+) -> dict:
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)
@@ -17889,8 +17896,13 @@ def build_portfolio_intelligent_table(portfolio_name: str, settings: Settings) -
     portfolio = sort_and_weight_portfolio(
         SavedPortfolio.model_validate(payload),
         settings,
-        refresh_prices=True,
+        refresh_prices=refresh_prices,
+        force_price_refresh=force_price_refresh,
     )
+    if refresh_prices and persist_refresh:
+        portfolio = portfolio.model_copy(update={"updated_at": current_storage_timestamp()})
+        store.setdefault("portfolios", {})[key] = portfolio.model_dump(mode="json")
+        write_json_store(portfolio_store_path(settings), store)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     portfolio_tickers = [
         normalize_ticker(holding.ticker)
@@ -17951,6 +17963,9 @@ def build_portfolio_intelligent_table(portfolio_name: str, settings: Settings) -
             warnings.append(f"{company_name}: 52주 최고가 {week52.get('week52_status')}")
         if target_price is None:
             warnings.append(f"{company_name}: 저장 리포트에서 목표주가를 찾지 못했습니다.")
+        fx_rate = infer_holding_fx_rate(holding)
+        if (holding.currency or "KRW").upper() == "USD" and fx_rate == 1.0:
+            warnings.append(f"{company_name}: 해외 종목 환율 보정값을 추정하지 못해 1.0 기준으로 계산했습니다.")
         memory_count = sum(
             1
             for entry in manifest_entries
@@ -18005,6 +18020,14 @@ def build_portfolio_intelligent_table(portfolio_name: str, settings: Settings) -
                 "unrealized_return": holding.unrealized_return,
                 "weight": holding.weight,
                 "price_source": holding.price_source,
+                "price_refresh_status": holding.price_refresh_status,
+                "price_checked_at": holding.price_checked_at,
+                "fx_rate": round(fx_rate, 6) if fx_rate else None,
+                "market_value_note": (
+                    f"USD 현재가에 추정 환율 {round(fx_rate, 2)}을 적용"
+                    if (holding.currency or "KRW").upper() == "USD"
+                    else "원화 현재가 기준"
+                ),
                 "week52_high": week52_high,
                 "week52_high_as_of": week52.get("week52_high_as_of"),
                 "week52_high_source": week52.get("week52_high_source"),
@@ -18055,6 +18078,15 @@ def build_portfolio_intelligent_table(portfolio_name: str, settings: Settings) -
         "module": "portfolio_intelligent_table",
         "portfolio_name": portfolio.portfolio_name,
         "as_of": current_storage_timestamp(),
+        "price_refresh": {
+            "refresh_prices": refresh_prices,
+            "force_price_refresh": force_price_refresh,
+            "persist_refresh": persist_refresh,
+            "updated": sum(1 for row in rows if row.get("price_refresh_status") == "updated"),
+            "confirmed": sum(1 for row in rows if row.get("price_refresh_status") == "confirmed"),
+            "unavailable": sum(1 for row in rows if row.get("price_refresh_status") == "unavailable"),
+            "skipped": sum(1 for row in rows if row.get("price_refresh_status") == "skipped"),
+        },
         "portfolio_value": portfolio.portfolio_value,
         "holding_count": len(rows),
         "summary": (
@@ -18302,9 +18334,18 @@ def get_target_consensus_scan(
 )
 def get_portfolio_intelligent_table(
     portfolio_name: str,
+    refresh_prices: bool = True,
+    force_price_refresh: bool = False,
+    persist_refresh: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    return build_portfolio_intelligent_table(portfolio_name, settings)
+    return build_portfolio_intelligent_table(
+        portfolio_name,
+        settings,
+        refresh_prices=refresh_prices,
+        force_price_refresh=force_price_refresh,
+        persist_refresh=persist_refresh,
+    )
 
 
 @app.get(

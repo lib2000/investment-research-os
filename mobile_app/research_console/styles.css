@@ -1759,6 +1759,7 @@ label {
     minmax(68px, 0.52fr)
     minmax(118px, 0.9fr)
     minmax(108px, 0.82fr)
+    minmax(86px, 0.56fr)
     minmax(112px, 0.86fr)
     minmax(58px, 0.44fr)
     minmax(116px, 0.88fr)
@@ -1839,6 +1840,62 @@ label {
 .gain-field input {
   min-width: 0;
   padding-inline: 5px;
+}
+
+.portfolio-refresh-badge {
+  display: flex;
+  min-height: calc(var(--holding-control-height) + 16px);
+  min-width: 0;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--muted);
+}
+
+.portfolio-refresh-badge strong,
+.smart-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.portfolio-refresh-badge.success strong,
+.smart-status-badge.success {
+  color: #0f766e;
+  background: #e6fffb;
+  border-color: #99d5cb;
+}
+
+.portfolio-refresh-badge.info strong,
+.smart-status-badge.info {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.portfolio-refresh-badge.warning strong,
+.smart-status-badge.warning {
+  color: #92400e;
+  background: #fff7e6;
+  border-color: #f7c873;
+}
+
+.portfolio-refresh-badge.muted strong,
+.smart-status-badge.muted {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .ticker-field input,

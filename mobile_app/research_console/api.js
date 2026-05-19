@@ -1448,9 +1448,20 @@ export async function fetchPortfolio(accessToken, portfolioName, options = {}) {
   });
 }
 
-export async function fetchPortfolioIntelligentTable(accessToken, portfolioName) {
+export async function fetchPortfolioIntelligentTable(accessToken, portfolioName, options = {}) {
+  const params = new URLSearchParams();
+  if (Object.prototype.hasOwnProperty.call(options, "refreshPrices")) {
+    params.set("refresh_prices", options.refreshPrices ? "true" : "false");
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "forcePriceRefresh")) {
+    params.set("force_price_refresh", options.forcePriceRefresh ? "true" : "false");
+  }
+  if (Object.prototype.hasOwnProperty.call(options, "persistRefresh")) {
+    params.set("persist_refresh", options.persistRefresh ? "true" : "false");
+  }
+  const query = params.toString();
   return request(
-    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/intelligent-table`,
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/intelligent-table${query ? `?${query}` : ""}`,
     {
       method: "GET",
       accessToken,

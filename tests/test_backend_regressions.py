@@ -664,6 +664,77 @@ class PortfolioPerformanceTests(unittest.TestCase):
         self.assertEqual(persisted["holdings"][0]["price_refresh_status"], "updated")
         self.assertEqual(persisted["portfolio_value"], 1200)
 
+    def test_intelligent_table_can_force_live_price_refresh(self):
+        import research_os_main as main
+        from research_os.models import (
+            PortfolioHolding,
+            SavedPortfolio,
+            TickerVerificationResponse,
+        )
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio = SavedPortfolio(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(
+                    ticker="003230",
+                    name="삼양식품",
+                    quantity=10,
+                    average_cost=80,
+                    current_price=100,
+                    market_value=1000,
+                    cost_basis=800,
+                    currency="KRW",
+                )
+            ],
+            portfolio_value=1000,
+        )
+        store = {
+            "portfolios": {
+                main.portfolio_store_key("테스트"): portfolio.model_dump(mode="json")
+            }
+        }
+        verification = TickerVerificationResponse(
+            requested_symbol="003230",
+            official_symbol="003230",
+            company_name="삼양식품",
+            exchange="KRX",
+            country="KR",
+            verified=True,
+            verification_source="test",
+            message="ok",
+        )
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=copy.deepcopy(store)),
+            patch.object(main, "latest_provider_price", return_value=(120, "live-test")) as latest_price,
+            patch.object(main, "portfolio_store_path", return_value=PROJECT_ROOT / "tmp_portfolios.json"),
+            patch.object(main, "write_json_store") as write_json_store,
+            patch.object(main, "current_storage_timestamp", return_value="2026-05-19T09:10:00+09:00"),
+            patch.object(main, "resolve_vault_dir", return_value=PROJECT_ROOT / "research_vault"),
+            patch.object(main, "count_research_memory_documents_by_ticker", return_value={}),
+            patch.object(main, "read_manifest", return_value=[]),
+            patch.object(main, "official_ticker_profile", return_value={"company_name": "삼양식품", "sector": "식품"}),
+            patch.object(main, "verify_ticker_symbol", return_value=verification),
+            patch.object(main, "fetch_52_week_high_for_holding", return_value={"week52_status": "테스트"}),
+            patch.object(main, "parse_latest_target_price_from_memory", return_value=None),
+            patch.object(main, "read_ticker_thesis_snapshot", return_value=None),
+        ):
+            result = main.build_portfolio_intelligent_table(
+                "테스트",
+                settings,
+                force_price_refresh=True,
+                persist_refresh=True,
+            )
+
+        latest_price.assert_called_once_with("003230", settings, force_refresh=True)
+        self.assertEqual(result["price_refresh"]["updated"], 1)
+        self.assertEqual(result["holdings"][0]["current_price"], 120)
+        self.assertEqual(result["holdings"][0]["price_refresh_status"], "updated")
+        self.assertEqual(result["holdings"][0]["price_checked_at"], "2026-05-19T09:10:00+09:00")
+        self.assertTrue(write_json_store.called)
+
     def test_performance_marks_overseas_history_limits_and_cache_mode(self):
         import research_os_main as main
         from research_os.models import PortfolioHolding, SavedPortfolio
