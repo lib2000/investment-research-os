@@ -67,7 +67,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=25f4fd0356d7";
+} from "./api.js?v=8220717d2620";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -8716,13 +8716,31 @@ elements.portfolioLoadButton.addEventListener("click", async () => {
     return;
   }
   syncApiBaseUrl();
-  startOutputLoading("내 포트폴리오 불러오는 중", ["저장소 조회", "입력 폼 채우기"]);
+  startOutputLoading("내 포트폴리오 실시간 불러오기 중", [
+    "저장 포트폴리오 조회",
+    "KIS/Finnhub/Tiingo 최신 현재가 조회",
+    "평가금액과 수익률 재계산",
+    "입력 폼과 그래프 테이블 갱신",
+  ]);
   try {
-    const result = await fetchPortfolio(token(), portfolioName);
+    const result = await fetchPortfolio(token(), portfolioName, {
+      refreshPrices: true,
+      persistRefresh: true,
+    });
     fillPortfolioForm(result?.active_portfolio);
-    updatePortfolioLoadedAt(result?.active_portfolio);
+    updatePortfolioLoadedAt(result?.active_portfolio, "실시간 갱신 후 불러온");
     await refreshPortfolioSmartTable({ silent: true });
-    setOutput(result);
+    const activePortfolio = result?.active_portfolio;
+    setOutput(
+      [
+        "# 포트폴리오 실시간 불러오기 완료",
+        "",
+        `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
+        `- 보유 종목: ${activePortfolio?.holding_count ?? activePortfolio?.holdings?.length ?? 0}개`,
+        `- 총액: ${formatMoney(activePortfolio?.portfolio_value, "KRW", "n/a")}`,
+        "- 저장된 현재가 캐시를 우회해 최신 데이터로 평가금액과 수익률을 다시 계산했습니다.",
+      ].join("\n")
+    );
   } catch (error) {
     setError(error);
   }

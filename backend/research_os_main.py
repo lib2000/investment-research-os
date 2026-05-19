@@ -4106,9 +4106,14 @@ def parse_float_or_none(value: object) -> float | None:
         return None
 
 
-def latest_provider_price(ticker: str, settings: Settings) -> tuple[float | None, str | None]:
+def latest_provider_price(
+    ticker: str,
+    settings: Settings,
+    *,
+    force_refresh: bool = False,
+) -> tuple[float | None, str | None]:
     cache_key = normalize_ticker(ticker)
-    if cache_key in PORTFOLIO_PRICE_CACHE:
+    if not force_refresh and cache_key in PORTFOLIO_PRICE_CACHE:
         return PORTFOLIO_PRICE_CACHE[cache_key]
     try:
         data_points = collect_analysis_input_data(
@@ -4161,6 +4166,7 @@ def enrich_portfolio_holding(
     settings: Settings,
     *,
     refresh_price: bool,
+    force_price_refresh: bool = False,
 ) -> PortfolioHolding:
     price_source = holding.price_source
     current_price = holding.current_price
@@ -4168,7 +4174,11 @@ def enrich_portfolio_holding(
     ticker = normalize_ticker(holding.ticker)
 
     if refresh_price and ticker != "CASH" and currency in {"KRW", "USD"}:
-        provider_price, provider_source = latest_provider_price(ticker, settings)
+        provider_price, provider_source = latest_provider_price(
+            ticker,
+            settings,
+            force_refresh=force_price_refresh,
+        )
         if provider_price is not None:
             current_price = provider_price
             price_source = provider_source or "data_provider"
@@ -4258,9 +4268,15 @@ def sort_and_weight_portfolio(
     settings: Settings,
     *,
     refresh_prices: bool = False,
+    force_price_refresh: bool = False,
 ) -> SavedPortfolio:
     enriched_holdings = [
-        enrich_portfolio_holding(holding, settings, refresh_price=refresh_prices)
+        enrich_portfolio_holding(
+            holding,
+            settings,
+            refresh_price=refresh_prices,
+            force_price_refresh=force_price_refresh,
+        )
         for holding in portfolio.holdings
     ]
     total_value = sum(holding.market_value or 0 for holding in enriched_holdings)
@@ -4343,6 +4359,8 @@ def portfolio_store_response(
     settings: Settings,
     *,
     active_portfolio: SavedPortfolio | None = None,
+    active_refresh_prices: bool = False,
+    force_active_price_refresh: bool = False,
 ) -> PortfolioStoreResponse:
     store = read_portfolio_store(settings)
     records = [
@@ -4358,7 +4376,8 @@ def portfolio_store_response(
         active_portfolio = sort_and_weight_portfolio(
             active_portfolio,
             settings,
-            refresh_prices=False,
+            refresh_prices=active_refresh_prices,
+            force_price_refresh=force_active_price_refresh,
         )
     return PortfolioStoreResponse(
         portfolios=records,
@@ -18289,6 +18308,8 @@ def get_portfolio_performance(
 )
 def get_portfolio(
     portfolio_name: str,
+    refresh_prices: bool = True,
+    persist_refresh: bool = True,
     settings: Settings = Depends(get_settings),
 ) -> PortfolioStoreResponse:
     store = read_portfolio_store(settings)
@@ -18296,9 +18317,20 @@ def get_portfolio(
     payload = store.get("portfolios", {}).get(key)
     if not payload:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
+    active_portfolio = SavedPortfolio.model_validate(payload)
+    if refresh_prices:
+        active_portfolio = sort_and_weight_portfolio(
+            active_portfolio,
+            settings,
+            refresh_prices=True,
+            force_price_refresh=True,
+        ).model_copy(update={"updated_at": current_storage_timestamp()})
+        if persist_refresh:
+            store.setdefault("portfolios", {})[key] = active_portfolio.model_dump(mode="json")
+            write_json_store(portfolio_store_path(settings), store)
     return portfolio_store_response(
         settings,
-        active_portfolio=SavedPortfolio.model_validate(payload),
+        active_portfolio=active_portfolio,
     )
 
 

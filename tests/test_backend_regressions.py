@@ -611,6 +611,56 @@ class DartFilingWatchTests(unittest.TestCase):
 
 
 class PortfolioPerformanceTests(unittest.TestCase):
+    def test_portfolio_load_refreshes_prices_and_persists_result(self):
+        import research_os_main as main
+        from research_os.models import PortfolioHolding, SavedPortfolio
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio = SavedPortfolio(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(
+                    ticker="003230",
+                    name="삼양식품",
+                    quantity=10,
+                    average_cost=80,
+                    current_price=100,
+                    market_value=1000,
+                    cost_basis=800,
+                    currency="KRW",
+                )
+            ],
+            portfolio_value=1000,
+            updated_at="2026-05-18T09:00:00+09:00",
+        )
+        store = {
+            "portfolios": {
+                main.portfolio_store_key("테스트"): portfolio.model_dump(mode="json")
+            }
+        }
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=copy.deepcopy(store)),
+            patch.object(main, "latest_provider_price", return_value=(120, "live-test")) as latest_price,
+            patch.object(main, "portfolio_store_path", return_value=PROJECT_ROOT / "tmp_portfolios.json"),
+            patch.object(main, "write_json_store") as write_json_store,
+            patch.object(main, "current_storage_timestamp", return_value="2026-05-19T09:00:00+09:00"),
+        ):
+            result = main.get_portfolio("테스트", settings=settings)
+
+        latest_price.assert_called_once_with("003230", settings, force_refresh=True)
+        self.assertEqual(result.active_portfolio.holdings[0].current_price, 120)
+        self.assertEqual(result.active_portfolio.holdings[0].market_value, 1200)
+        self.assertEqual(result.active_portfolio.holdings[0].unrealized_gain, 400)
+        self.assertEqual(result.active_portfolio.holdings[0].unrealized_return, 0.5)
+        self.assertEqual(result.active_portfolio.updated_at, "2026-05-19T09:00:00+09:00")
+        self.assertTrue(write_json_store.called)
+        persisted_store = write_json_store.call_args.args[1]
+        persisted = persisted_store["portfolios"][main.portfolio_store_key("테스트")]
+        self.assertEqual(persisted["holdings"][0]["current_price"], 120)
+        self.assertEqual(persisted["portfolio_value"], 1200)
+
     def test_performance_marks_overseas_history_limits_and_cache_mode(self):
         import research_os_main as main
         from research_os.models import PortfolioHolding, SavedPortfolio
