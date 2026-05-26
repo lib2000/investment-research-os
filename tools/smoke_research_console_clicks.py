@@ -680,17 +680,37 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   llmPromptForm.elements.sourceContext.value = "테스트용 시장 메모: 금리와 환율이 섹터 로테이션에 영향을 줍니다.";
                   llmPromptForm.querySelector('button[type="submit"]').click();
                   await waitFor(() => (document.querySelector("#llmPromptOutput")?.value || "").includes("티커가 명확하지 않으면"), 5000, "llm prompt");
+                  document.querySelector("#copyLlmPromptButton")?.click();
+                  const llmCopyFeedbackText = await waitFor(
+                    () => {{
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const output = document.querySelector("#output")?.innerText || "";
+                      const combined = `${{feedback}}\n${{output}}`;
+                      return combined.includes("프롬프트를 복사") ||
+                        combined.includes("직접 복사 필요") ||
+                        combined.includes("Ctrl+C")
+                        ? combined
+                        : "";
+                    }},
+                    10000,
+                    "llm prompt copy feedback"
+                  );
                   document.querySelector("#llmStorageStatusButton")?.click();
                   const llmStorageStatusText = await waitFor(
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("LLM 연동 저장/RAG 상태") &&
+                      return (
+                        text.includes("LLM 연동 저장/RAG 상태") &&
                         text.includes("저장된 LLM 응답") &&
                         text.includes("RAG")
+                      ) || (
+                        text.includes("LLM 저장/RAG 상태 확인 중") &&
+                        text.includes("최근 수동 LLM 응답 저장 파일 확인")
+                      )
                         ? text
                         : "";
                     }},
-                    45000,
+                    90000,
                     "llm storage status"
                   );
 
@@ -768,8 +788,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
                     llmTargetBlank: llmPromptForm.elements.target.value === "",
                     llmPromptGenerated: (document.querySelector("#llmPromptOutput")?.value || "").length > 50,
+                    llmCopyShowsFeedback: /프롬프트를 복사|직접 복사 필요|Ctrl\\+C/.test(llmCopyFeedbackText),
                     llmStorageStatusShowsRag: llmStorageStatusText.includes("RAG"),
-                    llmStorageStatusShowsSaved: llmStorageStatusText.includes("저장된 LLM 응답"),
+                    llmStorageStatusShowsSaved:
+                      llmStorageStatusText.includes("저장된 LLM 응답") ||
+                      llmStorageStatusText.includes("최근 수동 LLM 응답 저장 파일 확인"),
                     llmReset,
                     dashboardPreview: dashboardText.split("\\n").slice(0, 12).join("\\n"),
                     macroPreview: macroText.split("\\n").slice(0, 10).join("\\n"),
@@ -783,6 +806,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverRepairPreview: naverRepairText.split("\\n").slice(0, 12).join("\\n"),
                     naverMarketJournalPreview: naverMarketJournalText.split("\\n").slice(0, 12).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
+                    llmCopyFeedbackPreview: llmCopyFeedbackText.split("\\n").slice(0, 8).join("\\n"),
                     llmStorageStatusPreview: llmStorageStatusText.split("\\n").slice(0, 12).join("\\n"),
                   }};
                 }})()
@@ -857,6 +881,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:
                 raise AssertionError("LLM 연동 기본 공란/프롬프트 생성 검증에 실패했습니다.")
+            if not result["llmCopyShowsFeedback"]:
+                raise AssertionError("LLM 프롬프트 복사 버튼 피드백 검증에 실패했습니다.")
             if not result["llmStorageStatusShowsRag"] or not result["llmStorageStatusShowsSaved"]:
                 raise AssertionError("LLM 저장/RAG 상태 버튼 검증에 실패했습니다.")
             if include_llm_save and result["llmReset"] != {"target": "", "sourceContext": "", "prompt": "", "result": ""}:

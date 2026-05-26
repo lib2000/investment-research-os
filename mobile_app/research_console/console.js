@@ -9197,13 +9197,36 @@ elements.llmPromptForm?.addEventListener("submit", (event) => {
   );
 });
 
-elements.copyLlmPromptButton?.addEventListener("click", async () => {
+elements.copyLlmPromptButton?.addEventListener("click", async (event) => {
+  if (
+    !registerActionClick(
+      event.currentTarget,
+      "LLM 프롬프트 복사를 시작했습니다.",
+      event
+    )
+  ) {
+    return;
+  }
   try {
     const prompt = elements.llmPromptOutput?.value.trim() || ensureLlmPromptPreview();
     await copyTextToClipboard(prompt);
+    showActionFeedback("LLM 프롬프트를 복사했습니다. ChatGPT 또는 Gemini에 붙여넣으세요.");
+    showOutputStatus("복사 완료", "complete", 2400);
     setOutput("**프롬프트를 복사했습니다.**\n\nChatGPT 또는 Gemini 웹 채팅창에 붙여넣고, 생성된 응답을 다시 이 콘솔에 붙여넣으세요.");
   } catch (error) {
-    setError(error);
+    elements.llmPromptOutput?.focus();
+    elements.llmPromptOutput?.select();
+    showActionFeedback("브라우저 복사 권한이 제한되어 프롬프트를 선택했습니다. Ctrl+C로 복사하세요.");
+    showOutputStatus("직접 복사 필요", "pending", 3600);
+    renderPlainOutput(
+      [
+        "**직접 복사 필요**",
+        "",
+        error?.message || "브라우저 클립보드 권한이 제한되어 자동 복사하지 못했습니다.",
+        "",
+        "생성된 프롬프트 영역을 선택해 두었습니다. `Ctrl+C`로 복사한 뒤 ChatGPT 또는 Gemini에 붙여넣으세요.",
+      ].join("\n")
+    );
   }
 });
 
