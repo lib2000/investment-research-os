@@ -358,7 +358,7 @@ class SectorTrendInsight(BaseModel):
 class SectorOpportunityRequest(BaseModel):
     macro_environment: str
     period: str = "6개월"
-    region: str = "US"
+    region: str = "KR"
     style: str = "균형형"
     focus_theme: Optional[str] = None
     auto_inject_data: bool = True
@@ -417,7 +417,7 @@ class LongTermCompounderRequest(BaseModel):
     min_market_cap: Optional[float] = None
     max_market_cap: Optional[float] = None
     sector: str = "전체"
-    region: str = "US"
+    region: str = "KR"
     style: str = "퀄리티 성장"
     auto_inject_data: bool = True
     realtime_data: List[InjectedDataPoint] = Field(default_factory=list)
@@ -745,6 +745,10 @@ class PortfolioHolding(BaseModel):
     sector: str = "Unknown"
     theme_tags: List[str] = Field(default_factory=list)
     currency: str = "USD"
+    sync_status: Optional[str] = None
+    sync_source: Optional[str] = None
+    sync_checked_at: Optional[str] = None
+    sync_message: Optional[str] = None
 
 
 class PortfolioRiskScanRequest(BaseModel):
@@ -852,7 +856,7 @@ class InterestTicker(BaseModel):
 
 class InterestSector(BaseModel):
     name: str
-    region: str = "US"
+    region: str = "KR"
     priority: str = "medium"
     thesis: Optional[str] = None
     notes: Optional[str] = None
@@ -881,6 +885,9 @@ class MarketCloseReviewRequest(BaseModel):
     session_date: Optional[str] = None
     raw_summary: str = ""
     source_url: Optional[str] = None
+    source_origin: Optional[str] = None
+    source_provider: Optional[str] = None
+    source_title: Optional[str] = None
     file_name: Optional[str] = None
     file_mime_type: Optional[str] = None
     file_size: Optional[int] = None
@@ -893,6 +900,9 @@ class MarketCloseEntry(BaseModel):
     market: str
     session_date: str
     raw_summary: str
+    source_origin: str = "manual"
+    source_provider: Optional[str] = None
+    source_title: Optional[str] = None
     sentiment: str
     risk_level: str
     regime: str

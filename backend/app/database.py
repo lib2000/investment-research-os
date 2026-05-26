@@ -682,6 +682,36 @@ def _register_trade_dedup_keys(
             """,
             (dedup_key, source, source_type, source_key, now),
         )
+    if source == "kiwoom":
+        _mark_manual_duplicates_for_kiwoom_keys(connection, dedup_keys, now)
+
+
+def _mark_manual_duplicates_for_kiwoom_keys(
+    connection: sqlite3.Connection,
+    dedup_keys: list[str],
+    now: str,
+) -> None:
+    active_keys = sorted(set(key for key in dedup_keys if key))
+    if not active_keys:
+        return
+    placeholders = ",".join("?" for _ in active_keys)
+    connection.execute(
+        f"""
+        UPDATE manual_transactions
+        SET dedup_status = ?,
+            dedup_reason = ?,
+            updated_at = ?
+        WHERE dedup_key IN ({placeholders})
+          AND dedup_status != ?
+        """,
+        (
+            "duplicate_kiwoom",
+            "키움 원천 거래와 날짜/종목/수량/가격이 같아 분석 합산에서 제외됩니다.",
+            now,
+            *active_keys,
+            "duplicate_kiwoom",
+        ),
+    )
 
 
 def count_manual_transactions(settings: Settings) -> int:
@@ -1673,6 +1703,7 @@ def get_journal_analytics(
         if sell_amount_value is not None:
             total_sell_amount += int(sell_amount_value)
 
+    active_manual_transactions_count = len(manual_transactions) - duplicate_manual_transactions_count
     top_tickers = [
         {"ticker": ticker, "count": count}
         for ticker, count in sorted(
@@ -1712,7 +1743,7 @@ def get_journal_analytics(
     return {
         "filter_start_date": start_date,
         "filter_end_date": end_date,
-        "total_entries": len(entries) + len(manual_transactions),
+        "total_entries": len(entries) + active_manual_transactions_count,
         "completed_drafts": draft_counts.get("completed", 0),
         "pending_drafts": draft_counts.get("needs_review", 0),
         "rule_followed_count": rule_followed_count,

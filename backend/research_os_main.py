@@ -1,17 +1,15 @@
 import base64
-import csv
 import hashlib
 import io
 import json
 import math
 import os
 import threading
-import zipfile
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from re import DOTALL, IGNORECASE, escape, findall, finditer, fullmatch, search, split, sub
 from urllib.parse import urljoin
-from xml.etree import ElementTree
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -21,9 +19,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
+from research_os.customs_trade import customs_trade_quality_metadata
 from research_os.data_providers import (
     FmpClient,
     OpenDartClient,
+    fetch_customs_total_trend_status,
     fetch_customs_trade_rows,
     fetch_nps_institutional_context,
     fetch_nps_institutional_signal,
@@ -39,6 +39,30 @@ from research_os.file_extraction import (
     safe_attachment_file_name,
 )
 from research_os.kiwoom_auth import KiwoomAuthClient, KiwoomMaskedTokenStatus
+from research_os.kcif_reports import (
+    KCIF_REPORT_LIST_URL,
+    build_kcif_watch_targets,
+    fetch_kcif_detail_analyses,
+    fetch_kcif_report_list_with_status,
+    kcif_copyright_policy,
+    match_kcif_reports_to_targets,
+    should_refresh_kcif_cache,
+)
+from research_os.market_journal import naver_market_close_source_metadata
+from research_os.llm_bridge_status import build_llm_bridge_storage_status
+from research_os.regional_sources import (
+    fetch_regional_business_sources,
+    match_regional_business_items_to_targets,
+    regional_business_copyright_policy,
+    should_refresh_regional_business_cache,
+)
+from research_os.portfolio_import import (
+    parse_portfolio_delimited_text,
+    parse_portfolio_json_text,
+    parse_portfolio_xlsx,
+    portfolio_currency_for_ticker,
+    portfolio_holding_from_row,
+)
 from research_os.models import (
     Broker,
     BrokerStatus,
@@ -118,6 +142,13 @@ from research_os.models import (
     WatchItem,
     WatchItemSignal,
 )
+from research_os.portfolio_performance import build_price_refresh_summary
+from research_os.portfolio_store import portfolio_name_sort_key, portfolio_store_key
+from research_os.portfolio_sync import (
+    apply_kiwoom_domestic_balance_to_portfolio,
+    portfolio_sync_status_summary,
+    protect_manual_or_overseas_holding_sync_state,
+)
 from research_os.research_memory import (
     ResearchStorageInfo,
     read_manifest,
@@ -138,7 +169,23 @@ from research_os.rag_memory import (
     upsert_ticker_thesis_snapshot,
 )
 from research_os.security import verify_user_token
-from research_os.settings import Settings, get_settings, mask_secret
+from research_os.settings import Settings, get_settings
+from research_os.source_url_preview import build_source_url_preview_response
+from research_os.storage_quality import (
+    build_storage_quality_dashboard_payload,
+    is_archived_research_entry,
+    research_memory_entry_quality_metadata,
+    research_memory_legacy_policy,
+)
+from research_os.system_health import (
+    build_data_provider_status_payload,
+    build_safety_config_payload,
+    build_system_health_payload,
+)
+from research_os.ticker_registry import (
+    fetch_ticker_registry_sources,
+    read_source_status as read_ticker_registry_source_status,
+)
 from research_os.web_capture import (
     clean_web_article_text,
     fetch_capture_source_url,
@@ -150,7 +197,17 @@ from research_os.web_capture import (
 )
 
 
-app = FastAPI(title="Investment Journal API Gateway")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_ticker_registry_scheduler()
+    start_earnings_calendar_scheduler()
+    start_dart_filing_scheduler()
+    start_shinhan_research_scheduler()
+    start_naver_research_scheduler()
+    yield
+
+
+app = FastAPI(title="Investment Journal API Gateway", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -630,6 +687,30 @@ OFFICIAL_TICKER_REGISTRY = {
         "analysis_focus": "데이터센터/통신망 투자, 광트랜시버 수요, 고객사 발주, 수익성 회복, 재고 사이클",
         "watch_kpis": ["광트랜시버 매출", "수주/출하", "매출총이익률", "통신장비 투자", "재고 회전"],
     },
+    "327260": {
+        "company_name": "RF머트리얼즈",
+        "aliases": ["RF머트리얼즈", "알에프머트리얼즈", "RF Materials", "RFM", "RF머티리얼즈"],
+        "exchange": "KOSDAQ",
+        "country": "KR",
+        "asset_type": "equity",
+        "sector": "Technology",
+        "industry": "RF/Optical Communication Components",
+        "business_context": "RF 및 광통신용 패키지와 화합물 반도체 패키지를 생산하는 국내 통신·광부품 기업",
+        "analysis_focus": "CPO/광통신 투자, RF 패키지 수요, 모회사 RFHIC와 고객 다변화, 증설/유상증자, 수익성 개선",
+        "watch_kpis": ["광통신 패키지 매출", "RF 패키지 매출", "신규 고객사", "증설 투자", "영업이익률"],
+    },
+    "043260": {
+        "company_name": "성호전자",
+        "aliases": ["성호전자", "Sungho Electronics", "SUNGHO ELECTRONICS", "성호전자주식회사"],
+        "exchange": "KOSDAQ",
+        "country": "KR",
+        "asset_type": "equity",
+        "sector": "Technology",
+        "industry": "Electronic Components",
+        "business_context": "전원공급장치와 전자부품을 제조하는 국내 전자부품 기업",
+        "analysis_focus": "CPO/광인터커넥트 관련 수요, 전자부품 매출 성장, 재무구조, 전환증권/파생손익 변동성",
+        "watch_kpis": ["전자부품 매출", "신규 수주", "영업이익률", "순차입금", "전환증권/파생상품 평가손익"],
+    },
     "035510": {
         "company_name": "신세계I&C",
         "exchange": "KOSPI",
@@ -825,6 +906,17 @@ def normalize_ticker(ticker: str) -> str:
     return normalized or "UNKNOWN"
 
 
+def is_plausible_equity_symbol(symbol: str) -> bool:
+    normalized = normalize_ticker(symbol)
+    if normalized in {"UNKNOWN", "CASH"}:
+        return False
+    if fullmatch(r"\d{6}", normalized):
+        return True
+    if fullmatch(r"\d+", normalized):
+        return False
+    return bool(search(r"[A-Z]", normalized))
+
+
 def dynamic_ticker_cache_path(settings: Settings | None = None) -> Path:
     active_settings = settings or get_settings()
     return resolve_vault_dir(active_settings.research_vault_dir) / "_system" / "ticker_registry_cache.json"
@@ -843,6 +935,7 @@ def read_dynamic_ticker_registry(settings: Settings | None = None) -> dict[str, 
                         normalize_ticker(symbol): profile
                         for symbol, profile in payload.items()
                         if isinstance(profile, dict)
+                        and is_plausible_equity_symbol(str(symbol))
                     }
                 )
     except Exception:
@@ -868,6 +961,8 @@ def write_dynamic_ticker_profile(
     settings: Settings | None = None,
 ) -> None:
     normalized_symbol = normalize_ticker(symbol)
+    if not is_plausible_equity_symbol(normalized_symbol):
+        return
     DYNAMIC_TICKER_REGISTRY[normalized_symbol] = profile
     try:
         existing = read_dynamic_ticker_registry(settings)
@@ -911,6 +1006,75 @@ def ticker_registry_cache_entries(settings: Settings | None = None) -> list[dict
             }
         )
     return entries
+
+
+def ticker_registry_source_status(settings: Settings | None = None) -> dict:
+    active_settings = settings or get_settings()
+    vault_dir = resolve_vault_dir(active_settings.research_vault_dir)
+    return read_ticker_registry_source_status(vault_dir)
+
+
+def refresh_dynamic_ticker_registry_from_sources(
+    settings: Settings | None = None,
+) -> dict:
+    active_settings = settings or get_settings()
+    vault_dir = resolve_vault_dir(active_settings.research_vault_dir)
+    fetched_registry, source_status = fetch_ticker_registry_sources(
+        vault_dir=vault_dir,
+        krx_url=active_settings.ticker_registry_krx_kind_url,
+        nasdaq_listed_url=active_settings.ticker_registry_nasdaq_listed_url,
+        nasdaq_other_url=active_settings.ticker_registry_nasdaq_other_url,
+        timeout_seconds=active_settings.ticker_registry_timeout_seconds,
+        user_agent=active_settings.ticker_registry_user_agent,
+    )
+    if not fetched_registry:
+        return {
+            **source_status,
+            "cache_count": len(ticker_registry_cache_entries(active_settings)),
+            "cache_updated": False,
+            "message": "종목 레지스트리 외부 소스 갱신에 실패했습니다. 기존 캐시는 유지했습니다.",
+        }
+
+    existing = dict(read_dynamic_ticker_registry(active_settings))
+    merged = {**existing, **fetched_registry}
+    DYNAMIC_TICKER_REGISTRY.clear()
+    DYNAMIC_TICKER_REGISTRY.update(merged)
+    persist_dynamic_ticker_registry(merged, active_settings)
+    return {
+        **source_status,
+        "cache_count": len(merged),
+        "new_or_updated_count": len(fetched_registry),
+        "cache_updated": True,
+        "cache_path": str(dynamic_ticker_cache_path(active_settings)),
+    }
+
+
+_TICKER_REGISTRY_SCHEDULER_STARTED = False
+
+
+def ticker_registry_scheduler_loop() -> None:
+    settings = get_settings()
+    interval_seconds = max(int(settings.ticker_registry_refresh_hours * 3600), 3600)
+    while True:
+        try:
+            refresh_dynamic_ticker_registry_from_sources(settings)
+        except Exception:
+            pass
+        threading.Event().wait(interval_seconds)
+
+
+def start_ticker_registry_scheduler() -> None:
+    global _TICKER_REGISTRY_SCHEDULER_STARTED
+    settings = get_settings()
+    if _TICKER_REGISTRY_SCHEDULER_STARTED or not settings.ticker_registry_auto_refresh:
+        return
+    _TICKER_REGISTRY_SCHEDULER_STARTED = True
+    thread = threading.Thread(
+        target=ticker_registry_scheduler_loop,
+        name="ticker-registry-refresh",
+        daemon=True,
+    )
+    thread.start()
 
 
 def exchange_display_name(value: str | None) -> str:
@@ -1783,14 +1947,49 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
     )
     excluded_tickers = target_universe.get("excluded_tickers") or daily_check.get("excluded_tickers") or []
     due = bool(missing_today or missing_targets)
+    current_target_count = int(target_universe.get("target_count") or 0)
+    checked_tickers = [
+        normalize_ticker(str(item))
+        for item in (daily_check.get("checked_tickers") or [])
+        if normalize_ticker(str(item))
+    ]
+    checked_count = 0 if missing_today else len(set(checked_tickers) - set(failed_tickers))
+    coverage_rate = (
+        checked_count / current_target_count
+        if current_target_count
+        else 1.0
+    )
+    if due:
+        reliability_status = "점검 필요"
+    elif failed_tickers:
+        reliability_status = "부분 신뢰"
+    else:
+        reliability_status = "신뢰 가능"
+    next_check_after = None
+    checked_at = daily_check.get("checked_at")
+    if checked_at:
+        try:
+            base_dt = datetime.fromisoformat(str(checked_at))
+            next_check_after = (base_dt + timedelta(hours=max(settings.dart_filing_refresh_hours, 1))).isoformat()
+        except ValueError:
+            next_check_after = None
     return {
         "date": today,
         "status": "due" if due else "partial_success" if failed_tickers else "complete",
         "due": due,
         "last_checked_date": checked_date or None,
-        "last_checked_at": daily_check.get("checked_at"),
+        "last_checked_at": checked_at,
+        "next_check_after": next_check_after,
         "last_target_count": daily_check.get("target_count", 0),
-        "current_target_count": target_universe.get("target_count", 0),
+        "current_target_count": current_target_count,
+        "checked_count": checked_count,
+        "coverage_rate": coverage_rate,
+        "reliability_status": reliability_status,
+        "reliability_message": (
+            f"{today} 기준 {checked_count}/{current_target_count}개 종목 공시 점검 완료"
+            if current_target_count
+            else "점검 대상 국내 종목이 없습니다."
+        ),
         "missing_tickers": missing_targets,
         "failed_tickers": failed_tickers,
         "failure_count": len(failed_tickers),
@@ -2552,6 +2751,14 @@ def naver_research_cache_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "naver_research_cache.json"
 
 
+def naver_market_close_journal_state_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "naver_market_close_journal_state.json"
+
+
+def naver_market_close_journal_task_log_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "naver_market_close_journal_task.log"
+
+
 def read_naver_research_cache(settings: Settings) -> dict:
     return read_json_store(
         naver_research_cache_path(settings),
@@ -2707,6 +2914,7 @@ def fetch_naver_research_page(category_info: dict, settings: Settings) -> tuple[
     with httpx.Client(timeout=settings.naver_research_timeout_seconds, follow_redirects=True) as client:
         response = client.get(str(category_info.get("url")), headers=headers)
         response.raise_for_status()
+        response.encoding = "euc-kr"
     soup = BeautifulSoup(response.text, "html.parser")
     items: list[dict] = []
     for row in soup.find_all("tr"):
@@ -2736,7 +2944,257 @@ def fetch_naver_research_items(settings: Settings) -> tuple[list[dict], list[str
         key=lambda item: str(item.get("published_at") or ""),
         reverse=True,
     )
-    return sorted_items[: max(settings.naver_research_max_items, 1)], warnings
+    return sorted_items, warnings
+
+
+def safe_naver_research_snippet(text: str, max_chars: int = 220) -> str:
+    cleaned = clean_naver_research_text(text)
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[: max(max_chars - 1, 1)].rstrip() + "..."
+
+
+def parse_naver_won_value(value: str | None) -> int | None:
+    text = clean_naver_research_text(value)
+    match = search(r"([0-9][0-9,]{2,})\s*원?", text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def format_naver_won_value(value: object) -> str:
+    parsed = parse_float_or_none(value)
+    return f"{parsed:,.0f}원" if parsed is not None else "미확인"
+
+
+def naver_context_snippets(text: str, patterns: list[str], max_total_chars: int) -> list[str]:
+    snippets: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for pattern in patterns:
+        for match in finditer(pattern, text, flags=IGNORECASE):
+            start = max(match.start() - 80, 0)
+            end = min(match.end() + 120, len(text))
+            snippet = safe_naver_research_snippet(text[start:end], 260)
+            if not snippet or snippet in seen:
+                continue
+            if total + len(snippet) > max_total_chars:
+                return snippets
+            snippets.append(snippet)
+            seen.add(snippet)
+            total += len(snippet)
+    return snippets
+
+
+def extract_naver_report_signals(text: str, item: dict, settings: Settings) -> dict:
+    max_snippet_chars = max(int(settings.naver_research_pdf_snippet_max_chars or 900), 200)
+    normalized_text = sub(r"\s+", " ", text or "").strip()
+    opinion_match = search(
+        r"(?:투자의견|의견|Investment\s*Rating|Rating)[^\n\r]{0,40}?"
+        r"(매수|BUY|Buy|중립|HOLD|Hold|보유|SELL|Sell|매도)",
+        normalized_text,
+        flags=IGNORECASE,
+    )
+    target_match = search(
+        r"(?:목표주가|목표가|Target\s*Price)[^\d]{0,50}([0-9][0-9,]{2,})\s*원?",
+        normalized_text,
+        flags=IGNORECASE,
+    )
+    current_match = search(
+        r"(?:현재주가|현재가|Current\s*Price)[^\d]{0,50}([0-9][0-9,]{2,})\s*원?",
+        normalized_text,
+        flags=IGNORECASE,
+    )
+    upside_match = search(
+        r"(?:상승여력|Upside)[^\d+\-]{0,40}([+\-]?\d+(?:\.\d+)?)\s*%",
+        normalized_text,
+        flags=IGNORECASE,
+    )
+    snippets = naver_context_snippets(
+        normalized_text,
+        [
+            r"투자의견.{0,80}",
+            r"목표주가.{0,100}",
+            r"목표가.{0,100}",
+            r"상승여력.{0,100}",
+            r"Target\s*Price.{0,100}",
+            r"Upside.{0,100}",
+        ],
+        max_snippet_chars,
+    )
+    target_price = parse_naver_won_value(target_match.group(0) if target_match else None)
+    current_price = parse_naver_won_value(current_match.group(0) if current_match else None)
+    upside_percent = None
+    if upside_match:
+        try:
+            upside_percent = float(upside_match.group(1))
+        except ValueError:
+            upside_percent = None
+    return {
+        "status": "success" if normalized_text else "no_text",
+        "text_char_count": len(normalized_text),
+        "full_text_stored": False,
+        "copyright_policy": "structured_signals_and_short_snippets_only",
+        "investment_opinion": opinion_match.group(1).upper() if opinion_match else None,
+        "target_price": target_price,
+        "current_price": current_price,
+        "upside_percent": upside_percent,
+        "snippets": snippets,
+        "snippet_char_count": sum(len(value) for value in snippets),
+        "source_pdf_url": item.get("pdf_url"),
+    }
+
+
+def enrich_naver_research_item_with_pdf_signals(item: dict, settings: Settings) -> dict:
+    if not settings.naver_research_pdf_extract_enabled:
+        return {
+            **item,
+            "pdf_analysis": {
+                "status": "disabled",
+                "full_text_stored": False,
+                "message": "NAVER_RESEARCH_PDF_EXTRACT_ENABLED=false 상태입니다.",
+            },
+        }
+    pdf_url = clean_naver_research_text(item.get("pdf_url"))
+    if not pdf_url:
+        return {
+            **item,
+            "pdf_analysis": {
+                "status": "no_pdf",
+                "full_text_stored": False,
+                "message": "PDF 링크가 없는 리서치 항목입니다.",
+            },
+        }
+    headers = {
+        "User-Agent": settings.naver_research_user_agent,
+        "Accept": "application/pdf,*/*",
+        "Referer": item.get("url") or settings.naver_research_list_url,
+    }
+    try:
+        timeout = max(float(settings.naver_research_timeout_seconds or 10), 10.0)
+        with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False) as client:
+            response = client.get(pdf_url, headers=headers)
+            response.raise_for_status()
+        pdf_text, note = extract_pdf_text(response.content)
+        signals = extract_naver_report_signals(pdf_text, item, settings)
+        return {
+            **item,
+            "pdf_analysis": {
+                **signals,
+                "status": signals.get("status") or "success",
+                "note": note,
+                "pdf_size_bytes": len(response.content),
+            },
+        }
+    except Exception as exc:
+        return {
+            **item,
+            "pdf_analysis": {
+                "status": "failed",
+                "full_text_stored": False,
+                "message": provider_error_message(exc, settings),
+                "source_pdf_url": pdf_url,
+            },
+        }
+
+
+def naver_research_priority_context(settings: Settings) -> dict:
+    holding_tickers: set[str] = set()
+    holding_names: set[str] = set()
+    interest_tickers: set[str] = set()
+    interest_names: set[str] = set()
+    interest_sectors: set[str] = set()
+    try:
+        store = read_portfolio_store(settings)
+        for portfolio in (store.get("portfolios") or {}).values():
+            if not isinstance(portfolio, dict):
+                continue
+            for holding in portfolio.get("holdings", []):
+                if not isinstance(holding, dict):
+                    continue
+                ticker = normalize_ticker(str(holding.get("ticker") or ""))
+                name = clean_naver_research_text(holding.get("name"))
+                if ticker:
+                    holding_tickers.add(ticker)
+                if name:
+                    holding_names.add(name)
+    except Exception:
+        pass
+    try:
+        interests = read_interest_list(settings)
+        for item in interests.get("tickers", []):
+            if not isinstance(item, dict):
+                continue
+            ticker = normalize_ticker(str(item.get("ticker") or ""))
+            name = clean_naver_research_text(
+                (item.get("verification") or {}).get("company_name")
+                if isinstance(item.get("verification"), dict)
+                else None
+            )
+            if ticker:
+                interest_tickers.add(ticker)
+            if name:
+                interest_names.add(name)
+        for item in interests.get("sectors", []):
+            if isinstance(item, dict):
+                name = clean_naver_research_text(item.get("name"))
+                if name:
+                    interest_sectors.add(name)
+    except Exception:
+        pass
+    return {
+        "holding_tickers": holding_tickers,
+        "holding_names": holding_names,
+        "interest_tickers": interest_tickers,
+        "interest_names": interest_names,
+        "interest_sectors": interest_sectors,
+    }
+
+
+def score_naver_research_priority(item: dict, context: dict) -> dict:
+    ticker = normalize_ticker(str(item.get("ticker") or ""))
+    company_name = clean_naver_research_text(item.get("company_name"))
+    title = clean_naver_research_text(item.get("title"))
+    text = f"{company_name} {title}"
+    score = 0
+    reasons: list[str] = []
+    if ticker and ticker in context.get("holding_tickers", set()):
+        score += 100
+        reasons.append("보유종목")
+    if ticker and ticker in context.get("interest_tickers", set()):
+        score += 80
+        reasons.append("관심종목")
+    if company_name and company_name in context.get("holding_names", set()):
+        score += 70
+        reasons.append("보유종목명")
+    if company_name and company_name in context.get("interest_names", set()):
+        score += 50
+        reasons.append("관심종목명")
+    for sector in context.get("interest_sectors", set()):
+        if sector and sector in text:
+            score += 30
+            reasons.append(f"관심섹터:{sector}")
+            break
+    return {"score": score, "reasons": reasons or ["일반"]}
+
+
+def apply_naver_research_priorities(items: list[dict], settings: Settings) -> list[dict]:
+    context = naver_research_priority_context(settings)
+    prioritized: list[dict] = []
+    for item in items:
+        priority = score_naver_research_priority(item, context)
+        prioritized.append({**item, "priority": priority})
+    return sorted(
+        prioritized,
+        key=lambda item: (
+            int((item.get("priority") or {}).get("score") or 0),
+            str(item.get("published_at") or ""),
+        ),
+        reverse=True,
+    )
 
 
 def infer_naver_storage_target(item: dict, settings: Settings) -> tuple[str, str, str]:
@@ -2774,7 +3232,45 @@ def infer_naver_storage_target(item: dict, settings: Settings) -> tuple[str, str
     return "MARKET-KR", "naver_research", "market_research"
 
 
+def classify_naver_report_impact(item: dict) -> str:
+    pdf_analysis = item.get("pdf_analysis") if isinstance(item.get("pdf_analysis"), dict) else {}
+    opinion = clean_naver_research_text(pdf_analysis.get("investment_opinion")).lower()
+    upside = parse_float_or_none(pdf_analysis.get("upside_percent"))
+    if upside is not None:
+        if upside >= 10:
+            return "긍정"
+        if upside <= -5:
+            return "부정"
+    if any(keyword in opinion for keyword in ["buy", "매수", "outperform", "상향"]):
+        return "긍정"
+    if any(keyword in opinion for keyword in ["sell", "매도", "underperform", "하향"]):
+        return "부정"
+    return "중립"
+
+
+def build_naver_holding_interest_impact(item: dict) -> dict:
+    priority = item.get("priority") if isinstance(item.get("priority"), dict) else {}
+    reasons = [str(reason) for reason in (priority.get("reasons") or []) if str(reason).strip()]
+    affected = clean_naver_research_text(item.get("company_name")) or clean_naver_research_text(item.get("title"))
+    impact = classify_naver_report_impact(item)
+    is_linked = any("보유" in reason or "관심" in reason for reason in reasons)
+    if not is_linked:
+        impact = "참고"
+    return {
+        "impact": impact,
+        "affected": affected or "시장/섹터",
+        "reasons": reasons or ["일반"],
+        "linked_to_user_universe": is_linked,
+        "action": (
+            "기존 투자 논거와 목표가/실적 가정을 대조하세요."
+            if is_linked
+            else "시장일지와 섹터 배경 자료로 참고하세요."
+        ),
+    }
+
+
 def build_naver_capture_content(item: dict, target: str, source_hint: str) -> str:
+    impact = build_naver_holding_interest_impact(item)
     lines = [
         "[네이버 금융 리서치 자동 수집]",
         f"분류: {item.get('category') or '미분류'}",
@@ -2789,11 +3285,51 @@ def build_naver_capture_content(item: dict, target: str, source_hint: str) -> st
     ]
     if item.get("pdf_url"):
         lines.append(f"PDF 링크: {item.get('pdf_url')}")
+    pdf_analysis = item.get("pdf_analysis") if isinstance(item.get("pdf_analysis"), dict) else {}
+    priority = item.get("priority") if isinstance(item.get("priority"), dict) else {}
+    if priority:
+        lines.extend(
+            [
+                "",
+                "수집 우선순위:",
+                f"- 점수: {priority.get('score', 0)}",
+                f"- 근거: {', '.join(priority.get('reasons') or ['일반'])}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "보유/관심 영향도:",
+            f"- 영향 판정: {impact['impact']}",
+            f"- 연결 대상: {impact['affected']}",
+            f"- 연결 근거: {', '.join(impact['reasons'])}",
+            f"- 다음 조치: {impact['action']}",
+        ]
+    )
+    if pdf_analysis:
+        lines.extend(
+            [
+                "",
+                "PDF 구조화 분석:",
+                f"- 추출 상태: {pdf_analysis.get('status') or '미확인'}",
+                f"- 전체 원문 저장: {'아니오' if not pdf_analysis.get('full_text_stored') else '예'}",
+                f"- 텍스트 길이: {pdf_analysis.get('text_char_count') or 0:,}자",
+                f"- 투자의견: {pdf_analysis.get('investment_opinion') or '미확인'}",
+                f"- 목표주가: {format_naver_won_value(pdf_analysis.get('target_price'))}",
+                f"- 현재주가: {format_naver_won_value(pdf_analysis.get('current_price'))}",
+                f"- 상승여력: {pdf_analysis.get('upside_percent')}%" if pdf_analysis.get("upside_percent") is not None else "- 상승여력: 미확인",
+            ]
+        )
+        snippets = pdf_analysis.get("snippets") if isinstance(pdf_analysis.get("snippets"), list) else []
+        if snippets:
+            lines.append("- 검증 스니펫:")
+            lines.extend(f"  - {snippet}" for snippet in snippets[:4])
     lines.extend(
         [
             "",
             "활용 지침:",
             "- 이 자료는 네이버 금융 리서치 목록에서 자동 수집한 외부 리서치 메타데이터입니다.",
+            "- PDF 본문은 저작권 보호를 위해 전체 저장하지 않고, 구조화 신호와 짧은 검증 스니펫만 남깁니다.",
             "- 종목 리포트는 해당 종목의 기존 투자 논거와 비교하고, 산업/시황/투자정보는 시장일지·섹터 발굴·포트폴리오 리스크 스캔의 배경 자료로 활용합니다.",
             "- 최종 투자 판단 전에는 원문과 PDF의 세부 수치, 목표가, 발행일을 확인합니다.",
         ]
@@ -2812,7 +3348,12 @@ def save_naver_research_item(item: dict, settings: Settings, save_result: bool =
         source_url=item.get("url"),
         as_of=item.get("published_at") or current_storage_date().isoformat(),
         confidence=0.8 if item.get("pdf_url") else 0.74,
-        tags=["naver_research", "auto_ingested", f"naver_category:{item.get('category') or 'unknown'}"],
+        tags=[
+            "naver_research",
+            "auto_ingested",
+            "pdf_structured_signals" if (item.get("pdf_analysis") or {}).get("status") == "success" else "pdf_signal_unavailable",
+            f"naver_category:{item.get('category') or 'unknown'}",
+        ],
         run_thesis_impact=target not in SPECIAL_RESEARCH_KEYS,
         save_result=save_result,
     )
@@ -2855,7 +3396,8 @@ def refresh_naver_research_cache(
         }
 
     max_items = limit if limit is not None else settings.naver_research_max_items
-    selected_items = items[: max(int(max_items or 1), 1)]
+    prioritized_items = apply_naver_research_priorities(items, settings)
+    selected_items = prioritized_items[: max(int(max_items or 1), 1)]
     saved: list[dict] = []
     skipped: list[dict] = []
     failed: list[dict] = []
@@ -2866,6 +3408,7 @@ def refresh_naver_research_cache(
             skipped.append({"item_id": item_id, "title": item.get("title"), "reason": "already_ingested"})
             continue
         try:
+            item = enrich_naver_research_item_with_pdf_signals(item, settings)
             response = save_naver_research_item(item, settings, save_result=save_result)
             entry = {
                 **item,
@@ -2874,6 +3417,9 @@ def refresh_naver_research_cache(
                 "source_type": enum_or_str_value(response.captured_item.source_type),
                 "summary": response.captured_item.summary,
                 "storage": response.storage.model_dump(mode="json") if response.storage else None,
+                "thesis_impact_requested": response.captured_item.ticker not in SPECIAL_RESEARCH_KEYS,
+                "linked_impact": compact_naver_linked_impact(response),
+                "impact_summary": build_naver_holding_interest_impact(item),
             }
             entries[item_id] = entry
             saved.append(entry)
@@ -2902,15 +3448,580 @@ def refresh_naver_research_cache(
     }
 
 
+def naver_research_storage_relative_path(entry: dict) -> str:
+    storage = entry.get("storage") if isinstance(entry.get("storage"), dict) else {}
+    for key in ["relative_path", "markdown_relative_path", "file_name"]:
+        value = storage.get(key)
+        if value:
+            return str(value).replace("\\", "/")
+    return ""
+
+
+def normalize_naver_storage_path(vault_dir: Path, relative_path: str) -> Path:
+    normalized = str(relative_path or "").replace("\\", "/").lstrip("/")
+    if normalized.startswith("research_vault/"):
+        return vault_dir.parent / normalized
+    return vault_dir / normalized
+
+
+def normalize_naver_manifest_path(value: object) -> str:
+    normalized = str(value or "").replace("\\", "/").lstrip("/")
+    if normalized.startswith("research_vault/"):
+        return normalized[len("research_vault/") :]
+    return normalized
+
+
+def build_naver_research_cache_status(settings: Settings, cache: dict | None = None) -> dict:
+    cache = cache or read_naver_research_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    manifest_entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    naver_manifest_entries = [
+        entry
+        for entry in manifest_entries
+        if "naver_research" in entry.get("tags", [])
+        or str(entry.get("source_url") or "").startswith(settings.naver_research_base_url)
+    ]
+    manifest_paths = {
+        normalize_naver_manifest_path(entry.get("relative_path") or entry.get("file_name") or "")
+        for entry in naver_manifest_entries
+    }
+    stored_file_count = 0
+    cache_only_count = 0
+    missing_storage_count = 0
+    pdf_extraction_counts: dict[str, int] = {}
+    priority_counts = {"보유/관심": 0, "일반": 0}
+    for entry in entries.values():
+        if not isinstance(entry, dict):
+            continue
+        relative_path = naver_research_storage_relative_path(entry)
+        if relative_path:
+            storage_file = normalize_naver_storage_path(vault_dir, relative_path)
+            if storage_file.exists():
+                stored_file_count += 1
+            else:
+                missing_storage_count += 1
+            if normalize_naver_manifest_path(relative_path) not in manifest_paths:
+                cache_only_count += 1
+        pdf_status = str((entry.get("pdf_analysis") or {}).get("status") or "unknown")
+        pdf_extraction_counts[pdf_status] = pdf_extraction_counts.get(pdf_status, 0) + 1
+        score = int(((entry.get("priority") or {}).get("score") or 0))
+        if score > 0:
+            priority_counts["보유/관심"] += 1
+        else:
+            priority_counts["일반"] += 1
+    return {
+        "active_rag_count": len(naver_manifest_entries),
+        "stored_file_count": stored_file_count,
+        "cache_only_count": cache_only_count,
+        "missing_storage_count": missing_storage_count,
+        "pdf_extraction_counts": pdf_extraction_counts,
+        "priority_counts": priority_counts,
+    }
+
+
+def naver_research_cache_lookup_indexes(entries: dict) -> dict[str, dict[str, str]]:
+    indexes = {"item_id": {}, "url": {}, "pdf_url": {}, "nid": {}}
+    for key, entry in entries.items():
+        if not isinstance(entry, dict):
+            continue
+        indexes["item_id"][str(entry.get("item_id") or key)] = key
+        for field in ["url", "pdf_url", "nid"]:
+            value = clean_naver_research_text(entry.get(field))
+            if value:
+                indexes[field][value] = key
+    return indexes
+
+
+def find_existing_naver_cache_key(item: dict, indexes: dict[str, dict[str, str]]) -> str | None:
+    for field in ["item_id", "url", "pdf_url", "nid"]:
+        value = clean_naver_research_text(item.get(field))
+        if value and value in indexes.get(field, {}):
+            return indexes[field][value]
+    return None
+
+
+def naver_pdf_analysis_needs_backfill(entry: dict) -> bool:
+    analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
+    status = str(analysis.get("status") or "unknown").lower()
+    return status in {"", "unknown", "failed"} and bool(entry.get("pdf_url"))
+
+
+def compact_naver_linked_impact(response: ResearchCaptureResponse) -> dict | None:
+    impact = response.linked_impact
+    if not impact:
+        return None
+    return {
+        "overall_impact": enum_or_str_value(impact.overall_impact),
+        "summary": impact.summary,
+        "source_count": impact.source_count,
+        "next_actions": impact.next_actions[:5],
+        "saved_to_research_memory": impact.saved_to_research_memory,
+    }
+
+
+def repair_naver_research_cache(
+    settings: Settings,
+    pdf_backfill_limit: int = 20,
+    refresh_metadata: bool = True,
+    save_result: bool = False,
+    archive_duplicates: bool = False,
+) -> dict:
+    cache = read_naver_research_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    entries = dict(entries)
+    metadata_updated: list[dict] = []
+    backfilled: list[dict] = []
+    failed: list[dict] = []
+    warnings: list[str] = []
+    if refresh_metadata:
+        try:
+            fresh_items, parser_warnings = fetch_naver_research_items(settings)
+            warnings.extend(parser_warnings)
+            fresh_items = apply_naver_research_priorities(fresh_items, settings)
+            indexes = naver_research_cache_lookup_indexes(entries)
+            for item in fresh_items:
+                existing_key = find_existing_naver_cache_key(item, indexes)
+                if not existing_key:
+                    continue
+                previous = entries.get(existing_key) if isinstance(entries.get(existing_key), dict) else {}
+                updated = {
+                    **previous,
+                    **{
+                        key: item.get(key)
+                        for key in [
+                            "source",
+                            "category",
+                            "scope",
+                            "title",
+                            "broker",
+                            "published_at",
+                            "url",
+                            "pdf_url",
+                            "ticker",
+                            "company_name",
+                            "nid",
+                            "priority",
+                        ]
+                    },
+                    "clean_item_id": item.get("item_id"),
+                    "impact_summary": build_naver_holding_interest_impact(item),
+                    "metadata_repaired_at": current_storage_timestamp(),
+                }
+                entries[existing_key] = updated
+                metadata_updated.append(
+                    {
+                        "item_id": existing_key,
+                        "title": updated.get("title"),
+                        "published_at": updated.get("published_at"),
+                    }
+                )
+        except Exception as exc:
+            warnings.append(f"네이버 리서치 메타데이터 재조회 실패: {provider_error_message(exc, settings)}")
+
+    candidates = [
+        (key, entry)
+        for key, entry in entries.items()
+        if isinstance(entry, dict) and naver_pdf_analysis_needs_backfill(entry)
+    ]
+    candidates.sort(
+        key=lambda pair: (
+            int(((pair[1].get("priority") or {}).get("score") or 0)),
+            str(pair[1].get("published_at") or ""),
+        ),
+        reverse=True,
+    )
+    for key, entry in candidates[: max(int(pdf_backfill_limit or 0), 0)]:
+        try:
+            enriched = enrich_naver_research_item_with_pdf_signals(entry, settings)
+            enriched["pdf_analysis_backfilled_at"] = current_storage_timestamp()
+            enriched["impact_summary"] = build_naver_holding_interest_impact(enriched)
+            entries[key] = {**entry, **enriched}
+            if save_result:
+                response = save_naver_research_item(enriched, settings, save_result=True)
+                entries[key]["storage"] = response.storage.model_dump(mode="json") if response.storage else entry.get("storage")
+                entries[key]["linked_impact"] = compact_naver_linked_impact(response)
+            backfilled.append(
+                {
+                    "item_id": key,
+                    "title": entries[key].get("title"),
+                    "pdf_status": (entries[key].get("pdf_analysis") or {}).get("status"),
+                    "target_price": (entries[key].get("pdf_analysis") or {}).get("target_price"),
+                    "investment_opinion": (entries[key].get("pdf_analysis") or {}).get("investment_opinion"),
+                }
+            )
+        except Exception as exc:
+            failed.append({"item_id": key, "title": entry.get("title"), "error": str(exc)})
+
+    repaired_cache = {
+        **cache,
+        "updated_at": current_storage_timestamp(),
+        "repair_updated_at": current_storage_timestamp(),
+        "source_url": settings.naver_research_list_url,
+        "entries": entries,
+    }
+    write_naver_research_cache(settings, repaired_cache)
+    status = build_naver_research_cache_status(settings, repaired_cache)
+    duplicate_archive = archive_duplicate_naver_market_close_reports(
+        settings,
+        apply=archive_duplicates,
+    )
+    return {
+        "status": "success" if not failed else "partial_success",
+        "module": "naver_research_cache_repair",
+        "metadata_updated_count": len(metadata_updated),
+        "pdf_backfilled_count": len(backfilled),
+        "failed_count": len(failed),
+        "duplicate_archive": duplicate_archive,
+        "metadata_updated": metadata_updated[:30],
+        "pdf_backfilled": backfilled,
+        "failed": failed,
+        "warnings": warnings,
+        "cache_status": status,
+        "cache_path": str(naver_research_cache_path(settings)),
+    }
+
+
+def naver_market_close_duplicate_key(entry: dict, payload: dict) -> tuple[str, str, str]:
+    journal_entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else {}
+    source_processing = (
+        payload.get("source_url_processing")
+        if isinstance(payload.get("source_url_processing"), dict)
+        else {}
+    )
+    market = clean_naver_research_text(
+        journal_entry.get("market") or entry.get("market") or "KR"
+    ).upper()
+    session_date = clean_naver_research_text(
+        journal_entry.get("session_date")
+        or entry.get("session_date")
+        or entry.get("date")
+    )
+    source_url = clean_naver_research_text(
+        source_processing.get("url")
+        or payload.get("source_url")
+        or entry.get("source_url")
+    )
+    raw_summary = clean_naver_research_text(journal_entry.get("raw_summary") or "")
+    first_summary_line = raw_summary.splitlines()[0] if raw_summary else ""
+    source_title = clean_naver_research_text(
+        source_processing.get("title")
+        or payload.get("source_title")
+        or first_summary_line
+    )
+    source_identity = source_url or source_title or clean_naver_research_text(entry.get("summary"))
+    return market, session_date, source_identity
+
+
+def naver_market_close_entry_sort_key(item: dict) -> tuple[str, str]:
+    entry = item.get("entry") if isinstance(item.get("entry"), dict) else {}
+    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    return (
+        str(entry.get("created_at") or entry.get("updated_at") or payload.get("updated_at") or entry.get("date") or ""),
+        str(entry.get("file_name") or ""),
+    )
+
+
+def archive_duplicate_naver_market_close_reports(settings: Settings, apply: bool = False) -> dict:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    groups: dict[tuple[str, str, str], list[dict]] = {}
+    skipped = 0
+    for entry in read_manifest(vault_dir):
+        if str(entry.get("type") or "") != "market-close-review":
+            continue
+        if is_archived_research_entry(entry):
+            continue
+        ticker = str(entry.get("ticker") or "")
+        if ticker not in {"MARKET-KR", "MARKET"}:
+            continue
+        payload = read_manifest_entry_payload(entry, vault_dir)
+        key = naver_market_close_duplicate_key(entry, payload)
+        if not key[1] or not key[2]:
+            skipped += 1
+            continue
+        groups.setdefault(key, []).append({"entry": entry, "payload": payload})
+
+    duplicate_groups: list[dict] = []
+    duplicate_candidates: list[dict] = []
+    archived_files: list[dict] = []
+    errors: list[dict] = []
+    for key, items in groups.items():
+        if len(items) <= 1:
+            continue
+        ordered = sorted(items, key=naver_market_close_entry_sort_key, reverse=True)
+        keep = ordered[0]["entry"]
+        candidates = [item["entry"] for item in ordered[1:]]
+        duplicate_groups.append(
+            {
+                "market": key[0],
+                "session_date": key[1],
+                "source": key[2],
+                "keep_file": keep.get("file_name"),
+                "duplicate_count": len(candidates),
+                "duplicates": [candidate.get("file_name") for candidate in candidates],
+            }
+        )
+        duplicate_candidates.extend(candidates)
+
+    if apply:
+        reason = "네이버 국내 마감 시황 자동 반영 중복 후보라 삭제하지 않고 소프트 보관 처리했습니다."
+        for candidate in duplicate_candidates:
+            try:
+                result = set_research_memory_archive_status(
+                    str(candidate.get("ticker") or ""),
+                    str(candidate.get("file_name") or ""),
+                    ResearchMemoryArchiveRequest(archived=True, reason=reason),
+                    vault_dir,
+                )
+                archived_files.append(
+                    {
+                        "file_name": result.file_name,
+                        "relative_path": result.relative_path,
+                        "archived_at": result.archived_at,
+                    }
+                )
+            except Exception as exc:
+                errors.append({"file_name": candidate.get("file_name"), "error": str(exc)})
+
+    return {
+        "status": "success" if not errors else "partial_success",
+        "policy": "soft_archive",
+        "applied": apply,
+        "duplicate_group_count": len(duplicate_groups),
+        "duplicate_candidate_count": len(duplicate_candidates),
+        "archived_count": len(archived_files),
+        "skipped_count": skipped,
+        "groups": duplicate_groups,
+        "archived_files": archived_files,
+        "errors": errors,
+    }
+
+
+def is_naver_domestic_market_close_report(item: dict) -> bool:
+    category = clean_naver_research_text(item.get("category"))
+    title = clean_naver_research_text(item.get("title"))
+    text = f"{category} {title}"
+    return category == "시황정보" and all(keyword in text for keyword in ["국내", "마감"])
+
+
+def naver_market_close_report_summary(item: dict) -> str:
+    pdf_analysis = item.get("pdf_analysis") if isinstance(item.get("pdf_analysis"), dict) else {}
+    snippets = pdf_analysis.get("snippets") if isinstance(pdf_analysis.get("snippets"), list) else []
+    lines = [
+        "[네이버 금융 시황정보 자동 반영]",
+        f"제목: {item.get('title') or '제목 미확인'}",
+        f"증권사: {item.get('broker') or '미확인'}",
+        f"발행일: {item.get('published_at') or '미확인'}",
+        f"원문 링크: {item.get('url') or '미확인'}",
+        f"PDF 링크: {item.get('pdf_url') or '미확인'}",
+        f"PDF 분석 상태: {pdf_analysis.get('status') or '미확인'}",
+        "",
+        "활용 정책:",
+        "- 네이버 금융 시황정보의 원문 전체는 저장하지 않고 메타데이터, 구조화 신호, 짧은 검증 스니펫만 시장일지에 반영합니다.",
+        "- 이 시장일지는 보유/관심종목 리스크 스캔과 다음 장 체크포인트 생성에 활용합니다.",
+    ]
+    if snippets:
+        lines.extend(["", "검증 스니펫:"])
+        lines.extend(f"- {snippet}" for snippet in snippets[:5])
+    return "\n".join(lines)
+
+
+def latest_naver_domestic_market_close_report(settings: Settings) -> dict | None:
+    cache = read_naver_research_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    candidates = [
+        item
+        for item in entries.values()
+        if isinstance(item, dict) and is_naver_domestic_market_close_report(item)
+    ]
+    if not candidates:
+        return None
+    return sorted(
+        candidates,
+        key=lambda item: (str(item.get("published_at") or ""), str(item.get("ingested_at") or "")),
+        reverse=True,
+    )[0]
+
+
+def refresh_naver_market_close_journal(settings: Settings, force: bool = False) -> dict:
+    item = latest_naver_domestic_market_close_report(settings)
+    if not item or force:
+        refresh_naver_research_cache(settings, force=force, save_result=True)
+        item = latest_naver_domestic_market_close_report(settings)
+    if not item:
+        return {
+            "status": "not_found",
+            "module": "naver_market_close_journal",
+            "message": "네이버 시황정보에서 국내 마감 시황 리포트를 찾지 못했습니다.",
+            "state_path": str(naver_market_close_journal_state_path(settings)),
+        }
+    published_at = normalize_naver_research_date(item.get("published_at")) or current_storage_date().isoformat()
+    state_path = naver_market_close_journal_state_path(settings)
+    previous_state = read_json_store(state_path, {})
+    if (
+        not force
+        and previous_state.get("source_item_id") == item.get("item_id")
+        and previous_state.get("source_published_at") == item.get("published_at")
+    ):
+        return {
+            "status": "skipped",
+            "module": "naver_market_close_journal",
+            "message": "이미 같은 네이버 국내 마감 시황 리포트를 시장일지에 반영했습니다.",
+            "source": item,
+            "previous_state": previous_state,
+            "state_path": str(state_path),
+        }
+    source_metadata = naver_market_close_source_metadata(item.get("title"))
+    request = MarketCloseReviewRequest(
+        market="KR",
+        session_date=published_at,
+        raw_summary=naver_market_close_report_summary(item),
+        **source_metadata,
+        save_result=True,
+    )
+    response = save_market_close_review(request, settings)
+    state = {
+        "status": "success",
+        "last_run_at": current_storage_timestamp(),
+        "last_run_date": current_storage_date().isoformat(),
+        "source_item_id": item.get("item_id"),
+        "source_title": item.get("title"),
+        "source_origin": source_metadata["source_origin"],
+        "source_provider": source_metadata["source_provider"],
+        "source_published_at": item.get("published_at"),
+        "market_journal_entry_id": response.entry.entry_id,
+        "storage": response.storage.model_dump(mode="json") if response.storage else None,
+    }
+    write_json_store(state_path, state)
+    return {
+        "status": "success",
+        "module": "naver_market_close_journal",
+        "source": item,
+        "entry": response.entry.model_dump(mode="json"),
+        "storage": response.storage.model_dump(mode="json") if response.storage else None,
+        "state_path": str(state_path),
+    }
+
+
+def parse_naver_market_close_journal_time(settings: Settings) -> tuple[int, int]:
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.naver_market_close_journal_time or "08:30").strip())
+    if not match:
+        return 8, 30
+    hour = min(max(int(match.group(1)), 0), 23)
+    minute = min(max(int(match.group(2)), 0), 59)
+    return hour, minute
+
+
+def should_run_naver_market_close_journal(settings: Settings, now: datetime | None = None) -> bool:
+    if not settings.naver_market_close_auto_journal:
+        return False
+    now = now or current_storage_datetime()
+    hour, minute = parse_naver_market_close_journal_time(settings)
+    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
+        return False
+    state = read_json_store(naver_market_close_journal_state_path(settings), {})
+    return state.get("last_run_date") != now.date().isoformat()
+
+
+def read_naver_market_close_task_log(settings: Settings, limit: int = 20) -> dict:
+    log_path = naver_market_close_journal_task_log_path(settings)
+    normalized_limit = min(max(int(limit or 20), 1), 100)
+    if not log_path.exists():
+        return {
+            "exists": False,
+            "path": str(log_path),
+            "line_count": 0,
+            "recent_lines": [],
+            "last_line": "",
+        }
+    try:
+        with log_path.open("r", encoding="utf-8-sig", errors="replace") as handle:
+            lines = [line.rstrip("\r\n") for line in handle if line.strip()]
+    except Exception as exc:
+        return {
+            "exists": True,
+            "path": str(log_path),
+            "line_count": 0,
+            "recent_lines": [],
+            "last_line": "",
+            "read_error": provider_error_message(exc, settings),
+        }
+    recent_lines = lines[-normalized_limit:]
+    return {
+        "exists": True,
+        "path": str(log_path),
+        "line_count": len(lines),
+        "recent_lines": [repair_mojibake_log_line(line) for line in recent_lines],
+        "last_line": repair_mojibake_log_line(recent_lines[-1]) if recent_lines else "",
+    }
+
+
+def repair_mojibake_log_line(value: str) -> str:
+    text = str(value or "")
+    if not text or not any(marker in text for marker in ("Ã", "Â", "ì", "ê", "ë", "í", "\x80", "\x81")):
+        return text
+    try:
+        repaired = text.encode("latin-1").decode("utf-8")
+    except Exception:
+        return text
+    hangul_count = sum(1 for char in repaired if "\uac00" <= char <= "\ud7a3")
+    original_hangul_count = sum(1 for char in text if "\uac00" <= char <= "\ud7a3")
+    return repaired if hangul_count > original_hangul_count else text
+
+
+def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20) -> dict:
+    state = read_json_store(naver_market_close_journal_state_path(settings), {})
+    log = read_naver_market_close_task_log(settings, limit=log_limit)
+    duplicate_archive = archive_duplicate_naver_market_close_reports(settings, apply=False)
+    enabled = bool(settings.naver_market_close_auto_journal)
+    if not enabled:
+        next_action = "자동 반영이 비활성화되어 있습니다."
+        status = "disabled"
+    elif duplicate_archive.get("duplicate_candidate_count"):
+        next_action = "중복 시장일지 후보가 있어 네이버 리서치 정리로 soft_archive 처리하세요."
+        status = "needs_attention"
+    elif not log.get("exists"):
+        next_action = "작업 스케줄러 첫 실행 전입니다. 08:30 이후 로그가 생성되는지 확인하세요."
+        status = "waiting_for_first_run"
+    elif should_run_naver_market_close_journal(settings):
+        next_action = "오늘 자동 반영이 아직 실행되지 않았습니다. 스케줄러 또는 수동 반영을 확인하세요."
+        status = "due"
+    else:
+        next_action = "최근 상태가 정상입니다. 같은 원본은 중복 저장하지 않습니다."
+        status = "ok"
+    return {
+        "status": status,
+        "module": "naver_market_close_task_status",
+        "enabled": enabled,
+        "daily_time": settings.naver_market_close_journal_time,
+        "scheduled_task_name": "InvestmentResearchOS-NaverMarketCloseJournal-0830",
+        "due_now": should_run_naver_market_close_journal(settings) if enabled else False,
+        "state": state,
+        "task_log": log,
+        "duplicate_archive": duplicate_archive,
+        "next_action": next_action,
+    }
+
+
 _NAVER_RESEARCH_SCHEDULER_STARTED = False
 
 
 def naver_research_scheduler_loop() -> None:
     settings = get_settings()
-    interval_seconds = max(settings.naver_research_refresh_hours, 1) * 3600
+    interval_seconds = min(max(settings.naver_research_refresh_hours, 1) * 3600, 15 * 60)
+    last_refresh_at: datetime | None = None
     while True:
         try:
-            refresh_naver_research_cache(settings)
+            now = current_storage_datetime()
+            refresh_due = (
+                last_refresh_at is None
+                or now - last_refresh_at >= timedelta(hours=max(settings.naver_research_refresh_hours, 1))
+            )
+            if refresh_due:
+                refresh_naver_research_cache(settings)
+                last_refresh_at = now
+            if should_run_naver_market_close_journal(settings, now):
+                refresh_naver_market_close_journal(settings)
         except Exception:
             pass
         threading.Event().wait(interval_seconds)
@@ -3264,7 +4375,7 @@ def resolve_ticker_symbol_from_alias(
         if alias_symbol:
             return alias_symbol
 
-    if requested_symbol in registry:
+    if requested_symbol in registry and is_plausible_equity_symbol(requested_symbol):
         return requested_symbol
 
     alias_symbol = lookup_alias()
@@ -3305,6 +4416,20 @@ def verify_ticker_symbol(
     raw_requested = str(ticker or "").strip()
     requested_symbol = normalize_ticker(raw_requested)
     official_symbol = resolve_ticker_symbol_from_alias(raw_requested, settings)
+    if requested_symbol and not any("\uac00" <= char <= "\ud7a3" for char in raw_requested):
+        if not is_plausible_equity_symbol(official_symbol):
+            return TickerVerificationResponse(
+                status="failed",
+                requested_symbol=raw_requested or requested_symbol,
+                official_symbol=official_symbol,
+                company_name="",
+                exchange="",
+                country="",
+                asset_type="unknown",
+                verified=False,
+                verification_source="symbol_sanity_check",
+                message="6자리 국내 종목코드가 아닌 숫자-only 값은 공식 종목 티커로 사용하지 않습니다.",
+            )
     profile = verified_profile_for_ticker(official_symbol, settings)
     requested_label = raw_requested if raw_requested and raw_requested != requested_symbol else requested_symbol
     if profile:
@@ -3349,6 +4474,20 @@ def verify_ticker_symbol_local_cached(
     raw_requested = str(ticker or "").strip()
     requested_symbol = normalize_ticker(raw_requested)
     official_symbol = resolve_ticker_symbol_from_alias(raw_requested, active_settings)
+    if requested_symbol and not any("\uac00" <= char <= "\ud7a3" for char in raw_requested):
+        if not is_plausible_equity_symbol(official_symbol):
+            return TickerVerificationResponse(
+                status="failed",
+                requested_symbol=raw_requested or requested_symbol,
+                official_symbol=official_symbol,
+                company_name="",
+                exchange="",
+                country="",
+                asset_type="unknown",
+                verified=False,
+                verification_source="symbol_sanity_check",
+                message="6자리 국내 종목코드가 아닌 숫자-only 값은 공식 종목 티커로 사용하지 않습니다.",
+            )
     profile = OFFICIAL_TICKER_REGISTRY.get(official_symbol) or read_dynamic_ticker_registry(
         active_settings
     ).get(official_symbol)
@@ -4008,6 +5147,10 @@ def portfolio_store_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "user_portfolios.json"
 
 
+def portfolio_sync_history_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "portfolio_sync_history.jsonl"
+
+
 def interest_list_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "interest_list.json"
 
@@ -4022,6 +5165,14 @@ def latest_daily_brief_path(settings: Settings) -> Path:
 
 def news_inbox_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "news_inbox.json"
+
+
+def kcif_reports_watch_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "kcif_reports_watch.json"
+
+
+def regional_business_sources_watch_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "regional_business_sources_watch.json"
 
 
 def research_automation_status_path(settings: Settings) -> Path:
@@ -4065,11 +5216,6 @@ def append_jsonl(path: Path, payload: dict) -> None:
         file.write("\n")
 
 
-def portfolio_store_key(portfolio_name: str) -> str:
-    normalized = sub(r"[^\w-]+", "-", portfolio_name.strip().upper()).strip("-_")
-    return normalized or "DEFAULT"
-
-
 def research_memory_store_key(value: str) -> str:
     raw = str(value or "").strip()
     ascii_key = normalize_ticker(raw)
@@ -4090,10 +5236,6 @@ def read_portfolio_store(settings: Settings) -> dict:
     return read_json_store(portfolio_store_path(settings), {"portfolios": {}})
 
 
-def portfolio_name_sort_key(portfolio: SavedPortfolio) -> str:
-    return portfolio.portfolio_name.casefold()
-
-
 def parse_float_or_none(value: object) -> float | None:
     if value is None:
         return None
@@ -4104,6 +5246,148 @@ def parse_float_or_none(value: object) -> float | None:
         return float(text)
     except (TypeError, ValueError):
         return None
+
+
+def parse_kiwoom_number(value: object) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "").replace("%", "")
+    if not text:
+        return None
+    sign = -1 if text.startswith("-") else 1
+    text = text.lstrip("+-")
+    try:
+        return sign * float(text)
+    except ValueError:
+        return None
+
+
+def clean_kiwoom_ticker(value: object) -> str:
+    return normalize_ticker(str(value or "").strip().lstrip("A"))
+
+
+def normalize_kiwoom_balance_item(item: dict) -> dict:
+    purchase_amount = parse_kiwoom_number(item.get("pur_amt"))
+    evaluation_amount = parse_kiwoom_number(item.get("evlt_amt"))
+    evaluation_profit_loss = parse_kiwoom_number(item.get("evltv_prft"))
+    profit_rate = parse_kiwoom_number(item.get("prft_rt"))
+    return {
+        "ticker": clean_kiwoom_ticker(item.get("stk_cd")),
+        "name": str(item.get("stk_nm") or "").strip() or None,
+        "quantity": parse_kiwoom_number(item.get("rmnd_qty")),
+        "available_quantity": parse_kiwoom_number(item.get("trde_able_qty")),
+        "average_cost": parse_kiwoom_number(item.get("pur_pric")),
+        "current_price": parse_kiwoom_number(item.get("cur_prc")),
+        "cost_basis": purchase_amount,
+        "market_value": evaluation_amount,
+        "unrealized_gain": evaluation_profit_loss,
+        "unrealized_return": (profit_rate / 100) if profit_rate is not None else None,
+        "currency": "KRW",
+    }
+
+
+def fetch_kiwoom_domestic_balance(settings: Settings) -> dict:
+    token = KiwoomAuthClient(settings).issue_access_token()
+    response = httpx.post(
+        f"{settings.kiwoom_api_base_url}/api/dostk/acnt",
+        headers={
+            "Content-Type": "application/json;charset=UTF-8",
+            "authorization": f"Bearer {token.token}",
+            "cont-yn": "N",
+            "next-key": "",
+            "api-id": "kt00018",
+        },
+        json={
+            "qry_tp": "1",
+            "dmst_stex_tp": "KRX",
+        },
+        timeout=10,
+        trust_env=False,
+    )
+    response.raise_for_status()
+    raw = response.json()
+    items = [
+        normalize_kiwoom_balance_item(item)
+        for item in raw.get("acnt_evlt_remn_indv_tot", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "status": "success",
+        "api_id": "kt00018",
+        "holdings": [item for item in items if item.get("ticker") and item.get("ticker") != "UNKNOWN"],
+        "summary": {
+            "total_purchase_amount": parse_kiwoom_number(raw.get("tot_pur_amt")),
+            "total_evaluation_amount": parse_kiwoom_number(raw.get("tot_evlt_amt")),
+            "total_evaluation_profit_loss": parse_kiwoom_number(raw.get("tot_evlt_pl")),
+            "total_profit_rate": parse_kiwoom_number(raw.get("tot_prft_rt")),
+        },
+        "return_code": raw.get("return_code"),
+        "return_msg": raw.get("return_msg"),
+    }
+
+
+def sync_saved_portfolio_with_kiwoom_domestic(
+    portfolio: SavedPortfolio,
+    balance: dict,
+    settings: Settings,
+) -> tuple[SavedPortfolio, dict]:
+    checked_at = current_storage_timestamp()
+    synced_portfolio, sync_summary = apply_kiwoom_domestic_balance_to_portfolio(
+        portfolio,
+        balance,
+        checked_at=checked_at,
+    )
+    synced_portfolio = sort_and_weight_portfolio(synced_portfolio, settings, refresh_prices=False)
+    return synced_portfolio, sync_summary
+
+
+def append_portfolio_sync_history(
+    settings: Settings,
+    *,
+    portfolio_name: str,
+    summary: dict,
+) -> None:
+    append_jsonl(
+        portfolio_sync_history_path(settings),
+        {
+            "created_at": current_storage_timestamp(),
+            "portfolio_name": portfolio_name,
+            "broker": summary.get("broker"),
+            "scope": summary.get("scope"),
+            "mode": summary.get("mode"),
+            "checked_at": summary.get("checked_at"),
+            "updated_count": summary.get("updated_count", 0),
+            "confirmed_count": summary.get("confirmed_count", 0),
+            "skipped_count": summary.get("skipped_count", 0),
+            "changes": summary.get("changes", []),
+            "skipped": summary.get("skipped", []),
+            "message": summary.get("message"),
+        },
+    )
+
+
+def read_portfolio_sync_history(settings: Settings, *, limit: int = 10) -> list[dict]:
+    path = portfolio_sync_history_path(settings)
+    if not path.exists():
+        return []
+    records: list[dict] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in reversed(lines):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            records.append(payload)
+        if len(records) >= limit:
+            break
+    return records
 
 
 def latest_provider_price(
@@ -4210,7 +5494,55 @@ def enrich_portfolio_holding(
             and cost_basis > 0
         ):
             unrealized_return = unrealized_gain / cost_basis
-        return holding.model_copy(
+        return protect_manual_or_overseas_holding_sync_state(
+            holding.model_copy(
+                update={
+                    "ticker": ticker,
+                    "currency": currency,
+                    "current_price": round(current_price, 4)
+                    if current_price is not None
+                    else None,
+                    "market_value": round(market_value, 2)
+                    if market_value is not None
+                    else None,
+                    "cost_basis": round(cost_basis, 2)
+                    if cost_basis is not None
+                    else None,
+                    "unrealized_gain": round(unrealized_gain, 2)
+                    if unrealized_gain is not None
+                    else None,
+                    "unrealized_return": round(unrealized_return, 4)
+                    if unrealized_return is not None
+                    else None,
+                    "price_source": price_source,
+                    "price_refresh_status": price_refresh_status,
+                    "price_checked_at": price_checked_at,
+                }
+            ),
+            checked_at=price_checked_at,
+        )
+
+    fx_rate = infer_holding_fx_rate(holding)
+    cost_basis = None
+    market_value = holding.market_value
+    if holding.quantity is not None and holding.average_cost is not None:
+        cost_basis = holding.quantity * holding.average_cost * fx_rate
+    if holding.quantity is not None and current_price is not None:
+        market_value = holding.quantity * current_price * fx_rate
+
+    unrealized_gain = None
+    unrealized_return = None
+    if (
+        cost_basis is not None
+        and cost_basis > 0
+        and market_value is not None
+        and current_price is not None
+    ):
+        unrealized_gain = market_value - cost_basis
+        unrealized_return = unrealized_gain / cost_basis
+
+    return protect_manual_or_overseas_holding_sync_state(
+        holding.model_copy(
             update={
                 "ticker": ticker,
                 "currency": currency,
@@ -4233,50 +5565,8 @@ def enrich_portfolio_holding(
                 "price_refresh_status": price_refresh_status,
                 "price_checked_at": price_checked_at,
             }
-        )
-
-    fx_rate = infer_holding_fx_rate(holding)
-    cost_basis = None
-    market_value = holding.market_value
-    if holding.quantity is not None and holding.average_cost is not None:
-        cost_basis = holding.quantity * holding.average_cost * fx_rate
-    if holding.quantity is not None and current_price is not None:
-        market_value = holding.quantity * current_price * fx_rate
-
-    unrealized_gain = None
-    unrealized_return = None
-    if (
-        cost_basis is not None
-        and cost_basis > 0
-        and market_value is not None
-        and current_price is not None
-    ):
-        unrealized_gain = market_value - cost_basis
-        unrealized_return = unrealized_gain / cost_basis
-
-    return holding.model_copy(
-        update={
-            "ticker": ticker,
-            "currency": currency,
-            "current_price": round(current_price, 4)
-            if current_price is not None
-            else None,
-            "market_value": round(market_value, 2)
-            if market_value is not None
-            else None,
-            "cost_basis": round(cost_basis, 2)
-            if cost_basis is not None
-            else None,
-            "unrealized_gain": round(unrealized_gain, 2)
-            if unrealized_gain is not None
-            else None,
-            "unrealized_return": round(unrealized_return, 4)
-            if unrealized_return is not None
-            else None,
-            "price_source": price_source,
-            "price_refresh_status": price_refresh_status,
-            "price_checked_at": price_checked_at,
-        }
+        ),
+        checked_at=price_checked_at,
     )
 
 
@@ -4346,15 +5636,26 @@ def normalize_saved_portfolio(
                     update={
                         "ticker": ticker,
                         "name": holding.name or profile.get("company_name"),
+                        "currency": portfolio_currency_for_ticker(ticker, holding.currency),
                         "sector": holding.sector
                         if holding.sector and holding.sector != "Unknown"
                         else profile.get("sector", "Unknown"),
                     }
                 )
             else:
-                holding = holding.model_copy(update={"ticker": ticker})
+                holding = holding.model_copy(
+                    update={
+                        "ticker": ticker,
+                        "currency": portfolio_currency_for_ticker(ticker, holding.currency),
+                    }
+                )
         else:
-            holding = holding.model_copy(update={"ticker": ticker or "CASH"})
+            holding = holding.model_copy(
+                update={
+                    "ticker": ticker or "CASH",
+                    "currency": portfolio_currency_for_ticker(ticker or "CASH", holding.currency),
+                }
+            )
         normalized_holdings.append(holding)
 
     saved = SavedPortfolio(
@@ -4436,7 +5737,40 @@ def normalize_interest_list(
         raw_lookup = str(item.ticker or "").strip()
         if not raw_lookup:
             continue
-        if item.verification and item.verification.verified and item.verification.official_symbol:
+        verification_values = []
+        if item.verification:
+            verification_values.extend(
+                [
+                    item.verification.requested_symbol,
+                    item.verification.company_name,
+                    item.verification.official_symbol,
+                ]
+            )
+        lookup_candidates = [raw_lookup, *verification_values]
+        resolved_symbol = ""
+        resolved_verification: TickerVerificationResponse | None = None
+        for candidate in lookup_candidates:
+            candidate_text = str(candidate or "").strip()
+            if not candidate_text:
+                continue
+            candidate_symbol, candidate_verification = local_interest_verification_response(
+                candidate_text,
+                settings,
+            )
+            if candidate_verification.verified and normalize_ticker(candidate_symbol) not in {"UNKNOWN", "CASH"}:
+                resolved_symbol = normalize_ticker(candidate_symbol)
+                resolved_verification = candidate_verification
+                break
+        has_valid_existing_verification = (
+            item.verification
+            and item.verification.verified
+            and item.verification.official_symbol
+            and normalize_ticker(item.verification.official_symbol) not in {"UNKNOWN", "CASH"}
+        )
+        if resolved_verification:
+            official_symbol = resolved_symbol
+            verification = resolved_verification
+        elif has_valid_existing_verification:
             official_symbol = normalize_ticker(item.verification.official_symbol)
             verification = item.verification
         else:
@@ -4480,7 +5814,7 @@ def normalize_interest_list(
         normalized_sectors.append(
             InterestSector(
                 name=name,
-                region=item.region or "US",
+                region=item.region or "KR",
                 priority=item.priority or "medium",
                 thesis=item.thesis,
                 notes=item.notes,
@@ -5020,7 +6354,7 @@ def render_naver_chart_analysis_markdown(analysis: dict, storage_date: date) -> 
 
     return "\n".join(
         [
-            f"# {analysis.get('company_name')}({analysis.get('ticker')}) 네이버 차트 분석",
+            f"# {analysis.get('company_name') or '회사명 확인 필요'} 네이버 차트 분석",
             "",
             f"- 저장일: {storage_date.isoformat()}",
             f"- 기준일: {analysis.get('as_of')}",
@@ -5560,6 +6894,9 @@ def build_market_close_entry(
         market=market,
         session_date=session_date,
         raw_summary=raw_summary,
+        source_origin=str(request.source_origin or "manual").strip() or "manual",
+        source_provider=str(request.source_provider or "").strip() or None,
+        source_title=str(request.source_title or "").strip() or None,
         sentiment=sentiment,
         risk_level=risk_level,
         regime=regime,
@@ -6184,109 +7521,19 @@ def collect_analysis_input_data(
     return [*profile_points, *provider_data, *provided_data]
 
 
-def is_archived_research_entry(manifest_entry: dict | None, json_payload: dict | None = None) -> bool:
-    payload = json_payload if isinstance(json_payload, dict) else {}
-    entry = manifest_entry if isinstance(manifest_entry, dict) else {}
-    return bool(
-        entry.get("is_deleted")
-        or payload.get("is_deleted")
-        or str(entry.get("status") or "").lower() == "archived"
-        or str(payload.get("status") or "").lower() == "archived"
-    )
-
-
-def research_memory_legacy_policy(
-    *,
-    ticker: str | None = None,
-    legacy_file_count: int = 0,
-    archived_file_count: int = 0,
-) -> dict:
-    return {
-        "policy": "soft_archive",
-        "hard_delete_allowed": False,
-        "default_visibility": "collapsed_legacy_group",
-        "archive_behavior": "레거시 파일은 삭제하지 않고 status=archived, is_deleted=true 메타데이터로 기본 목록과 자동 주입 후보에서 숨깁니다.",
-        "restore_behavior": "보관 문서 포함 옵션으로 다시 표시하고 개별 파일을 복원할 수 있습니다.",
-        "decision": "공식 인증 리포트를 새 판단 기준으로 사용하고, 레거시 파일은 원문 추적/감사용으로 보관합니다.",
-        "ticker": ticker,
-        "legacy_file_count": legacy_file_count,
-        "archived_file_count": archived_file_count,
-        "recommended_action": (
-            "공식 인증 파일이 충분하면 레거시 일괄 보관을 실행하세요."
-            if legacy_file_count
-            else "현재 기본 목록에 보관할 레거시 파일이 없습니다."
-        ),
-    }
-
-
-def research_memory_entry_quality_metadata(
-    manifest_entry: dict | None,
-    json_payload: dict | None = None,
-    captured_item: dict | None = None,
-) -> dict:
-    payload = json_payload if isinstance(json_payload, dict) else {}
-    entry = manifest_entry if isinstance(manifest_entry, dict) else {}
-    captured = captured_item if isinstance(captured_item, dict) else {}
-    if not captured and isinstance(payload.get("captured_item"), dict):
-        captured = payload["captured_item"]
-
-    tag_values: list[str] = []
-    for candidate in (entry.get("tags"), captured.get("tags"), payload.get("tags")):
-        if isinstance(candidate, list):
-            tag_values.extend(str(tag).strip() for tag in candidate if str(tag or "").strip())
-    tags = list(dict.fromkeys(tag_values))
-
-    source_url_processing = (
-        entry.get("source_url_processing")
-        if isinstance(entry.get("source_url_processing"), dict)
-        else payload.get("source_url_processing")
-        if isinstance(payload.get("source_url_processing"), dict)
-        else None
-    )
-    capture_quality = (
-        entry.get("capture_quality")
-        if isinstance(entry.get("capture_quality"), dict)
-        else payload.get("capture_quality")
-        if isinstance(payload.get("capture_quality"), dict)
-        else None
-    )
-    source_status = str((source_url_processing or {}).get("status") or "")
-    url_text_unavailable = bool(
-        "url_text_unavailable" in tags
-        or source_status in {"fetch_failed", "invalid", "empty_text"}
-    )
-    body_supplemented = bool(
-        "body_supplemented" in tags
-        or payload.get("body_supplemented_at")
-        or (isinstance(payload.get("body_supplements"), list) and payload["body_supplements"])
-        or (isinstance(capture_quality, dict) and capture_quality.get("body_supplemented"))
-    )
-    needs_body_copy = bool(("needs_body_copy" in tags or url_text_unavailable) and not body_supplemented)
-    data_quality_status = (
-        str((capture_quality or {}).get("status") or "").strip()
-        or ("본문 미확보" if url_text_unavailable else None)
-    )
-    return {
-        "tags": tags,
-        "source_url_processing": source_url_processing,
-        "capture_quality": capture_quality,
-        "data_quality_status": data_quality_status,
-        "needs_body_copy": needs_body_copy,
-        "url_text_unavailable": url_text_unavailable,
-    }
-
-
 def list_research_memory_files(
     ticker: str,
     vault_dir: Path,
     include_archived: bool = False,
+    manifest_entries: list[dict] | None = None,
 ) -> list[ResearchMemoryFile]:
     ticker_dir = vault_dir / ticker
     if not ticker_dir.exists():
         return []
+    manifest_source = manifest_entries if manifest_entries is not None else read_manifest(vault_dir)
     manifest_by_file = {
         entry.get("file_name"): entry
-        for entry in read_manifest(vault_dir)
+        for entry in manifest_source
         if entry.get("ticker") == ticker and entry.get("file_name")
     }
 
@@ -6791,6 +8038,724 @@ def read_manifest_entry_payload(entry: dict | None, vault_dir: Path) -> dict:
         except (OSError, json.JSONDecodeError):
             continue
     return {}
+
+
+def manifest_entry_json_path(entry: dict | None, vault_dir: Path) -> Path | None:
+    if not entry:
+        return None
+    candidates: list[Path] = []
+    json_relative_path = entry.get("json_relative_path")
+    if json_relative_path:
+        candidates.append((vault_dir.parent / str(json_relative_path)).resolve())
+    relative_path = entry.get("relative_path")
+    if relative_path:
+        candidates.append((vault_dir.parent / str(relative_path)).with_suffix(".json").resolve())
+    file_name = entry.get("file_name")
+    ticker = entry.get("ticker")
+    if file_name and ticker:
+        candidates.append((vault_dir / str(ticker) / str(file_name)).with_suffix(".json").resolve())
+    root = vault_dir.parent.resolve()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+            if not str(resolved).startswith(str(root)):
+                continue
+            return resolved
+        except OSError:
+            continue
+    return None
+
+
+def manifest_entry_markdown_path(entry: dict | None, vault_dir: Path) -> Path | None:
+    if not entry:
+        return None
+    candidates: list[Path] = []
+    relative_path = entry.get("relative_path")
+    if relative_path:
+        candidates.append((vault_dir.parent / str(relative_path)).resolve())
+    file_name = entry.get("file_name")
+    ticker = entry.get("ticker")
+    if file_name and ticker:
+        candidates.append((vault_dir / str(ticker) / str(file_name)).resolve())
+    root = vault_dir.parent.resolve()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+            if not str(resolved).startswith(str(root)):
+                continue
+            if resolved.exists() and resolved.is_file():
+                return resolved
+        except OSError:
+            continue
+    return None
+
+
+def merge_research_tags(*tag_groups: object) -> list[str]:
+    tags: list[str] = []
+    for group in tag_groups:
+        if not isinstance(group, list):
+            continue
+        for tag in group:
+            cleaned = str(tag or "").strip()
+            if cleaned and cleaned not in tags:
+                tags.append(cleaned)
+    return tags
+
+
+QUALITY_REBUILD_MARKER = "## 품질 재점검/투자 반영 추론"
+OCR_REPROCESS_MARKER = "## OCR 재처리 결과"
+QUALITY_REBUILD_TAGS = {
+    "interest_ticker_matched",
+    "interest_sector_matched",
+    "portfolio_holding_matched",
+}
+
+
+def strip_quality_rebuild_tags(tags: object) -> list[str]:
+    if not isinstance(tags, list):
+        return []
+    cleaned_tags: list[str] = []
+    for tag in tags:
+        cleaned = str(tag or "").strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith("theme:") or cleaned in QUALITY_REBUILD_TAGS:
+            continue
+        if cleaned not in cleaned_tags:
+            cleaned_tags.append(cleaned)
+    return cleaned_tags
+
+
+def strip_quality_scope_from_summary(summary: object) -> str:
+    text = str(summary or "").strip()
+    if not text:
+        return ""
+    markers = [
+        " [투자 반영 추론]",
+        "[투자 반영 추론]",
+        " 관심 범위 후보:",
+        " 관심종목 매칭:",
+        " 관심섹터 매칭:",
+        " 보유종목 매칭:",
+        " 다음 조치:",
+    ]
+    cut_at = len(text)
+    for marker in markers:
+        found = text.find(marker)
+        if found >= 0:
+            cut_at = min(cut_at, found)
+    return text[:cut_at].strip()
+
+
+def strip_quality_rebuild_section_text(markdown_text: str) -> str:
+    if QUALITY_REBUILD_MARKER not in markdown_text:
+        return markdown_text
+    return markdown_text.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
+
+
+def build_quality_rebuild_context(
+    entry: dict,
+    payload: dict,
+    markdown_text: str,
+) -> tuple[str, dict | None, str]:
+    attachment = (
+        entry.get("attachment")
+        if isinstance(entry.get("attachment"), dict)
+        else payload.get("attachment")
+        if isinstance(payload.get("attachment"), dict)
+        else None
+    )
+    attachment_context = ""
+    if attachment:
+        attachment_context = render_attachment_signal_context(
+            attachment.get("file_name") or entry.get("file_name"),
+            attachment.get("mime_type"),
+            attachment.get("text_extraction"),
+        )
+    captured_item = payload.get("captured_item") if isinstance(payload.get("captured_item"), dict) else {}
+    cleaned_markdown_text = strip_quality_rebuild_section_text(markdown_text)
+    pieces = [
+        str(entry.get("title") or ""),
+        strip_quality_scope_from_summary(entry.get("summary")),
+        str(entry.get("source_type") or ""),
+        str(entry.get("type") or ""),
+        str(entry.get("file_name") or ""),
+        " ".join(str(tag) for tag in strip_quality_rebuild_tags(entry.get("tags"))),
+        strip_quality_scope_from_summary(captured_item.get("summary")),
+        " ".join(str(tag) for tag in strip_quality_rebuild_tags(captured_item.get("tags"))),
+        str(payload.get("raw_content") or ""),
+        str(attachment.get("file_name") or "") if attachment else "",
+        str(attachment.get("extracted_text") or "")[:12000] if attachment else "",
+        attachment_context,
+        "\n".join(plain_research_lines(cleaned_markdown_text, limit=80))[:12000],
+    ]
+    return "\n\n".join(piece for piece in pieces if piece), attachment, attachment_context
+
+
+def upsert_quality_rebuild_section(markdown_path: Path | None, section_text: str) -> bool:
+    if not markdown_path:
+        return False
+    try:
+        current = markdown_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    cleaned_section = section_text.strip()
+    if QUALITY_REBUILD_MARKER in current:
+        prefix = current.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
+        next_text = (
+            f"{prefix}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n"
+            if cleaned_section
+            else f"{prefix}\n"
+        )
+        if next_text == current:
+            return False
+        markdown_path.write_text(next_text, encoding="utf-8")
+        return True
+    if not cleaned_section:
+        return False
+    markdown_path.write_text(
+        f"{current.rstrip()}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n",
+        encoding="utf-8",
+    )
+    return True
+
+
+def upsert_markdown_tail_section(
+    markdown_path: Path | None,
+    marker: str,
+    section_text: str,
+) -> bool:
+    if not markdown_path:
+        return False
+    try:
+        current = markdown_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    cleaned_section = section_text.strip()
+    if marker in current:
+        prefix = current.split(marker, 1)[0].rstrip()
+        next_text = (
+            f"{prefix}\n\n{marker}\n\n{cleaned_section}\n"
+            if cleaned_section
+            else f"{prefix}\n"
+        )
+    else:
+        if not cleaned_section:
+            return False
+        next_text = f"{current.rstrip()}\n\n{marker}\n\n{cleaned_section}\n"
+    if next_text == current:
+        return False
+    markdown_path.write_text(next_text, encoding="utf-8")
+    return True
+
+
+def resolve_attachment_file_path(vault_dir: Path, attachment: dict | None) -> Path | None:
+    if not isinstance(attachment, dict):
+        return None
+    relative_path = str(attachment.get("relative_path") or "").strip()
+    if not relative_path:
+        return None
+    root = vault_dir.resolve()
+    candidate = (vault_dir / relative_path).resolve()
+    try:
+        if not str(candidate).startswith(str(root)):
+            return None
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
+def attachment_needs_ocr_reprocess(attachment: dict | None) -> bool:
+    if not isinstance(attachment, dict):
+        return False
+    file_name = attachment.get("file_name")
+    mime_type = attachment.get("mime_type")
+    if not (is_pdf_attachment(file_name, mime_type) or is_image_attachment(file_name, mime_type)):
+        return False
+    profile = attachment.get("extraction_profile") if isinstance(attachment.get("extraction_profile"), dict) else {}
+    note = str(attachment.get("text_extraction") or "")
+    char_count = int(attachment.get("extraction_char_count") or 0)
+    if char_count > 0 and attachment.get("extracted_text"):
+        return False
+    return bool(
+        char_count == 0
+        or profile.get("ocr_status") in {"unavailable", "error", "empty"}
+        or "언어팩" in note
+        or "Tesseract" in note
+        or "OCR" in note.upper()
+    )
+
+
+def apply_attachment_extraction_result(
+    attachment: dict,
+    extraction: dict,
+    *,
+    settings: Settings,
+    raw_context: str = "",
+) -> dict:
+    updated = {**attachment}
+    previous_note = updated.get("text_extraction")
+    extracted_text = extraction.get("extracted_text") or ""
+    extraction_note = extraction.get("text_extraction") or previous_note or "OCR 재처리 결과 없음"
+    fallback_context = render_attachment_signal_context(
+        updated.get("file_name"),
+        updated.get("mime_type"),
+        extraction_note,
+    )
+    investment_scope = infer_capture_investment_scope(
+        "\n\n".join(
+            value
+            for value in [raw_context, fallback_context, extracted_text]
+            if value
+        ),
+        settings,
+    )
+    updated.update(
+        {
+            "text_extraction": extraction_note,
+            "extracted_text": extracted_text,
+            "document_type": extraction.get("document_type") or updated.get("document_type"),
+            "extraction_quality": extraction.get("extraction_quality"),
+            "extraction_char_count": extraction.get("extraction_char_count") or len(extracted_text),
+            "extraction_preview": extraction.get("extraction_preview") or extracted_text[:500],
+            "extraction_warnings": extraction.get("extraction_warnings") or [],
+            "extraction_profile": extraction.get("extraction_profile") or {},
+            "fallback_analysis_context": fallback_context,
+            "inferred_investment_scope": investment_scope,
+            "ocr_reprocessed_at": current_storage_timestamp(),
+            "previous_text_extraction": previous_note,
+        }
+    )
+    return updated
+
+
+def render_ocr_reprocess_section(attachment: dict) -> str:
+    profile = attachment.get("extraction_profile") if isinstance(attachment.get("extraction_profile"), dict) else {}
+    lines = [
+        f"- 파일명: {attachment.get('file_name') or 'n/a'}",
+        f"- 처리 상태: {attachment.get('text_extraction') or 'n/a'}",
+        f"- 추출 본문: {int(attachment.get('extraction_char_count') or 0):,}자",
+        f"- 추출 품질: {attachment.get('extraction_quality') or '미평가'}",
+        f"- OCR 상태: {profile.get('ocr_status') or '미확인'}",
+        f"- OCR 언어: {profile.get('ocr_language') or 'kor+eng'}",
+        f"- 재처리 시각: {attachment.get('ocr_reprocessed_at') or current_storage_timestamp()}",
+    ]
+    preview = str(attachment.get("extraction_preview") or "").strip()
+    if preview:
+        lines.extend(["", "### 추출 미리보기", "", preview[:2000]])
+    warnings = attachment.get("extraction_warnings") or []
+    if warnings:
+        lines.extend(["", "### 경고", *[f"- {warning}" for warning in warnings]])
+    return "\n".join(lines)
+
+
+def reprocess_research_memory_ocr(
+    settings: Settings,
+    *,
+    include_archived: bool = False,
+    save_result: bool = True,
+    limit: int | None = None,
+    force: bool = False,
+) -> dict:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    if limit is not None:
+        entries = entries[: max(0, int(limit))]
+    checked_count = 0
+    candidate_count = 0
+    reprocessed_count = 0
+    skipped_archived_count = 0
+    missing_file_count = 0
+    failed_count = 0
+    rag_updated_count = 0
+    samples: list[dict] = []
+
+    for entry in entries:
+        if not include_archived and is_archived_research_entry(entry):
+            skipped_archived_count += 1
+            continue
+        checked_count += 1
+        attachment = entry.get("attachment") if isinstance(entry.get("attachment"), dict) else None
+        if not attachment:
+            continue
+        if not force and not attachment_needs_ocr_reprocess(attachment):
+            continue
+        if force and not (
+            is_pdf_attachment(attachment.get("file_name"), attachment.get("mime_type"))
+            or is_image_attachment(attachment.get("file_name"), attachment.get("mime_type"))
+        ):
+            continue
+        candidate_count += 1
+        attachment_path = resolve_attachment_file_path(vault_dir, attachment)
+        if not attachment_path:
+            missing_file_count += 1
+            continue
+        try:
+            file_bytes = attachment_path.read_bytes()
+            extraction = extract_uploaded_file_text(
+                file_bytes,
+                attachment.get("file_name"),
+                attachment.get("mime_type"),
+                source_path=attachment_path,
+            )
+        except Exception as exc:
+            failed_count += 1
+            samples.append(
+                {
+                    "ticker": entry.get("ticker"),
+                    "file_name": entry.get("file_name"),
+                    "attachment_file_name": attachment.get("file_name"),
+                    "status": "failed",
+                    "error": str(exc),
+                }
+            )
+            continue
+        payload = read_manifest_entry_payload(entry, vault_dir)
+        raw_context = "\n\n".join(
+            value
+            for value in [
+                str(entry.get("summary") or ""),
+                str(payload.get("raw_content") or "") if isinstance(payload, dict) else "",
+            ]
+            if value
+        )
+        updated_attachment = apply_attachment_extraction_result(
+            attachment,
+            extraction,
+            settings=settings,
+            raw_context=raw_context,
+        )
+        updated_entry = {**entry, "attachment": updated_attachment}
+        updated_entry["ocr_reprocessed_at"] = updated_attachment.get("ocr_reprocessed_at")
+        scope = updated_attachment.get("inferred_investment_scope") or {}
+        if scope:
+            updated_entry["inferred_investment_scope"] = scope
+            updated_entry["tags"] = merge_research_tags(
+                strip_quality_rebuild_tags(updated_entry.get("tags")),
+                scope.get("tags") or [],
+            )
+        capture_quality = updated_entry.get("capture_quality")
+        if isinstance(capture_quality, dict):
+            capture_quality = {**capture_quality}
+            capture_quality["ocr_reprocessed_at"] = updated_attachment.get("ocr_reprocessed_at")
+            capture_quality["ocr_status"] = (updated_attachment.get("extraction_profile") or {}).get("ocr_status")
+            if int(updated_attachment.get("extraction_char_count") or 0) > 0:
+                capture_quality["status"] = "정상"
+                capture_quality["readiness"] = "OCR 본문 반영 완료"
+            updated_entry["capture_quality"] = capture_quality
+
+        if save_result:
+            update_manifest(vault_dir=vault_dir, entry=updated_entry)
+            json_path = manifest_entry_json_path(entry, vault_dir)
+            if json_path and isinstance(payload, dict):
+                updated_payload = {**payload, "attachment": updated_attachment}
+                if isinstance(updated_payload.get("capture_quality"), dict):
+                    payload_quality = {**updated_payload["capture_quality"]}
+                    payload_quality["ocr_reprocessed_at"] = updated_attachment.get("ocr_reprocessed_at")
+                    payload_quality["ocr_status"] = (updated_attachment.get("extraction_profile") or {}).get("ocr_status")
+                    if int(updated_attachment.get("extraction_char_count") or 0) > 0:
+                        payload_quality["status"] = "정상"
+                        payload_quality["readiness"] = "OCR 본문 반영 완료"
+                    updated_payload["capture_quality"] = payload_quality
+                json_path.write_text(
+                    json.dumps(updated_payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            upsert_markdown_tail_section(
+                manifest_entry_markdown_path(entry, vault_dir),
+                OCR_REPROCESS_MARKER,
+                render_ocr_reprocess_section(updated_attachment),
+            )
+            upsert_research_memory_document(
+                vault_dir=vault_dir,
+                entry=updated_entry,
+                full_text="\n\n".join(
+                    value
+                    for value in [
+                        read_manifest_entry_text(vault_dir, updated_entry),
+                        updated_attachment.get("extracted_text"),
+                    ]
+                    if value
+                ),
+            )
+            rag_updated_count += 1
+
+        reprocessed_count += 1
+        if len(samples) < 12:
+            samples.append(
+                {
+                    "ticker": entry.get("ticker"),
+                    "file_name": entry.get("file_name"),
+                    "attachment_file_name": attachment.get("file_name"),
+                    "status": "success",
+                    "text_extraction": updated_attachment.get("text_extraction"),
+                    "char_count": updated_attachment.get("extraction_char_count"),
+                    "ocr_status": (updated_attachment.get("extraction_profile") or {}).get("ocr_status"),
+                }
+            )
+
+    rag_backfill = backfill_research_memory_documents_from_manifest(vault_dir) if save_result else None
+    return {
+        "status": "success",
+        "module": "research_memory_ocr_reprocess",
+        "save_result": save_result,
+        "include_archived": include_archived,
+        "force": force,
+        "checked_count": checked_count,
+        "skipped_archived_count": skipped_archived_count,
+        "candidate_count": candidate_count,
+        "reprocessed_count": reprocessed_count,
+        "missing_file_count": missing_file_count,
+        "failed_count": failed_count,
+        "rag_updated_count": rag_updated_count,
+        "samples": samples,
+        "rag_backfill": rag_backfill,
+        "ocr_runtime": ocr_runtime_status(),
+        "next_actions": [
+            "OCR 본문이 반영된 파일은 저장 데이터/RAG/Dossier에서 다시 활용됩니다.",
+            "본문 0자가 남는 PDF는 원본이 이미지 품질이 낮거나 보안/렌더링 제한이 있을 수 있어 원문 텍스트 입력으로 보강하세요.",
+        ],
+    }
+
+
+def rebuild_research_memory_quality_metadata(
+    settings: Settings,
+    *,
+    include_archived: bool = False,
+    save_result: bool = True,
+    limit: int | None = None,
+) -> dict:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    if limit is not None:
+        entries = entries[: max(0, int(limit))]
+    rebuilt_at = current_storage_timestamp()
+    checked_count = 0
+    enriched_count = 0
+    attachment_count = 0
+    markdown_updated_count = 0
+    sidecar_updated_count = 0
+    rag_updated_count = 0
+    skipped_archived_count = 0
+    cleaned_count = 0
+    themes: dict[str, int] = {}
+    matched_interest_count = 0
+    matched_holding_count = 0
+    samples: list[dict] = []
+
+    for entry in entries:
+        if not include_archived and is_archived_research_entry(entry):
+            skipped_archived_count += 1
+            continue
+        checked_count += 1
+        payload = read_manifest_entry_payload(entry, vault_dir)
+        markdown_text = read_manifest_entry_text(vault_dir, entry)
+        context, attachment, attachment_context = build_quality_rebuild_context(entry, payload, markdown_text)
+        markdown_path = manifest_entry_markdown_path(entry, vault_dir)
+        has_previous_quality = bool(
+            entry.get("quality_rebuild_version")
+            or (isinstance(payload, dict) and payload.get("quality_rebuild_version"))
+            or (QUALITY_REBUILD_MARKER in markdown_text)
+        )
+        scope = infer_capture_investment_scope(context, settings)
+        scope_context = render_investment_scope_context(scope)
+        scope_tags = scope.get("tags") or []
+        has_scope = bool(
+            scope.get("theme_candidates")
+            or scope.get("matched_interest_tickers")
+            or scope.get("matched_interest_sectors")
+            or scope.get("matched_portfolio_holdings")
+        )
+        if attachment:
+            attachment_count += 1
+        if not has_scope and not attachment_context and not has_previous_quality:
+            continue
+
+        updated_entry = {**entry}
+        updated_payload = dict(payload) if isinstance(payload, dict) else {}
+        updated_attachment = dict(attachment) if isinstance(attachment, dict) else None
+        if updated_attachment is not None:
+            updated_attachment["fallback_analysis_context"] = attachment_context
+            if has_scope:
+                updated_attachment["inferred_investment_scope"] = scope
+            else:
+                updated_attachment.pop("inferred_investment_scope", None)
+            updated_entry["attachment"] = updated_attachment
+            updated_payload["attachment"] = updated_attachment
+
+        if has_scope:
+            updated_entry["inferred_investment_scope"] = scope
+        else:
+            updated_entry.pop("inferred_investment_scope", None)
+        updated_entry["quality_rebuilt_at"] = rebuilt_at
+        updated_entry["quality_rebuild_version"] = "attachment-scope-v1"
+        updated_entry["tags"] = merge_research_tags(strip_quality_rebuild_tags(entry.get("tags")), scope_tags)
+        base_summary = strip_quality_scope_from_summary(entry.get("summary"))
+        if has_scope:
+            updated_entry["summary"] = compact_representative_sentence(
+                " ".join(
+                    value
+                    for value in [
+                        base_summary,
+                        scope_context.replace("\n", " "),
+                    ]
+                    if value
+                ),
+                360,
+            )
+        elif has_previous_quality and base_summary:
+            updated_entry["summary"] = base_summary
+
+        capture_quality = updated_entry.get("capture_quality")
+        if isinstance(capture_quality, dict):
+            capture_quality = {**capture_quality}
+            capture_quality["metadata_enriched"] = True
+            capture_quality["quality_rebuilt_at"] = rebuilt_at
+            if capture_quality.get("status") == "실패" and has_scope:
+                capture_quality["status"] = "보강 필요"
+                capture_quality["readiness"] = "본문은 부족하지만 파일명/관심 범위 추론으로 제한 활용 가능"
+            updated_entry["capture_quality"] = capture_quality
+
+        if updated_payload:
+            if has_scope:
+                updated_payload["inferred_investment_scope"] = scope
+            else:
+                updated_payload.pop("inferred_investment_scope", None)
+            updated_payload["quality_rebuilt_at"] = rebuilt_at
+            updated_payload["quality_rebuild_version"] = "attachment-scope-v1"
+            captured_item = updated_payload.get("captured_item")
+            if isinstance(captured_item, dict):
+                captured_item = {**captured_item}
+                captured_item["tags"] = merge_research_tags(
+                    strip_quality_rebuild_tags(captured_item.get("tags")),
+                    scope_tags,
+                )
+                captured_summary = strip_quality_scope_from_summary(captured_item.get("summary"))
+                if has_scope and captured_item.get("summary"):
+                    captured_item["summary"] = compact_representative_sentence(
+                        f"{captured_summary} {scope_context.replace(chr(10), ' ')}",
+                        360,
+                    )
+                elif has_previous_quality and captured_summary:
+                    captured_item["summary"] = captured_summary
+                updated_payload["captured_item"] = captured_item
+            payload_quality = updated_payload.get("capture_quality")
+            if isinstance(payload_quality, dict):
+                payload_quality = {**payload_quality}
+                payload_quality["metadata_enriched"] = True
+                payload_quality["quality_rebuilt_at"] = rebuilt_at
+                updated_payload["capture_quality"] = payload_quality
+
+        if save_result:
+            update_manifest(vault_dir=vault_dir, entry=updated_entry)
+            json_path = manifest_entry_json_path(entry, vault_dir)
+            if json_path and updated_payload:
+                json_path.parent.mkdir(parents=True, exist_ok=True)
+                json_path.write_text(
+                    json.dumps(updated_payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                sidecar_updated_count += 1
+            section_body = "\n".join(
+                value
+                for value in [
+                    attachment_context if attachment_context or has_scope else "",
+                    scope_context,
+                    f"재점검 시각: {rebuilt_at}" if attachment_context or has_scope else "",
+                ]
+                if value
+            )
+            section_changed = upsert_quality_rebuild_section(
+                markdown_path,
+                section_body,
+            )
+            if section_changed:
+                markdown_updated_count += 1
+            markdown_for_rag = read_manifest_entry_text(vault_dir, updated_entry)
+            upsert_research_memory_document(
+                vault_dir=vault_dir,
+                entry=updated_entry,
+                full_text="\n\n".join(
+                    value
+                    for value in [
+                        markdown_for_rag,
+                        attachment_context,
+                        scope_context,
+                    ]
+                    if value
+                ),
+            )
+            rag_updated_count += 1
+
+        if has_scope or attachment_context:
+            enriched_count += 1
+        else:
+            cleaned_count += 1
+        for candidate in scope.get("theme_candidates", []):
+            label = str(candidate.get("label") or candidate.get("key") or "").strip()
+            if label:
+                themes[label] = themes.get(label, 0) + 1
+        if scope.get("matched_interest_tickers") or scope.get("matched_interest_sectors"):
+            matched_interest_count += 1
+        if scope.get("matched_portfolio_holdings"):
+            matched_holding_count += 1
+        if len(samples) < 12:
+            samples.append(
+                {
+                    "ticker": updated_entry.get("ticker"),
+                    "type": updated_entry.get("type"),
+                    "file_name": updated_entry.get("file_name"),
+                    "attachment_file_name": (updated_attachment or {}).get("file_name"),
+                    "theme_candidates": [
+                        item.get("label")
+                        for item in scope.get("theme_candidates", [])
+                        if item.get("label")
+                    ],
+                    "matched_interests": [
+                        item.get("company_name") or item.get("name") or item.get("ticker")
+                        for item in [
+                            *(scope.get("matched_interest_tickers") or []),
+                            *(scope.get("matched_interest_sectors") or []),
+                        ]
+                    ][:8],
+                    "matched_holdings": [
+                        item.get("company_name") or item.get("ticker")
+                        for item in scope.get("matched_portfolio_holdings", [])
+                    ][:8],
+                }
+            )
+
+    rag_backfill = backfill_research_memory_documents_from_manifest(vault_dir) if save_result else None
+    thesis_backfill = backfill_thesis_snapshots_from_manifest(vault_dir) if save_result else None
+
+    return {
+        "status": "success",
+        "module": "research_memory_quality_rebuild",
+        "save_result": save_result,
+        "include_archived": include_archived,
+        "checked_count": checked_count,
+        "skipped_archived_count": skipped_archived_count,
+        "enriched_count": enriched_count,
+        "attachment_count": attachment_count,
+        "markdown_updated_count": markdown_updated_count,
+        "sidecar_updated_count": sidecar_updated_count,
+        "rag_updated_count": rag_updated_count,
+        "cleaned_count": cleaned_count,
+        "matched_interest_count": matched_interest_count,
+        "matched_holding_count": matched_holding_count,
+        "theme_counts": dict(sorted(themes.items(), key=lambda item: item[1], reverse=True)),
+        "samples": samples,
+        "rag_backfill": rag_backfill,
+        "thesis_backfill": thesis_backfill,
+        "rebuilt_at": rebuilt_at,
+        "next_actions": [
+            "저장 데이터 품질 필터에서 본문 보강 필요/OCR 보강 항목을 우선 확인하세요.",
+            "관심 범위 후보가 붙은 문서는 RAG 검색과 Dossier 합성에서 다시 활용됩니다.",
+            "본문 0자 PDF는 OCR 언어팩 연결 후 다시 업로드하거나 본문을 직접 보강하면 정확도가 더 올라갑니다.",
+        ],
+    }
 
 
 def build_latest_dossier_preview(ticker: str, entries: list[dict], vault_dir: Path) -> dict:
@@ -7765,6 +9730,37 @@ def render_sector_opportunity_markdown(
     report: SectorOpportunityResponse,
     storage_date: date,
 ) -> str:
+    company_name_by_ticker: dict[str, str] = {}
+    for universe in SECTOR_COMPANY_UNIVERSE.values():
+        for candidates in universe.values():
+            for ticker, company_name, _thesis in candidates:
+                normalized = normalize_ticker(ticker)
+                if normalized and company_name:
+                    company_name_by_ticker[normalized] = company_name
+    for collection in (
+        report.recommended_companies,
+        report.sector_leaders,
+        report.peer_comparison,
+        report.idea_shortlist,
+    ):
+        for item in collection:
+            normalized = normalize_ticker(item.ticker)
+            if normalized and item.company_name:
+                company_name_by_ticker[normalized] = item.company_name
+    for trend in report.sector_trends:
+        for item in trend.leader_companies:
+            normalized = normalize_ticker(item.ticker)
+            if normalized and item.company_name:
+                company_name_by_ticker[normalized] = item.company_name
+
+    def display_company_name(ticker: str, fallback: str = "") -> str:
+        normalized = normalize_ticker(ticker)
+        return company_name_by_ticker.get(normalized) or fallback or "회사명 확인 필요"
+
+    def display_company_names(tickers: list[str]) -> list[str]:
+        names = [display_company_name(ticker) for ticker in tickers]
+        return list(dict.fromkeys(name for name in names if name))
+
     injected_data = "\n".join(
         f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
         for item in report.injected_data
@@ -7776,7 +9772,7 @@ def render_sector_opportunity_markdown(
                 f"- 투자 논거: {item.rationale}",
                 f"- 매크로 순풍: {', '.join(item.macro_tailwinds) or '없음'}",
                 f"- 주요 리스크: {', '.join(item.key_risks) or '없음'}",
-                f"- 선호 티커: {', '.join(item.preferred_tickers) or '없음'}",
+                f"- 선호 기업: {', '.join(display_company_names(item.preferred_tickers)) or '없음'}",
             ]
         )
         for index, item in enumerate(report.ranked_sectors, start=1)
@@ -7784,7 +9780,7 @@ def render_sector_opportunity_markdown(
     companies = "\n\n".join(
         "\n".join(
             [
-                f"### {item.ticker} - {item.company_name} ({item.fit_score}/100)",
+                f"### {item.company_name or display_company_name(item.ticker)} ({item.fit_score}/100)",
                 f"- 섹터: {item.sector}",
                 f"- 투자 논거: {item.thesis}",
                 f"- 촉매: {', '.join(item.catalysts) or '없음'}",
@@ -7799,7 +9795,7 @@ def render_sector_opportunity_markdown(
                 f"### {index}. {item.sector} - {item.trend_label} ({item.flow_score}/100)",
                 f"- 시장 흐름: {item.market_flow}",
                 f"- 투자 솔루션: {item.investment_solution}",
-                f"- 주도주: {', '.join(item.leader_tickers) or '없음'}",
+                f"- 주도 기업: {', '.join(display_company_names(item.leader_tickers)) or '없음'}",
                 f"- 근거: {', '.join(item.evidence) or '없음'}",
                 f"- 리스크: {', '.join(item.risks) or '없음'}",
                 f"- 체크포인트: {', '.join(item.next_checkpoints) or '없음'}",
@@ -7810,7 +9806,7 @@ def render_sector_opportunity_markdown(
     sector_leaders = "\n\n".join(
         "\n".join(
             [
-                f"### {index}. {item.company_name} ({item.ticker}) - {item.leader_score}/100",
+                f"### {index}. {item.company_name or display_company_name(item.ticker)} - {item.leader_score}/100",
                 f"- 섹터: {item.sector}",
                 f"- 출처: {item.source}",
                 f"- 투자 논거: {item.thesis}",
@@ -7824,12 +9820,12 @@ def render_sector_opportunity_markdown(
     industry_overview = "\n".join(f"- {item}" for item in report.industry_overview)
     competitive_landscape = "\n".join(f"- {item}" for item in report.competitive_landscape)
     peer_comparison = "\n".join(
-        f"- {item.company_name} ({item.ticker}) / {item.role} / 적합도 {item.fit_score}/100: "
+        f"- {item.company_name or display_company_name(item.ticker)} / {item.role} / 적합도 {item.fit_score}/100: "
         f"강점 {', '.join(item.strengths) or '없음'} | 리스크 {', '.join(item.risks) or '없음'}"
         for item in report.peer_comparison
     )
     idea_shortlist = "\n".join(
-        f"- {item.company_name} ({item.ticker}) / {item.sector} / 적합도 {item.fit_score}/100: {item.thesis}"
+        f"- {item.company_name or display_company_name(item.ticker)} / {item.sector} / 적합도 {item.fit_score}/100: {item.thesis}"
         for item in report.idea_shortlist
     )
     analyst_report = "\n\n".join(f"{index}. {item}" for index, item in enumerate(report.analyst_report, start=1))
@@ -7930,6 +9926,9 @@ def render_long_term_compounder_markdown(
             return "제한 없음"
         return f"{value:,.0f} {market_cap_unit}"
 
+    def candidate_name(item: CompounderCandidate) -> str:
+        return item.company_name or item.ticker
+
     injected_data = "\n".join(
         f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
         for item in report.injected_data
@@ -7937,7 +9936,7 @@ def render_long_term_compounder_markdown(
     candidates = "\n\n".join(
         "\n".join(
             [
-                f"### {index}. {item.ticker} - {item.company_name} ({item.compounder_score}/100)",
+                f"### {index}. {candidate_name(item)} ({item.compounder_score}/100)",
                 f"- 섹터: {item.sector}",
                 f"- 시가총액: {market_cap_text(item.market_cap)}",
                 f"- 매출 성장률: {item.revenue_growth:.0%}",
@@ -8083,7 +10082,7 @@ def build_skill_contributions(
             persona=persona,
             role=role,
             summary=(
-                f"{ticker_company_name(ticker)}({ticker})를 {request.investment_period} 관점에서 분석합니다. "
+                f"{ticker_company_name(ticker)}를 {request.investment_period} 관점에서 분석합니다. "
                 f"사업 맥락은 {business_context}이며, 중점 영역은 {focus}입니다. {data_signal}.{institutional_sentence}"
             ),
             key_outputs=[
@@ -8222,7 +10221,7 @@ def build_team_consensus(
     company_name = ticker_company_name(ticker)
     business_context = ticker_business_context(ticker)
     consensus = [
-        f"{company_name}({ticker}) 분석은 {business_context}이라는 사업 특성과 가격/리스크 조건을 분리해서 판단해야 합니다.",
+        f"{company_name} 분석은 {business_context}이라는 사업 특성과 가격/리스크 조건을 분리해서 판단해야 합니다.",
         "장기 투자 논거가 강해도 단기 매매 전략은 시장 구조와 포트폴리오 노출에 따라 달라져야 합니다.",
         "새 데이터가 들어올 때마다 강세/기준/약세 가정과 무효화 조건을 다시 비교해야 합니다.",
     ]
@@ -8239,7 +10238,7 @@ def build_team_conflicts(ticker: str) -> list[TeamConflict]:
     return [
         TeamConflict(
             topic="기업 퀄리티와 밸류에이션의 충돌",
-            positive_view=f"{company_name}({ticker})의 장기 성장성과 경쟁 우위는 프리미엄 밸류에이션을 일부 정당화할 수 있습니다.",
+            positive_view=f"{company_name}의 장기 성장성과 경쟁 우위는 프리미엄 밸류에이션을 일부 정당화할 수 있습니다.",
             caution_view="높은 기대가 이미 가격에 반영되어 있으면 장기 성장이 좋아도 기대수익률이 낮아질 수 있습니다.",
             resolution="밸류에이션 범위를 단일 목표가가 아니라 강세/기준/약세 확률 가중 범위로 관리합니다.",
             severity="high",
@@ -8686,10 +10685,10 @@ def build_earnings_reaction(
             if has_context_input
             else "실제 발표일, 주가 반응, 주요 수치, 경영진 코멘트 또는 가이던스를 입력해야 합니다."
         )
-        headline_assessment = f"{company_name}({ticker}) {request.quarter} 실적 분석은 입력 데이터가 부족해 판정을 보류합니다. {missing_reason}"
+        headline_assessment = f"{company_name} {request.quarter} 실적 분석은 입력 데이터가 부족해 판정을 보류합니다. {missing_reason}"
     else:
         headline_assessment = (
-            f"{company_name}({ticker}) {request.quarter} 실적은 '{reaction_type}'으로 분류됩니다. "
+            f"{company_name} {request.quarter} 실적은 '{reaction_type}'으로 분류됩니다. "
             f"주가 반응은 {request.price_reaction or '미입력'}이며, 가이던스 평가는 '{guidance_assessment}'입니다."
         )
     market_reaction_pattern = (
@@ -8742,7 +10741,7 @@ def build_earnings_reaction(
         thesis_implications = [
             "현재 분기 실적 판정은 보류합니다. 기존 투자 논거를 강화하거나 약화하는 증거로 사용하지 마세요.",
             "직전 실적 주요 내용과 다음 실적 가이던스는 다음 분석을 위한 체크포인트로만 연결합니다.",
-            f"{company_name}({ticker})의 후속 분석은 {', '.join(watch_kpis[:3])} 입력 후 다시 실행하세요.",
+            f"{company_name}의 후속 분석은 {', '.join(watch_kpis[:3])} 입력 후 다시 실행하세요.",
         ]
         next_actions = [
             "현재 분기의 실제 실적 발표일, 주가 반응, 매출/EPS 또는 회사 핵심 KPI 수치를 입력",
@@ -9060,7 +11059,7 @@ def build_sector_trend_analysis(
             ticker = normalize_ticker(holding.ticker)
             if not ticker or ticker == "CASH":
                 continue
-            profile = official_ticker_profile(ticker, settings)
+            profile = official_ticker_profile(ticker, settings, refresh_external=False)
             company_name = holding.name or profile.get("company_name") or ticker
             sector = normalize_sector_trend_bucket(holding.sector or profile.get("sector"), company_name, ticker)
             state = bucket_state(sector)
@@ -9106,7 +11105,7 @@ def build_sector_trend_analysis(
         ticker = normalize_ticker(item.get("ticker"))
         if not ticker:
             continue
-        profile = official_ticker_profile(ticker, settings)
+        profile = official_ticker_profile(ticker, settings, refresh_external=False)
         company_name = item.get("company_name") or profile.get("company_name") or ticker
         sector = normalize_sector_trend_bucket(item.get("sector") or profile.get("sector"), company_name, ticker)
         state = bucket_state(sector)
@@ -9655,13 +11654,13 @@ def build_long_term_compounder_report(
             request.max_market_cap,
         ):
             rejected_reasons.append(
-                f"{item['ticker']}는 시가총액 조건에 맞지 않아 제외했습니다."
+                f"{item['company_name']}는 시가총액 조건에 맞지 않아 제외했습니다."
             )
             continue
         score = compounder_score(item, request.screening_criteria, request.style)
         if score < 68:
             rejected_reasons.append(
-                f"{item['ticker']}는 복리 성장 점수 {score}/100으로 기준선 68점을 넘지 못했습니다."
+                f"{item['company_name']}는 복리 성장 점수 {score}/100으로 기준선 68점을 넘지 못했습니다."
             )
             continue
         candidates.append(
@@ -9705,7 +11704,7 @@ def build_long_term_compounder_report(
             "현재 입력 조건에서는 정량 기준으로 제외된 주요 후보가 없습니다."
         ]
     if candidates:
-        top_names = ", ".join(f"{item.ticker}({item.compounder_score}/100)" for item in candidates[:3])
+        top_names = ", ".join(f"{item.company_name}({item.compounder_score}/100)" for item in candidates[:3])
         summary = (
             f"{request.region} {request.sector} 범위에서 {request.style} 기준 장기 복리 후보는 "
             f"{top_names} 순으로 선별되었습니다."
@@ -9752,7 +11751,7 @@ def build_investment_thesis(
     company_name = ticker_company_name(ticker)
     return InvestmentThesis(
         ticker=ticker,
-        thesis=f"{company_name}({ticker})의 투자 논거는 {focus}가 지속적으로 확인되는지에 달려 있습니다.",
+        thesis=f"{company_name}의 투자 논거는 {focus}가 지속적으로 확인되는지에 달려 있습니다.",
         time_horizon=request.investment_period,
         bull_triggers=[
             "성장률 또는 가이던스가 시장 기대를 상회",
@@ -11064,6 +13063,8 @@ def build_storage_duplicate_review(
         if isinstance(entry, dict)
         and str(entry.get("type") or "").strip().lower() in DOSSIER_ALLOWED_REPORT_TYPES
     ]
+    archived_input_count = sum(1 for entry in manifest_entries if is_archived_research_entry(entry))
+    manifest_entries = [entry for entry in manifest_entries if not is_archived_research_entry(entry)]
     manifest_entries.sort(key=manifest_entry_sort_key, reverse=True)
 
     representatives: list[dict] = []
@@ -11173,6 +13174,7 @@ def build_storage_duplicate_review(
         "module": "storage_duplicate_review",
         "as_of": current_storage_timestamp(),
         "checked_count": checked_count,
+        "skipped_archived_count": archived_input_count,
         "unique_representative_count": len(representatives),
         "duplicate_group_count": len(groups),
         "duplicate_entry_count": duplicate_entry_count,
@@ -11283,7 +13285,7 @@ def build_dossier_payload(ticker: str, vault_dir: Path) -> dict:
         mode="bear",
     )
     thesis_summary = (
-        f"{company_name}({ticker})의 최신 Dossier는 {len(entries)}개 고유 저장 자료를 바탕으로 "
+        f"{company_name}의 최신 Dossier는 {len(entries)}개 고유 저장 자료를 바탕으로 "
         f"{profile_focus}를 핵심 투자 논거로 추적합니다. "
         f"강세는 {bull_summary} / 약세는 {bear_summary}입니다."
     )
@@ -11335,7 +13337,7 @@ date: {payload["date"]}
 module: research_dossier_synthesis
 ---
 
-# {payload["company_name"]}({payload["ticker"]}) Dossier 합성 보고서
+# {payload["company_name"]} Dossier 합성 보고서
 
 ## 요약
 
@@ -11473,8 +13475,9 @@ def synthesize_and_save_dossier(
 def dossier_candidate_tickers(settings: Settings, limit: int = 30) -> list[str]:
     tickers: set[str] = set()
     for ticker in portfolio_calendar_tickers(settings):
-        if ticker and ticker not in SPECIAL_RESEARCH_KEYS and ticker != "CASH":
-            tickers.add(normalize_ticker(ticker))
+        normalized = normalize_ticker(ticker)
+        if is_dossier_refresh_ticker_key(normalized):
+            tickers.add(normalized)
     try:
         interest_payload = read_interest_list(settings)
         for item in interest_payload.get("tickers", []):
@@ -11486,11 +13489,30 @@ def dossier_candidate_tickers(settings: Settings, limit: int = 30) -> list[str]:
         vault_dir = resolve_vault_dir(settings.research_vault_dir)
         for entry in read_manifest(vault_dir):
             ticker = normalize_ticker(str(entry.get("ticker") or ""))
-            if ticker and ticker not in SPECIAL_RESEARCH_KEYS and ticker != "UNKNOWN":
+            if is_dossier_refresh_ticker_key(ticker):
                 tickers.add(ticker)
     except Exception:
         pass
     return sorted(tickers)[: max(1, min(limit, 100))]
+
+
+def is_dossier_refresh_ticker_key(ticker: str) -> bool:
+    normalized = normalize_ticker(ticker)
+    if (
+        not normalized
+        or normalized in SPECIAL_RESEARCH_KEYS
+        or normalized in {"UNKNOWN", "CASH"}
+        or normalized.startswith("COMPOUNDER-")
+        or "-" in normalized
+    ):
+        return False
+    if fullmatch(r"\d{6}", normalized):
+        return True
+    if fullmatch(r"[A-Z]{1,5}", normalized):
+        return True
+    if fullmatch(r"[A-Z0-9]{6}", normalized) and search(r"[A-Z]", normalized):
+        return True
+    return False
 
 
 def dossier_refresh_candidates_from_duplicate_review(settings: Settings, limit: int = 8) -> list[dict]:
@@ -11502,10 +13524,8 @@ def dossier_refresh_candidates_from_duplicate_review(settings: Settings, limit: 
     for item in review.get("ticker_breakdown") or []:
         ticker = normalize_ticker(str(item.get("ticker") or ""))
         if (
-            not ticker
+            not is_dossier_refresh_ticker_key(ticker)
             or ticker in seen
-            or ticker in SPECIAL_RESEARCH_KEYS
-            or ticker in {"UNKNOWN", "CASH"}
         ):
             continue
         seen.add(ticker)
@@ -12070,6 +14090,7 @@ def build_research_automation_feature_status(settings: Settings) -> dict:
         "last_run": last_run,
         "duplicate_review": duplicate_review if isinstance(duplicate_review, dict) else {},
         "dossier_refresh_queue": refresh_queue if isinstance(refresh_queue, dict) else {},
+        "storage_quality_dashboard": build_storage_quality_dashboard(settings),
     }
     try:
         payload["dashboard_digest"] = build_research_automation_dashboard_digest(settings)
@@ -12128,6 +14149,14 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         target_rag_count,
     )
     news_payload = build_news_inbox_payload(settings, limit=10)
+    kcif_watch = read_kcif_reports_watch(settings)
+    kcif_related_count = 0
+    kcif_due = True
+    if isinstance(kcif_watch, dict) and kcif_watch:
+        kcif_related_count = len(kcif_watch.get("related_reports") or [])
+        kcif_due = should_refresh_kcif_cache(kcif_watch)
+    dart_cache = read_dart_filing_cache(settings)
+    dart_daily = dart_daily_check_status(dart_cache, settings)
     news_items = news_payload.get("items") if isinstance(news_payload, dict) else []
     if not isinstance(news_items, list):
         news_items = []
@@ -12159,6 +14188,14 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         next_actions.append(f"뉴스 인박스 미승격 자료 {news_unpromoted_count}개를 논거/시장일지 반영 여부로 분류하세요.")
     if news_quality_issue_count:
         next_actions.append(f"뉴스 본문 추출 품질 경고 {news_quality_issue_count}개를 원문 링크나 본문 붙여넣기로 보강하세요.")
+    if kcif_due:
+        next_actions.append("KCIF 매크로 보고서 목록 일일 점검이 필요합니다.")
+    elif kcif_related_count:
+        next_actions.append(f"KCIF 관련 매크로 보고서 {kcif_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요.")
+    if dart_daily.get("due"):
+        next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")
+    elif dart_daily.get("failure_count"):
+        next_actions.append(f"DART 공시 점검 실패 {dart_daily.get('failure_count')}개 종목을 확인하세요.")
     if not next_actions:
         next_actions.append("보유·관심 대상의 새 자료를 수집하고 Dossier/일일 브리핑에 반영할 준비가 되어 있습니다.")
 
@@ -12187,6 +14224,12 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         "news_inbox_count": len(news_items),
         "news_unpromoted_count": news_unpromoted_count,
         "news_quality_issue_count": news_quality_issue_count,
+        "kcif_related_count": kcif_related_count,
+        "kcif_due": bool(kcif_due),
+        "kcif_last_checked_at": kcif_watch.get("updated_at") if isinstance(kcif_watch, dict) else None,
+        "dart_daily_check": dart_daily,
+        "dart_due": bool(dart_daily.get("due")),
+        "dart_failure_count": int(dart_daily.get("failure_count") or 0),
         "last_run_at": status.get("updated_at"),
         "priority_targets": [
             {
@@ -12232,6 +14275,20 @@ def run_research_automation_pipeline(
             )
         except Exception as exc:
             source_results.append({"source": name, "status": "failed", "error": str(exc)})
+    try:
+        source_results.append(
+            {
+                "source": "kcif_reports_watch",
+                "result": build_kcif_reports_watch_payload(
+                    settings,
+                    limit=min(limit, 30),
+                    force=False,
+                    save_result=save_result,
+                ),
+            }
+        )
+    except Exception as exc:
+        source_results.append({"source": "kcif_reports_watch", "status": "failed", "error": str(exc)})
 
     rag_backfill = backfill_research_memory_documents_from_manifest(vault_dir)
     dossier_results: list[dict] = []
@@ -12347,7 +14404,114 @@ def news_scope_label(scope: str) -> str:
     }.get(scope, scope)
 
 
-def build_news_inbox_payload(settings: Settings, limit: int = 30) -> dict:
+NEWS_SAFE_TEXT_LIMIT = 900
+NEWS_SAFE_PREVIEW_LIMIT = 420
+
+
+def compact_news_safe_text(value: object, max_length: int = NEWS_SAFE_TEXT_LIMIT) -> str:
+    text = sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length].rstrip()}..."
+
+
+def news_item_safe_view(item: dict) -> dict:
+    safe_item = dict(item or {})
+    source_url_processing = sanitize_news_source_url_processing(safe_item.get("source_url_processing"))
+    if source_url_processing:
+        safe_item["source_url_processing"] = source_url_processing
+    raw_content = compact_news_safe_text(safe_item.get("safe_user_note") or safe_item.get("raw_content"))
+    safe_item["safe_user_note"] = raw_content
+    safe_item["raw_content"] = raw_content or "\n".join(
+        value for value in [
+            f"뉴스 URL: {safe_item.get('source_url')}" if safe_item.get("source_url") else "",
+            "본문 저장 정책: 원문 본문은 저장하지 않고 URL, 제목, 짧은 분석 메모만 보관합니다.",
+        ] if value
+    )
+    safe_item["summary"] = compact_news_safe_text(
+        safe_item.get("summary") or safe_item["raw_content"],
+        NEWS_SAFE_PREVIEW_LIMIT,
+    )
+    safe_item["document_preview"] = compact_news_safe_text(
+        safe_item.get("document_preview")
+        or source_url_processing.get("short_excerpt")
+        or source_url_processing.get("note"),
+        NEWS_SAFE_PREVIEW_LIMIT,
+    )
+    safe_item["copyright_policy"] = {
+        "mode": "metadata_only",
+        "full_article_body_stored": False,
+        "allowed_fields": ["title", "source_url", "source_title", "short_user_note", "short_excerpt", "analysis_summary"],
+        "message": "뉴스/기사 원문 본문은 저장하지 않고 링크와 짧은 자체 분석 메모만 보관합니다.",
+    }
+    tags = sorted(set([*(safe_item.get("tags") or []), "copyright_safe_metadata"]))
+    if safe_item.get("source_url"):
+        tags.append("url_only")
+    safe_item["tags"] = sorted(set(tags))
+    return safe_item
+
+
+def sanitize_news_source_url_processing(url_info: dict | None) -> dict:
+    if not isinstance(url_info, dict):
+        return {}
+    sanitized = {
+        key: value
+        for key, value in url_info.items()
+        if key not in {"text", "original_text", "analysis_text", "raw_text"}
+    }
+    text = compact_news_safe_text(url_info.get("text"), NEWS_SAFE_PREVIEW_LIMIT)
+    if text:
+        sanitized["short_excerpt"] = text
+        sanitized["full_text_stored"] = False
+    return sanitized
+
+
+def news_filter_key(item: dict) -> set[str]:
+    tags = {str(tag).lower() for tag in (item.get("tags") or [])}
+    quality_status = str((item.get("capture_quality") or {}).get("status") or "")
+    review_status = str(item.get("review_status") or "")
+    keys = {"all"}
+    if not item.get("promoted"):
+        keys.add("unpromoted")
+    if item.get("source_url") and ("url_only" in tags or not str(item.get("safe_user_note") or "").strip()):
+        keys.add("url_only")
+    if "needs_body_copy" in tags or "url_text_unavailable" in tags or quality_status in {"보강 필요", "실패"}:
+        keys.add("needs_body")
+    if quality_status not in {None, "", "정상"}:
+        keys.add("quality_issue")
+    if item.get("market_journal_candidate") or "시장일지" in review_status:
+        keys.add("market_journal")
+    if review_status == "보류":
+        keys.add("held")
+    return keys
+
+
+def filter_news_inbox_items(items: list[dict], filter_key: str) -> list[dict]:
+    normalized = str(filter_key or "all").strip().lower()
+    if normalized in {"", "all", "전체"}:
+        return items
+    aliases = {
+        "body_missing": "needs_body",
+        "body": "needs_body",
+        "본문": "needs_body",
+        "url": "url_only",
+        "pending": "unpromoted",
+        "시장일지": "market_journal",
+        "quality": "quality_issue",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return [item for item in items if normalized in news_filter_key(item)]
+
+
+def news_filter_counts(items: list[dict]) -> dict:
+    keys = ["all", "unpromoted", "needs_body", "url_only", "quality_issue", "market_journal", "held"]
+    return {
+        key: sum(1 for item in items if key in news_filter_key(item))
+        for key in keys
+    }
+
+
+def build_news_inbox_payload(settings: Settings, limit: int = 30, filter_key: str = "all") -> dict:
     payload = read_news_inbox(settings)
     items = [
         item
@@ -12359,6 +14523,9 @@ def build_news_inbox_payload(settings: Settings, limit: int = 30) -> dict:
         key=lambda item: item.get("created_at") or item.get("updated_at") or "",
         reverse=True,
     )
+    counts = news_filter_counts(items)
+    filtered_items = filter_news_inbox_items(items, filter_key)
+    safe_filtered_items = [news_item_safe_view(item) for item in filtered_items]
     return {
         "status": "success",
         "module": "news_inbox_list",
@@ -12370,8 +14537,25 @@ def build_news_inbox_payload(settings: Settings, limit: int = 30) -> dict:
             for item in items
             if (item.get("capture_quality") or {}).get("status") not in {None, "정상"}
         ),
-        "items": items[: max(1, min(int(limit or 30), 100))],
+        "filter": filter_key or "all",
+        "filter_counts": counts,
+        "filtered_count": len(filtered_items),
+        "items": safe_filtered_items[: max(1, min(int(limit or 30), 100))],
     }
+
+
+def build_storage_quality_dashboard(settings: Settings) -> dict:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    manifest_entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    news_payload = build_news_inbox_payload(settings, limit=10)
+    duplicate_review = read_json_store(storage_duplicate_review_path(settings), {})
+    duplicate_count = int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0
+    return build_storage_quality_dashboard_payload(
+        manifest_entries=manifest_entries,
+        news_payload=news_payload,
+        duplicate_count=duplicate_count,
+        as_of=current_storage_timestamp(),
+    )
 
 
 def update_news_inbox_item_action(item: dict, action: str) -> dict:
@@ -12453,6 +14637,7 @@ def save_news_item_to_market_journal(
     item: dict,
     settings: Settings,
 ) -> MarketCloseReviewResponse:
+    item = news_item_safe_view(item)
     market = infer_market_from_news_item(item)
     session_date = current_storage_date().isoformat()
     report_date = current_storage_date()
@@ -12577,26 +14762,36 @@ def build_news_item_from_payload(payload: dict, settings: Settings) -> dict:
     raw_content = str(payload.get("raw_content") or payload.get("rawContent") or "").strip()
     source_url = str(payload.get("source_url") or payload.get("sourceUrl") or "").strip()
     url_info = fetch_capture_source_url(source_url) if source_url else {}
-    url_body_context = render_source_url_body(url_info)
+    sanitized_url_info = sanitize_news_source_url_processing(url_info)
     url_title_context = (
         f"웹사이트 제목: {url_info.get('title')}"
         if source_url and url_info.get("title")
         else ""
     )
-    if (
-        source_url
-        and is_unusable_source_url(url_info)
-        and not raw_content
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "뉴스 URL 본문을 추출하지 못했습니다. "
-                f"{url_info.get('note') or '본문 텍스트를 직접 붙여넣으세요.'}"
-            ),
-        )
+    url_text_unavailable = bool(source_url and is_unusable_source_url(url_info))
+    safe_user_note = compact_news_safe_text(raw_content)
+    safe_url_excerpt = compact_news_safe_text(url_info.get("text"), NEWS_SAFE_PREVIEW_LIMIT)
+    url_status_line = (
+        f"웹 추출 상태: {url_info.get('status') or '확인 전'}"
+        if source_url
+        else ""
+    )
+    url_only_line = (
+        "본문 저장 정책: 원문 본문은 저장하지 않고 URL, 제목, 짧은 분석 메모만 보관합니다."
+        if source_url
+        else ""
+    )
     combined_content = "\n\n".join(
-        value for value in [raw_content, url_title_context, url_body_context] if value
+        value
+        for value in [
+            safe_user_note,
+            url_title_context,
+            f"뉴스 URL: {source_url}" if source_url else "",
+            url_status_line,
+            url_only_line,
+            f"본문 보강 안내: {url_info.get('note')}" if url_text_unavailable and url_info.get("note") else "",
+        ]
+        if value
     )
     if not combined_content.strip():
         raise HTTPException(status_code=422, detail="저장할 뉴스 본문 또는 웹사이트 주소가 비어 있습니다.")
@@ -12620,12 +14815,20 @@ def build_news_item_from_payload(payload: dict, settings: Settings) -> dict:
         ["news_inbox", "auto_classified", f"auto_scope:{scope_reason}"],
     )
     if source_url:
-        tags.extend(["url_input", "web_capture"])
+        tags.extend(["url_input", "url_only", "copyright_safe_metadata"])
+    if url_text_unavailable:
+        tags.extend(["url_text_unavailable", "needs_body_copy"])
     quality_status = capture_quality_status(
         raw_content=combined_content,
         attachment_info=None,
-        source_url_processing=url_info if source_url else None,
+        source_url_processing=sanitized_url_info if source_url else None,
     )
+    if source_url and not safe_user_note:
+        quality_status["status"] = "보강 필요"
+        quality_status["readiness"] = "원문 링크와 메타데이터만 있어 투자 판단 전 본문 또는 사용자 메모 보강 필요"
+        quality_status["warnings"] = sorted(
+            set([*(quality_status.get("warnings") or []), "URL-only 저장"])
+        )
     fingerprint = news_item_fingerprint(title, combined_content, source_url_for_storage)
     now = current_storage_timestamp()
     return {
@@ -12639,14 +14842,24 @@ def build_news_item_from_payload(payload: dict, settings: Settings) -> dict:
         "source_url": source_url_for_storage,
         "raw_content": combined_content,
         "summary": summarize_capture(combined_content),
+        "safe_user_note": safe_user_note,
+        "safe_url_excerpt": safe_url_excerpt,
+        "copyright_policy": {
+            "mode": "metadata_only",
+            "full_article_body_stored": False,
+            "allowed_fields": ["title", "source_url", "source_title", "short_user_note", "short_excerpt", "analysis_summary"],
+            "message": "뉴스/기사 원문 본문은 저장하지 않고 링크와 짧은 자체 분석 메모만 보관합니다.",
+        },
         "confidence": float(payload.get("confidence") or 0.78),
         "tags": sorted(set(tags)),
         "capture_quality": quality_status,
-        "source_url_processing": url_info if source_url else None,
+        "source_url_processing": sanitized_url_info if source_url else None,
         "input_preview": capture_preview_text(
             "\n".join(value for value in [raw_content, f"웹사이트 주소: {source_url}" if source_url else ""] if value)
         ),
-        "document_preview": capture_preview_text(url_info.get("text") or url_info.get("note")),
+        "document_preview": capture_preview_text(safe_url_excerpt or url_info.get("note")),
+        "needs_body_copy": bool(url_text_unavailable or (source_url and not safe_user_note)),
+        "url_text_unavailable": url_text_unavailable,
         "created_at": now,
         "updated_at": now,
         "promoted": False,
@@ -12660,9 +14873,20 @@ def build_news_item_from_payload(payload: dict, settings: Settings) -> dict:
 )
 def get_news_inbox(
     limit: int = 30,
+    filter: str = "all",
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    return build_news_inbox_payload(settings, limit=limit)
+    return build_news_inbox_payload(settings, limit=limit, filter_key=filter)
+
+
+@app.get(
+    "/api/v1/storage/quality-dashboard",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_storage_quality_dashboard(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_storage_quality_dashboard(settings)
 
 
 @app.post(
@@ -12735,26 +14959,27 @@ def promote_news_inbox_item(
     item = find_news_inbox_item(items, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="뉴스 인박스에서 해당 항목을 찾지 못했습니다.")
+    safe_item = news_item_safe_view(item)
     scope = str(item.get("scope") or "INBOX").upper()
-    short_title = compact_interest_text(item.get("title") or "뉴스 인박스 자료", 70)
-    title = prefix_capture_title(short_title, scope, item.get("scope_reason") or "news_inbox")
+    short_title = compact_interest_text(safe_item.get("title") or "뉴스 인박스 자료", 70)
+    title = prefix_capture_title(short_title, scope, safe_item.get("scope_reason") or "news_inbox")
     request = ResearchCaptureRequest(
         ticker=scope,
         title=title,
-        raw_content=str(item.get("raw_content") or item.get("summary") or ""),
+        raw_content=str(safe_item.get("raw_content") or safe_item.get("summary") or ""),
         source_type=DataSourceType.NEWS,
-        source_url=item.get("source_url"),
-        confidence=float(item.get("confidence") or 0.78),
-        tags=sorted(set([*(item.get("tags") or []), "news_inbox_promoted"])),
+        source_url=safe_item.get("source_url"),
+        confidence=float(safe_item.get("confidence") or 0.78),
+        tags=sorted(set([*(safe_item.get("tags") or []), "news_inbox_promoted"])),
         run_thesis_impact=scope not in SPECIAL_RESEARCH_KEYS,
         save_result=True,
     )
     response = save_capture_request(
         request,
         settings,
-        source_url_processing=item.get("source_url_processing"),
-        input_preview_override=item.get("input_preview"),
-        document_preview_override=item.get("document_preview"),
+        source_url_processing=safe_item.get("source_url_processing"),
+        input_preview_override=safe_item.get("input_preview"),
+        document_preview_override=safe_item.get("document_preview"),
     )
     item["promoted"] = True
     item["promoted_at"] = current_storage_timestamp()
@@ -13158,6 +15383,311 @@ def build_interest_automation_board(settings: Settings, *, save_result: bool = T
     return payload
 
 
+def read_kcif_reports_watch(settings: Settings) -> dict:
+    return read_json_store(kcif_reports_watch_path(settings), {})
+
+
+def write_kcif_reports_watch(settings: Settings, payload: dict) -> None:
+    write_json_store(kcif_reports_watch_path(settings), payload)
+
+
+def build_kcif_reports_watch_payload(
+    settings: Settings,
+    *,
+    limit: int = 30,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    cache = read_kcif_reports_watch(settings)
+    target_limit = max(1, min(int(limit or 30), 100))
+    should_fetch = force or should_refresh_kcif_cache(cache)
+    source_status = "cached"
+    auth_status = "not_configured"
+    connection_mode = None
+    detail_status = "not_checked"
+    warnings: list[str] = []
+    reports = cache.get("reports", []) if isinstance(cache, dict) else []
+    if should_fetch:
+        try:
+            fetched = fetch_kcif_report_list_with_status(
+                url=settings.kcif_report_list_url,
+                limit=target_limit,
+                timeout=settings.kcif_timeout_seconds,
+                username=settings.kcif_username if settings.kcif_use_login else "",
+                password=settings.kcif_password if settings.kcif_use_login else "",
+                login_proc_url=settings.kcif_login_proc_url,
+            )
+            reports = fetched.get("reports") or []
+            auth_status = fetched.get("auth_status") or auth_status
+            connection_mode = fetched.get("connection_mode")
+            source_status = "refreshed"
+        except Exception as exc:
+            source_status = "cache_fallback" if reports else "failed"
+            warnings.append(f"KCIF 목록 확인 실패: {provider_error_message(exc, settings)}")
+    elif isinstance(cache, dict):
+        auth_status = cache.get("auth_status") or auth_status
+        connection_mode = cache.get("connection_mode")
+        detail_status = cache.get("detail_status") or detail_status
+    portfolio_payload = portfolio_store_response(settings)
+    interest_payload = read_interest_list(settings)
+    targets = build_kcif_watch_targets(portfolio_payload, interest_payload)
+    enriched_reports = match_kcif_reports_to_targets(
+        [item for item in reports if isinstance(item, dict)],
+        targets,
+    )
+    if source_status == "refreshed" and enriched_reports:
+        detail_result = fetch_kcif_detail_analyses(
+            enriched_reports,
+            timeout=settings.kcif_timeout_seconds,
+            username=settings.kcif_username if settings.kcif_use_login else "",
+            password=settings.kcif_password if settings.kcif_use_login else "",
+            login_proc_url=settings.kcif_login_proc_url,
+            max_reports=min(target_limit, 10),
+        )
+        detail_status = detail_result.get("detail_status") or "not_checked"
+        if detail_result.get("auth_status"):
+            auth_status = detail_result.get("auth_status")
+        if detail_result.get("connection_mode"):
+            connection_mode = detail_result.get("connection_mode")
+        detail_analyses = detail_result.get("analyses") or {}
+        if detail_status == "failed":
+            warnings.append("KCIF 상세 화면 확인 실패: 목록 메타데이터만 저장했습니다.")
+        for report in enriched_reports:
+            analysis = detail_analyses.get(str(report.get("report_id")))
+            if not isinstance(analysis, dict):
+                continue
+            report["detail_analysis"] = analysis
+            combined_themes = list(
+                dict.fromkeys(
+                    [
+                        *(report.get("matched_themes") or []),
+                        *(analysis.get("matched_themes") or []),
+                    ]
+                )
+            )
+            report["matched_themes"] = combined_themes[:8]
+            if analysis.get("source_summary_available"):
+                report["relevance_score"] = min(100, int(report.get("relevance_score") or 0) + 6)
+    if settings.kcif_use_login and not (settings.kcif_username and settings.kcif_password):
+        warnings.append("KCIF_LOGIN 설정은 켜져 있지만 KCIF_USERNAME/KCIF_PASSWORD가 없어 비로그인 목록만 확인했습니다.")
+    related_reports = [item for item in enriched_reports if item.get("relevance_score", 0) > 0]
+    top_related = related_reports[: min(target_limit, 30)]
+    payload = {
+        "status": "success" if source_status != "failed" else "warning",
+        "module": "kcif_reports_watch",
+        "source_status": source_status,
+        "auth_status": auth_status,
+        "connection_mode": connection_mode,
+        "detail_status": detail_status,
+        "as_of": current_storage_timestamp(),
+        "source_url": settings.kcif_report_list_url or KCIF_REPORT_LIST_URL,
+        "report_count": len(enriched_reports),
+        "related_count": len(related_reports),
+        "target_count": len(targets),
+        "reports": enriched_reports[:target_limit],
+        "related_reports": top_related,
+        "policy": kcif_copyright_policy(),
+        "warnings": warnings,
+        "next_actions": build_kcif_watch_next_actions(top_related, warnings),
+    }
+    if save_result:
+        write_kcif_reports_watch(
+            settings,
+            {
+                "updated_at": payload["as_of"],
+                "source_status": source_status,
+                "auth_status": auth_status,
+                "connection_mode": connection_mode,
+                "detail_status": detail_status,
+                "reports": enriched_reports[:100],
+                "related_reports": top_related,
+                "policy": payload["policy"],
+                "warnings": warnings,
+            },
+        )
+        payload["storage_path"] = str(kcif_reports_watch_path(settings))
+    return payload
+
+
+def build_kcif_watch_next_actions(related_reports: list[dict], warnings: list[str]) -> list[str]:
+    actions = []
+    if warnings:
+        actions.append("KCIF 목록 확인이 지연되면 이전 캐시를 기준으로 관련성만 먼저 점검하세요.")
+    if related_reports:
+        top = related_reports[0]
+        themes = ", ".join(top.get("matched_themes") or []) or "매크로"
+        actions.append(f"최상위 관련 보고서 `{top.get('title')}`를 {themes} 관점의 시장일지 후보로 검토하세요.")
+        actions.append("필요한 경우 KCIF 사이트에서 사용자가 직접 원문을 열람한 뒤 핵심 메모만 정보입력에 붙여넣으세요.")
+    else:
+        actions.append("새 KCIF 보고서와 보유·관심종목 간 직접 매칭은 낮습니다. 금리/환율/유가 같은 테마만 시장일지에 참고하세요.")
+    actions.append("KCIF 원문/PDF는 자동 저장하지 않고 제목·분류·날짜·링크·자체 관련성 분석만 보관합니다.")
+    return actions[:5]
+
+
+@app.get(
+    "/api/v1/kcif/reports/watch",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_kcif_reports_watch(
+    limit: int = 30,
+    refresh: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_kcif_reports_watch_payload(
+        settings,
+        limit=limit,
+        force=refresh,
+        save_result=save_result,
+    )
+
+
+@app.post(
+    "/api/v1/kcif/reports/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_kcif_reports_watch(
+    limit: int = 30,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_kcif_reports_watch_payload(
+        settings,
+        limit=limit,
+        force=True,
+        save_result=save_result,
+    )
+
+
+def read_regional_business_sources_watch(settings: Settings) -> dict:
+    return read_json_store(regional_business_sources_watch_path(settings), {})
+
+
+def write_regional_business_sources_watch(settings: Settings, payload: dict) -> None:
+    write_json_store(regional_business_sources_watch_path(settings), payload)
+
+
+def build_regional_business_watch_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
+    actions: list[str] = []
+    if warnings:
+        actions.append("EMERiCs/CSF 목록 확인이 지연되면 이전 캐시 기준으로 관련 테마만 먼저 확인하세요.")
+    if related_items:
+        top = related_items[0]
+        provider = top.get("source_provider") or "지역 포털"
+        themes = ", ".join(top.get("matched_themes") or []) or "해외 비즈니스"
+        actions.append(f"{provider} `{top.get('title')}`를 {themes} 관점의 시장일지/매크로 분석 후보로 검토하세요.")
+        actions.append("보유종목과 직접 연결되는 경우 원문 링크를 열어 핵심 투자 메모만 정보입력에 별도로 남기세요.")
+    else:
+        actions.append("보유·관심종목과 직접 매칭되는 EMERiCs/CSF 비즈니스 정보는 아직 낮습니다. 중국/신흥국 테마 변화만 참고하세요.")
+    actions.append("저작권 보호를 위해 원문 본문은 자동 저장하지 않고 제목·기관·발행일·링크·관련성 점수만 보관합니다.")
+    return actions[:5]
+
+
+def build_regional_business_sources_watch_payload(
+    settings: Settings,
+    *,
+    limit: int = 40,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    cache = read_regional_business_sources_watch(settings)
+    target_limit = max(1, min(int(limit or 40), 100))
+    should_fetch = force or should_refresh_regional_business_cache(cache)
+    source_status = "cached"
+    warnings: list[str] = []
+    source_results = cache.get("source_results", []) if isinstance(cache, dict) else []
+    items = cache.get("items", []) if isinstance(cache, dict) else []
+    if not settings.regional_business_sources_enabled:
+        warnings.append("REGIONAL_BUSINESS_SOURCES_ENABLED가 꺼져 있어 캐시만 표시합니다.")
+        source_status = "disabled"
+    elif should_fetch:
+        try:
+            items, fetch_warnings, source_results = fetch_regional_business_sources(
+                limit=target_limit,
+                timeout=settings.regional_business_sources_timeout_seconds,
+                user_agent=settings.regional_business_sources_user_agent,
+            )
+            warnings.extend(fetch_warnings)
+            source_status = "refreshed"
+        except Exception as exc:
+            source_status = "cache_fallback" if items else "failed"
+            warnings.append(f"EMERiCs/CSF 목록 확인 실패: {provider_error_message(exc, settings)}")
+    portfolio_payload = portfolio_store_response(settings)
+    interest_payload = read_interest_list(settings)
+    targets = build_kcif_watch_targets(portfolio_payload, interest_payload)
+    enriched_items = match_regional_business_items_to_targets(
+        [item for item in items if isinstance(item, dict)],
+        targets,
+    )
+    related_items = [item for item in enriched_items if int(item.get("relevance_score") or 0) > 0]
+    top_related = related_items[: min(target_limit, 30)]
+    payload = {
+        "status": "success" if source_status != "failed" else "warning",
+        "module": "regional_business_sources_watch",
+        "source_status": source_status,
+        "as_of": current_storage_timestamp(),
+        "source_results": source_results,
+        "item_count": len(enriched_items),
+        "related_count": len(related_items),
+        "target_count": len(targets),
+        "items": enriched_items[:target_limit],
+        "related_items": top_related,
+        "policy": regional_business_copyright_policy(),
+        "warnings": warnings,
+        "next_actions": build_regional_business_watch_next_actions(top_related, warnings),
+    }
+    if save_result:
+        write_regional_business_sources_watch(
+            settings,
+            {
+                "updated_at": payload["as_of"],
+                "source_status": source_status,
+                "source_results": source_results,
+                "items": enriched_items[:100],
+                "related_items": top_related,
+                "policy": payload["policy"],
+                "warnings": warnings,
+            },
+        )
+        payload["storage_path"] = str(regional_business_sources_watch_path(settings))
+    return payload
+
+
+@app.get(
+    "/api/v1/regional-sources/business/watch",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_regional_business_sources_watch(
+    limit: int = 40,
+    refresh: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_regional_business_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=refresh,
+        save_result=save_result,
+    )
+
+
+@app.post(
+    "/api/v1/regional-sources/business/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_regional_business_sources_watch(
+    limit: int = 40,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_regional_business_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=True,
+        save_result=save_result,
+    )
+
+
 @app.post(
     "/api/v1/source-url/preview",
     dependencies=[Depends(verify_user_token)],
@@ -13172,30 +15702,7 @@ def preview_source_url_body(
     source_url = str(payload.get("source_url") or payload.get("sourceUrl") or "").strip()
     if not source_url:
         raise HTTPException(status_code=422, detail="미리보기할 웹사이트 주소를 입력하세요.")
-    url_info = fetch_capture_source_url(source_url)
-    text = str(url_info.get("text") or "").strip()
-    original_text = str(url_info.get("original_text") or "").strip()
-    preview = clean_web_article_text(text)[:12000]
-    original_preview = clean_web_article_text(original_text)[:12000] if original_text else ""
-    return {
-        "status": "success",
-        "module": "source_url_preview",
-        "source_url_processing": url_info,
-        "source_url": source_url,
-        "final_url": url_info.get("final_url") or source_url,
-        "title": url_info.get("title") or "",
-        "original_title": url_info.get("original_title") or "",
-        "language": url_info.get("language") or "unknown",
-        "translation_status": url_info.get("translation_status") or "unknown",
-        "translation_note": url_info.get("translation_note") or "",
-        "content_type": url_info.get("content_type") or "unknown",
-        "preview": preview,
-        "analysis_preview": preview,
-        "original_preview": original_preview,
-        "context": render_source_url_context(url_info),
-        "text_length": len(preview),
-        "note": url_info.get("note") or "",
-    }
+    return build_source_url_preview_response(source_url)
 
 
 def infer_capture_title(raw_content: str, file_name: str | None = None) -> str:
@@ -13225,6 +15732,282 @@ def prefix_capture_title(title: str, ticker: str, inference: str) -> str:
     if cleaned_title.startswith(label):
         return cleaned_title[:80]
     return f"{label}: {cleaned_title}"[:80]
+
+
+def attachment_keyword_tokens(file_name: str | None) -> list[str]:
+    stem = Path(str(file_name or "")).stem
+    normalized = sub(r"[_\-\[\]{}()（）·,]+", " ", stem)
+    tokens = [
+        token.strip()
+        for token in split(r"\s+", normalized)
+        if len(token.strip()) >= 2
+    ]
+    return list(dict.fromkeys(tokens))[:20]
+
+
+def attachment_theme_candidates(text: str) -> list[dict]:
+    lowered = text.lower()
+    theme_rules = [
+        (
+            "kosdaq",
+            "코스닥",
+            ["코스닥", "kosdaq"],
+            "코스닥 시장 정책/수급/상장기업 전반에 영향을 줄 수 있는 자료입니다.",
+        ),
+        (
+            "small_mid_cap",
+            "중견·중소형주",
+            ["중견", "중소", "중소형", "스몰캡", "small cap", "mid cap"],
+            "중견·중소형 성장주와 유동성 민감 종목을 우선 점검해야 합니다.",
+        ),
+        (
+            "policy",
+            "정책/규제",
+            ["정책", "규제", "정부 정책", "거래소 정책", "제도 개선", "policy", "regulation"],
+            "정책 변화가 밸류에이션, 거래대금, 상장 유지 요건에 미치는 영향을 확인해야 합니다.",
+        ),
+        (
+            "market_structure",
+            "시장 구조/유동성",
+            ["옥석", "가리기", "유동성 공급", "상장폐지", "코스닥 활성화", "시장 구조", "market structure"],
+            "시장 구조 변화와 종목 선별 강도 변화가 투자 논거에 반영될 수 있습니다.",
+        ),
+    ]
+    matches: list[dict] = []
+    for key, label, keywords, implication in theme_rules:
+        matched_keywords = [
+            keyword
+            for keyword in keywords
+            if keyword.lower() in lowered
+        ]
+        if matched_keywords:
+            matches.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "matched_keywords": matched_keywords[:6],
+                    "implication": implication,
+                }
+            )
+    return matches
+
+
+def render_attachment_signal_context(
+    file_name: str | None,
+    mime_type: str | None = None,
+    extraction_note: str | None = None,
+) -> str:
+    tokens = attachment_keyword_tokens(file_name)
+    theme_candidates = attachment_theme_candidates(
+        " ".join(
+            value
+            for value in [file_name or "", mime_type or "", extraction_note or "", " ".join(tokens)]
+            if value
+        )
+    )
+    if not tokens and not theme_candidates:
+        return ""
+    lines = ["[첨부 신호 컨텍스트]"]
+    if file_name:
+        lines.append(f"파일명 기반 제목: {Path(file_name).stem}")
+    if tokens:
+        lines.append(f"파일명 키워드: {', '.join(tokens)}")
+    if theme_candidates:
+        lines.append(
+            "관심 범위 후보: "
+            + ", ".join(candidate["label"] for candidate in theme_candidates)
+        )
+        for candidate in theme_candidates:
+            lines.append(f"- {candidate['label']}: {candidate['implication']}")
+    if extraction_note:
+        lines.append(f"본문 추출 상태: {extraction_note}")
+    return "\n".join(lines)
+
+
+def _context_contains_term(context_upper: str, term: str) -> bool:
+    normalized = str(term or "").strip().upper()
+    if len(normalized) < 2:
+        return False
+    return alias_matches_research_text(normalized, context_upper)
+
+
+def _quality_scope_match_terms(*terms: object, allow_short: bool = False) -> list[str]:
+    blocked = {
+        "KR",
+        "US",
+        "JP",
+        "CN",
+        "ALL",
+        "전체",
+        "한국",
+        "미국",
+        "시장",
+        "증권",
+        "투자",
+        "성장",
+        "정책",
+        "AI",
+    }
+    cleaned_terms: list[str] = []
+    for term in terms:
+        if isinstance(term, list):
+            nested = term
+        elif isinstance(term, tuple):
+            nested = list(term)
+        else:
+            nested = [term]
+        for raw_value in nested:
+            value = str(raw_value or "").strip()
+            normalized = value.upper()
+            if not value or normalized in blocked:
+                continue
+            has_korean = any("\uac00" <= char <= "\ud7a3" for char in value)
+            min_len = 2 if allow_short else 3
+            if len(value) < min_len and not (allow_short and normalized.isalnum()):
+                continue
+            if has_korean and len(value) < min_len:
+                continue
+            if value not in cleaned_terms:
+                cleaned_terms.append(value)
+    return cleaned_terms
+
+
+def infer_capture_investment_scope(context: str, settings: Settings) -> dict:
+    context_upper = context.upper()
+    theme_candidates = attachment_theme_candidates(context)
+    matched_interest_tickers: list[dict] = []
+    matched_interest_sectors: list[dict] = []
+    matched_portfolio_holdings: list[dict] = []
+
+    interest_payload = read_interest_list(settings)
+    for item in interest_payload.get("tickers", []):
+        if not isinstance(item, dict):
+            continue
+        ticker = normalize_ticker(item.get("ticker"))
+        verification = item.get("verification") or {}
+        company_name = str(
+            verification.get("company_name")
+            or item.get("company_name")
+            or ticker_company_name(ticker)
+            or ticker
+        )
+        terms = _quality_scope_match_terms(ticker, company_name, allow_short=True)
+        matched_terms = [
+            str(term)
+            for term in terms
+            if _context_contains_term(context_upper, str(term))
+        ]
+        if matched_terms:
+            matched_interest_tickers.append(
+                {
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "matched_terms": list(dict.fromkeys(matched_terms))[:6],
+                }
+            )
+
+    for item in interest_payload.get("sectors", []):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        terms = _quality_scope_match_terms(name, *(item.get("tags") or []))
+        matched_terms = [
+            str(term)
+            for term in terms
+            if _context_contains_term(context_upper, str(term))
+        ]
+        if matched_terms:
+            matched_interest_sectors.append(
+                {
+                    "name": name,
+                    "region": item.get("region"),
+                    "matched_terms": list(dict.fromkeys(matched_terms))[:6],
+                }
+            )
+
+    portfolio_payload = read_portfolio_store(settings)
+    for portfolio_name, portfolio in (portfolio_payload.get("portfolios") or {}).items():
+        holdings = portfolio.get("holdings") if isinstance(portfolio, dict) else []
+        for holding in holdings or []:
+            if not isinstance(holding, dict):
+                continue
+            ticker = normalize_ticker(holding.get("ticker"))
+            name = str(holding.get("name") or ticker_company_name(ticker) or ticker)
+            terms = _quality_scope_match_terms(ticker, name, allow_short=True)
+            matched_terms = [
+                str(term)
+                for term in terms
+                if _context_contains_term(context_upper, str(term))
+            ]
+            if matched_terms:
+                matched_portfolio_holdings.append(
+                    {
+                        "portfolio_name": portfolio.get("portfolio_name") or portfolio_name,
+                        "ticker": ticker,
+                        "company_name": name,
+                        "matched_terms": list(dict.fromkeys(matched_terms))[:6],
+                    }
+                )
+
+    tags = [f"theme:{candidate['key']}" for candidate in theme_candidates]
+    if matched_interest_tickers:
+        tags.append("interest_ticker_matched")
+    if matched_interest_sectors:
+        tags.append("interest_sector_matched")
+    if matched_portfolio_holdings:
+        tags.append("portfolio_holding_matched")
+
+    if matched_interest_tickers or matched_interest_sectors or matched_portfolio_holdings:
+        action = "매칭된 관심/보유 항목의 기존 투자 논거와 함께 비교하세요."
+    elif theme_candidates:
+        action = "직접 매칭된 종목은 없지만 관심 범위 후보를 저장 데이터/RAG 검색어로 활용하세요."
+    else:
+        action = "본문 보강 후 종목·섹터 매칭을 다시 실행하세요."
+
+    return {
+        "theme_candidates": theme_candidates,
+        "matched_interest_tickers": matched_interest_tickers[:20],
+        "matched_interest_sectors": matched_interest_sectors[:20],
+        "matched_portfolio_holdings": matched_portfolio_holdings[:20],
+        "tags": tags,
+        "next_action": action,
+    }
+
+
+def render_investment_scope_context(scope: dict | None) -> str:
+    if not scope:
+        return ""
+    theme_labels = [
+        str(item.get("label"))
+        for item in scope.get("theme_candidates", [])
+        if item.get("label")
+    ]
+    interest_names = [
+        str(item.get("company_name") or item.get("ticker"))
+        for item in scope.get("matched_interest_tickers", [])
+    ]
+    sector_names = [
+        str(item.get("name"))
+        for item in scope.get("matched_interest_sectors", [])
+        if item.get("name")
+    ]
+    holding_names = [
+        str(item.get("company_name") or item.get("ticker"))
+        for item in scope.get("matched_portfolio_holdings", [])
+    ]
+    if not any([theme_labels, interest_names, sector_names, holding_names]):
+        return ""
+    lines = ["[투자 반영 추론]"]
+    if theme_labels:
+        lines.append(f"관심 범위 후보: {', '.join(theme_labels)}")
+    if interest_names:
+        lines.append(f"관심종목 매칭: {', '.join(list(dict.fromkeys(interest_names))[:10])}")
+    if sector_names:
+        lines.append(f"관심섹터 매칭: {', '.join(list(dict.fromkeys(sector_names))[:10])}")
+    if holding_names:
+        lines.append(f"보유종목 매칭: {', '.join(list(dict.fromkeys(holding_names))[:10])}")
+    lines.append(f"다음 조치: {scope.get('next_action') or '원문 확인 후 투자 논거에 반영'}")
+    return "\n".join(lines)
 
 
 def ticker_aliases(symbol: str, profile: dict) -> set[str]:
@@ -13281,12 +16064,15 @@ def infer_non_ticker_research_key(raw_content: str) -> tuple[str, str]:
                 "congress",
                 "central bank",
                 "정책",
+                "활성화",
                 "규제",
                 "관세",
                 "재정",
                 "보조금",
                 "선거",
                 "정부",
+                "거래소",
+                "제도",
                 "의회",
                 "중앙은행",
                 "한국은행",
@@ -13485,6 +16271,8 @@ def infer_non_ticker_research_key(raw_content: str) -> tuple[str, str]:
         scores["FLOWS"] += 1
     if scores.get("POLICY", 0) and scores.get("MACRO", 0):
         scores["POLICY"] += 1
+    if scores.get("POLICY", 0) and scores.get("MARKET", 0):
+        scores["POLICY"] += 1
     best_key, best_score = max(scores.items(), key=lambda item: item[1])
     if best_score > 0:
         return best_key, str(keyword_groups[best_key]["source_type"])
@@ -13509,6 +16297,8 @@ def infer_capture_ticker(raw_content: str, settings: Settings | None = None) -> 
     for symbol in registry:
         if symbol in special_research_keys:
             continue
+        if not is_plausible_equity_symbol(symbol):
+            continue
         if search(rf"(?<![A-Z0-9])\$?{escape(symbol)}(?![A-Z0-9])", upper_text):
             symbol_hits.append(symbol)
     if len(symbol_hits) == 1:
@@ -13517,6 +16307,8 @@ def infer_capture_ticker(raw_content: str, settings: Settings | None = None) -> 
     alias_hits = []
     for symbol, profile in registry.items():
         if symbol in special_research_keys:
+            continue
+        if not is_plausible_equity_symbol(symbol):
             continue
         aliases = ticker_aliases(symbol, profile) - {symbol.upper()}
         if any(alias_matches_research_text(alias, upper_text) for alias in aliases):
@@ -13582,6 +16374,7 @@ def save_capture_attachment(
     ticker: str,
     storage_date: date,
     request: AutoResearchCaptureRequest,
+    settings: Settings | None = None,
 ) -> dict | None:
     file_bytes = decode_attachment_base64(request.file_content_base64)
     if file_bytes is None:
@@ -13608,6 +16401,27 @@ def save_capture_attachment(
         if request.raw_content.strip()
         else "원본 첨부만 저장됨"
     )
+    fallback_context = render_attachment_signal_context(
+        request.file_name,
+        request.file_mime_type,
+        extraction_note,
+    )
+    investment_scope = (
+        infer_capture_investment_scope(
+            "\n\n".join(
+                value
+                for value in [
+                    request.raw_content,
+                    fallback_context,
+                    extracted_text,
+                ]
+                if value
+            ),
+            settings,
+        )
+        if settings is not None
+        else {}
+    )
 
     relative_path = attachment_path.relative_to(vault_dir).as_posix()
     return {
@@ -13624,6 +16438,8 @@ def save_capture_attachment(
         "extraction_preview": extraction.get("extraction_preview"),
         "extraction_warnings": extraction.get("extraction_warnings") or [],
         "extraction_profile": extraction.get("extraction_profile") or {},
+        "fallback_analysis_context": fallback_context,
+        "inferred_investment_scope": investment_scope,
     }
 
 
@@ -13649,6 +16465,14 @@ def render_attachment_context(request: AutoResearchCaptureRequest, attachment_in
                 f"권장 조치: {extraction_profile.get('next_action') or 'n/a'}",
             ]
         )
+    fallback_context = (attachment_info.get("fallback_analysis_context") or "").strip()
+    if fallback_context:
+        lines.extend(["", fallback_context])
+    investment_scope_context = render_investment_scope_context(
+        attachment_info.get("inferred_investment_scope")
+    )
+    if investment_scope_context:
+        lines.extend(["", investment_scope_context])
     for warning in attachment_info.get("extraction_warnings") or []:
         lines.append(f"추출 경고: {warning}")
     extracted_text = (attachment_info.get("extracted_text") or "").strip()
@@ -13749,11 +16573,12 @@ def build_portfolio_warnings(
     warnings = []
     for holding in holdings:
         if (holding.weight or 0) > request.max_single_position_weight:
+            display_name = holding.name or normalize_ticker(holding.ticker)
             warnings.append(
                 PortfolioRiskWarning(
                     type="single_position",
                     severity="high",
-                    message=f"{holding.ticker} 비중이 {holding.weight:.0%}로 단일 종목 한도 {request.max_single_position_weight:.0%}를 초과했습니다.",
+                    message=f"{display_name} 비중이 {holding.weight:.0%}로 단일 종목 한도 {request.max_single_position_weight:.0%}를 초과했습니다.",
                     action="추가 매수 전 포지션 크기, 일부 축소 계획, 투자 논거 확신도를 재검토하세요.",
                 )
             )
@@ -14043,119 +16868,20 @@ def read_root() -> dict:
     return {"message": "매매일지 백엔드 서버가 정상 작동 중입니다."}
 
 
-def _configured_secret(value: str | None) -> bool:
-    normalized = str(value or "").strip()
-    return bool(normalized and normalized != "********")
-
-
-def credential_storage_policy(settings: Settings) -> dict:
-    return {
-        "runtime_source": "환경변수와 로컬 .env 파일은 python-dotenv로 로드합니다.",
-        "local_secret_files": [
-            ".env",
-            "backend/.env",
-            "mobile_app/.env",
-            "apps/mobile/.env",
-        ],
-        "gitignore_required": True,
-        "frontend_rule": (
-            "EXPO_PUBLIC_* 값은 앱 번들에 노출될 수 있으므로 API Base URL과 개발용 토큰 외의 "
-            "증권사/API 키를 넣지 않습니다."
-        ),
-        "backend_rule": "증권사/API 키, 접근 토큰, SECRET_SALT는 백엔드 환경변수 또는 무시된 로컬 파일에만 둡니다.",
-        "token_cache": {
-            "kis_allow_token_issue": settings.kis_allow_token_issue,
-            "kis_access_token_file_configured": bool(settings.kis_access_token_file.strip()),
-            "kis_token_cache_file": settings.kis_token_cache_file,
-            "default_location": "../research_vault/_system/kis_access_token.json",
-            "gitignored_by_default": True,
-            "note": "KIS tokenP 신규 발급은 기본 비활성화이며, 기존 토큰 재사용 또는 무시된 캐시 파일을 우선합니다.",
-        },
-        "configured_secrets": {
-            "kiwoom_api_key": _configured_secret(settings.brokerage_api_key),
-            "kiwoom_api_secret": _configured_secret(settings.brokerage_api_secret),
-            "secret_salt": _configured_secret(settings.secret_salt),
-            "kis_app_key": _configured_secret(settings.kis_app_key),
-            "kis_app_secret": _configured_secret(settings.kis_app_secret),
-            "kis_access_token": _configured_secret(settings.kis_access_token),
-            "dart_api_key": _configured_secret(settings.dart_api_key),
-            "financial_datasets_api_key": _configured_secret(settings.financial_datasets_api_key),
-            "finnhub_api_key": _configured_secret(settings.finnhub_api_key),
-            "tiingo_api_key": _configured_secret(settings.tiingo_api_key),
-            "alpha_vantage_api_key": _configured_secret(settings.alpha_vantage_api_key),
-            "tavily_api_key": _configured_secret(settings.tavily_api_key),
-            "brave_api_key": _configured_secret(settings.brave_api_key),
-            "nps_odcloud_api_key": _configured_secret(settings.nps_odcloud_api_key),
-            "customs_trade_api_key": _configured_secret(settings.customs_trade_api_key),
-        },
-        "response_rule": "상태/점검 API는 실제 값을 반환하지 않고 마스킹 값 또는 설정 여부만 반환합니다.",
-    }
-
-
 @app.get("/api/v1/config/safety")
 def read_safety_config(settings: Settings = Depends(get_settings)) -> dict:
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    return {
-        "brokerage_api_key": mask_secret(settings.brokerage_api_key),
-        "brokerage_api_secret": mask_secret(settings.brokerage_api_secret),
-        "kiwoom_base_url": settings.kiwoom_base_url,
-        "kiwoom_mock_base_url": settings.kiwoom_mock_base_url,
-        "kiwoom_use_mock": settings.kiwoom_use_mock,
-        "kiwoom_registered_ip": mask_secret(settings.kiwoom_registered_ip),
-        "secret_salt": mask_secret(settings.secret_salt),
-        "research_vault_dir": settings.research_vault_dir,
-        "resolved_research_vault_dir": str(vault_dir),
-        "block_onedrive_paths": settings.block_onedrive_paths,
-        "onedrive_excluded": "onedrive" not in str(vault_dir).lower(),
-        "live_data_max_age_minutes": settings.live_data_max_age_minutes,
-        "earnings_calendar_on_demand_refresh": settings.earnings_calendar_on_demand_refresh,
-        "data_provider_mode": settings.data_provider_mode,
-        "auto_inject_analysis_data": settings.auto_inject_analysis_data,
-        "fmp_api_key": mask_secret(settings.fmp_api_key),
-        "fmp_base_url": settings.fmp_base_url,
-        "fmp_timeout_seconds": settings.fmp_timeout_seconds,
-        "dart_api_key": mask_secret(settings.dart_api_key),
-        "dart_base_url": settings.dart_base_url,
-        "financial_datasets_api_key": mask_secret(settings.financial_datasets_api_key),
-        "finnhub_api_key": mask_secret(settings.finnhub_api_key),
-        "tiingo_api_key": mask_secret(settings.tiingo_api_key),
-        "alpha_vantage_api_key": mask_secret(settings.alpha_vantage_api_key),
-        "tavily_api_key": mask_secret(settings.tavily_api_key),
-        "brave_api_key": mask_secret(settings.brave_api_key),
-        "naver_finance_enabled": settings.naver_finance_enabled,
-        "naver_finance_base_url": settings.naver_finance_base_url,
-        "naver_finance_timeout_seconds": settings.naver_finance_timeout_seconds,
-        "nps_odcloud_enabled": settings.nps_odcloud_enabled,
-        "nps_odcloud_api_key": mask_secret(settings.nps_odcloud_api_key),
-        "nps_odcloud_base_url": settings.nps_odcloud_base_url,
-        "nps_domestic_stock_docs_url": settings.nps_domestic_stock_docs_url,
-        "nps_large_holding_docs_url": settings.nps_large_holding_docs_url,
-        "nps_domestic_stock_api_url": settings.nps_domestic_stock_api_url,
-        "nps_large_holding_api_url": settings.nps_large_holding_api_url,
-        "customs_trade_enabled": settings.customs_trade_enabled,
-        "customs_trade_api_key": mask_secret(settings.customs_trade_api_key),
-        "customs_trade_api_url": settings.customs_trade_api_url,
-        "customs_trade_release_days": settings.customs_trade_release_days,
-        "credential_policy": credential_storage_policy(settings),
-        "secrets_are_masked": True,
-    }
+    return build_safety_config_payload(settings)
 
 
 @app.get("/api/v1/data-providers/status")
 def read_data_provider_status(settings: Settings = Depends(get_settings)) -> dict:
     provider = get_analysis_data_provider(settings)
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    return {
-        "status": "success",
-        "mode": settings.data_provider_mode,
-        "auto_inject_analysis_data": settings.auto_inject_analysis_data,
-        "live_data_max_age_minutes": settings.live_data_max_age_minutes,
-        "earnings_calendar_on_demand_refresh": settings.earnings_calendar_on_demand_refresh,
-        "resolved_research_vault_dir": str(vault_dir),
-        "onedrive_excluded": "onedrive" not in str(vault_dir).lower(),
-        "ocr": ocr_runtime_status(),
-        "providers": provider.status(),
-    }
+    return build_data_provider_status_payload(settings, ocr_runtime_status(), provider.status())
+
+
+@app.get("/api/v1/system/health")
+def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
+    return build_system_health_payload(settings, ocr_runtime_status())
 
 
 @app.get("/api/v1/ocr/status")
@@ -14312,6 +17038,16 @@ def build_customs_trade_snapshot(
         rows = fetched.get("rows") or []
         raw_rows.extend(rows[:20])
         aggregates.append(aggregate_customs_trade_rows(rows, theme))
+    total_valid_rows = sum(int(item.get("row_count") or 0) for item in aggregates)
+    if total_valid_rows == 0:
+        warnings.append(
+            "조회 조건에서 실제 수출입 수치가 있는 행을 찾지 못했습니다. "
+            "빈 응답은 저장/RAG 반영하지 않습니다."
+        )
+    quality_metadata = customs_trade_quality_metadata(
+        bool(total_valid_rows),
+        valid_row_count=total_valid_rows,
+    )
 
     aggregates.sort(
         key=lambda item: abs(float(item.get("trade_balance_usd") or 0)),
@@ -14329,11 +17065,15 @@ def build_customs_trade_snapshot(
                 f"{item['label']}은 이번 조회 조건에서 표시 가능한 행이 없습니다. HS코드/기간/국가 조건을 재확인하세요."
             )
     sector_implications = [
-        f"{item['label']} 관련 섹터({', '.join(item['linked_sectors'])})는 {item['signal']} 신호를 보조 지표로 반영합니다."
+        (
+            f"{item['label']} 관련 섹터({', '.join(item['linked_sectors'])})는 {item['signal']} 신호를 보조 지표로 반영합니다."
+            if item.get("row_count")
+            else f"{item['label']} 관련 섹터({', '.join(item['linked_sectors'])})는 이번 조회에서 실제 수출입 수치가 없어 투자 신호로 반영하지 않습니다."
+        )
         for item in aggregates
     ]
     return {
-        "status": "success",
+        "status": "success" if total_valid_rows else "warning",
         "module": "korea_customs_trade_snapshot",
         "source": "관세청 품목별 국가별 수출입실적(GW)",
         "release_schedule": "매월 1일, 11일, 21일 발표 자료를 우선 확인",
@@ -14344,6 +17084,9 @@ def build_customs_trade_snapshot(
         "country_code": country_code,
         "source_urls": source_urls,
         "warnings": list(dict.fromkeys(warnings))[:5],
+        "has_valid_data": bool(total_valid_rows),
+        "valid_row_count": total_valid_rows,
+        **quality_metadata,
         "aggregates": aggregates,
         "raw_rows_preview": raw_rows[:20],
         "key_takeaways": key_takeaways,
@@ -14360,11 +17103,16 @@ def build_customs_trade_snapshot(
 def render_customs_trade_markdown(snapshot: dict, storage_date: date) -> str:
     aggregate_lines = []
     for item in snapshot.get("aggregates", []):
-        aggregate_lines.append(
-            f"- {item['label']}({item['item_code']}): {item['signal']} / "
-            f"수출 ${item['export_value_usd']:,.0f}, 수입 ${item['import_value_usd']:,.0f}, "
-            f"무역수지 ${item['trade_balance_usd']:,.0f} / {item['inventory_signal']}"
-        )
+        if item.get("row_count"):
+            aggregate_lines.append(
+                f"- {item['label']}({item['item_code']}): {item['signal']} / "
+                f"수출 ${item['export_value_usd']:,.0f}, 수입 ${item['import_value_usd']:,.0f}, "
+                f"무역수지 ${item['trade_balance_usd']:,.0f} / {item['inventory_signal']}"
+            )
+        else:
+            aggregate_lines.append(
+                f"- {item['label']}({item['item_code']}): 실제 수출입 수치 없음 / 저장·RAG 반영 제외"
+            )
     return f"""---
 ticker: CUSTOMS
 type: customs-trade-brief
@@ -14404,6 +17152,15 @@ period: {snapshot.get('start_yymm')}~{snapshot.get('end_yymm')}
 
 
 def save_customs_trade_snapshot(snapshot: dict, settings: Settings) -> dict:
+    if not snapshot.get("has_valid_data"):
+        return {
+            **snapshot,
+            "storage_skipped": True,
+            "storage_skip_reason": str(
+                snapshot.get("storage_policy")
+                or "실제 수출입 수치가 없어 저장/RAG 반영을 건너뜁니다."
+            ),
+        }
     storage_date = current_storage_date()
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     markdown = render_customs_trade_markdown(snapshot, storage_date)
@@ -14449,6 +17206,31 @@ def save_customs_trade_snapshot(snapshot: dict, settings: Settings) -> dict:
     return {**snapshot, "storage": storage, "rag_document": rag_document}
 
 
+def attach_customs_total_trend_diagnostic(snapshot: dict, settings: Settings) -> dict:
+    if snapshot.get("has_valid_data") or snapshot.get("total_trend_status"):
+        return snapshot
+    warnings = list(snapshot.get("warnings") or [])
+    try:
+        total_trend_status = fetch_customs_total_trend_status(
+            settings,
+            start_yymm=str(snapshot.get("start_yymm") or ""),
+            end_yymm=str(snapshot.get("end_yymm") or ""),
+        )
+        for warning in total_trend_status.get("warnings", []):
+            if warning not in warnings:
+                warnings.append(warning)
+        return {
+            **snapshot,
+            "total_trend_status": total_trend_status,
+            "warnings": warnings[:5],
+        }
+    except Exception as exc:
+        message = provider_error_message(exc, settings)
+        if message not in warnings:
+            warnings.append(message)
+        return {**snapshot, "warnings": warnings[:5]}
+
+
 def should_check_customs_trade_today(settings: Settings, selected_date: date | None = None) -> bool:
     today = selected_date or current_storage_date()
     try:
@@ -14475,14 +17257,22 @@ def build_daily_customs_trade_reference(settings: Settings) -> dict | None:
             "key_takeaways": [],
             "warnings": [provider_error_message(exc, settings)],
         }
+    snapshot = attach_customs_total_trend_diagnostic(snapshot, settings)
     return {
-        "status": "success",
+        "status": "success" if snapshot.get("has_valid_data") else "warning",
         "source": snapshot.get("source"),
         "period": f"{snapshot.get('start_yymm')}~{snapshot.get('end_yymm')}",
         "release_cycle": snapshot.get("release_cycle"),
+        "has_valid_data": bool(snapshot.get("has_valid_data")),
+        "data_quality": snapshot.get("data_quality"),
+        "data_quality_label": snapshot.get("data_quality_label"),
+        "storage_policy": snapshot.get("storage_policy"),
+        "storage_skip_expected": snapshot.get("storage_skip_expected"),
+        "next_action": snapshot.get("next_action"),
+        "total_trend_status": snapshot.get("total_trend_status"),
         "key_takeaways": snapshot.get("key_takeaways", [])[:4],
         "sector_implications": snapshot.get("sector_implications", [])[:4],
-        "warnings": snapshot.get("warnings", [])[:3],
+        "warnings": snapshot.get("warnings", [])[:5],
     }
 
 
@@ -14505,9 +17295,35 @@ def read_latest_customs_trade_snapshot(
         item_code=item_code,
         country_code=country_code,
     )
+    snapshot = attach_customs_total_trend_diagnostic(snapshot, settings)
     if save_result:
         return save_customs_trade_snapshot(snapshot, settings)
     return snapshot
+
+
+@app.get(
+    "/api/v1/macro/customs-trade/total-trend/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_customs_total_trend_status(
+    start_yymm: str | None = Query(default=None),
+    end_yymm: str | None = Query(default=None),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    default_start, default_end, release_cycle = customs_default_period()
+    start_yymm = start_yymm or default_start
+    end_yymm = end_yymm or default_end
+    status = fetch_customs_total_trend_status(
+        settings,
+        start_yymm=start_yymm,
+        end_yymm=end_yymm,
+    )
+    return {
+        "module": "korea_customs_trade_total_trend_status",
+        "release_cycle": release_cycle,
+        "storage_policy": "진단 전용입니다. 이 API 응답은 research_vault/CUSTOMS에 저장하지 않습니다.",
+        **status,
+    }
 
 @app.post(
     "/api/v1/alerts/backend-health",
@@ -14900,6 +17716,10 @@ def refresh_shinhan_research(
 def get_naver_research_status(settings: Settings = Depends(get_settings)) -> dict:
     cache = read_naver_research_cache(settings)
     entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    cache_status = build_naver_research_cache_status(settings, cache)
+    market_journal_state = read_json_store(naver_market_close_journal_state_path(settings), {})
+    market_journal_source = naver_market_close_source_metadata(market_journal_state.get("source_title"))
+    duplicate_archive_status = archive_duplicate_naver_market_close_reports(settings, apply=False)
     recent_entries = sorted(
         entries.values(),
         key=lambda item: str(item.get("ingested_at") or item.get("published_at") or ""),
@@ -14911,9 +17731,27 @@ def get_naver_research_status(settings: Settings = Depends(get_settings)) -> dic
         "enabled": settings.naver_research_enabled,
         "auto_refresh": settings.naver_research_auto_refresh,
         "refresh_hours": settings.naver_research_refresh_hours,
+        "pdf_extract_enabled": settings.naver_research_pdf_extract_enabled,
         "source_url": settings.naver_research_list_url,
         "updated_at": cache.get("updated_at"),
         "entry_count": len(entries),
+        "active_rag_count": cache_status["active_rag_count"],
+        "stored_file_count": cache_status["stored_file_count"],
+        "cache_only_count": cache_status["cache_only_count"],
+        "missing_storage_count": cache_status["missing_storage_count"],
+        "pdf_extraction_counts": cache_status["pdf_extraction_counts"],
+        "priority_counts": cache_status["priority_counts"],
+        "duplicate_archive": duplicate_archive_status,
+        "market_close_journal": {
+            "enabled": settings.naver_market_close_auto_journal,
+            "daily_time": settings.naver_market_close_journal_time,
+            "source_origin": market_journal_state.get("source_origin") or market_journal_source["source_origin"],
+            "source_provider": market_journal_state.get("source_provider") or market_journal_source["source_provider"],
+            "last_run_at": market_journal_state.get("last_run_at"),
+            "last_run_date": market_journal_state.get("last_run_date"),
+            "source_title": market_journal_state.get("source_title"),
+            "source_published_at": market_journal_state.get("source_published_at"),
+        },
         "recent_entries": recent_entries,
         "cache_path": str(naver_research_cache_path(settings)),
     }
@@ -14935,6 +17773,48 @@ def refresh_naver_research(
         force=force,
         save_result=save_result,
     )
+
+
+@app.post(
+    "/api/v1/naver-research/repair",
+    dependencies=[Depends(verify_user_token)],
+)
+def repair_naver_research(
+    pdf_backfill_limit: int = 20,
+    refresh_metadata: bool = True,
+    save_result: bool = False,
+    archive_duplicates: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return repair_naver_research_cache(
+        settings,
+        pdf_backfill_limit=pdf_backfill_limit,
+        refresh_metadata=refresh_metadata,
+        save_result=save_result,
+        archive_duplicates=archive_duplicates,
+    )
+
+
+@app.post(
+    "/api/v1/naver-research/market-close-journal/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_naver_market_close_journal_endpoint(
+    force: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return refresh_naver_market_close_journal(settings, force=force)
+
+
+@app.get(
+    "/api/v1/naver-research/market-close-journal/task-status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_naver_market_close_task_status(
+    log_limit: int = 20,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_naver_market_close_task_status(settings, log_limit=log_limit)
 @app.get(
     "/api/v1/tickers/diagnose/{ticker}",
     dependencies=[Depends(verify_user_token)],
@@ -14965,8 +17845,21 @@ def list_ticker_cache(settings: Settings = Depends(get_settings)) -> dict:
         "local_registry_count": len(OFFICIAL_TICKER_REGISTRY),
         "cache_count": len(entries),
         "cache_path": str(dynamic_ticker_cache_path(settings)),
+        "source_status": ticker_registry_source_status(settings),
         "entries": entries,
     }
+
+
+@app.post(
+    "/api/v1/tickers/cache/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_ticker_cache(settings: Settings = Depends(get_settings)) -> dict:
+    """
+    KRX/KIND와 Nasdaq Trader 심볼 디렉터리에서 회사명-티커 캐시를 갱신합니다.
+    실패해도 기존 캐시는 유지합니다.
+    """
+    return refresh_dynamic_ticker_registry_from_sources(settings)
 
 
 @app.delete(
@@ -15173,6 +18066,67 @@ def backfill_rag_memory_documents(
     """
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     return backfill_research_memory_documents_from_manifest(vault_dir)
+
+
+@app.post(
+    "/api/v1/research-memory/quality/rebuild",
+    dependencies=[Depends(verify_user_token)],
+)
+def rebuild_research_memory_quality(
+    payload: dict = Body(default_factory=dict),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    기존 저장 리포트/첨부 메타데이터를 새 품질 추론 로직으로 다시 점검합니다.
+    파일 본문이 부족한 자료도 파일명, 저장 메타데이터, 관심/보유 목록을 이용해
+    투자 반영 후보를 보강하고 RAG 색인을 다시 갱신합니다.
+    """
+    include_archived = bool(payload.get("include_archived", False))
+    save_result = bool(payload.get("save_result", True))
+    raw_limit = payload.get("limit")
+    limit = None
+    if raw_limit not in {None, "", 0, "0"}:
+        try:
+            limit = max(1, min(int(raw_limit), 5000))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="limit은 숫자여야 합니다.")
+    return rebuild_research_memory_quality_metadata(
+        settings,
+        include_archived=include_archived,
+        save_result=save_result,
+        limit=limit,
+    )
+
+
+@app.post(
+    "/api/v1/research-memory/ocr/reprocess",
+    dependencies=[Depends(verify_user_token)],
+)
+def reprocess_research_memory_ocr_endpoint(
+    payload: dict = Body(default_factory=dict),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    기존 저장 데이터 중 OCR 미연결/언어팩 누락/본문 0자 첨부를 다시 처리합니다.
+    성공 시 manifest, JSON sidecar, Markdown, RAG 색인을 함께 갱신합니다.
+    """
+    include_archived = bool(payload.get("include_archived", False))
+    save_result = bool(payload.get("save_result", True))
+    force = bool(payload.get("force", False))
+    raw_limit = payload.get("limit")
+    limit = None
+    if raw_limit not in {None, "", 0, "0"}:
+        try:
+            limit = max(1, min(int(raw_limit), 5000))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="limit은 숫자여야 합니다.")
+    return reprocess_research_memory_ocr(
+        settings,
+        include_archived=include_archived,
+        save_result=save_result,
+        limit=limit,
+        force=force,
+    )
 
 
 def _rag_synthesis_unique(values: list[str], limit: int = 8) -> list[str]:
@@ -16084,7 +19038,7 @@ def run_thesis_impact_review(
     새 뉴스, 실시간 데이터, 사용자 메모가 기존 투자 논거를 강화/약화/무관하게 만드는지 평가합니다.
     결과는 thesis-impact-review 리포트로 자동 저장되어 다음 후속 분석의 입력이 됩니다.
     """
-    ticker = ensure_verified_ticker(request.ticker)
+    ticker = ensure_verified_ticker(request.ticker, settings)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     theses, watch_items = extract_manifest_theses_and_watch_items(ticker, vault_dir)
     impact = evaluate_thesis_impact(ticker, request.new_data, theses, watch_items)
@@ -16368,6 +19322,14 @@ def auto_capture_research_item(
     inference_content = "\n\n".join(
         value for value in [raw_content, url_title_context, url_body_context] if value
     )
+    attachment_signal_context = render_attachment_signal_context(
+        request.file_name,
+        request.file_mime_type,
+    )
+    if attachment_signal_context:
+        inference_content = "\n\n".join(
+            value for value in [inference_content, attachment_signal_context] if value
+        )
     if request.file_name:
         inference_content = "\n".join(
             value for value in [inference_content, f"첨부 파일명: {request.file_name}"] if value
@@ -16396,6 +19358,7 @@ def auto_capture_research_item(
             inferred_ticker,
             current_storage_date(),
             request,
+            settings,
         )
         if request.save_result
         else None
@@ -16405,6 +19368,23 @@ def auto_capture_research_item(
         raw_content = "\n\n".join(value for value in [raw_content, attachment_context] if value)
     if url_body_context and url_body_context not in raw_content:
         raw_content = "\n\n".join(value for value in [raw_content, url_body_context] if value)
+    inferred_investment_scope = infer_capture_investment_scope(
+        "\n\n".join(
+            value
+            for value in [
+                raw_content,
+                attachment_signal_context,
+                (attachment_info or {}).get("extracted_text"),
+            ]
+            if value
+        ),
+        settings,
+    )
+    investment_scope_context = render_investment_scope_context(inferred_investment_scope)
+    if investment_scope_context and investment_scope_context not in raw_content:
+        raw_content = "\n\n".join(value for value in [raw_content, investment_scope_context] if value)
+    if attachment_info is not None:
+        attachment_info["inferred_investment_scope"] = inferred_investment_scope
     source_type = (
         ticker_inference
         if inferred_ticker in SPECIAL_RESEARCH_KEYS - {"INBOX"}
@@ -16414,6 +19394,7 @@ def auto_capture_research_item(
     if inferred_ticker in SPECIAL_RESEARCH_KEYS:
         tags.append(f"research_scope:{inferred_ticker.lower()}")
     tags = infer_capture_tags(raw_content, tags)
+    tags.extend(inferred_investment_scope.get("tags") or [])
     if request.file_name:
         tags.append("file_input")
     if source_url:
@@ -16476,190 +19457,18 @@ def auto_capture_research_item(
     return response
 
 
-PORTFOLIO_IMPORT_HEADERS = {
-    "ticker": {"ticker", "symbol", "종목", "종목코드", "티커", "코드"},
-    "name": {"name", "company", "company_name", "종목명", "회사명", "이름"},
-    "quantity": {"quantity", "qty", "shares", "수량", "보유수량", "주식수"},
-    "average_cost": {"average_cost", "avg_cost", "avg price", "평단", "평균단가", "매입가"},
-    "current_price": {"current_price", "price", "last", "현재가", "가격"},
-    "market_value": {"market_value", "value", "amount", "평가금액", "평가액", "금액"},
-    "weight": {"weight", "비중", "비율"},
-    "sector": {"sector", "섹터", "업종"},
-    "theme_tags": {"theme_tags", "tags", "tag", "테마", "태그"},
-}
-
-
-def normalize_import_header(value: str) -> str:
-    cleaned = sub(r"[\s_\-()/%]+", "", str(value or "").strip().lower())
-    for target, aliases in PORTFOLIO_IMPORT_HEADERS.items():
-        if cleaned in {sub(r"[\s_\-()/%]+", "", alias.lower()) for alias in aliases}:
-            return target
-    return cleaned
-
-
-def parse_import_number(value: object) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    is_percent = "%" in text
-    cleaned = sub(r"[^0-9.\-]+", "", text)
-    if cleaned in {"", "-", "."}:
-        return None
-    try:
-        number = float(cleaned)
-    except ValueError:
-        return None
-    if is_percent:
-        return number / 100
-    return number
-
-
-def portfolio_holding_from_row(row: dict[str, object]) -> PortfolioHolding | None:
-    normalized = {normalize_import_header(key): value for key, value in row.items()}
-    ticker = normalize_ticker(str(normalized.get("ticker") or normalized.get("symbol") or ""))
-    if not ticker or ticker == "UNKNOWN":
-        return None
-    quantity = parse_import_number(normalized.get("quantity"))
-    current_price = parse_import_number(normalized.get("current_price"))
-    market_value = parse_import_number(normalized.get("market_value"))
-    if market_value is None and quantity is not None and current_price is not None:
-        market_value = quantity * current_price
-    if ticker == "CASH" and market_value is None:
-        market_value = current_price or parse_import_number(normalized.get("average_cost"))
-    tags = [
-        tag.strip()
-        for tag in str(normalized.get("theme_tags") or "").replace(";", ",").split(",")
-        if tag.strip()
-    ]
-    return PortfolioHolding(
-        ticker=ticker,
-        name=str(normalized.get("name") or "").strip() or None,
-        quantity=quantity,
-        average_cost=parse_import_number(normalized.get("average_cost")),
-        current_price=current_price,
-        market_value=market_value,
-        weight=parse_import_number(normalized.get("weight")),
-        sector=str(normalized.get("sector") or "Unknown").strip() or "Unknown",
-        theme_tags=tags,
-        currency="USD" if ticker != "CASH" else "USD",
-    )
-
-
-def parse_portfolio_delimited_text(text: str) -> tuple[list[PortfolioHolding], int, list[str]]:
-    warnings: list[str] = []
-    rows = [line for line in text.splitlines() if line.strip()]
-    if not rows:
-        return [], 0, ["파일에서 읽을 수 있는 행이 없습니다."]
-    sample = "\n".join(rows[:8])
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
-        reader = csv.DictReader(io.StringIO("\n".join(rows)), dialect=dialect)
-    except csv.Error:
-        delimiter = "\t" if "\t" in sample else ","
-        reader = csv.DictReader(io.StringIO("\n".join(rows)), delimiter=delimiter)
-    holdings = [holding for record in reader if (holding := portfolio_holding_from_row(record))]
-    if not holdings:
-        warnings.append("헤더 기반 표를 찾지 못했습니다. 첫 행에 티커, 수량, 현재가, 평가금액 같은 열 이름을 넣어주세요.")
-    return holdings, max(0, len(rows) - 1), warnings
-
-
-def parse_portfolio_json_text(text: str) -> tuple[list[PortfolioHolding], int, list[str]]:
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return [], 0, ["JSON 파일 형식을 읽지 못했습니다."]
-    records = payload.get("holdings") if isinstance(payload, dict) else payload
-    if not isinstance(records, list):
-        return [], 0, ["JSON은 보유 종목 배열이거나 holdings 배열을 포함해야 합니다."]
-    holdings = [
-        holding
-        for record in records
-        if isinstance(record, dict) and (holding := portfolio_holding_from_row(record))
-    ]
-    warnings = [] if holdings else ["JSON에서 보유 종목을 인식하지 못했습니다."]
-    return holdings, len(records), warnings
-
-
-def parse_xlsx_shared_strings(zip_file: zipfile.ZipFile) -> list[str]:
-    try:
-        xml_bytes = zip_file.read("xl/sharedStrings.xml")
-    except KeyError:
-        return []
-    root = ElementTree.fromstring(xml_bytes)
-    namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    values = []
-    for item in root.findall("x:si", namespace):
-        texts = [node.text or "" for node in item.findall(".//x:t", namespace)]
-        values.append("".join(texts))
-    return values
-
-
-def xlsx_cell_value(cell: ElementTree.Element, shared_strings: list[str]) -> str:
-    cell_type = cell.attrib.get("t")
-    value_node = cell.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}v")
-    if value_node is None or value_node.text is None:
-        inline = cell.find(".//{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t")
-        return inline.text if inline is not None and inline.text else ""
-    value = value_node.text
-    if cell_type == "s":
-        try:
-            return shared_strings[int(value)]
-        except (ValueError, IndexError):
-            return ""
-    return value
-
-
-def xlsx_column_index(cell_ref: str) -> int:
-    letters = "".join(char for char in cell_ref.upper() if char.isalpha())
-    index = 0
-    for char in letters:
-        index = index * 26 + (ord(char) - ord("A") + 1)
-    return max(index - 1, 0)
-
-
-def parse_portfolio_xlsx(content: bytes) -> tuple[list[PortfolioHolding], int, list[str]]:
-    warnings: list[str] = []
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as workbook:
-            shared_strings = parse_xlsx_shared_strings(workbook)
-            sheet_names = [
-                name
-                for name in workbook.namelist()
-                if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")
-            ]
-            if not sheet_names:
-                return [], 0, ["엑셀 파일에서 워크시트를 찾지 못했습니다."]
-            sheet_xml = workbook.read(sorted(sheet_names)[0])
-    except zipfile.BadZipFile:
-        return [], 0, ["지원하지 않는 엑셀 형식입니다. .xlsx 또는 CSV로 다시 저장해 주세요."]
-    root = ElementTree.fromstring(sheet_xml)
-    namespace = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    table_rows: list[list[str]] = []
-    for row in root.findall(".//x:sheetData/x:row", namespace):
-        values_by_column: dict[int, str] = {}
-        for cell in row.findall("x:c", namespace):
-            values_by_column[xlsx_column_index(cell.attrib.get("r", ""))] = xlsx_cell_value(
-                cell,
-                shared_strings,
-            )
-        max_column = max(values_by_column.keys(), default=-1)
-        values = [values_by_column.get(index, "") for index in range(max_column + 1)]
-        if any(str(value).strip() for value in values):
-            table_rows.append(values)
-    if len(table_rows) < 2:
-        return [], len(table_rows), ["엑셀 파일에 헤더와 보유 종목 행이 필요합니다."]
-    headers = [normalize_import_header(value) for value in table_rows[0]]
-    holdings = []
-    for values in table_rows[1:]:
-        record = {headers[index]: value for index, value in enumerate(values) if index < len(headers)}
-        holding = portfolio_holding_from_row(record)
-        if holding:
-            holdings.append(holding)
-    if not holdings:
-        warnings.append("엑셀에서 보유 종목을 인식하지 못했습니다. 첫 행에 티커/수량/평가금액 등의 열 이름을 넣어주세요.")
-    return holdings, len(table_rows) - 1, warnings
+@app.get(
+    "/api/v1/llm-bridge/storage-status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_llm_bridge_storage_status(
+    limit: int = 10,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    수동 LLM 연동으로 붙여넣은 응답과 원 프롬프트가 저장/RAG 색인에 연결됐는지 확인합니다.
+    """
+    return build_llm_bridge_storage_status(settings, limit=limit)
 
 
 @app.post(
@@ -16729,6 +19538,131 @@ def list_portfolios(
     settings: Settings = Depends(get_settings),
 ) -> PortfolioStoreResponse:
     return portfolio_store_response(settings)
+
+
+@app.get(
+    "/api/v1/portfolios/{portfolio_name}/sync-history",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_portfolio_sync_history(
+    portfolio_name: str,
+    limit: int = 10,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    store = read_portfolio_store(settings)
+    key = portfolio_store_key(portfolio_name)
+    payload = store.get("portfolios", {}).get(key)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
+    active_portfolio = SavedPortfolio.model_validate(payload)
+    bounded_limit = max(1, min(int(limit or 10), 50))
+    history = [
+        item
+        for item in read_portfolio_sync_history(settings, limit=bounded_limit * 3)
+        if item.get("portfolio_name") == active_portfolio.portfolio_name
+    ][:bounded_limit]
+    return {
+        "status": "success",
+        "portfolio_name": active_portfolio.portfolio_name,
+        "summary": portfolio_sync_status_summary(active_portfolio, history),
+        "history": history,
+    }
+
+
+@app.post(
+    "/api/v1/portfolios/{portfolio_name}/sync/kiwoom-domestic/preview",
+    dependencies=[Depends(verify_user_token)],
+)
+def preview_portfolio_kiwoom_domestic_sync(
+    portfolio_name: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_portfolio_kiwoom_domestic_sync_response(
+        portfolio_name,
+        settings,
+        apply_changes=False,
+    )
+
+
+@app.post(
+    "/api/v1/portfolios/{portfolio_name}/sync/kiwoom-domestic",
+    dependencies=[Depends(verify_user_token)],
+)
+def sync_portfolio_kiwoom_domestic(
+    portfolio_name: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_portfolio_kiwoom_domestic_sync_response(
+        portfolio_name,
+        settings,
+        apply_changes=True,
+    )
+
+
+def build_portfolio_kiwoom_domestic_sync_response(
+    portfolio_name: str,
+    settings: Settings,
+    *,
+    apply_changes: bool,
+) -> dict:
+    store = read_portfolio_store(settings)
+    key = portfolio_store_key(portfolio_name)
+    payload = store.get("portfolios", {}).get(key)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
+
+    active_portfolio = SavedPortfolio.model_validate(payload)
+    try:
+        balance = fetch_kiwoom_domestic_balance(settings)
+    except (ValueError, httpx.HTTPError) as exc:
+        status = "not_configured" if isinstance(exc, ValueError) else "kiwoom_unavailable"
+        message = (
+            str(exc)
+            if isinstance(exc, ValueError)
+            else "키움 국내 잔고 API에 연결하지 못했습니다. 기존 수량은 변경하지 않았습니다."
+        )
+        response = portfolio_store_response(settings, active_portfolio=active_portfolio)
+        result = response.model_dump(mode="json")
+        result["sync_summary"] = {
+            "status": status,
+            "broker": "KIWOOM",
+            "scope": "domestic_stock_only",
+            "updated_count": 0,
+            "confirmed_count": 0,
+            "skipped_count": len(active_portfolio.holdings),
+            "changes": [],
+            "skipped": [
+                {
+                    "ticker": normalize_ticker(holding.ticker),
+                    "name": holding.name or normalize_ticker(holding.ticker),
+                    "quantity": holding.quantity,
+                    "reason": "kiwoom_not_configured" if status == "not_configured" else "kiwoom_unavailable",
+                }
+                for holding in active_portfolio.holdings
+            ],
+            "mode": "apply" if apply_changes else "preview",
+            "message": message,
+        }
+        return result
+
+    synced_portfolio, sync_summary = sync_saved_portfolio_with_kiwoom_domestic(
+        active_portfolio,
+        balance,
+        settings,
+    )
+    sync_summary["mode"] = "apply" if apply_changes else "preview"
+    if apply_changes:
+        store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
+        write_json_store(portfolio_store_path(settings), store)
+        append_portfolio_sync_history(
+            settings,
+            portfolio_name=synced_portfolio.portfolio_name,
+            summary=sync_summary,
+        )
+    response = portfolio_store_response(settings, active_portfolio=synced_portfolio)
+    result = response.model_dump(mode="json")
+    result["sync_summary"] = sync_summary
+    return result
 
 
 @app.get(
@@ -17398,11 +20332,16 @@ def build_target_price_consensus_from_memory(
     holding_currency: str,
     *,
     limit_files: int = 40,
+    manifest_entries: list[dict] | None = None,
 ) -> dict | None:
     normalized_ticker = normalize_ticker(ticker)
     observations: list[dict] = []
     allowed_report_types = {"research-capture", "thesis-impact-review", "dossier-synthesis"}
-    for memory_file in list_research_memory_files(normalized_ticker, vault_dir)[:limit_files]:
+    for memory_file in list_research_memory_files(
+        normalized_ticker,
+        vault_dir,
+        manifest_entries=manifest_entries,
+    )[:limit_files]:
         if memory_file.report_type not in allowed_report_types:
             continue
         try:
@@ -17613,7 +20552,12 @@ def portfolio_holding_current_value(
     return holding.quantity * current_price * infer_holding_fx_rate(holding)
 
 
-def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict:
+def build_portfolio_performance(
+    portfolio_name: str,
+    settings: Settings,
+    *,
+    force_price_refresh: bool = False,
+) -> dict:
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)
@@ -17623,7 +20567,19 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
     portfolio = sort_and_weight_portfolio(
         SavedPortfolio.model_validate(payload),
         settings,
-        refresh_prices=False,
+        refresh_prices=force_price_refresh,
+        force_price_refresh=force_price_refresh,
+    )
+    refreshed_holdings = portfolio.holdings
+    current_price_refresh = build_price_refresh_summary(
+        refreshed_holdings,
+        enabled=force_price_refresh,
+        force_price_refresh=force_price_refresh,
+        description=(
+            "기간 수익 비교 요청에서 현재가 제공자 강제 갱신을 실행했습니다."
+            if force_price_refresh
+            else "기간 수익 비교는 빠른 응답을 위해 저장 현재가와 국내 가격 히스토리 최신 종가를 사용합니다. 최신 현재가 갱신은 포트폴리오의 가격 갱신 불러오기를 먼저 실행하세요."
+        ),
     )
     as_of = current_storage_date()
     period_accumulators = {
@@ -17656,6 +20612,12 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
     history_cache_misses = 0
     overseas_unsupported_count = 0
     unsupported_market_value = 0.0
+    stored_price_checked_at_values = sorted(
+        str(holding.price_checked_at)
+        for holding in refreshed_holdings
+        if getattr(holding, "price_checked_at", None)
+    )
+    price_comparisons: list[dict] = []
 
     for holding in portfolio.holdings:
         ticker = normalize_ticker(holding.ticker)
@@ -17706,12 +20668,26 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
             if unsupported_history:
                 overseas_unsupported_count += 1
                 unsupported_market_value += current_value_for_total
+            manual_return = holding.unrealized_return
+            manual_gain = holding.unrealized_gain
+            manual_note = (
+                "저장 수량, 저장 현재가, 저장 평단 기준의 수동 손익으로 별도 표시합니다."
+                if unsupported_history and (manual_gain is not None or manual_return is not None)
+                else None
+            )
             skipped.append({
                 "ticker": ticker,
                 "name": holding.name,
                 "market_value": round(current_value_for_total, 2) if current_value_for_total else None,
                 "reason": reason,
                 "category": "overseas_or_unsupported_history" if unsupported_history else "price_history_unavailable",
+                "quantity": holding.quantity,
+                "average_cost": holding.average_cost,
+                "current_price": holding.current_price,
+                "currency": holding.currency,
+                "manual_unrealized_gain": round(manual_gain, 2) if manual_gain is not None else None,
+                "manual_unrealized_return": round(manual_return, 4) if manual_return is not None else None,
+                "manual_result_note": manual_note,
                 "impact": (
                     "현재 평가금액과 미실현 손익에는 포함하지만, 1주/1개월/6개월/1년 기간 수익 비교에서는 제외했습니다."
                     if unsupported_history
@@ -17729,6 +20705,21 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
         if latest_history_date_text:
             price_as_of_dates.append(latest_history_date_text)
         current_price = latest_history_close or holding.current_price
+        stored_current_price = holding.current_price
+        if latest_history_close is not None and stored_current_price is not None and stored_current_price > 0:
+            difference = latest_history_close - stored_current_price
+            difference_rate = difference / stored_current_price
+            if abs(difference_rate) >= 0.005:
+                price_comparisons.append({
+                    "ticker": ticker,
+                    "name": holding.name,
+                    "stored_current_price": round(stored_current_price, 4),
+                    "history_latest_close": round(latest_history_close, 4),
+                    "history_latest_date": latest_history_date_text,
+                    "difference": round(difference, 4),
+                    "difference_rate": round(difference_rate, 4),
+                    "message": "저장 현재가와 네이버 가격 히스토리 최신 종가가 다릅니다.",
+                })
         current_value = portfolio_holding_current_value(
             holding,
             current_price,
@@ -17840,12 +20831,44 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
         if current_cost_basis > 0
         else None
     )
+    coverage_rates = [
+        period.get("coverage_rate")
+        for period in periods
+        if period.get("coverage_rate") is not None
+    ]
+    min_coverage_rate = min(coverage_rates) if coverage_rates else None
+    avg_coverage_rate = (
+        sum(coverage_rates) / len(coverage_rates)
+        if coverage_rates
+        else None
+    )
+    if min_coverage_rate is None:
+        confidence_label = "계산 보류"
+    elif min_coverage_rate >= 0.8 and not price_comparisons:
+        confidence_label = "높음"
+    elif min_coverage_rate >= 0.5:
+        confidence_label = "보통"
+    else:
+        confidence_label = "제한적"
+    if price_comparisons and confidence_label == "높음":
+        confidence_label = "확인 필요"
+    price_basis = (
+        "제공자 현재가 강제 갱신"
+        if force_price_refresh
+        else "저장 현재가 + 국내 가격 히스토리 최신 종가"
+    )
+    latest_stored_price_checked_at = (
+        stored_price_checked_at_values[-1]
+        if stored_price_checked_at_values
+        else None
+    )
     return {
         "status": "success",
         "module": "portfolio_performance_comparison",
         "portfolio_name": portfolio.portfolio_name,
         "as_of": current_storage_timestamp(),
         "calculation_mode": "recomputed_on_request",
+        "current_price_refresh": current_price_refresh,
         "result_cache": {
             "enabled": False,
             "description": "기간 수익 비교 결과 자체는 저장 캐시하지 않고 요청할 때마다 현재 저장 포트폴리오 기준으로 다시 계산합니다.",
@@ -17859,7 +20882,38 @@ def build_portfolio_performance(portfolio_name: str, settings: Settings) -> dict
             "description": "국내 종목 가격 히스토리 원천 조회만 서버 프로세스 메모리에 임시 캐시합니다. 서버 재시작 시 초기화됩니다.",
         },
         "price_data_as_of": sorted(price_as_of_dates)[-1] if price_as_of_dates else None,
-        "method": "현재 저장 수량과 가격 히스토리의 최신 종가를 기준으로, 기간별 과거 종가 대비 평가금액 차이를 계산했습니다.",
+        "latest_stored_price_checked_at": latest_stored_price_checked_at,
+        "price_basis": price_basis,
+        "price_refresh_guidance": (
+            "가격 갱신 불러오기를 먼저 실행한 뒤 기간 수익 비교를 보면 저장 현재가 기준 정확도가 올라갑니다."
+            if not force_price_refresh
+            else "이번 요청에서 현재가 강제 갱신을 시도했습니다."
+        ),
+        "current_price_comparison": {
+            "basis": "저장 현재가와 네이버 가격 히스토리 최신 종가 비교",
+            "difference_count": len(price_comparisons),
+            "material_threshold": "0.5%",
+            "items": sorted(
+                price_comparisons,
+                key=lambda item: abs(item.get("difference_rate") or 0),
+                reverse=True,
+            )[:12],
+        },
+        "performance_quality": {
+            "confidence_label": confidence_label,
+            "min_coverage_rate": round(min_coverage_rate, 4) if min_coverage_rate is not None else None,
+            "average_coverage_rate": round(avg_coverage_rate, 4) if avg_coverage_rate is not None else None,
+            "covered_holding_count": max((period.get("included_count") or 0 for period in periods), default=0),
+            "excluded_holding_count": len(skipped),
+            "domestic_price_difference_count": len(price_comparisons),
+            "latest_stored_price_checked_at": latest_stored_price_checked_at,
+            "price_basis": price_basis,
+        },
+        "method": (
+            "현재가는 요청 시 강제 갱신하고, 국내 기간 수익은 가격 히스토리의 최신 종가와 기간별 과거 종가를 비교해 평가금액 차이를 계산했습니다."
+            if force_price_refresh
+            else "빠른 응답을 위해 저장 현재가를 기준 정보로 유지하고, 국내 기간 수익은 가격 히스토리의 최신 종가와 기간별 과거 종가를 비교해 계산했습니다."
+        ),
         "portfolio_value": round(current_portfolio_value or portfolio.portfolio_value or 0, 2),
         "current_unrealized_gain": round(current_unrealized_gain, 2),
         "current_unrealized_return": round(current_unrealized_return, 4)
@@ -17911,6 +20965,7 @@ def build_portfolio_intelligent_table(
     ]
     rag_document_counts = count_research_memory_documents_by_ticker(vault_dir, portfolio_tickers)
     manifest_entries = read_manifest(vault_dir)
+    dart_cache = read_dart_filing_cache(settings)
     rows: list[dict] = []
     warnings: list[str] = []
     for holding in portfolio.holdings:
@@ -17971,6 +21026,7 @@ def build_portfolio_intelligent_table(
             for entry in manifest_entries
             if normalize_ticker(str(entry.get("ticker") or "")) in {ticker, official_symbol}
         )
+        freshness = build_ticker_freshness_status(ticker, official_symbol, manifest_entries, dart_cache)
         try:
             thesis_snapshot = read_ticker_thesis_snapshot(vault_dir, official_symbol)
         except Exception:
@@ -18059,6 +21115,12 @@ def build_portfolio_intelligent_table(
                 "thesis_snapshot_connected": bool(thesis_snapshot),
                 "thesis_snapshot_date": (thesis_snapshot or {}).get("source_date") if thesis_snapshot else None,
                 "thesis_summary": (thesis_snapshot or {}).get("thesis_summary") if thesis_snapshot else "",
+                "freshness_status": freshness.get("status"),
+                "freshness_tone": freshness.get("tone"),
+                "latest_research_date": freshness.get("latest_date"),
+                "latest_dart_date": freshness.get("latest_dart_date"),
+                "latest_dart_report": freshness.get("latest_dart_report"),
+                "freshness_summary": freshness.get("summary"),
                 "data_readiness_score": round(readiness_score / 100, 4),
                 "next_action": next_action,
             }
@@ -18133,13 +21195,9 @@ def target_consensus_universe(
             ticker = normalize_ticker(holding.ticker)
             if not ticker or ticker == "CASH":
                 continue
-            try:
-                verification = verify_ticker_symbol(ticker, settings)
-                official_symbol = normalize_ticker(verification.official_symbol or ticker)
-            except HTTPException:
-                verification = None
-                official_symbol = ticker
-            profile = official_ticker_profile(official_symbol, settings)
+            verification = verify_ticker_symbol_local_cached(ticker, settings)
+            official_symbol = normalize_ticker(verification.official_symbol or ticker)
+            profile = official_ticker_profile(official_symbol, settings, refresh_external=False)
             currency = (holding.currency or ("KRW" if profile.get("country") == "KR" else "USD")).upper()
             row = by_ticker.setdefault(
                 official_symbol,
@@ -18177,13 +21235,9 @@ def target_consensus_universe(
             ticker = normalize_ticker(item.get("ticker"))
             if not ticker:
                 continue
-            try:
-                verification = verify_ticker_symbol(ticker, settings)
-                official_symbol = normalize_ticker(verification.official_symbol or ticker)
-            except HTTPException:
-                verification = None
-                official_symbol = ticker
-            profile = official_ticker_profile(official_symbol, settings)
+            verification = verify_ticker_symbol_local_cached(ticker, settings)
+            official_symbol = normalize_ticker(verification.official_symbol or ticker)
+            profile = official_ticker_profile(official_symbol, settings, refresh_external=False)
             currency = "KRW" if profile.get("country") == "KR" or fullmatch(r"\d{6}", official_symbol) else "USD"
             row = by_ticker.setdefault(
                 official_symbol,
@@ -18209,14 +21263,75 @@ def target_consensus_universe(
     return list(by_ticker.values())
 
 
+def build_ticker_freshness_status(
+    ticker: str,
+    official_symbol: str,
+    manifest_entries: list[dict],
+    dart_cache: dict,
+) -> dict:
+    symbols = {normalize_ticker(ticker), normalize_ticker(official_symbol)}
+    today = current_storage_date()
+    related_entries = [
+        entry
+        for entry in manifest_entries
+        if normalize_ticker(str(entry.get("ticker") or "")) in symbols
+    ]
+    latest_date = None
+    for entry in related_entries:
+        parsed = parse_iso_date(entry.get("date"))
+        if parsed and (latest_date is None or parsed > latest_date):
+            latest_date = parsed
+    recent_dart = recent_dart_cache_entries(dart_cache, official_symbol or ticker, limit=3)
+    latest_dart = recent_dart[0] if recent_dart else {}
+    filing = latest_dart.get("filing") or {}
+    receipt_date_text = str(filing.get("receipt_date") or "")
+    try:
+        dart_date = datetime.strptime(receipt_date_text, "%Y%m%d").date() if receipt_date_text else None
+    except ValueError:
+        dart_date = parse_iso_date(receipt_date_text)
+    age_days = (today - latest_date).days if latest_date else None
+    dart_age_days = (today - dart_date).days if dart_date else None
+    news_count = sum(1 for entry in related_entries if str(entry.get("source_type") or entry.get("type") or "").lower().find("news") >= 0 or "news" in (entry.get("tags") or []))
+    report_count = sum(1 for entry in related_entries if "report" in str(entry.get("type") or "").lower() or "dossier" in str(entry.get("type") or "").lower())
+    if dart_age_days is not None and dart_age_days <= 7:
+        status = "공시 최신"
+        tone = "ok"
+    elif age_days is not None and age_days <= 7:
+        status = "자료 최신"
+        tone = "ok"
+    elif age_days is not None and age_days <= 30:
+        status = "점검 가능"
+        tone = "warning"
+    else:
+        status = "업데이트 필요"
+        tone = "needs_action"
+    return {
+        "status": status,
+        "tone": tone,
+        "latest_date": latest_date.isoformat() if latest_date else None,
+        "latest_dart_date": dart_date.isoformat() if dart_date else None,
+        "latest_dart_report": filing.get("report_name"),
+        "recent_document_count": len(related_entries),
+        "news_count": news_count,
+        "report_count": report_count,
+        "summary": (
+            f"최근 저장 자료 {len(related_entries)}개"
+            + (f", 최신 저장일 {latest_date.isoformat()}" if latest_date else "")
+            + (f", 최근 공시 {filing.get('report_name')} {dart_date.isoformat()}" if dart_date else "")
+        ),
+    }
+
+
 def build_target_consensus_scan(
     settings: Settings,
     *,
     portfolio_name: str | None = None,
     include_interests: bool = True,
+    refresh_missing_prices: bool = False,
 ) -> dict:
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     universe = target_consensus_universe(settings, portfolio_name, include_interests)
+    manifest_entries = read_manifest(vault_dir)
     rows: list[dict] = []
     warnings: list[str] = []
     for item in universe:
@@ -18224,11 +21339,19 @@ def build_target_consensus_scan(
         currency = (item.get("currency") or "KRW").upper()
         current_price = parse_float_or_none(item.get("current_price"))
         price_source = item.get("price_source")
-        consensus = build_target_price_consensus_from_memory(ticker, vault_dir, currency)
-        if current_price is None and consensus is not None:
-            provider_price, provider_source = latest_provider_price(ticker, settings)
-            current_price = provider_price
-            price_source = provider_source
+        consensus = build_target_price_consensus_from_memory(
+            ticker,
+            vault_dir,
+            currency,
+            manifest_entries=manifest_entries,
+        )
+        if current_price is None and consensus is not None and refresh_missing_prices:
+            try:
+                provider_price, provider_source = latest_provider_price(ticker, settings)
+                current_price = provider_price
+                price_source = provider_source
+            except Exception as exc:
+                warnings.append(f"{item.get('company_name') or ticker}: 현재가 보강 실패 - {provider_error_message(exc, settings)}")
         target_price = consensus.get("target_price") if consensus else None
         target_upside = (
             (target_price - current_price) / current_price
@@ -18299,6 +21422,7 @@ def build_target_consensus_scan(
         "as_of": current_storage_timestamp(),
         "portfolio_name": portfolio_name or "__all__",
         "include_interests": include_interests,
+        "price_refresh_mode": "on_missing_prices" if refresh_missing_prices else "stored_prices_only",
         "universe_count": len(universe),
         "calculated_count": len(calculable),
         "best_undervalued": best,
@@ -18319,12 +21443,14 @@ def build_target_consensus_scan(
 def get_target_consensus_scan(
     portfolio_name: str | None = None,
     include_interests: bool = True,
+    refresh_missing_prices: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_target_consensus_scan(
         settings,
         portfolio_name=portfolio_name,
         include_interests=include_interests,
+        refresh_missing_prices=refresh_missing_prices,
     )
 
 
@@ -18354,9 +21480,14 @@ def get_portfolio_intelligent_table(
 )
 def get_portfolio_performance(
     portfolio_name: str,
+    force_price_refresh: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    return build_portfolio_performance(portfolio_name, settings)
+    return build_portfolio_performance(
+        portfolio_name,
+        settings,
+        force_price_refresh=force_price_refresh,
+    )
 
 
 @app.get(
@@ -18784,7 +21915,7 @@ def run_portfolio_risk_scan(
 
     single_position_concentration = aggregate_concentration(
         holdings,
-        lambda holding: holding.ticker,
+        lambda holding: holding.name or normalize_ticker(holding.ticker),
     )
     sector_concentration = aggregate_concentration(
         holdings,
@@ -18916,7 +22047,7 @@ def run_institutional_stock_breakdown(
         investment_period=request.investment_period,
         focus_area=focus,
         executive_summary=(
-            f"{ticker_company_name(ticker)}({ticker})에 대한 기관급 분석을 시작했습니다. "
+            f"{ticker_company_name(ticker)}에 대한 기관급 분석을 시작했습니다. "
             f"투자 기간은 {request.investment_period}이며, 중점 분석은 {focus}입니다."
         ),
         bull_case=ScenarioSummary(
@@ -19282,7 +22413,7 @@ module: earnings_filing_note
 persona: Buy-Side 모델 업데이트 애널리스트
 ---
 
-# {response.get('company_name')}({response.get('ticker')}) 어닝 콜/공시 기반 노트 초안
+# {response.get('company_name')} 어닝 콜/공시 기반 노트 초안
 
 ## 모델 업데이트 항목
 
@@ -19824,7 +22955,7 @@ def run_collaborative_team_report(
         style=request.style,
         focus_area=focus,
         executive_summary=(
-            f"{ticker_company_name(ticker)}({ticker})에 대해 7개 분석 스킬이 협업하는 종합 투자 리포트를 생성했습니다. "
+            f"{ticker_company_name(ticker)}에 대해 7개 분석 스킬이 협업하는 종합 투자 리포트를 생성했습니다. "
             f"핵심 초점은 {focus}이며, 투자 기간은 {request.investment_period}입니다."
         ),
         team_contributions=contributions,
@@ -20006,15 +23137,4 @@ def assess_research_checklist(
             }),
             report_date=storage_date,
         )
-
     return assessment
-
-
-
-
-@app.on_event("startup")
-def start_background_schedulers() -> None:
-    start_earnings_calendar_scheduler()
-    start_dart_filing_scheduler()
-    start_shinhan_research_scheduler()
-    start_naver_research_scheduler()

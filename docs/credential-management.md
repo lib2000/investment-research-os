@@ -19,7 +19,10 @@
 - `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCESS_TOKEN_FILE`
 - `DART_API_KEY`, `FINNHUB_API_KEY`, `TIINGO_API_KEY`, `ALPHA_VANTAGE_API_KEY`
 - `TAVILY_API_KEY`, `BRAVE_API_KEY`, `NPS_ODCLOUD_API_KEY`, `CUSTOMS_TRADE_API_KEY`
+- `KCIF_USERNAME`, `KCIF_PASSWORD`
 - `SECRET_SALT`
+
+관세청 수출입은 같은 공공데이터 키를 쓰더라도 서비스별 활용 신청/승인이 다를 수 있습니다. `CUSTOMS_TRADE_API_URL`은 품목·국가별 실적용이고, `CUSTOMS_TRADE_TOTAL_API_URL`은 1일·11일·21일 잠정/총괄 수출입동향 확인용입니다. 총괄 API가 403을 반환하면 키 값 문제가 아니라 data.go.kr의 해당 서비스 권한 상태를 먼저 확인합니다.
 
 프론트 `.env`에 넣을 수 있는 값:
 
@@ -40,6 +43,22 @@ KIS_ACCESS_TOKEN=
 KIS_ACCESS_TOKEN_FILE=
 KIS_TOKEN_CACHE_FILE=../research_vault/_system/kis_access_token.json
 ```
+
+## KCIF 계정 원칙
+
+KCIF ID와 비밀번호는 `backend\.env`에만 둡니다. 채팅, 프론트 `.env`, `.env.example`, 테스트 코드에는 실제 값을 넣지 않습니다.
+
+권장 설정:
+
+```dotenv
+KCIF_USE_LOGIN=true
+KCIF_USERNAME=
+KCIF_PASSWORD=
+KCIF_REPORT_LIST_URL=https://www.kcif.or.kr/annual/reportList
+KCIF_LOGIN_PROC_URL=https://www.kcif.or.kr/webUser/loginProc
+```
+
+KCIF 연동은 로그인 세션으로 볼 수 있는 상세 화면을 활용하되, 보고서 PDF나 전문 원문은 자동 다운로드/저장하지 않습니다. 저장되는 것은 제목, 분류, 날짜, 링크, 파일명, 관련 테마, 수치 신호, 자체 파생 메모입니다.
 
 ## 상태 확인
 

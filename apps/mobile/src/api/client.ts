@@ -18,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
+async function throwIfNotOk(response: Response): Promise<void> {
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
     let code = `HTTP_${response.status}`;
@@ -31,6 +31,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
     }
     throw new ApiError(response.status, code, message);
   }
+}
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  await throwIfNotOk(response);
 
   return response.json() as Promise<T>;
 }
@@ -46,6 +50,18 @@ export async function apiGet<T>(path: string): Promise<T> {
   return parseResponse<T>(response);
 }
 
+export async function apiGetText(path: string): Promise<string> {
+  const response = await fetch(`${apiConfig.baseUrl}${path}`, {
+    headers: {
+      Accept: "text/csv, text/plain, */*",
+      Authorization: `Bearer ${apiConfig.token}`,
+    },
+  });
+
+  await throwIfNotOk(response);
+  return response.text();
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${apiConfig.baseUrl}${path}`, {
     method: "POST",
@@ -55,6 +71,37 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+  });
+
+  return parseResponse<T>(response);
+}
+
+export async function apiPostText<T>(
+  path: string,
+  body: string,
+  contentType = "text/csv; charset=utf-8",
+): Promise<T> {
+  const response = await fetch(`${apiConfig.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiConfig.token}`,
+      "Content-Type": contentType,
+    },
+    body,
+  });
+
+  return parseResponse<T>(response);
+}
+
+export async function apiPostFormData<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(`${apiConfig.baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiConfig.token}`,
+    },
+    body,
   });
 
   return parseResponse<T>(response);

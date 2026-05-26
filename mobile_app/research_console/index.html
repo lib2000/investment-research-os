@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=cb2ef63bd2b3" />
+    <link rel="stylesheet" href="./styles.css?v=671fa510a820" />
   </head>
   <body>
     <main class="app-shell">
@@ -47,6 +47,7 @@
         <button class="tab" data-tab="trade" type="button">매매 전략</button>
         <button class="tab" data-tab="chart" type="button">차트 분석</button>
         <button class="tab" data-tab="earnings" type="button">실적 분석</button>
+        <button class="tab" data-tab="macro" type="button">매크로 분석</button>
         <button class="tab" data-tab="sector" type="button">섹터 발굴</button>
         <button class="tab" data-tab="compounder" type="button">복리 성장주</button>
         <button class="tab" data-tab="capture" type="button">정보 입력</button>
@@ -304,13 +305,57 @@
         </form>
       </section>
 
+      <section id="macro" class="panel">
+        <form id="macroForm" class="form-grid">
+          <label>
+            지역
+            <select name="region">
+              <option value="KR" selected>한국</option>
+              <option value="US">미국</option>
+            </select>
+          </label>
+          <label>
+            분석 기간
+            <input name="period" value="3개월" />
+          </label>
+          <label>
+            스타일
+            <select name="style">
+              <option value="균형형" selected>균형형</option>
+              <option value="성장">성장</option>
+              <option value="가치">가치</option>
+              <option value="방어">방어</option>
+            </select>
+          </label>
+          <label class="wide">
+            중점 변수
+            <input name="focusTheme" placeholder="예: 금리, 환율, AI CAPEX, 수출, 유가, 정책" />
+          </label>
+          <label class="wide">
+            매크로 환경
+            <textarea name="macroEnvironment" required>한국 시장은 반도체와 AI 인프라 수요가 강하고, 환율과 금리 경로가 외국인 수급과 성장주 밸류에이션에 영향을 주고 있습니다.</textarea>
+          </label>
+          <label class="switch">
+            <input name="autoInjectData" type="checkbox" checked />
+            시장/저장 데이터 자동 연결
+          </label>
+          <div class="button-row wide">
+            <button type="submit">매크로 분석 실행</button>
+            <button id="kcifReportsWatchButton" class="secondary" type="button">KCIF 보고서 Watch</button>
+            <button id="kcifReportsRefreshButton" class="secondary" type="button">KCIF 새로 확인</button>
+            <button id="regionalBusinessSourcesWatchButton" class="secondary" type="button">EMERiCs/CSF Watch</button>
+            <button id="regionalBusinessSourcesRefreshButton" class="secondary" type="button">EMERiCs/CSF 새로 확인</button>
+          </div>
+        </form>
+      </section>
+
       <section id="sector" class="panel">
         <form id="sectorForm" class="form-grid">
           <label>
             지역
             <select name="region">
-              <option value="US" selected>미국</option>
-              <option value="KR">한국</option>
+              <option value="KR" selected>한국</option>
+              <option value="US">미국</option>
             </select>
           </label>
           <label>
@@ -347,8 +392,8 @@
           <label>
             지역
             <select name="region">
-              <option value="US" selected>미국</option>
-              <option value="KR">한국</option>
+              <option value="KR" selected>한국</option>
+              <option value="US">미국</option>
             </select>
           </label>
           <label>
@@ -372,7 +417,7 @@
           </label>
           <label>
             최소 시가총액 (한국: 억원 / 미국: 백만 달러)
-            <input name="minMarketCap" type="number" min="0" step="100" value="5000" />
+            <input name="minMarketCap" type="number" min="0" step="100" value="3000" />
           </label>
           <label>
             최대 시가총액 (한국: 억원 / 미국: 백만 달러)
@@ -432,7 +477,7 @@
         <form id="newsForm" class="form-stack">
           <label class="wide">
             뉴스 본문
-            <textarea name="rawContent" placeholder="기사 본문, 뉴스 요약, 헤드라인 메모를 붙여넣으세요. 링크만 넣어도 서버에서 본문 추출을 시도합니다."></textarea>
+            <textarea name="rawContent" placeholder="뉴스 원문 전체가 아니라 핵심 요약, 투자 판단 메모, 확인할 포인트만 붙여넣으세요."></textarea>
           </label>
           <label class="wide">
             뉴스 URL
@@ -443,6 +488,20 @@
             <button id="newsUrlPreviewButton" class="secondary" type="button">본문 미리보기</button>
             <button id="newsInboxButton" class="secondary" type="button">뉴스 인박스 조회</button>
             <button id="newsPromoteLatestButton" class="secondary" type="button">최근 뉴스 승격</button>
+          </div>
+          <div class="news-policy-bar">
+            <span>저작권 안전 모드: 기사 원문 본문은 저장하지 않고 제목, 링크, 짧은 메모와 자체 분석만 보관합니다.</span>
+            <label>
+              보기
+              <select id="newsInboxFilter">
+                <option value="all">전체</option>
+                <option value="unpromoted">승격 전</option>
+                <option value="needs_body">본문 보강 필요</option>
+                <option value="url_only">URL-only</option>
+                <option value="market_journal">시장일지 후보</option>
+                <option value="quality_issue">품질 확인</option>
+              </select>
+            </label>
           </div>
         </form>
         <div id="newsInboxList" class="news-inbox-list" aria-live="polite">
@@ -458,7 +517,7 @@
         <form id="llmPromptForm" class="form-grid">
           <label>
             대상
-            <input name="target" value="삼양식품" placeholder="티커, 종목명, 시장/섹터 주제" />
+            <input name="target" placeholder="비워두면 시장/섹터/거시 자료로 분류" />
           </label>
           <label>
             사용할 LLM
@@ -509,6 +568,7 @@
             종목이 확인되면 기존 투자 논거 영향도까지 분석
           </label>
           <button type="submit">응답 저장 및 분석</button>
+          <button id="llmStorageStatusButton" class="secondary" type="button">저장/RAG 상태 확인</button>
           <div class="form-hint">자동 로그인, 자동 전송, 웹 채팅창 자동 수집은 하지 않습니다. 응답을 붙여넣으면 저장 데이터와 RAG 메모리에 연결됩니다.</div>
         </form>
       </section>
@@ -630,7 +690,11 @@
                 <option value="">저장된 내 포트폴리오 없음</option>
               </select>
             </label>
-            <button id="portfolioLoadButton" class="secondary" type="button">불러오기</button>
+            <button id="portfolioLoadButton" class="secondary" type="button">가격 갱신 불러오기</button>
+            <button id="portfolioKiwoomSyncButton" class="secondary" type="button">키움 국내 수량 확인</button>
+            <button id="portfolioKiwoomApplyButton" type="button" hidden disabled>변경 적용</button>
+            <button id="portfolioKiwoomCancelButton" class="secondary" type="button" hidden disabled>취소</button>
+            <button id="portfolioSyncHistoryButton" class="secondary" type="button">최근 동기화 이력</button>
             <button id="portfolioConnectivityButton" class="secondary" type="button">전체 연결 점검</button>
             <button id="portfolioNpsFlowButton" class="secondary" type="button">국민연금 수급</button>
             <button id="portfolioAnalysisStatusButton" class="secondary" type="button">전체 분석 현황</button>
@@ -644,6 +708,13 @@
         </div>
         <div id="portfolioLoadedAt" class="portfolio-loaded-at" aria-live="polite">
           최근 불러온 일시: 아직 없음
+        </div>
+        <div id="portfolioSyncOverview" class="portfolio-sync-overview" aria-live="polite">
+          <div>
+            <span>계좌 동기화</span>
+            <strong>확인 전</strong>
+            <p>키움 국내 수량 확인 또는 이력 조회를 실행하면 상태가 표시됩니다.</p>
+          </div>
         </div>
         <div id="portfolioAnalysisOverview" class="portfolio-analysis-overview" aria-live="polite">
           <div>
@@ -934,16 +1005,31 @@
             <input name="showBodyMissingOnly" type="checkbox" />
             본문 보강 필요만 보기
           </label>
+          <label>
+            품질 필터
+            <select name="qualityFilter">
+              <option value="all" selected>전체 자료</option>
+              <option value="body_missing">본문 보강 필요</option>
+              <option value="url_only">URL-only 저장</option>
+              <option value="ocr_needed">OCR 보강 필요</option>
+              <option value="legacy">레거시/검증 전</option>
+            </select>
+          </label>
           <button type="submit">저장 데이터 조회</button>
           <button id="ragNaturalSearchButton" type="button">전체 자연어 검색</button>
           <button id="ragSynthesisButton" type="button">검색 결과 합성</button>
           <button id="ragSearchButton" type="button">현재 키 RAG 검색</button>
           <button id="dossierButton" type="button">Dossier 합성</button>
           <button id="todayResearchUpdateButton" type="button">오늘 리서치 업데이트</button>
+          <button id="naverResearchStatusButton" type="button">네이버 리서치 상태</button>
+          <button id="naverResearchRepairButton" type="button">네이버 리서치 정리</button>
+          <button id="naverMarketJournalButton" type="button">시황 시장일지 반영</button>
           <button id="dailyBriefButton" type="button">일일 브리핑</button>
           <button id="researchAutomationButton" type="button">전체 자동화 실행</button>
           <button id="researchAutomationStatusButton" type="button">자동화 상태</button>
           <button id="ragBackfillButton" type="button">RAG 색인 갱신</button>
+          <button id="ocrReprocessButton" type="button">OCR 재처리</button>
+          <button data-workflow-action="storage-quality" type="button">저장 데이터 품질 점검</button>
           <button id="storageCleanupButton" type="button">저장 데이터 정리</button>
           <button id="dedupedDossierRefreshButton" type="button">중복 종목 Dossier 갱신</button>
           <button id="manifestButton" type="button">전체 목록 조회</button>
@@ -993,6 +1079,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=866480e217c2"></script>
+  <script type="module" src="./console.js?v=e5b93223824a"></script>
 </body>
 </html>

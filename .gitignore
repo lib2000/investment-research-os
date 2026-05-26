@@ -46,13 +46,19 @@ research_vault/
 research_vault_*_tmp/
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
 *.db
 *.db-shm
 *.db-wal
 backend/backups/
+backend/tessdata/*.traineddata
 
 # Logs and temporary local artifacts
 *.log
 *.out.log
 *.err.log
+.test-tmp/
 .codex_migration_backup_*/

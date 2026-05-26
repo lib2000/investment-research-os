@@ -76,6 +76,13 @@ class Settings(BaseModel):
     naver_finance_enabled: bool = True
     naver_finance_base_url: str = "https://m.stock.naver.com"
     naver_finance_timeout_seconds: float = 6.0
+    ticker_registry_auto_refresh: bool = True
+    ticker_registry_refresh_hours: float = 24.0
+    ticker_registry_timeout_seconds: float = 12.0
+    ticker_registry_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    ticker_registry_krx_kind_url: str = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
+    ticker_registry_nasdaq_listed_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
+    ticker_registry_nasdaq_other_url: str = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
     block_onedrive_paths: bool = True
     live_data_max_age_minutes: float = 30.0
     earnings_calendar_on_demand_refresh: bool = True
@@ -97,6 +104,20 @@ class Settings(BaseModel):
     naver_research_timeout_seconds: float = 10.0
     naver_research_max_items: int = 40
     naver_research_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    naver_research_pdf_extract_enabled: bool = True
+    naver_research_pdf_snippet_max_chars: int = 900
+    naver_market_close_auto_journal: bool = True
+    naver_market_close_journal_time: str = "08:30"
+    kcif_use_login: bool = True
+    kcif_username: str = Field(default="")
+    kcif_password: str = Field(default="")
+    kcif_report_list_url: str = "https://www.kcif.or.kr/annual/reportList"
+    kcif_login_proc_url: str = "https://www.kcif.or.kr/webUser/loginProc"
+    kcif_timeout_seconds: float = 12.0
+    regional_business_sources_enabled: bool = True
+    regional_business_sources_timeout_seconds: float = 10.0
+    regional_business_sources_max_items: int = 40
+    regional_business_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     nps_odcloud_enabled: bool = True
     nps_odcloud_api_key: str = Field(default="")
     nps_odcloud_base_url: str = "https://api.odcloud.kr/api"
@@ -109,6 +130,8 @@ class Settings(BaseModel):
     customs_trade_enabled: bool = True
     customs_trade_api_key: str = Field(default="")
     customs_trade_api_url: str = "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList"
+    customs_trade_total_api_url: str = "https://apis.data.go.kr/1220000/Newtrade/getNewtradeList"
+    customs_trade_total_docs_url: str = "https://www.data.go.kr/data/15102108/openapi.do"
     customs_trade_timeout_seconds: float = 8.0
     customs_trade_max_rows: int = 100
     customs_trade_release_days: str = "1,11,21"
@@ -208,6 +231,29 @@ class Settings(BaseModel):
             naver_finance_timeout_seconds=float(
                 os.getenv("NAVER_FINANCE_TIMEOUT_SECONDS", "6")
             ),
+            ticker_registry_auto_refresh=_read_bool("TICKER_REGISTRY_AUTO_REFRESH", True),
+            ticker_registry_refresh_hours=float(
+                os.getenv("TICKER_REGISTRY_REFRESH_HOURS", "24")
+            ),
+            ticker_registry_timeout_seconds=float(
+                os.getenv("TICKER_REGISTRY_TIMEOUT_SECONDS", "12")
+            ),
+            ticker_registry_user_agent=os.getenv(
+                "TICKER_REGISTRY_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            ticker_registry_krx_kind_url=os.getenv(
+                "TICKER_REGISTRY_KRX_KIND_URL",
+                "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13",
+            ),
+            ticker_registry_nasdaq_listed_url=os.getenv(
+                "TICKER_REGISTRY_NASDAQ_LISTED_URL",
+                "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+            ),
+            ticker_registry_nasdaq_other_url=os.getenv(
+                "TICKER_REGISTRY_NASDAQ_OTHER_URL",
+                "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+            ),
             block_onedrive_paths=_read_bool("BLOCK_ONEDRIVE_PATHS", True),
             live_data_max_age_minutes=float(os.getenv("LIVE_DATA_MAX_AGE_MINUTES", "30")),
             earnings_calendar_on_demand_refresh=_read_bool(
@@ -256,6 +302,41 @@ class Settings(BaseModel):
                 "NAVER_RESEARCH_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
+            naver_research_pdf_extract_enabled=_read_bool(
+                "NAVER_RESEARCH_PDF_EXTRACT_ENABLED", True
+            ),
+            naver_research_pdf_snippet_max_chars=int(
+                os.getenv("NAVER_RESEARCH_PDF_SNIPPET_MAX_CHARS", "900")
+            ),
+            naver_market_close_auto_journal=_read_bool(
+                "NAVER_MARKET_CLOSE_AUTO_JOURNAL", True
+            ),
+            naver_market_close_journal_time=os.getenv(
+                "NAVER_MARKET_CLOSE_JOURNAL_TIME", "08:30"
+            ),
+            kcif_use_login=_read_bool("KCIF_USE_LOGIN", True),
+            kcif_username=os.getenv("KCIF_USERNAME", os.getenv("KCIF_ID", "")),
+            kcif_password=os.getenv("KCIF_PASSWORD", ""),
+            kcif_report_list_url=os.getenv(
+                "KCIF_REPORT_LIST_URL", "https://www.kcif.or.kr/annual/reportList"
+            ),
+            kcif_login_proc_url=os.getenv(
+                "KCIF_LOGIN_PROC_URL", "https://www.kcif.or.kr/webUser/loginProc"
+            ),
+            kcif_timeout_seconds=float(os.getenv("KCIF_TIMEOUT_SECONDS", "12")),
+            regional_business_sources_enabled=_read_bool(
+                "REGIONAL_BUSINESS_SOURCES_ENABLED", True
+            ),
+            regional_business_sources_timeout_seconds=float(
+                os.getenv("REGIONAL_BUSINESS_SOURCES_TIMEOUT_SECONDS", "10")
+            ),
+            regional_business_sources_max_items=int(
+                os.getenv("REGIONAL_BUSINESS_SOURCES_MAX_ITEMS", "40")
+            ),
+            regional_business_sources_user_agent=os.getenv(
+                "REGIONAL_BUSINESS_SOURCES_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
             nps_odcloud_enabled=_read_bool("NPS_ODCLOUD_ENABLED", True),
             nps_odcloud_api_key=os.getenv(
                 "NPS_ODCLOUD_API_KEY",
@@ -293,6 +374,14 @@ class Settings(BaseModel):
             customs_trade_api_url=os.getenv(
                 "CUSTOMS_TRADE_API_URL",
                 "https://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList",
+            ),
+            customs_trade_total_api_url=os.getenv(
+                "CUSTOMS_TRADE_TOTAL_API_URL",
+                "https://apis.data.go.kr/1220000/Newtrade/getNewtradeList",
+            ),
+            customs_trade_total_docs_url=os.getenv(
+                "CUSTOMS_TRADE_TOTAL_DOCS_URL",
+                "https://www.data.go.kr/data/15102108/openapi.do",
             ),
             customs_trade_timeout_seconds=float(os.getenv("CUSTOMS_TRADE_TIMEOUT_SECONDS", "8")),
             customs_trade_max_rows=int(os.getenv("CUSTOMS_TRADE_MAX_ROWS", "100")),

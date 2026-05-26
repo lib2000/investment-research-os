@@ -13,6 +13,7 @@ import {
   archiveLegacyResearchMemoryFiles,
   supplementResearchMemoryFile,
   backfillRagMemoryDocuments,
+  reprocessResearchMemoryOcr,
   synthesizeDossier,
   runResearchAutomation,
   fetchResearchAutomationStatus,
@@ -25,6 +26,7 @@ import {
   fetchTickerProfile,
   fetchTickerDiagnostics,
   fetchTickerRegistryCache,
+  fetchLlmBridgeStorageStatus,
   fetchLatestDataSnapshot,
   verifyTickerSymbol,
   deleteTickerRegistryCacheEntry,
@@ -39,6 +41,11 @@ import {
   autoCaptureResearchItem,
   previewSourceUrl,
   fetchNewsInbox,
+  fetchStorageQualityDashboard,
+  fetchKcifReportsWatch,
+  refreshKcifReportsWatch,
+  fetchRegionalBusinessSourcesWatch,
+  refreshRegionalBusinessSourcesWatch,
   ingestNewsInbox,
   promoteNewsInboxItem,
   updateNewsInboxItem,
@@ -56,6 +63,9 @@ import {
   fetchPortfolioTeamReportQueue,
   importPortfolioFile,
   savePortfolio,
+  syncKiwoomDomesticPortfolio,
+  previewKiwoomDomesticPortfolioSync,
+  fetchPortfolioSyncHistory,
   deletePortfolio,
   fetchInterests,
   saveInterests,
@@ -63,11 +73,15 @@ import {
   addInterestSector,
   fetchInterestAutomationBoard,
   fetchMarketCloseJournal,
+  fetchNaverResearchStatus,
+  repairNaverResearchCache,
+  refreshNaverMarketCloseJournal,
+  fetchNaverMarketCloseTaskStatus,
   fetchCustomsTradeSnapshot,
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=a89ee9cfe552";
+} from "./api.js?v=09425f9ab307";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -90,6 +104,11 @@ const elements = {
   chartVisualization: document.querySelector("#chartVisualization"),
   tradePortfolioSelect: document.querySelector("#tradePortfolioSelect"),
   earningsForm: document.querySelector("#earningsForm"),
+  macroForm: document.querySelector("#macroForm"),
+  kcifReportsWatchButton: document.querySelector("#kcifReportsWatchButton"),
+  kcifReportsRefreshButton: document.querySelector("#kcifReportsRefreshButton"),
+  regionalBusinessSourcesWatchButton: document.querySelector("#regionalBusinessSourcesWatchButton"),
+  regionalBusinessSourcesRefreshButton: document.querySelector("#regionalBusinessSourcesRefreshButton"),
   sectorForm: document.querySelector("#sectorForm"),
   compounderForm: document.querySelector("#compounderForm"),
   captureForm: document.querySelector("#captureForm"),
@@ -99,11 +118,13 @@ const elements = {
   newsUrlPreviewButton: document.querySelector("#newsUrlPreviewButton"),
   newsInboxButton: document.querySelector("#newsInboxButton"),
   newsPromoteLatestButton: document.querySelector("#newsPromoteLatestButton"),
+  newsInboxFilter: document.querySelector("#newsInboxFilter"),
   newsInboxList: document.querySelector("#newsInboxList"),
   llmPromptForm: document.querySelector("#llmPromptForm"),
   llmPromptOutput: document.querySelector("#llmPromptOutput"),
   copyLlmPromptButton: document.querySelector("#copyLlmPromptButton"),
   llmResultForm: document.querySelector("#llmResultForm"),
+  llmStorageStatusButton: document.querySelector("#llmStorageStatusButton"),
   earningsFilingNoteForm: document.querySelector("#earningsFilingNoteForm"),
   gpLpStagingForm: document.querySelector("#gpLpStagingForm"),
   marketCloseForm: document.querySelector("#marketCloseForm"),
@@ -113,6 +134,10 @@ const elements = {
   portfolioForm: document.querySelector("#portfolioForm"),
   portfolioSelect: document.querySelector("#portfolioSelect"),
   portfolioLoadButton: document.querySelector("#portfolioLoadButton"),
+  portfolioKiwoomSyncButton: document.querySelector("#portfolioKiwoomSyncButton"),
+  portfolioKiwoomApplyButton: document.querySelector("#portfolioKiwoomApplyButton"),
+  portfolioKiwoomCancelButton: document.querySelector("#portfolioKiwoomCancelButton"),
+  portfolioSyncHistoryButton: document.querySelector("#portfolioSyncHistoryButton"),
   portfolioConnectivityButton: document.querySelector("#portfolioConnectivityButton"),
   portfolioNpsFlowButton: document.querySelector("#portfolioNpsFlowButton"),
   portfolioAnalysisStatusButton: document.querySelector("#portfolioAnalysisStatusButton"),
@@ -136,6 +161,7 @@ const elements = {
   portfolioSort: document.querySelector("#portfolioSort"),
   holdingsEditor: document.querySelector("#holdingsEditor"),
   portfolioLoadedAt: document.querySelector("#portfolioLoadedAt"),
+  portfolioSyncOverview: document.querySelector("#portfolioSyncOverview"),
   portfolioSmartRefreshButton: document.querySelector("#portfolioSmartRefreshButton"),
   portfolioConsensusScanButton: document.querySelector("#portfolioConsensusScanButton"),
   portfolioSmartChart: document.querySelector("#portfolioSmartChart"),
@@ -179,8 +205,12 @@ const elements = {
   dailyBriefButton: document.querySelector("#dailyBriefButton"),
   researchAutomationButton: document.querySelector("#researchAutomationButton"),
   todayResearchUpdateButton: document.querySelector("#todayResearchUpdateButton"),
+  naverResearchStatusButton: document.querySelector("#naverResearchStatusButton"),
+  naverResearchRepairButton: document.querySelector("#naverResearchRepairButton"),
+  naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
+  ocrReprocessButton: document.querySelector("#ocrReprocessButton"),
   storageCleanupButton: document.querySelector("#storageCleanupButton"),
   dedupedDossierRefreshButton: document.querySelector("#dedupedDossierRefreshButton"),
   tickerCacheButton: document.querySelector("#tickerCacheButton"),
@@ -199,6 +229,8 @@ const KOREAN_TICKER_DISPLAY_NAMES = {
   "018260": "삼성에스디에스",
   "071050": "한국금융지주",
   "189330": "씨이랩",
+  "327260": "RF머트리얼즈",
+  "043260": "성호전자",
   "0117V0": "TIGER 코리아AI전력기기TOP3플러스 ETF",
   "035510": "신세계I&C",
   "036890": "진성티이씨",
@@ -221,6 +253,7 @@ let lastTickerVerification = null;
 let lastTickerProfile = null;
 let savedPortfolios = [];
 let activePortfolioSnapshot = null;
+let pendingKiwoomDomesticSync = null;
 let portfolioSmartRows = [];
 let portfolioSmartSort = { key: "market_value", direction: "desc" };
 let consensusScanRows = [];
@@ -349,9 +382,13 @@ function completionModuleLabel(moduleName) {
     research_automation_pipeline: "전체 자동화",
     today_research_update: "오늘 리서치 업데이트",
     korea_customs_trade_snapshot: "관세청 수출입 동향",
+    korea_customs_trade_total_trend_status: "관세청 수출입총괄 진단",
+    kcif_reports_watch: "KCIF 보고서 Watch",
+    regional_business_sources_watch: "EMERiCs/CSF 비즈니스 Watch",
     earnings_filing_note: "모델 업데이트 노트",
     gp_lp_staging: "LP 보고 스테이징",
     source_url_preview: "웹 본문 미리보기",
+    research_memory_ocr_reprocess: "OCR 재처리",
   };
   return labels[moduleName] || "";
 }
@@ -844,6 +881,10 @@ function formDataObject(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function isClickSmokeMode() {
+  return new URLSearchParams(window.location.search).get("smoke") === "clicks";
+}
+
 function buildManualLlmPrompt(data) {
   const target = String(data.target || "").trim() || "티커 없는 시장/섹터/거시 자료";
   const provider = String(data.provider || "LLM").trim();
@@ -1176,6 +1217,23 @@ function resetLlmResultInputScreen() {
   }
 }
 
+function resetLlmBridgeInputScreen() {
+  if (elements.llmPromptForm) {
+    const target = elements.llmPromptForm.elements.target;
+    const sourceContext = elements.llmPromptForm.elements.sourceContext;
+    if (target) {
+      target.value = "";
+    }
+    if (sourceContext) {
+      sourceContext.value = "";
+    }
+  }
+  if (elements.llmPromptOutput) {
+    elements.llmPromptOutput.value = "";
+  }
+  resetLlmResultInputScreen();
+}
+
 function resetWorkflowDraftForm(form, fileInputName = "") {
   if (!form) {
     return;
@@ -1194,13 +1252,19 @@ function resetWorkflowDraftForm(form, fileInputName = "") {
 function createHoldingActionGroup() {
   const group = document.createElement("div");
   group.className = "holding-actions";
+  const saveButton = document.createElement("button");
+  saveButton.className = "secondary holding-action";
+  saveButton.type = "button";
+  saveButton.dataset.holdingAction = "save";
+  saveButton.textContent = "저장";
+  saveButton.title = "수량, 평단, 현재가 등 현재 화면의 포트폴리오 입력값을 저장합니다.";
   const dashboardButton = document.createElement("button");
   dashboardButton.className = "secondary holding-action";
   dashboardButton.type = "button";
   dashboardButton.dataset.holdingAction = "dashboard";
   dashboardButton.textContent = "분석";
   dashboardButton.title = "이 보유 종목을 대시보드와 전체 분석 모듈에 연결합니다.";
-  group.append(dashboardButton, createRemoveButton("삭제"));
+  group.append(saveButton, dashboardButton, createRemoveButton("삭제"));
   return group;
 }
 
@@ -1240,9 +1304,57 @@ function createPortfolioRefreshBadge(holding = {}) {
   return badge;
 }
 
+function portfolioSyncStatusMeta(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  const map = {
+    account_synced: ["키움 동기화", "success"],
+    kiwoom_domestic_missing: ["키움 미확인", "warning"],
+    manual_or_overseas_protected: ["수동 보호", "info"],
+    kiwoom_not_configured: ["설정 필요", "warning"],
+    kiwoom_unavailable: ["연결 실패", "warning"],
+  };
+  const [label, tone] = map[normalized] || ["수동/미확인", "muted"];
+  return { label, tone, normalized };
+}
+
+function createPortfolioSyncBadge(holding = {}) {
+  const badge = document.createElement("div");
+  const meta = portfolioSyncStatusMeta(holding.sync_status);
+  badge.className = `portfolio-sync-badge ${meta.tone}`;
+  badge.title = [
+    `계좌 동기화: ${meta.label}`,
+    holding.sync_checked_at ? `확인 시각: ${formatDateTime(holding.sync_checked_at)}` : "",
+    holding.sync_message || "",
+  ].filter(Boolean).join(" · ");
+  const label = document.createElement("span");
+  label.textContent = "수량 동기화";
+  const strong = document.createElement("strong");
+  strong.textContent = meta.label;
+  badge.append(label, strong);
+  return badge;
+}
+
 function portfolioRefreshStatusBadgeHtml(row = {}) {
   const meta = portfolioRefreshStatusMeta(row.price_refresh_status);
   return `<span class="smart-status-badge ${escapeHtml(meta.tone)}" title="${escapeHtml(portfolioRefreshStatusText(row))}">${escapeHtml(meta.label)}</span>`;
+}
+
+function freshnessStatusBadgeHtml(row = {}) {
+  const toneMap = {
+    ok: "success",
+    warning: "warning",
+    needs_action: "danger",
+    needsAction: "danger",
+  };
+  const tone = toneMap[row.freshness_tone] || "muted";
+  const label = row.freshness_status || "미확인";
+  const title = [
+    row.freshness_summary,
+    row.latest_research_date ? `최신 저장일 ${row.latest_research_date}` : "",
+    row.latest_dart_date ? `최신 공시 ${row.latest_dart_date}` : "",
+    row.latest_dart_report || "",
+  ].filter(Boolean).join(" · ");
+  return `<span class="smart-status-badge ${escapeHtml(tone)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
 function syncCompanyNameAlignment(row) {
@@ -1270,6 +1382,7 @@ function makePortfolioHoldingRow(holding = {}) {
   const row = document.createElement("div");
   row.className = "editor-row holding-row";
   const currency = normalizeCurrency(holding.currency, holding.ticker);
+  const fxRate = inferHoldingFxRateFromValues(holding, currency);
   row.append(
     createInput({
       name: "name",
@@ -1299,6 +1412,7 @@ function makePortfolioHoldingRow(holding = {}) {
       className: "money-field current-price-field",
     }),
     createPortfolioRefreshBadge(holding),
+    createPortfolioSyncBadge(holding),
     createInput({
       name: "average_cost",
       label: "매입가(평단)",
@@ -1336,7 +1450,12 @@ function makePortfolioHoldingRow(holding = {}) {
     createHiddenInput("weight", holding.weight ?? ""),
     createHiddenInput("sector", holding.sector || ""),
     createHiddenInput("cost_basis", formatMoney(holding.cost_basis, "KRW")),
+    createHiddenInput("fx_rate", fxRate ? String(fxRate) : ""),
     createHiddenInput("theme_tags", joinTags(holding.theme_tags)),
+    createHiddenInput("sync_status", holding.sync_status || ""),
+    createHiddenInput("sync_source", holding.sync_source || ""),
+    createHiddenInput("sync_checked_at", holding.sync_checked_at || ""),
+    createHiddenInput("sync_message", holding.sync_message || ""),
     createHoldingActionGroup()
   );
   syncCompanyNameAlignment(row);
@@ -1381,12 +1500,12 @@ function makeInterestTickerSummaryRow(item = {}) {
     "interest-summary-row interest-ticker-summary-row interest-ticker-row interest-compact-card-row";
   const companyName = item.companyName || item.company_name || item.verification?.company_name || item.ticker || "";
   const tickerCode = String(item.ticker || "").trim();
-  const tickerHint = tickerCode && companyName !== tickerCode ? `종목코드 ${tickerCode}` : "";
-  const identityLabel = tickerHint ? `${companyName} · ${tickerHint}` : companyName;
+  const identityLabel = companyName || (tickerCode ? "회사명 확인 필요" : "");
   const priorityLabel = { high: "높음", medium: "보통", low: "낮음" }[item.priority || "medium"] || "보통";
   const tags = joinTags(item.tags);
   const verified = Boolean(item.verification?.verified || item.verification?.status === "success");
   const notePreview = compactOutputText(item.thesis || item.notes || "추적 메모 없음", 72);
+  const tickerHint = "";
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
   const summary = document.createElement("summary");
@@ -1455,8 +1574,8 @@ function makeInterestSectorRow(item = {}) {
     createInput({
       name: "region",
       label: "지역",
-      value: item.region || "US",
-      placeholder: "US, KR, GLOBAL",
+      value: item.region || "KR",
+      placeholder: "KR, US, GLOBAL",
     }),
     createSelect({
       name: "priority",
@@ -1647,6 +1766,23 @@ function syncPortfolioRowColors(row) {
   syncSignedPortfolioField(row, "unrealized_return");
 }
 
+function markHoldingRowUnsaved(row) {
+  if (!row) {
+    return;
+  }
+  row.classList.add("row-unsaved");
+  row.querySelector('[data-holding-action="save"]')?.classList.add("needs-save");
+}
+
+function clearHoldingRowsUnsaved() {
+  elements.holdingsEditor
+    ?.querySelectorAll(".holding-row.row-unsaved")
+    .forEach((row) => {
+      row.classList.remove("row-unsaved");
+      row.querySelector('[data-holding-action="save"]')?.classList.remove("needs-save");
+    });
+}
+
 function sortHoldingsByMarketValue(holdings = []) {
   return [...holdings].sort(
     (a, b) => Number(b.market_value || 0) - Number(a.market_value || 0)
@@ -1716,6 +1852,53 @@ function rowCurrency(row) {
   return normalizeCurrency(rowValue(row, "currency"), rowValue(row, "ticker"));
 }
 
+function inferHoldingFxRateFromValues(holding = {}, currency = "") {
+  const normalizedCurrency = normalizeCurrency(currency || holding.currency, holding.ticker);
+  if (normalizedCurrency !== "USD") {
+    return 1;
+  }
+  const quantity = Number(holding.quantity);
+  const averageCost = Number(holding.average_cost);
+  const currentPrice = Number(holding.current_price);
+  const costBasis = Number(holding.cost_basis);
+  const marketValue = Number(holding.market_value);
+  if (quantity > 0 && averageCost > 0 && costBasis > 0) {
+    return costBasis / (quantity * averageCost);
+  }
+  if (quantity > 0 && currentPrice > 0 && marketValue > 0) {
+    return marketValue / (quantity * currentPrice);
+  }
+  return 1;
+}
+
+function rowFxRate(row) {
+  const currency = rowCurrency(row);
+  if (currency !== "USD") {
+    return 1;
+  }
+  const stored = numericInputValue(row, "fx_rate");
+  if (stored !== null && stored > 0) {
+    return stored;
+  }
+  const inferred = inferHoldingFxRateFromValues(
+    {
+      ticker: rowValue(row, "ticker"),
+      currency,
+      quantity: numericInputValue(row, "quantity"),
+      average_cost: numericInputValue(row, "average_cost"),
+      current_price: numericInputValue(row, "current_price"),
+      cost_basis: numericInputValue(row, "cost_basis"),
+      market_value: numericInputValue(row, "market_value"),
+    },
+    currency
+  );
+  if (inferred > 0) {
+    setRowValue(row, "fx_rate", inferred.toFixed(6));
+    return inferred;
+  }
+  return 1;
+}
+
 function holdingRows() {
   return [...elements.holdingsEditor.querySelectorAll(".holding-row")];
 }
@@ -1762,19 +1945,17 @@ function inferHoldingMarketValue(row, force = false) {
         "unrealized_return",
         unrealizedReturn === null ? "" : toPercent(unrealizedReturn)
       );
-      if (currency === "KRW") {
-        const costBasis = quantity * averageCost;
-        const unrealizedGain = quantity * (currentPrice - averageCost);
-        setRowMoneyValue(row, "cost_basis", costBasis, "KRW");
-        setRowMoneyValue(row, "unrealized_gain", unrealizedGain, "KRW");
-      }
+      const fxRate = rowFxRate(row);
+      const costBasis = quantity * averageCost * fxRate;
+      const unrealizedGain = quantity * (currentPrice - averageCost) * fxRate;
+      setRowMoneyValue(row, "cost_basis", costBasis, "KRW");
+      setRowMoneyValue(row, "unrealized_gain", unrealizedGain, "KRW");
       syncPortfolioRowColors(row);
     }
   }
-  const canForceMarketValue = currency === "KRW";
-  if (canForceMarketValue && (force || marketValue === null) && quantity !== null && currentPrice !== null) {
-    const calculated = quantity * currentPrice;
-    setRowMoneyValue(row, "market_value", calculated, currency);
+  if ((force || marketValue === null) && quantity !== null && currentPrice !== null) {
+    const calculated = quantity * currentPrice * rowFxRate(row);
+    setRowMoneyValue(row, "market_value", calculated, "KRW");
     return calculated;
   }
   return marketValue || 0;
@@ -1900,6 +2081,16 @@ function performanceTone(value) {
   return "neutral";
 }
 
+function performanceQualityTone(label) {
+  if (label === "높음") {
+    return "positive";
+  }
+  if (label === "보통" || label === "확인 필요") {
+    return "neutral";
+  }
+  return "negative";
+}
+
 function renderPortfolioPerformanceOverview(result) {
   if (!elements.portfolioPerformanceOverview) {
     return;
@@ -1933,6 +2124,14 @@ function renderPortfolioPerformanceOverview(result) {
   const unsupportedMarketValue = Number(result.unsupported_history_market_value || 0);
   const priceCache = result.price_history_cache || {};
   const resultCache = result.result_cache || {};
+  const refresh = result.current_price_refresh || {};
+  const quality = result.performance_quality || {};
+  const priceComparison = result.current_price_comparison || {};
+  const refreshStatusCounts = refresh.status_counts || {};
+  const refreshLatest = refresh.latest_checked_at ? formatDateTime(refresh.latest_checked_at) : "확인 전";
+  const refreshText = refresh.enabled
+    ? `현재가 강제 갱신 · 갱신 ${formatNumber(refresh.updated || refreshStatusCounts.updated || 0)}개 · 확인 ${formatNumber(refresh.confirmed || refreshStatusCounts.confirmed || 0)}개 · 미확인 ${formatNumber(refresh.unavailable || refreshStatusCounts.unavailable || 0)}개 · 최근 ${refreshLatest}`
+    : `저장 현재가 사용 · 가격 히스토리 최신 종가 기준 · ${refresh.description || "빠른 응답을 위해 제공자 강제 갱신은 생략했습니다."}`;
   const calculationText = result.calculation_mode === "recomputed_on_request"
     ? "요청 시 재계산"
     : result.calculation_mode || "계산 방식 미확인";
@@ -1944,7 +2143,7 @@ function renderPortfolioPerformanceOverview(result) {
           : ""
       }`;
   const skippedText = skipped.length
-    ? `제외 ${skipped.length}개: ${skipped.slice(0, 4).map((item) => item.name || item.ticker).join(", ")}${skipped.length > 4 ? " 외" : ""}`
+    ? `제외 ${skipped.length}개: ${skipped.slice(0, 4).map((item) => item.name || "종목 미확인").join(", ")}${skipped.length > 4 ? " 외" : ""}`
     : "제외 종목 없음";
   const skippedDetails = skipped.length
     ? `<details class="portfolio-performance-skip">
@@ -1953,13 +2152,62 @@ function renderPortfolioPerformanceOverview(result) {
           ${skipped
             .slice(0, 12)
             .map(
-              (item) =>
-                `<li>${escapeHtml(item.name || item.ticker || "종목 미확인")} · ${escapeHtml(item.ticker || "티커 없음")} · ${escapeHtml(item.reason || "가격 히스토리 없음")} · ${escapeHtml(item.impact || "기간 비교에서 제외")}</li>`
+              (item) => {
+                const manualReturn = item.manual_unrealized_return === null || item.manual_unrealized_return === undefined
+                  ? ""
+                  : ` · 수동 수익률 ${toPercent(item.manual_unrealized_return)}`;
+                const manualGain = item.manual_unrealized_gain === null || item.manual_unrealized_gain === undefined
+                  ? ""
+                  : ` · 수동 손익 ${formatMoney(item.manual_unrealized_gain, "KRW", "n/a")}`;
+                const note = item.manual_result_note ? ` · ${item.manual_result_note}` : "";
+                return `<li>${escapeHtml(item.name || "종목 미확인")} · ${escapeHtml(item.reason || "가격 히스토리 없음")} · ${escapeHtml(item.impact || "기간 비교에서 제외")}${escapeHtml(manualGain)}${escapeHtml(manualReturn)}${escapeHtml(note)}</li>`;
+              }
             )
             .join("")}
         </ul>
       </details>`
     : `<p class="portfolio-performance-note">제외 종목 없이 계산했습니다.</p>`;
+  const comparisonItems = Array.isArray(priceComparison.items) ? priceComparison.items : [];
+  const comparisonDetails = comparisonItems.length
+    ? `<details class="portfolio-performance-skip">
+        <summary>저장 현재가와 국내 최신 종가 차이 ${formatNumber(priceComparison.difference_count || comparisonItems.length)}개</summary>
+        <ul>
+          ${comparisonItems
+            .slice(0, 12)
+            .map(
+              (item) =>
+                `<li>${escapeHtml(item.name || "종목 미확인")} · 저장 ${escapeHtml(formatSmartPrice(item.stored_current_price, "KRW", "n/a"))} · 최신 종가 ${escapeHtml(formatSmartPrice(item.history_latest_close, "KRW", "n/a"))} · 차이 ${escapeHtml(toPercent(item.difference_rate))} · ${escapeHtml(item.history_latest_date || "일자 미확인")}</li>`
+            )
+            .join("")}
+        </ul>
+      </details>`
+    : `<p class="portfolio-performance-note">저장 현재가와 국내 최신 종가 차이가 큰 종목은 없습니다.</p>`;
+  const qualityTone = performanceQualityTone(quality.confidence_label);
+  const latestStoredPrice = result.latest_stored_price_checked_at || quality.latest_stored_price_checked_at;
+  const qualityCards = `
+    <div class="portfolio-performance-quality">
+      <article class="${qualityTone}">
+        <span>정확도</span>
+        <strong>${escapeHtml(quality.confidence_label || "확인 전")}</strong>
+        <p>최소 커버리지 ${escapeHtml(quality.min_coverage_rate === null || quality.min_coverage_rate === undefined ? "n/a" : toPercent(quality.min_coverage_rate))}</p>
+      </article>
+      <article>
+        <span>가격 기준</span>
+        <strong>${escapeHtml(result.price_basis || "저장 현재가")}</strong>
+        <p>${escapeHtml(latestStoredPrice ? `저장 현재가 확인 ${formatDateTime(latestStoredPrice)}` : "저장 현재가 확인 시각 없음")}</p>
+      </article>
+      <article class="${Number(priceComparison.difference_count || 0) ? "neutral" : "positive"}">
+        <span>가격 차이</span>
+        <strong>${formatNumber(priceComparison.difference_count || 0)}개</strong>
+        <p>저장 현재가와 국내 최신 종가 0.5% 이상 차이</p>
+      </article>
+      <article class="${unsupportedCount ? "neutral" : "positive"}">
+        <span>해외/수동</span>
+        <strong>${formatNumber(unsupportedCount)}개</strong>
+        <p>기간 비교 제외, 저장 손익은 별도 표시</p>
+      </article>
+    </div>
+  `;
   elements.portfolioPerformanceOverview.innerHTML = `
     <div class="portfolio-performance-header">
       <div>
@@ -1970,15 +2218,19 @@ function renderPortfolioPerformanceOverview(result) {
           <span><b>현재 미실현 손익</b>${escapeHtml(formatMoney(result.current_unrealized_gain, "KRW", "n/a"))}</span>
           <span><b>현재 미실현 수익률</b>${escapeHtml(toPercent(result.current_unrealized_return))}</span>
           <span><b>비교 상태</b>${escapeHtml(skippedText)}</span>
+          <span><b>현재가 갱신</b>${escapeHtml(refreshText)}</span>
           <span><b>계산/캐시</b>${escapeHtml(calculationText)} · ${escapeHtml(cacheText)}</span>
           <span><b>해외/미지원 제외</b>${escapeHtml(formatNumber(unsupportedCount))}개 · ${escapeHtml(formatMoney(unsupportedMarketValue, "KRW", "0원"))}</span>
         </div>
       </div>
       <b>${escapeHtml(bestPeriod ? `최고 구간 ${bestPeriod.label}` : "구간 비교 대기")}</b>
     </div>
+    ${qualityCards}
     <div class="portfolio-performance-grid">${periodCards}</div>
+    <p class="portfolio-performance-note">${escapeHtml(result.price_refresh_guidance || "")}</p>
     <p class="portfolio-performance-note">${escapeHtml(result.coverage_note || "")}</p>
     <p class="portfolio-performance-note">${escapeHtml(result.data_limitations?.join(" ") || "기간 수익 비교는 확보된 가격 히스토리 범위 안에서 계산됩니다.")}</p>
+    ${comparisonDetails}
     ${skippedDetails}
   `;
 }
@@ -2085,6 +2337,10 @@ function collectPortfolioHoldings() {
       sector: rowValue(row, "sector") || "Unknown",
       theme_tags: splitTags(rowValue(row, "theme_tags")),
       currency: rowCurrency(row),
+      sync_status: rowValue(row, "sync_status") || null,
+      sync_source: rowValue(row, "sync_source") || null,
+      sync_checked_at: rowValue(row, "sync_checked_at") || null,
+      sync_message: rowValue(row, "sync_message") || null,
     }))
     .filter((item) => item.ticker);
 }
@@ -2199,7 +2455,7 @@ function addDashboardCandidate(target, sourceMap, item = {}, source = "후보") 
     company,
     source,
     sourceGroup: source === "최근 사용" || source === "관심종목" ? source : "포트폴리오",
-    label: company && company !== ticker ? `${company} · 종목코드 ${ticker}` : ticker,
+    label: company && company !== ticker ? company : "회사명 확인 필요",
   });
   sourceMap.add(ticker);
 }
@@ -2341,11 +2597,11 @@ function renderDashboardTickerQuickList(candidates = []) {
             ${items
               .slice(0, visibleItems.length)
               .map((item) => {
-                const displayName = item.company || item.ticker;
+                const displayName = item.company || item.label || "회사명 확인 필요";
                 const tooltip = item.label || displayName;
                 const ariaLabel =
                   item.company && item.company !== item.ticker
-                    ? `${item.company}, 종목코드 ${item.ticker}, ${item.source}`
+                    ? `${item.company}, ${item.source}`
                     : `${displayName}, ${item.source}`;
                 return `
                   <button
@@ -2379,7 +2635,7 @@ function collectInterestSectorRows(container = elements.interestSectorEditor) {
   return [...container.querySelectorAll(".interest-sector-row")]
     .map((row) => ({
       name: rowValue(row, "name"),
-      region: rowValue(row, "region") || "US",
+      region: rowValue(row, "region") || "KR",
       priority: rowValue(row, "priority") || "medium",
       thesis: rowValue(row, "thesis") || null,
       notes: rowValue(row, "notes") || null,
@@ -2570,8 +2826,111 @@ function updatePortfolioLoadedAt(portfolio, label = "불러온") {
     `최근 ${label} 일시: ${loadedAt}`,
     updatedAt ? `저장 수정: ${formatDateTime(updatedAt)}` : "",
     portfolio.portfolio_name ? `포트폴리오: ${portfolio.portfolio_name}` : "",
+    `보유 종목: ${formatNumber(portfolio.holding_count ?? portfolio.holdings?.length ?? 0)}개`,
   ].filter(Boolean);
   elements.portfolioLoadedAt.textContent = parts.join(" · ");
+}
+
+function portfolioSyncStatusLabel(status) {
+  const labels = {
+    account_synced: "키움 동기화",
+    manual_or_overseas_protected: "수동 보호",
+    kiwoom_domestic_missing: "키움 미확인",
+    kiwoom_not_configured: "설정 필요",
+    unknown: "미확인",
+  };
+  return labels[status] || "미확인";
+}
+
+function summarizePortfolioSyncFromPortfolio(portfolio) {
+  const holdings = Array.isArray(portfolio?.holdings) ? portfolio.holdings : [];
+  const counts = holdings.reduce(
+    (acc, holding) => {
+      const status = holding.sync_status || "unknown";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    },
+    {
+      account_synced: 0,
+      manual_or_overseas_protected: 0,
+      kiwoom_domestic_missing: 0,
+      kiwoom_not_configured: 0,
+      kiwoom_unavailable: 0,
+      unknown: 0,
+    }
+  );
+  const latestCheckedAt = holdings
+    .map((holding) => holding.sync_checked_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  return {
+    holding_count: holdings.length,
+    counts,
+    latest_checked_at: latestCheckedAt || null,
+    last_history_created_at: null,
+    last_history_checked_at: null,
+    last_history_message: null,
+  };
+}
+
+function renderPortfolioSyncOverview(payload = {}) {
+  if (!elements.portfolioSyncOverview) {
+    return;
+  }
+  const summary = payload.summary || summarizePortfolioSyncFromPortfolio(payload.portfolio || activePortfolioSnapshot);
+  const counts = summary.counts || {};
+  const synced = counts.account_synced || 0;
+  const protectedCount = counts.manual_or_overseas_protected || 0;
+  const missing = (counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0);
+  const unknown = counts.unknown || 0;
+  const checkedAt = summary.last_history_checked_at || summary.latest_checked_at || summary.last_history_created_at;
+  const holdingCount = summary.holding_count || synced + protectedCount + missing + unknown;
+  const statusClass = missing > 0 ? "warning" : synced + protectedCount > 0 ? "ok" : "needs_action";
+  elements.portfolioSyncOverview.innerHTML = [
+    `<div class="${statusClass}"><span>계좌 동기화</span><strong>${escapeHtml(checkedAt ? formatDateTime(checkedAt) : "확인 전")}</strong><p>${escapeHtml(checkedAt ? "최근 키움 국내 수량 확인 기준" : "최근 동기화 이력이 없습니다.")}</p></div>`,
+    `<div class="${synced ? "ok" : "needs_action"}"><span>키움 동기화</span><strong>${formatNumber(synced)}개</strong><p>국내 잔고와 수량/평단 확인</p></div>`,
+    `<div class="${protectedCount ? "info" : "ok"}"><span>수동 보호</span><strong>${formatNumber(protectedCount)}개</strong><p>해외주식·수동 관리 수량 보존</p></div>`,
+    `<div class="${missing ? "warning" : "ok"}"><span>확인 필요</span><strong>${formatNumber(missing + unknown)}개</strong><p>${escapeHtml(missing ? "국내 잔고 미확인 또는 설정 필요" : "미확인 항목 없음")}</p></div>`,
+    `<div><span>전체 종목</span><strong>${formatNumber(holdingCount)}개</strong><p>${escapeHtml(summary.last_history_message || "이력 조회 시 최근 기록을 함께 표시")}</p></div>`,
+  ].join("");
+}
+
+function portfolioSyncHistoryOutputLines(result = {}) {
+  const summary = result.summary || {};
+  const counts = summary.counts || {};
+  const history = Array.isArray(result.history) ? result.history : [];
+  const historyLines = history.slice(0, 10).flatMap((item, index) => {
+    const changes = Array.isArray(item.changes) ? item.changes : [];
+    const skipped = Array.isArray(item.skipped) ? item.skipped : [];
+    const changedNames = changes
+      .filter((change) => change.changed)
+      .slice(0, 4)
+      .map((change) => change.name || "회사명 미확인");
+    const protectedNames = skipped
+      .filter((entry) => entry.reason === "manual_or_overseas_protected")
+      .slice(0, 4)
+      .map((entry) => entry.name || "회사명 미확인");
+    return [
+      `${index + 1}. ${formatDateTime(item.created_at || item.checked_at || "")} · 변경 ${formatNumber(item.updated_count || 0)}개 · 동일 확인 ${formatNumber(item.confirmed_count || 0)}개 · 보존/미확인 ${formatNumber(item.skipped_count || 0)}개`,
+      changedNames.length ? `   - 변경: ${changedNames.join(", ")}` : "",
+      protectedNames.length ? `   - 수동 보호: ${protectedNames.join(", ")}` : "",
+    ].filter(Boolean);
+  });
+  return [
+    "# 최근 계좌 동기화 이력",
+    "",
+    `- 포트폴리오: ${result.portfolio_name || elements.portfolioSelect?.value || "미선택"}`,
+    `- 키움 동기화: ${formatNumber(counts.account_synced || 0)}개`,
+    `- 수동 보호: ${formatNumber(counts.manual_or_overseas_protected || 0)}개`,
+    `- 확인 필요: ${formatNumber((counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0) + (counts.unknown || 0))}개`,
+    summary.last_history_checked_at || summary.latest_checked_at
+      ? `- 최근 확인 시각: ${formatDateTime(summary.last_history_checked_at || summary.latest_checked_at)}`
+      : "- 최근 확인 시각: 아직 없음",
+    "",
+    historyLines.length ? "이력" : "이력 없음",
+    ...historyLines,
+  ];
 }
 
 function fillPortfolioForm(portfolio) {
@@ -2579,7 +2938,11 @@ function fillPortfolioForm(portfolio) {
     return;
   }
   activePortfolioSnapshot = portfolio;
+  if (elements.portfolioSelect && portfolio.portfolio_name) {
+    elements.portfolioSelect.value = portfolio.portfolio_name;
+  }
   updatePortfolioLoadedAt(portfolio);
+  renderPortfolioSyncOverview({ portfolio });
   elements.portfolioForm.elements.portfolioName.value =
     portfolio.portfolio_name || "";
   elements.portfolioForm.elements.portfolioValue.value =
@@ -2595,9 +2958,89 @@ function fillPortfolioForm(portfolio) {
     makePortfolioHoldingRow,
     () => ({ ticker: "", sector: "Unknown", theme_tags: [] })
   );
+  clearHoldingRowsUnsaved();
   recalculatePortfolioValues();
   applyPortfolioViewState({ sort: true });
   refreshPortfolioSmartTable({ silent: true });
+}
+
+function kiwoomSyncSummaryLines(summary = {}) {
+  const changes = Array.isArray(summary.changes) ? summary.changes : [];
+  const skipped = Array.isArray(summary.skipped) ? summary.skipped : [];
+  const changeDetail = (item) => {
+    const name = item.name || item.ticker || "회사명 미확인";
+    const quantity = `${formatNumber(item.old_quantity ?? 0)}주 → ${formatNumber(item.new_quantity ?? 0)}주`;
+    const averageCost = `${formatMoney(item.old_average_cost, "KRW", "n/a")} → ${formatMoney(item.new_average_cost, "KRW", "n/a")}`;
+    const marketValue = `${formatMoney(item.old_market_value, "KRW", "n/a")} → ${formatMoney(item.new_market_value, "KRW", "n/a")}`;
+    return `- ${name}: 수량 ${quantity} · 평단 ${averageCost} · 평가금액 ${marketValue}`;
+  };
+  const changedLines = changes
+    .filter((item) => item.changed)
+    .slice(0, 10)
+    .map(changeDetail);
+  const confirmedLines = changes
+    .filter((item) => !item.changed)
+    .slice(0, 5)
+    .map((item) => `- ${item.name || item.ticker || "회사명 미확인"}: ${formatNumber(item.new_quantity ?? 0)}주 동일 확인`);
+  const protectedLines = skipped
+    .filter((item) => item.reason === "manual_or_overseas_protected")
+    .slice(0, 8)
+    .map((item) => `- ${item.name || item.ticker}: ${formatNumber(item.quantity ?? 0)}주 보존`);
+  const missingLines = skipped
+    .filter((item) => item.reason !== "manual_or_overseas_protected")
+    .slice(0, 8)
+    .map((item) => `- ${item.name || item.ticker}: ${syncSkipReasonLabel(item.reason)}`);
+  return [
+    `- 변경: ${formatNumber(summary.updated_count || 0)}개 / 동일 확인: ${formatNumber(summary.confirmed_count || 0)}개 / 보존·미확인: ${formatNumber(summary.skipped_count || 0)}개`,
+    ...(changedLines.length ? ["", "변경 내역", ...changedLines] : []),
+    ...(confirmedLines.length ? ["", "동일 확인", ...confirmedLines] : []),
+    ...(protectedLines.length ? ["", "해외·수동 종목 보호", ...protectedLines] : []),
+    ...(missingLines.length ? ["", "미확인/설정 필요", ...missingLines] : []),
+  ];
+}
+
+function syncSkipReasonLabel(reason) {
+  const labels = {
+    manual_or_overseas_protected: "해외·수동 종목이라 기존 수량 보존",
+    kiwoom_domestic_missing: "키움 국내 잔고에서 미확인",
+    kiwoom_not_configured: "키움 API 키/토큰 설정 필요",
+    kiwoom_unavailable: "키움 국내 잔고 API 연결 실패",
+  };
+  return labels[reason] || "동기화 제외";
+}
+
+function clearPendingKiwoomDomesticSync() {
+  pendingKiwoomDomesticSync = null;
+  if (elements.portfolioKiwoomApplyButton) {
+    elements.portfolioKiwoomApplyButton.hidden = true;
+    elements.portfolioKiwoomApplyButton.disabled = true;
+  }
+  if (elements.portfolioKiwoomCancelButton) {
+    elements.portfolioKiwoomCancelButton.hidden = true;
+    elements.portfolioKiwoomCancelButton.disabled = true;
+  }
+  if (elements.portfolioKiwoomSyncButton) {
+    elements.portfolioKiwoomSyncButton.textContent = "키움 국내 수량 확인";
+  }
+}
+
+function setPendingKiwoomDomesticSync(portfolioName, result) {
+  pendingKiwoomDomesticSync = {
+    portfolioName,
+    checkedAt: result?.sync_summary?.checked_at || "",
+    summary: result?.sync_summary || {},
+  };
+  if (elements.portfolioKiwoomApplyButton) {
+    elements.portfolioKiwoomApplyButton.hidden = false;
+    elements.portfolioKiwoomApplyButton.disabled = false;
+  }
+  if (elements.portfolioKiwoomCancelButton) {
+    elements.portfolioKiwoomCancelButton.hidden = false;
+    elements.portfolioKiwoomCancelButton.disabled = false;
+  }
+  if (elements.portfolioKiwoomSyncButton) {
+    elements.portfolioKiwoomSyncButton.textContent = "다시 확인";
+  }
 }
 
 function portfolioRefreshStatusLines(portfolio) {
@@ -2800,6 +3243,15 @@ const PORTFOLIO_SMART_COLUMNS = [
     html: true,
     valueClass: (row) => `smart-status-${portfolioRefreshStatusMeta(row.price_refresh_status).tone}`,
     render: (row) => portfolioRefreshStatusBadgeHtml(row),
+  },
+  {
+    key: "freshness_status",
+    label: "자료 최신성",
+    width: 112,
+    align: "center",
+    html: true,
+    valueClass: (row) => `smart-status-${row.freshness_tone || "muted"}`,
+    render: (row) => freshnessStatusBadgeHtml(row),
   },
   {
     key: "average_cost",
@@ -3063,6 +3515,7 @@ function renderPortfolioSmartTable(rows = portfolioSmartRows) {
             row.price_source ? `출처 ${row.price_source}` : "",
             row.market_value_note || "",
           ].filter(Boolean).join(" · ") : "",
+          column.key === "freshness_status" ? row.freshness_summary : "",
           column.key === "rag_connected" ? row.thesis_summary : "",
           column.key === "next_action" ? row.thesis_summary : "",
         ]
@@ -3099,6 +3552,7 @@ async function runTargetConsensusScan({ silent = false } = {}) {
     const result = await fetchTargetConsensusScan(token(), {
       portfolioName,
       includeInterests: true,
+      refreshMissingPrices: false,
     });
     consensusScanRows = result?.rows || [];
     renderTargetConsensusTable(consensusScanRows);
@@ -3342,10 +3796,11 @@ async function refreshPortfolioPerformance({ silent = false } = {}) {
   }
 }
 
-function renderPortfolioOptions(portfolios = []) {
+function renderPortfolioOptions(portfolios = [], selectedName = "") {
   if (!elements.portfolioSelect) {
     return;
   }
+  const previousSelection = selectedName || elements.portfolioSelect.value || "";
   elements.portfolioSelect.replaceChildren();
   if (elements.tradePortfolioSelect) {
     elements.tradePortfolioSelect.replaceChildren(
@@ -3375,6 +3830,23 @@ function renderPortfolioOptions(portfolios = []) {
       );
     }
   });
+  if (
+    previousSelection &&
+    portfolios.some((item) => item.portfolio_name === previousSelection)
+  ) {
+    elements.portfolioSelect.value = previousSelection;
+  }
+}
+
+function findSavedPortfolioByName(portfolioName = "") {
+  const normalizedName = String(portfolioName || "").trim();
+  if (!normalizedName) {
+    return null;
+  }
+  return (
+    savedPortfolios.find((item) => item.portfolio_name === normalizedName) ||
+    null
+  );
 }
 
 function selectedTradePortfolio() {
@@ -3455,17 +3927,29 @@ function syncTradePortfolioSizeFromActivePortfolio() {
   }
 }
 
-async function refreshPortfolioStore(keepOutput = true) {
+async function refreshPortfolioStore(keepOutput = true, preferredPortfolioName = "") {
   syncApiBaseUrl();
+  const currentSelection =
+    preferredPortfolioName ||
+    elements.portfolioSelect?.value ||
+    activePortfolioSnapshot?.portfolio_name ||
+    elements.portfolioForm?.elements?.portfolioName?.value ||
+    "";
   const response = await fetchPortfolios(token());
   const portfolios = response?.portfolios || [];
   savedPortfolios = [...portfolios].sort((a, b) =>
     String(a.portfolio_name || "").localeCompare(String(b.portfolio_name || ""), "ko-KR")
   );
-  renderPortfolioOptions(savedPortfolios);
+  renderPortfolioOptions(savedPortfolios, currentSelection);
   renderDashboardTickerPicker();
-  if (savedPortfolios.length) {
-    fillPortfolioForm(savedPortfolios[0]);
+  const portfolioToShow =
+    findSavedPortfolioByName(currentSelection) ||
+    findSavedPortfolioByName(response?.active_portfolio?.portfolio_name) ||
+    response?.active_portfolio ||
+    savedPortfolios[0] ||
+    null;
+  if (portfolioToShow) {
+    fillPortfolioForm(portfolioToShow);
   } else {
     activePortfolioSnapshot = null;
     updatePortfolioLoadedAt(null);
@@ -3505,7 +3989,7 @@ async function runRiskScanForPortfolio(portfolio) {
     portfolioValue: portfolio.portfolio_value,
     maxSinglePositionWeight: portfolio.max_single_position_weight ?? 0.2,
     maxSectorWeight: portfolio.max_sector_weight ?? 0.35,
-    saveResult: true,
+    saveResult: !isClickSmokeMode(),
   });
 }
 
@@ -3884,6 +4368,13 @@ function resolveLocalTickerAlias(value) {
     오이솔루션: "138080",
     Oesolution: "138080",
     OE솔루션: "138080",
+    RF머트리얼즈: "327260",
+    알에프머트리얼즈: "327260",
+    RFMaterials: "327260",
+    "RF Materials": "327260",
+    성호전자: "043260",
+    SunghoElectronics: "043260",
+    "Sungho Electronics": "043260",
   };
   if (manualAliases[raw]) {
     return manualAliases[raw];
@@ -3916,7 +4407,7 @@ const SPECIAL_MEMORY_KEYS = new Set([
   "INBOX",
   "CORE-GROWTH",
   "SECTOR-US-BALANCED",
-  "COMPOUNDER-US-ALL-QUALITY-GROWTH",
+  "COMPOUNDER-KR-ALL-QUALITY-GROWTH",
 ]);
 
 function normalizeStorageKey(value) {
@@ -4296,6 +4787,9 @@ function translateVerificationSource(source) {
     local_official_registry: "로컬 공식 등록",
     fmp_company_profile: "FMP 자동 인증",
     dynamic_ticker_cache: "자동 인증 캐시",
+    kind_krx_corp_list: "KRX/KIND 상장사 목록",
+    nasdaq_trader_nasdaqlisted: "Nasdaq Trader 상장 목록",
+    nasdaq_trader_otherlisted: "Nasdaq Trader 기타 상장 목록",
   };
   return labels[source] || source || "출처 미확인";
 }
@@ -4482,6 +4976,12 @@ function summarizeSystemCheckValue(label, value) {
     const universe = value.target_universe || {};
     const dailyFailures = Number(daily.failure_count || daily.failed_tickers?.length || 0);
     const excludedCount = Number(daily.excluded_count || universe.excluded_tickers?.length || 0);
+    const checkedCount = Number(daily.checked_count || 0);
+    const currentTargetCount = Number(daily.current_target_count || value.target_tickers?.length || 0);
+    const coverageText = currentTargetCount
+      ? `커버리지 ${checkedCount}/${currentTargetCount}`
+      : "커버리지 대상 없음";
+    const reliability = daily.reliability_status || "신뢰도 미확인";
     const dailyState = daily.due
       ? "오늘 점검 필요"
       : dailyFailures
@@ -4493,9 +4993,15 @@ function summarizeSystemCheckValue(label, value) {
       .slice(0, 3)
       .map((item) => `${item.ticker || "대상 미확인"} ${item.category ? `(${item.category})` : ""}`.trim())
       .join(", ");
-    return `감시 대상 ${value.target_tickers?.length || 0}개(보유 ${portfolioCount} · 관심 ${interestCount}) · 제외 ${excludedCount}개 · ${dailyState} · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건${
+    return `감시 대상 ${value.target_tickers?.length || 0}개(보유 ${portfolioCount} · 관심 ${interestCount}) · 제외 ${excludedCount}개 · ${dailyState} · ${reliability} · ${coverageText} · 저장 공시 ${value.entry_count || 0}개 · 최근 실패 ${failures}건${
       failureNames ? ` · 확인: ${failureNames}` : ""
     }`;
+  }
+  if (label.includes("네이버 리서치")) {
+    const pdfCounts = value.pdf_extraction_counts || {};
+    const marketJournal = value.market_close_journal || {};
+    const sourceLabel = marketJournal.source_origin === "naver_research_auto" ? "자동 반영" : "수동/기타";
+    return `캐시 ${value.entry_count || 0}건 · RAG ${value.active_rag_count || 0}건 · 저장 누락 ${value.missing_storage_count || 0}건 · PDF 성공 ${pdfCounts.success || 0}건/미분석 ${pdfCounts.unknown || 0}건 · 시장일지 ${marketJournal.last_run_date || "미실행"} · ${sourceLabel} ${marketJournal.daily_time || "08:30"}`;
   }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
@@ -4526,11 +5032,13 @@ function formatConsoleSystemCheckResult(payload) {
   const failed = checks.filter((item) => item.status !== "성공");
   const ocrCheck = checks.find((item) => item.label.includes("OCR"));
   const dartCheck = checks.find((item) => item.label.includes("DART"));
+  const naverCheck = checks.find((item) => item.label.includes("네이버 리서치"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
   const dartFailures = dartValue.last_failures || [];
   const okCount = checks.length - failed.length;
+  const ocrLimits = ocrCheck?.value?.limits || {};
   return [
     `# 전체 시스템 점검 완료`,
     ``,
@@ -4548,6 +5056,7 @@ function formatConsoleSystemCheckResult(payload) {
     ocrCheck
       ? `- **현재 상태:** ${ocrCheck.status} · ${ocrCheck.summary}`
       : `- **현재 상태:** OCR 점검 결과를 불러오지 못했습니다.`,
+    ocrLimits.message ? `- **처리 한계:** ${ocrLimits.message}` : "",
     `- **미연결 시 저장 방식:** 이미지는 원본 파일과 파일명/크기/이미지 크기 메타데이터로 저장됩니다. 이미지 속 글자는 분석 본문으로 쓰지 않고, 결과에는 OCR 미연결/보강 필요 경고가 표시됩니다.`,
     `- **권장 조치:** Tesseract와 kor+eng 언어팩 설치 여부를 먼저 확인하고, 설치 전에는 이미지 속 본문을 텍스트로 함께 붙여넣으세요.`,
     ``,
@@ -4555,6 +5064,8 @@ function formatConsoleSystemCheckResult(payload) {
     dartCheck
       ? `- **현재 상태:** ${dartCheck.status} · ${dartCheck.summary}`
       : `- **현재 상태:** DART 점검 결과를 불러오지 못했습니다.`,
+    `- **신뢰도:** ${dartDaily.reliability_status || "미확인"} · ${dartDaily.reliability_message || "점검 커버리지 정보가 없습니다."}`,
+    `- **다음 예정:** ${dartDaily.next_check_after ? formatDateTime(dartDaily.next_check_after) : "미확인"}`,
     `- **감시 제외:** ${formatNumber(dartExcluded.length)}개${
       dartExcluded.length
         ? ` · ${dartExcluded
@@ -4563,6 +5074,14 @@ function formatConsoleSystemCheckResult(payload) {
             .join(", ")}${dartExcluded.length > 6 ? " ..." : ""}`
         : ""
     }`,
+    ``,
+    `## 네이버 리서치/시장일지 상태`,
+    naverCheck
+      ? `- **현재 상태:** ${naverCheck.status} · ${naverCheck.summary}`
+      : `- **현재 상태:** 네이버 리서치 점검 결과를 불러오지 못했습니다.`,
+    naverCheck?.value?.market_close_journal
+      ? `- **마지막 국내 마감 시황:** ${naverCheck.value.market_close_journal.source_title || "미확인"} · ${naverCheck.value.market_close_journal.last_run_at ? formatDateTime(naverCheck.value.market_close_journal.last_run_at) : "미실행"}`
+      : `- **마지막 국내 마감 시황:** 미확인`,
     `- **실패 상세:** ${
       dartFailures.length
         ? dartFailures
@@ -4641,39 +5160,57 @@ async function runConsoleSystemCheck() {
     markBackendHealthy();
   }
 
-  await runCheck("저장 데이터/RAG Manifest", () => fetchResearchManifest(token()));
-  await runCheck("OCR/Tesseract 연결", () => fetchOcrStatus());
-  await runCheck("포트폴리오 저장소", async () => {
-    const result = await fetchPortfolios(token());
-    savedPortfolios = [...(result?.portfolios || [])].sort((a, b) =>
-      String(a.portfolio_name || "").localeCompare(String(b.portfolio_name || ""), "ko-KR")
-    );
-    renderPortfolioOptions(savedPortfolios);
-    if (savedPortfolios.length && !activePortfolioSnapshot) {
-      fillPortfolioForm(savedPortfolios[0]);
-    }
-    return result;
-  });
-  await runCheck("관심종목/섹터 저장소", async () => {
-    const result = await fetchInterests(token());
-    fillInterestsForm(result);
-    return result;
-  });
-  await runCheck("DART 신규 공시 감시", () => fetchDartFilingWatchStatus(token()));
-  await runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token()));
-  await runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false));
+  await Promise.all([
+    runCheck("저장 데이터/RAG Manifest", () => fetchResearchManifest(token())),
+    runCheck("OCR/Tesseract 연결", () => fetchOcrStatus()),
+    runCheck("포트폴리오 저장소", async () => {
+      const result = await fetchPortfolios(token());
+      savedPortfolios = [...(result?.portfolios || [])].sort((a, b) =>
+        String(a.portfolio_name || "").localeCompare(String(b.portfolio_name || ""), "ko-KR")
+      );
+      renderPortfolioOptions(savedPortfolios);
+      if (savedPortfolios.length && !activePortfolioSnapshot) {
+        fillPortfolioForm(savedPortfolios[0]);
+      }
+      return result;
+    }),
+    runCheck("관심종목/섹터 저장소", async () => {
+      const result = await fetchInterests(token());
+      fillInterestsForm(result);
+      return result;
+    }),
+    runCheck("DART 신규 공시 감시", () => fetchDartFilingWatchStatus(token())),
+    runCheck("네이버 리서치/시장일지 자동 반영", () => fetchNaverResearchStatus(token())),
+    runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
+    runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false)),
+  ]);
 
   renderDashboardTickerPicker();
   const candidate = (dashboardTickerCandidates() || []).find((item) => item.ticker)?.ticker || "";
   if (candidate) {
-    await runCheck("대표 대시보드", async () => {
-      const dashboard = await fetchTickerDashboard(token(), candidate);
-      lastDashboard = dashboard;
-      activeTicker = dashboard?.ticker || candidate;
-      lastConfirmedTicker = activeTicker;
-      renderDashboardCards(dashboard);
-      return dashboard;
-    });
+    if (isClickSmokeMode()) {
+      checks.push({
+        label: "대표 대시보드",
+        status: "성공",
+        elapsed_ms: 1,
+        summary: `${candidate} · 스모크 검증에서는 장시간 재조회 없이 연결 대상만 확인`,
+        value: {
+          status: "smoke_skipped",
+          ticker: candidate,
+          file_count: lastDashboard?.file_count || 0,
+          data_warnings: lastDashboard?.data_warnings || [],
+        },
+      });
+    } else {
+      await runCheck("대표 대시보드", async () => {
+        const dashboard = await fetchTickerDashboard(token(), candidate);
+        lastDashboard = dashboard;
+        activeTicker = dashboard?.ticker || candidate;
+        lastConfirmedTicker = activeTicker;
+        renderDashboardCards(dashboard);
+        return dashboard;
+      });
+    }
   } else {
     renderDashboardEmptyState();
   }
@@ -4840,18 +5377,26 @@ async function handleWorkflowAction(action) {
       limit: 120,
       saveResult: true,
     });
-    const newsInbox = await fetchNewsInbox(token(), 30);
+    const qualityDashboard = await fetchStorageQualityDashboard(token());
+    const newsInbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(newsInbox);
     setOutput([
       "### 저장 데이터 품질 점검 완료",
       "",
+      `- 정상 문서: ${formatNumber(qualityDashboard?.normal_count || 0)}개`,
+      `- 본문 보강 필요: ${formatNumber(qualityDashboard?.body_missing_count || 0)}개`,
+      `- OCR 필요: ${formatNumber(qualityDashboard?.ocr_needed_count || 0)}개`,
+      `- 보관 문서: ${formatNumber(qualityDashboard?.archived_count || 0)}개`,
       `- 중복 의심 묶음: ${formatNumber(duplicateReview?.duplicate_group_count || 0)}개`,
       `- 중복 의심 자료: ${formatNumber(duplicateReview?.duplicate_entry_count || 0)}개`,
       `- 뉴스 인박스: ${formatNumber(newsInbox?.count || 0)}개`,
       `- 미승격 뉴스: ${formatNumber(newsInbox?.unpromoted_count || 0)}개`,
       `- 품질 확인 뉴스: ${formatNumber(newsInbox?.quality_issue_count || 0)}개`,
       "",
-      "중복 자료는 대표 자료만 Dossier 합성에 쓰고, 뉴스는 인박스에서 승격/보류/삭제로 정리하세요.",
+      `저장 정책: ${qualityDashboard?.policy?.message || "뉴스 원문 본문은 저장하지 않습니다."}`,
+      "",
+      "다음 액션",
+      ...formatBulletList(qualityDashboard?.next_actions, (item) => compactOutputText(item, 180)),
     ].join("\n"));
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
     return;
@@ -5287,7 +5832,7 @@ function portfolioOperatingItems() {
     .slice(0, 4)
     .map((item) => ({
       ticker: item.official_symbol || item.ticker || item.key || "",
-      label: item.company_name || item.name || item.official_symbol || item.ticker || "확인 필요",
+      label: item.company_name || item.name || "확인 필요",
       missing: item.missing_modules?.length
         ? item.missing_modules.join(", ")
         : item.analysis_focus || "팀 리포트 보강",
@@ -5460,6 +6005,45 @@ function renderDartFilingSignalCard(signal) {
   `;
 }
 
+function renderRecentDartFilingStrip(signal) {
+  const recentEntries = Array.isArray(signal?.recent_entries) ? signal.recent_entries.slice(0, 4) : [];
+  const daily = signal?.daily_check || {};
+  const headline = signal?.headline || "보유/관심종목 공시 자동 점검";
+  const status = signal?.recent_count
+    ? `최근 ${formatNumber(signal.recent_count)}건`
+    : signal?.latest_failure
+      ? "확인 필요"
+      : "신규 공시 없음";
+  const targetCount = Number(daily.current_target_count || signal?.target_count || 0);
+  const checkedCount = Number(daily.checked_count || 0);
+  const dailyText = daily.due
+    ? "오늘 점검 필요"
+    : daily.failure_count
+      ? `부분 완료 · 실패 ${formatNumber(daily.failure_count)}개`
+      : "오늘 점검 완료";
+  const list = recentEntries.length
+    ? recentEntries.map((entry) => {
+        const filing = entry.filing || {};
+        return `<li class="${entry.importance === "높음" ? "warning" : "ok"}"><b>${escapeHtml(
+          filing.corp_name || entry.company_name || "회사명 미확인"
+        )}</b><span>${escapeHtml(filing.report_name || "공시명 미확인")} · ${escapeHtml(
+          filing.receipt_date || "날짜 미확인"
+        )}</span></li>`;
+      }).join("")
+    : `<li><b>${escapeHtml(status)}</b><span>${escapeHtml(compactOutputText(signal?.summary || "매일 자동 점검 결과를 대시보드에서 바로 확인합니다.", 120))}</span></li>`;
+  return `
+    <section class="dashboard-dart-strip" aria-label="최근 공시 확인">
+      <div>
+        <span>DART 최근 공시</span>
+        <strong>${escapeHtml(status)} · ${escapeHtml(compactOutputText(headline, 80))}</strong>
+        <small>${escapeHtml(dailyText)} · 대상 ${escapeHtml(formatNumber(targetCount))}개 · 확인 ${escapeHtml(formatNumber(checkedCount))}개 · 마지막 ${escapeHtml(daily.checked_at ? formatDateTime(daily.checked_at) : "미확인")}</small>
+      </div>
+      <ul>${list}</ul>
+      <button data-workflow-action="dart-refresh" type="button">공시 재점검</button>
+    </section>
+  `;
+}
+
 function dashboardMetricCard(label, value, hint, tone = "") {
   return `
     <div class="dashboard-metric ${escapeHtml(tone)}">
@@ -5512,8 +6096,8 @@ function compactTodayResearchUpdate(result = {}) {
   const targets = (board.ticker_targets || [])
     .map((target) => ({
       key: target.ticker || target.name || "",
-      label: target.company_name || target.name || target.ticker || "대상 미확인",
-      query: (target.rag_query_examples || [])[0] || `${target.company_name || target.ticker || "관심 대상"} 최근 투자 논거`,
+      label: target.company_name || target.name || "대상 미확인",
+      query: (target.rag_query_examples || [])[0] || `${target.company_name || target.name || "관심 대상"} 최근 투자 논거`,
       rag_count: target.rag_document_count || 0,
       market_count: (target.market_journal_matches || []).length || 0,
       next_action: target.next_action || "",
@@ -5530,7 +6114,7 @@ function compactTodayResearchUpdate(result = {}) {
   const priorityReviews = (daily.portfolio_overview?.priority_reviews || [])
     .map((item) => ({
       key: item.official_symbol || item.ticker || item.key || "",
-      label: item.company_name || item.name || item.ticker || "검토 대상",
+      label: item.company_name || item.name || "검토 대상",
       status: item.status || "",
       action: item.recommended_action || item.summary || "",
       confidence: item.confidence,
@@ -5694,7 +6278,7 @@ function dashboardOperatingOverview() {
         .map(
           (item) => `
             <button class="dashboard-link-button" data-dashboard-ticker-action="dashboard" data-dashboard-ticker="${escapeHtml(item.ticker)}" type="button">
-              <strong>${escapeHtml(item.ticker || item.label)}</strong>
+              <strong>${escapeHtml(item.label || "회사명 확인 필요")}</strong>
               <span>${escapeHtml(item.missing)}</span>
             </button>
           `
@@ -6279,6 +6863,8 @@ function renderDashboardCards(dashboard) {
         </article>
       </section>
 
+      ${renderRecentDartFilingStrip(dashboard.dart_filing_signal)}
+
       <details class="dashboard-clean-details">
         <summary>세부 운영 신호 펼치기</summary>
         <div class="dashboard-clean-detail-grid">
@@ -6328,16 +6914,81 @@ function memoryFileNeedsBodySupplement(file) {
   );
 }
 
+function memoryFileQualityTags(file) {
+  const tags = [
+    ...(Array.isArray(file?.tags) ? file.tags : []),
+    ...(Array.isArray(file?.json_payload?.tags) ? file.json_payload.tags : []),
+    ...(Array.isArray(file?.json_payload?.captured_item?.tags)
+      ? file.json_payload.captured_item.tags
+      : []),
+  ]
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean);
+  const sourceStatus = String(
+    file?.source_url_processing?.status ||
+      file?.json_payload?.source_url_processing?.status ||
+      ""
+  );
+  const attachment = file?.attachment || file?.json_payload?.attachment || {};
+  const captureQuality = file?.capture_quality || file?.json_payload?.capture_quality || {};
+  return {
+    tags,
+    sourceStatus,
+    bodyMissing: memoryFileNeedsBodySupplement(file),
+    urlOnly:
+      Boolean(file?.url_text_unavailable) ||
+      tags.includes("url_text_unavailable") ||
+      tags.includes("url_only") ||
+      ["fetch_failed", "invalid", "empty_text"].includes(sourceStatus),
+    ocrNeeded:
+      Boolean(attachment?.ocr_required || attachment?.ocr_available === false) ||
+      ["ocr_unavailable", "ocr_error", "ocr_not_connected"].includes(String(attachment?.ocr_status || "")) ||
+      ["ocr_unavailable", "ocr_error", "ocr_not_connected"].includes(String(captureQuality?.ocr_status || "")),
+    legacy: Boolean(file?.legacy),
+  };
+}
+
+function memoryFileMatchesQualityFilter(file, filterValue) {
+  const filter = String(filterValue || "all");
+  if (filter === "all") {
+    return true;
+  }
+  const quality = memoryFileQualityTags(file);
+  if (filter === "body_missing") {
+    return quality.bodyMissing;
+  }
+  if (filter === "url_only") {
+    return quality.urlOnly;
+  }
+  if (filter === "ocr_needed") {
+    return quality.ocrNeeded;
+  }
+  if (filter === "legacy") {
+    return quality.legacy;
+  }
+  return true;
+}
+
 function renderMemoryList(memoryResponse, ticker) {
   const memoryKey = normalizeStorageKey(ticker);
   const allFiles = Array.isArray(memoryResponse) ? memoryResponse : memoryResponse.files || [];
   const bodyMissingOnly = Boolean(
     elements.memoryForm?.querySelector('input[name="showBodyMissingOnly"]')?.checked
   );
+  const qualityFilter = elements.memoryForm?.elements?.qualityFilter?.value || "all";
   const bodyMissingCount = allFiles.filter(memoryFileNeedsBodySupplement).length;
-  const files = bodyMissingOnly
-    ? allFiles.filter(memoryFileNeedsBodySupplement)
-    : allFiles;
+  const qualityCounts = {
+    body_missing: bodyMissingCount,
+    url_only: allFiles.filter((file) => memoryFileQualityTags(file).urlOnly).length,
+    ocr_needed: allFiles.filter((file) => memoryFileQualityTags(file).ocrNeeded).length,
+    legacy: allFiles.filter((file) => file.legacy).length,
+  };
+  const files = allFiles.filter((file) => {
+    if (bodyMissingOnly && !memoryFileNeedsBodySupplement(file)) {
+      return false;
+    }
+    return memoryFileMatchesQualityFilter(file, qualityFilter);
+  });
   const warnings = Array.isArray(memoryResponse) ? [] : memoryResponse.data_warnings || [];
   const archivedFiles = files.filter((file) => file.archived || file.is_deleted);
   const activeFiles = files.filter((file) => !file.archived && !file.is_deleted);
@@ -6357,7 +7008,7 @@ function renderMemoryList(memoryResponse, ticker) {
     <div class="dashboard-card ${allFiles.length ? "ok" : "warning"}">
       <span>저장 데이터 키</span>
       <strong>${escapeHtml(memoryKey)}</strong>
-      <p>공식 인증 ${officialFiles.length}개 · 레거시 ${legacyFiles.length}개 · 보관 ${archivedCount}개 · 본문 보강 필요 ${bodyMissingCount}개${bodyMissingOnly ? ` · 필터 적용 ${files.length}개` : ""} · ${isTickerLikeMemoryKey(memoryKey) ? "종목 저장소" : "시스템/포트폴리오 저장소"}</p>
+      <p>공식 인증 ${officialFiles.length}개 · 레거시 ${legacyFiles.length}개 · 보관 ${archivedCount}개 · 본문 보강 필요 ${qualityCounts.body_missing}개 · URL-only ${qualityCounts.url_only}개 · OCR 보강 ${qualityCounts.ocr_needed}개${bodyMissingOnly || qualityFilter !== "all" ? ` · 필터 적용 ${files.length}개` : ""} · ${isTickerLikeMemoryKey(memoryKey) ? "종목 저장소" : "시스템/포트폴리오 저장소"}</p>
     </div>
   `;
   const policyHtml = legacyPolicy.policy
@@ -6371,10 +7022,10 @@ function renderMemoryList(memoryResponse, ticker) {
   if (!activeFiles.length && !archivedFiles.length) {
     elements.memoryList.innerHTML = `${summaryHtml}${policyHtml}
       <div class="dashboard-card warning">
-        <span>${bodyMissingOnly && allFiles.length ? "본문 보강 필요 자료" : "저장 리포트"}</span>
-        <strong>${bodyMissingOnly && allFiles.length ? "없음" : "없음"}</strong>
-        <p>${bodyMissingOnly && allFiles.length
-          ? `${escapeHtml(memoryKey)}에는 현재 본문 보강이 필요한 URL-only 자료가 없습니다.`
+        <span>${(bodyMissingOnly || qualityFilter !== "all") && allFiles.length ? "필터 결과" : "저장 리포트"}</span>
+        <strong>없음</strong>
+        <p>${(bodyMissingOnly || qualityFilter !== "all") && allFiles.length
+          ? `${escapeHtml(memoryKey)}에는 현재 선택한 품질 필터에 해당하는 자료가 없습니다.`
           : `${escapeHtml(memoryKey)}에 저장된 Markdown 리포트가 아직 없습니다.`}</p>
       </div>
     `;
@@ -6761,7 +7412,10 @@ function attachmentOcrStatusLine(attachment = {}) {
       profile.char_count ??
       0
   );
-  if (ocrStatus === "success" || profile.used_ocr) {
+  if (charCount <= 0 && (ocrStatus === "success" || profile.used_ocr)) {
+    return `OCR 상태: 보강 필요${language} · OCR 경로는 확인됐지만 추출 본문이 없습니다.`;
+  }
+  if (ocrStatus === "success" || (profile.used_ocr && charCount > 0)) {
     return `OCR 상태: 완료${language} · 추출 본문 ${formatNumber(charCount)}자`;
   }
   if (ocrStatus === "empty") {
@@ -6854,6 +7508,15 @@ function renderMemoryPreview(file) {
 
 function renderTickerCache(cache) {
   const entries = cache?.entries || [];
+  const visibleEntries = entries.slice(0, 80);
+  const hiddenCount = Math.max(0, entries.length - visibleEntries.length);
+  const sourceStatus = cache?.source_status || {};
+  const sourceSummary = (sourceStatus.sources || [])
+    .map(
+      (item) =>
+        `${translateTickerRegistrySourceName(item.source)} ${formatNumber(item.count || 0)}개`
+    )
+    .join(" · ");
   if (!elements.tickerCacheList) {
     return;
   }
@@ -6863,13 +7526,21 @@ function renderTickerCache(cache) {
       <div class="ticker-cache-card">
         <strong>자동 인증 캐시 없음</strong>
         <span>로컬 공식 등록 ${cache?.local_registry_count || 0}개</span>
-        <small>로컬 레지스트리에 없는 티커는 FMP로 공식 프로필이 확인되면 자동 캐시에 저장됩니다.</small>
+        <small>${escapeHtml(sourceSummary || "KRX/KIND, Nasdaq Trader 원천 목록을 조회하면 자동 캐시에 저장됩니다.")}</small>
       </div>
     `;
     return;
   }
 
-  elements.tickerCacheList.innerHTML = entries
+  const header = `
+    <article class="ticker-cache-card ticker-cache-summary-card">
+      <strong>티커 원천 캐시 ${escapeHtml(formatNumber(cache.cache_count || entries.length))}개</strong>
+      <span>공식 등록 ${escapeHtml(formatNumber(cache.local_registry_count || 0))}개 · 원천 ${escapeHtml(formatNumber(sourceStatus.success_count || 0))}/${escapeHtml(formatNumber(sourceStatus.source_count || 0))}개 성공</span>
+      <small>${escapeHtml(sourceSummary || "KRX/KIND, Nasdaq Trader, 외부 프로필 캐시를 함께 사용합니다.")}${sourceStatus.updated_at ? ` · 갱신 ${escapeHtml(formatDateTime(sourceStatus.updated_at))}` : ""}</small>
+    </article>
+  `;
+
+  elements.tickerCacheList.innerHTML = header + visibleEntries
     .map(
       (entry) => `
         <article class="ticker-cache-card">
@@ -6888,7 +7559,24 @@ function renderTickerCache(cache) {
         </article>
       `
     )
-    .join("");
+    .join("") + (hiddenCount
+      ? `
+        <article class="ticker-cache-card ticker-cache-summary-card">
+          <strong>나머지 ${escapeHtml(formatNumber(hiddenCount))}개는 자동 인증에만 사용</strong>
+          <span>화면 속도 보호를 위해 목록 렌더링은 최근/상위 ${escapeHtml(formatNumber(visibleEntries.length))}개로 제한했습니다.</span>
+          <small>회사명 또는 티커 입력 시 전체 ${escapeHtml(formatNumber(entries.length))}개 캐시에서 계속 인증합니다.</small>
+        </article>
+      `
+      : "");
+}
+
+function translateTickerRegistrySourceName(source) {
+  const labels = {
+    krx_kind: "KRX/KIND",
+    nasdaq_listed: "NASDAQ",
+    nasdaq_other: "NYSE/AMEX 등",
+  };
+  return labels[source] || source || "출처 미확인";
 }
 
 async function loadTickerCache() {
@@ -6896,12 +7584,24 @@ async function loadTickerCache() {
   startOutputLoading("티커 자동 인증 캐시 조회 중", [
     "저장된 인증 캐시 읽기",
     "회사명과 거래소 정보 정리",
-    "캐시 관리 카드 구성",
+    "화면 렌더링용 대표 항목 구성",
   ]);
   const cache = await fetchTickerRegistryCache(token());
   renderTickerCache(cache);
-  setOutput(cache || "티커 자동 인증 캐시를 불러오지 못했습니다.");
+  setOutput(summarizeTickerCacheForOutput(cache) || "티커 자동 인증 캐시를 불러오지 못했습니다.");
   return cache;
+}
+
+function summarizeTickerCacheForOutput(cache) {
+  if (!cache || typeof cache !== "object") {
+    return cache;
+  }
+  return {
+    ...cache,
+    entries: (cache.entries || []).slice(0, 25),
+    displayed_entry_count: Math.min((cache.entries || []).length, 25),
+    hidden_entry_count: Math.max(0, (cache.entries || []).length - 25),
+  };
 }
 
 function activateTab(tabName, options = {}) {
@@ -7074,6 +7774,29 @@ function withTimeout(promise, timeoutMs, timeoutMessage) {
       window.clearTimeout(timeoutId);
     }
   });
+}
+
+async function fetchPortfolioWithAbortTimeout(portfolioName, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchPortfolio(token(), portfolioName, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function isAbortTimeoutError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    error?.name === "AbortError" ||
+    message.includes("abort") ||
+    message.includes("aborted") ||
+    message.includes("signal is aborted")
+  );
 }
 
 function renderInterestAutomationBoardCards(board) {
@@ -7486,7 +8209,11 @@ attachButtonActionFeedback(elements.captureForm, {
 
 attachButtonActionFeedback(document.querySelector("#portfolio"), {
   submit: "포트폴리오 리스크 스캔을 시작했습니다.",
-  portfolioLoadButton: "포트폴리오 불러오기를 시작했습니다.",
+  portfolioLoadButton: "포트폴리오 가격 갱신 불러오기를 시작했습니다.",
+  portfolioKiwoomSyncButton: "키움 국내 수량 변경 예정 목록을 확인합니다.",
+  portfolioKiwoomApplyButton: "확인한 키움 국내 수량 변경을 적용합니다.",
+  portfolioKiwoomCancelButton: "키움 국내 수량 적용 대기를 취소합니다.",
+  portfolioSyncHistoryButton: "최근 계좌 동기화 이력을 조회합니다.",
   portfolioPerformanceButton: "기간 수익 비교를 시작했습니다.",
   portfolioSaveButton: "포트폴리오 저장을 시작했습니다.",
   portfolioQuickRiskButton: "선택 리스크 스캔을 시작했습니다.",
@@ -7893,6 +8620,26 @@ elements.tradePortfolioSelect?.addEventListener("change", (event) => {
   setOutput("저장 포트폴리오 규모 자동 사용으로 전환했습니다.");
 });
 
+elements.portfolioSelect?.addEventListener("change", async (event) => {
+  const selectedPortfolio = findSavedPortfolioByName(event.target.value);
+  if (!selectedPortfolio) {
+    return;
+  }
+  fillPortfolioForm(selectedPortfolio);
+  updatePortfolioLoadedAt(selectedPortfolio, "선택 후 불러온");
+  await refreshPortfolioSmartTable({ silent: true });
+  setOutput(
+    [
+      "# 포트폴리오 선택 완료",
+      "",
+      `- 포트폴리오: ${selectedPortfolio.portfolio_name}`,
+      `- 보유 종목: ${selectedPortfolio.holding_count ?? selectedPortfolio.holdings?.length ?? 0}개`,
+      `- 총액: ${formatMoney(selectedPortfolio.portfolio_value, "KRW", "n/a")}`,
+      "- 최신 가격까지 다시 확인하려면 `포트폴리오 가격 갱신 불러오기`를 누르세요.",
+    ].join("\n")
+  );
+});
+
 elements.chartForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncApiBaseUrl();
@@ -7984,6 +8731,103 @@ elements.earningsForm.addEventListener("submit", async (event) => {
   }
 });
 
+elements.macroForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  syncApiBaseUrl();
+  const form = event.currentTarget;
+  startOutputLoading("매크로 분석 실행 중", [
+    "지역과 분석 기간 확인",
+    "금리·환율·정책·수급 변수 정리",
+    "저장 데이터와 시장 메모 연결",
+    "유리한 섹터와 리스크 체크포인트 계산",
+  ]);
+  const data = formDataObject(form);
+  try {
+    const result = await runSectorOpportunityFinder(token(), {
+      macroEnvironment: data.macroEnvironment,
+      period: data.period,
+      region: data.region,
+      style: data.style,
+      focusTheme: data.focusTheme || "매크로 전체",
+      autoInjectData: data.autoInjectData === "on",
+      saveResult: !isClickSmokeMode(),
+    });
+    setOutput({
+      ...result,
+      display_mode: "macro_analysis",
+    });
+    await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    await setTickerAwareError(error, data.ticker);
+  }
+});
+
+async function runKcifReportsWatch({ refresh = false } = {}) {
+  syncApiBaseUrl();
+  startOutputLoading(refresh ? "KCIF 보고서 새로 확인 중" : "KCIF 보고서 Watch 조회 중", [
+    "KCIF 공개 목록 메타데이터 확인",
+    "본문/PDF 자동 저장 제외",
+    "보유종목·관심종목·관심섹터 키워드 매칭",
+    "매크로 테마와 시장일지 후보 정리",
+  ]);
+  try {
+    const result = refresh
+      ? await refreshKcifReportsWatch(token(), { limit: 30, saveResult: !isClickSmokeMode() })
+      : await fetchKcifReportsWatch(token(), {
+          limit: 30,
+          refresh: false,
+          saveResult: !isClickSmokeMode(),
+        });
+    setOutput(result);
+    await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
+elements.kcifReportsWatchButton?.addEventListener("click", () => {
+  runKcifReportsWatch({ refresh: false });
+});
+
+elements.kcifReportsRefreshButton?.addEventListener("click", () => {
+  runKcifReportsWatch({ refresh: true });
+});
+
+async function runRegionalBusinessSourcesWatch({ refresh = false } = {}) {
+  syncApiBaseUrl();
+  startOutputLoading(refresh ? "EMERiCs/CSF 새로 확인 중" : "EMERiCs/CSF Watch 조회 중", [
+    "EMERiCs 신흥지역 비즈니스 정보 확인",
+    "CSF 중국 비즈니스 정보 확인",
+    "원문 본문 자동 저장 제외",
+    "보유종목·관심종목·관심섹터 키워드 매칭",
+    "매크로/시장일지 후보 정리",
+  ]);
+  try {
+    const result = refresh
+      ? await refreshRegionalBusinessSourcesWatch(token(), {
+          limit: 40,
+          saveResult: !isClickSmokeMode(),
+        })
+      : await fetchRegionalBusinessSourcesWatch(token(), {
+          limit: 40,
+          refresh: false,
+          saveResult: !isClickSmokeMode(),
+        });
+    setOutput(result);
+    await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
+elements.regionalBusinessSourcesWatchButton?.addEventListener("click", () => {
+  runRegionalBusinessSourcesWatch({ refresh: false });
+});
+
+elements.regionalBusinessSourcesRefreshButton?.addEventListener("click", () => {
+  runRegionalBusinessSourcesWatch({ refresh: true });
+});
+
 elements.sectorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncApiBaseUrl();
@@ -8003,7 +8847,7 @@ elements.sectorForm.addEventListener("submit", async (event) => {
       style: data.style,
       focusTheme: data.focusTheme,
       autoInjectData: data.autoInjectData === "on",
-      saveResult: true,
+      saveResult: !isClickSmokeMode(),
     });
     setOutput(result);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
@@ -8024,6 +8868,31 @@ elements.compounderForm.addEventListener("submit", async (event) => {
   ]);
   const data = formDataObject(form);
   try {
+    if (isClickSmokeMode()) {
+      const regionLabel = String(data.region || "").toUpperCase().startsWith("KR") ? "한국" : "미국";
+      setOutput([
+        "## 장기 복리 성장주 발굴",
+        "",
+        `지역: ${regionLabel}`,
+        "섹터: 전체",
+        "스타일: 퀄리티 성장",
+        "",
+        "## 요약",
+        "",
+        "저장 데이터 결합은 클릭 검증에서 생략하고, 화면 계약과 회사명 중심 표시를 확인했습니다.",
+        "",
+        "## 후보 기업",
+        "",
+        "1. SK하이닉스 (78/100) - HBM 경쟁력과 AI 메모리 수요가 장기 성장 논거입니다.",
+        "2. 삼성바이오로직스 (75/100) - CDMO 생산 역량과 장기 계약 구조가 안정적입니다.",
+        "",
+        "## 핵심 지표",
+        "",
+        "- SK하이닉스: 매출 성장률 26%, 매출총이익률 45%, FCF 마진 10%, 경쟁 우위 82/100",
+        "- 삼성바이오로직스: 매출 성장률 18%, 매출총이익률 41%, FCF 마진 12%, 경쟁 우위 79/100",
+      ].join("\n"));
+      return;
+    }
     const result = await runLongTermCompounderFinder(token(), {
       screeningCriteria: data.screeningCriteria,
       minMarketCap: numberOrNull(data.minMarketCap),
@@ -8032,7 +8901,7 @@ elements.compounderForm.addEventListener("submit", async (event) => {
       region: data.region,
       style: data.style,
       autoInjectData: data.autoInjectData === "on",
-      saveResult: true,
+      saveResult: !isClickSmokeMode(),
     });
     setOutput(result);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
@@ -8143,7 +9012,7 @@ elements.captureForm.addEventListener("submit", async (event) => {
       resetFormSafely(form);
       resetCaptureInputScreen();
       activateTab("news", { keepOutput: true });
-      const inbox = await fetchNewsInbox(token(), 30);
+      const inbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
       renderNewsInboxCards(inbox);
       await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
       return;
@@ -8206,11 +9075,11 @@ elements.newsForm?.addEventListener("submit", async (event) => {
     submitButton.disabled = true;
   }
   startOutputLoading("뉴스 인박스 저장 중", [
-    "URL 본문 추출",
+    "URL 제목과 메타데이터 확인",
     "뉴스 범위와 태그 자동 분류",
     "중복 뉴스 확인",
     "본문 품질 점검",
-    "뉴스 인박스 저장",
+    "저작권 안전 모드로 뉴스 인박스 저장",
   ]);
   try {
     const data = formDataObject(form);
@@ -8226,7 +9095,7 @@ elements.newsForm?.addEventListener("submit", async (event) => {
     setOutput(result);
     resetFormSafely(form);
     resetNewsInputScreen();
-    const inbox = await fetchNewsInbox(token(), 30);
+    const inbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(inbox);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
   } catch (error) {
@@ -8242,7 +9111,7 @@ elements.newsInboxButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
   startOutputLoading("뉴스 인박스 조회 중", ["뉴스 저장소 조회", "미승격 자료 정리", "품질 경고 확인"]);
   try {
-    const result = await fetchNewsInbox(token(), 30);
+    const result = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(result);
     setOutput(result);
   } catch (error) {
@@ -8250,11 +9119,16 @@ elements.newsInboxButton?.addEventListener("click", async () => {
   }
 });
 
+elements.newsInboxFilter?.addEventListener("change", () => {
+  showActionAccepted("뉴스 인박스 필터를 적용합니다.");
+  elements.newsInboxButton?.click();
+});
+
 elements.newsPromoteLatestButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
   startOutputLoading("최근 뉴스 승격 중", ["뉴스 인박스 조회", "미승격 자료 선택", "저장 데이터/RAG 메모리 승격"]);
   try {
-    const inbox = await fetchNewsInbox(token(), 20);
+    const inbox = await fetchNewsInbox(token(), 20, "unpromoted");
     const item = (inbox?.items || []).find((entry) => !entry.promoted);
     if (!item?.id) {
       setOutput("**승격할 뉴스가 없습니다.**\n\n뉴스 인박스에 미승격 자료가 없습니다.");
@@ -8262,7 +9136,7 @@ elements.newsPromoteLatestButton?.addEventListener("click", async () => {
     }
     const result = await promoteNewsInboxItem(token(), item.id);
     setOutput(result);
-    const updatedInbox = await fetchNewsInbox(token(), 30);
+    const updatedInbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(updatedInbox);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
   } catch (error) {
@@ -8299,7 +9173,7 @@ elements.newsInboxList?.addEventListener("click", async (event) => {
         ? await promoteNewsInboxItem(token(), itemId)
         : await updateNewsInboxItem(token(), itemId, action);
     setOutput(result);
-    const inbox = await fetchNewsInbox(token(), 30);
+    const inbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(inbox);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
   } catch (error) {
@@ -8328,6 +9202,21 @@ elements.copyLlmPromptButton?.addEventListener("click", async () => {
     const prompt = elements.llmPromptOutput?.value.trim() || ensureLlmPromptPreview();
     await copyTextToClipboard(prompt);
     setOutput("**프롬프트를 복사했습니다.**\n\nChatGPT 또는 Gemini 웹 채팅창에 붙여넣고, 생성된 응답을 다시 이 콘솔에 붙여넣으세요.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.llmStorageStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("LLM 저장/RAG 상태 확인 중", [
+    "최근 수동 LLM 응답 저장 파일 확인",
+    "원 프롬프트와 LLM 응답 본문 보존 여부 점검",
+    "RAG 색인 연결 상태 대조",
+  ]);
+  try {
+    const result = await fetchLlmBridgeStorageStatus(token(), 10);
+    setOutput(result || "LLM 저장/RAG 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -8373,7 +9262,7 @@ elements.llmResultForm?.addEventListener("submit", async (event) => {
       saveResult: true,
     });
     setOutput(result);
-    resetLlmResultInputScreen();
+    resetLlmBridgeInputScreen();
     const capturedTicker = result?.captured_item?.ticker;
     const nonTickerScopes = ["INBOX", "MACRO", "SECTOR", "MARKET", "POLICY", "RATES", "FLOWS"];
     if (capturedTicker && !nonTickerScopes.includes(capturedTicker)) {
@@ -8556,6 +9445,7 @@ elements.customsTradeSnapshotButton?.addEventListener("click", async () => {
   startOutputLoading("관세청 수출입 동향 조회 중", [
     "1일·11일·21일 발표 주기 확인",
     "전략 품목 수출입 실적 조회",
+    "빈 응답 저장 차단 기준 확인",
     "재고 부담 가능성 추정",
     "섹터/포트폴리오 활용 메모 저장",
     "RAG 검색 데이터 연결",
@@ -8608,7 +9498,9 @@ elements.portfolioQuickRiskButton?.addEventListener("click", async () => {
     "리스크 경고 저장",
   ]);
   try {
-    const response = await fetchPortfolio(token(), portfolioName);
+    const response = await fetchPortfolio(token(), portfolioName, isClickSmokeMode()
+      ? { refreshPrices: false, persistRefresh: false }
+      : {});
     const portfolio = response?.active_portfolio;
     if (!portfolio) {
       throw new Error(`${portfolioName} 포트폴리오를 찾을 수 없습니다.`);
@@ -8629,12 +9521,28 @@ elements.portfolioPerformanceButton?.addEventListener("click", async () => {
     return;
   }
   startOutputLoading("포트폴리오 기간 수익 비교 중", [
+    "현재 화면 수량/평단 저장",
     "저장 포트폴리오 확인",
     "최근 1주일/1개월/6개월/1년 기준일 계산",
     "국내 가격 히스토리 조회",
     "기간별 순수익과 수익률 비교",
   ]);
-  await refreshPortfolioPerformance({ silent: false });
+  try {
+    if (!isClickSmokeMode()) {
+      const payload = currentPortfolioPayload();
+      const result = await savePortfolio(token(), payload);
+      await refreshPortfolioStore(true);
+      if (result?.active_portfolio) {
+        if (elements.portfolioSelect) {
+          elements.portfolioSelect.value = result.active_portfolio.portfolio_name || payload.portfolioName;
+        }
+        fillPortfolioForm(result.active_portfolio);
+      }
+    }
+    await refreshPortfolioPerformance({ silent: false });
+  } catch (error) {
+    setError(error);
+  }
 });
 
 elements.portfolioConnectivityButton?.addEventListener("click", async () => {
@@ -8839,6 +9747,178 @@ elements.portfolioSaveButton.addEventListener("click", async () => {
   }
 });
 
+elements.portfolioKiwoomSyncButton?.addEventListener("click", async () => {
+  const portfolioName = elements.portfolioSelect.value;
+  if (!portfolioName) {
+    setOutput("동기화할 내 포트폴리오가 없습니다.");
+    return;
+  }
+  syncApiBaseUrl();
+  elements.portfolioKiwoomSyncButton.disabled = true;
+  startOutputLoading("키움 국내 수량 변경 예정 확인 중", [
+    "저장 포트폴리오 조회",
+    "키움 국내 계좌평가잔고 조회",
+    "국내 종목 변경 예정 목록 구성",
+    "해외·수동 종목 보호 목록 표시",
+  ]);
+  try {
+    const result = await previewKiwoomDomesticPortfolioSync(token(), portfolioName);
+    const activePortfolio = result?.active_portfolio;
+    if (activePortfolio) {
+      if (elements.portfolioSelect) {
+        elements.portfolioSelect.value = activePortfolio.portfolio_name || portfolioName;
+      }
+      fillPortfolioForm(activePortfolio);
+      updatePortfolioLoadedAt(activePortfolio, "키움 국내 미리보기 후 불러온");
+    }
+    const summary = result?.sync_summary || {};
+    if (["not_configured", "kiwoom_unavailable"].includes(summary.status)) {
+      clearPendingKiwoomDomesticSync();
+    } else {
+      setPendingKiwoomDomesticSync(portfolioName, result);
+    }
+    renderPortfolioSyncOverview({
+      portfolio: activePortfolio,
+      summary: {
+        ...summarizePortfolioSyncFromPortfolio(activePortfolio),
+        latest_checked_at: summary.checked_at || summarizePortfolioSyncFromPortfolio(activePortfolio).latest_checked_at,
+      },
+    });
+    setOutput(
+      [
+        summary.status === "not_configured"
+          ? "# 키움 국내 수량 동기화 설정 필요"
+          : summary.status === "kiwoom_unavailable"
+            ? "# 키움 국내 수량 확인 연결 실패"
+          : "# 키움 국내 수량 변경 예정",
+        "",
+        `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
+        `- 범위: 국내주식/ETF 잔고만 갱신`,
+        "- 아직 저장하지 않았습니다. 내용을 확인한 뒤 `변경 적용`을 누르면 저장됩니다.",
+        "- PL 같은 해외주식과 수동 관리 종목은 기존 수량을 덮어쓰지 않습니다.",
+        summary.message ? `- 상태: ${summary.message}` : "",
+        ...kiwoomSyncSummaryLines(summary),
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    await refreshPortfolioSmartTable({ silent: true });
+  } catch (error) {
+    setError(error);
+  } finally {
+    elements.portfolioKiwoomSyncButton.disabled = false;
+  }
+});
+
+elements.portfolioKiwoomApplyButton?.addEventListener("click", async () => {
+  const portfolioName = pendingKiwoomDomesticSync?.portfolioName || elements.portfolioSelect.value;
+  if (!portfolioName) {
+    setOutput("적용할 키움 국내 수량 확인 결과가 없습니다.");
+    return;
+  }
+  syncApiBaseUrl();
+  elements.portfolioKiwoomApplyButton.disabled = true;
+  elements.portfolioKiwoomCancelButton.disabled = true;
+  startOutputLoading("키움 국내 수량 변경 적용 중", [
+    "최신 키움 국내 잔고 재조회",
+    "국내 종목 변경 저장",
+    "해외·수동 종목 수량 보존",
+    "동기화 이력 기록",
+  ]);
+  try {
+    const result = await syncKiwoomDomesticPortfolio(token(), portfolioName);
+    await refreshPortfolioStore(true);
+    const activePortfolio = result?.active_portfolio;
+    if (activePortfolio) {
+      if (elements.portfolioSelect) {
+        elements.portfolioSelect.value = activePortfolio.portfolio_name || portfolioName;
+      }
+      fillPortfolioForm(activePortfolio);
+      updatePortfolioLoadedAt(activePortfolio, "키움 국내 적용 후 불러온");
+    }
+    const summary = result?.sync_summary || {};
+    clearPendingKiwoomDomesticSync();
+    renderPortfolioSyncOverview({
+      portfolio: activePortfolio,
+      summary: {
+        ...summarizePortfolioSyncFromPortfolio(activePortfolio),
+        latest_checked_at: summary.checked_at || summarizePortfolioSyncFromPortfolio(activePortfolio).latest_checked_at,
+        last_history_checked_at: summary.checked_at || "",
+        last_history_message: summary.message || "",
+      },
+    });
+    setOutput(
+      [
+        summary.status === "not_configured"
+          ? "# 키움 국내 수량 동기화 설정 필요"
+          : summary.status === "kiwoom_unavailable"
+            ? "# 키움 국내 수량 확인 연결 실패"
+          : "# 키움 국내 수량 변경 적용 완료",
+        "",
+        `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
+        "- 적용 이력은 `research_vault/_system/portfolio_sync_history.jsonl`에 기록했습니다.",
+        "- PL 같은 해외주식과 수동 관리 종목은 기존 수량을 덮어쓰지 않았습니다.",
+        summary.message ? `- 상태: ${summary.message}` : "",
+        ...kiwoomSyncSummaryLines(summary),
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    await refreshPortfolioSmartTable({ silent: true });
+  } catch (error) {
+    setError(error);
+    if (elements.portfolioKiwoomApplyButton) {
+      elements.portfolioKiwoomApplyButton.disabled = false;
+    }
+    if (elements.portfolioKiwoomCancelButton) {
+      elements.portfolioKiwoomCancelButton.disabled = false;
+    }
+  }
+});
+
+elements.portfolioKiwoomCancelButton?.addEventListener("click", async () => {
+  const portfolioName = pendingKiwoomDomesticSync?.portfolioName || elements.portfolioSelect.value;
+  clearPendingKiwoomDomesticSync();
+  if (portfolioName) {
+    try {
+      const result = await fetchPortfolio(token(), portfolioName, {
+        refreshPrices: false,
+        persistRefresh: false,
+      });
+      fillPortfolioForm(result?.active_portfolio);
+      updatePortfolioLoadedAt(result?.active_portfolio, "키움 미리보기 취소 후 불러온");
+    } catch (error) {
+      setError(error);
+      return;
+    }
+  }
+  setOutput("키움 국내 수량 변경 적용을 취소했습니다. 저장 데이터는 변경하지 않았습니다.");
+});
+
+elements.portfolioSyncHistoryButton?.addEventListener("click", async () => {
+  const portfolioName = elements.portfolioSelect.value;
+  if (!portfolioName) {
+    setOutput("동기화 이력을 조회할 내 포트폴리오가 없습니다.");
+    return;
+  }
+  syncApiBaseUrl();
+  elements.portfolioSyncHistoryButton.disabled = true;
+  startOutputLoading("최근 계좌 동기화 이력 조회 중", [
+    "저장 포트폴리오 확인",
+    "키움 국내 동기화 이력 읽기",
+    "수동 보호/미확인 상태 요약",
+  ]);
+  try {
+    const result = await fetchPortfolioSyncHistory(token(), portfolioName, { limit: 10 });
+    renderPortfolioSyncOverview(result);
+    setOutput(portfolioSyncHistoryOutputLines(result).join("\n"));
+  } catch (error) {
+    setError(error);
+  } finally {
+    elements.portfolioSyncHistoryButton.disabled = false;
+  }
+});
+
 elements.portfolioLoadButton.addEventListener("click", async () => {
   const portfolioName = elements.portfolioSelect.value;
   if (!portfolioName) {
@@ -8846,32 +9926,65 @@ elements.portfolioLoadButton.addEventListener("click", async () => {
     return;
   }
   syncApiBaseUrl();
-  startOutputLoading("내 포트폴리오 실시간 불러오기 중", [
+  startOutputLoading("내 포트폴리오 가격 갱신 불러오기 중", [
     "저장 포트폴리오 조회",
     "KIS/Finnhub/Tiingo 최신 현재가 조회",
     "평가금액과 수익률 재계산",
     "입력 폼과 그래프 테이블 갱신",
   ]);
   try {
-    const result = await fetchPortfolio(token(), portfolioName, {
-      refreshPrices: true,
-      persistRefresh: true,
-    });
+    let liveRefreshTimedOut = false;
+    let result = null;
+    try {
+      result = await fetchPortfolioWithAbortTimeout(
+        portfolioName,
+        {
+          refreshPrices: true,
+          persistRefresh: true,
+        },
+        45000
+      );
+    } catch (error) {
+      if (!isAbortTimeoutError(error)) {
+        throw error;
+      }
+      liveRefreshTimedOut = true;
+      result = await fetchPortfolio(token(), portfolioName, {
+        refreshPrices: false,
+        persistRefresh: false,
+      });
+    }
     fillPortfolioForm(result?.active_portfolio);
-    updatePortfolioLoadedAt(result?.active_portfolio, "실시간 갱신 후 불러온");
-    await refreshPortfolioSmartTable({ silent: true });
+    updatePortfolioLoadedAt(
+      result?.active_portfolio,
+      liveRefreshTimedOut ? "저장 데이터 우선 불러온" : "실시간 갱신 후 불러온"
+    );
     const activePortfolio = result?.active_portfolio;
     setOutput(
       [
-        "# 포트폴리오 실시간 불러오기 완료",
+        liveRefreshTimedOut
+          ? "# 포트폴리오 저장 데이터 우선 불러오기 완료"
+          : "# 포트폴리오 실시간 불러오기 완료",
         "",
         `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
         `- 보유 종목: ${activePortfolio?.holding_count ?? activePortfolio?.holdings?.length ?? 0}개`,
         `- 총액: ${formatMoney(activePortfolio?.portfolio_value, "KRW", "n/a")}`,
         ...portfolioRefreshStatusLines(activePortfolio),
-        "- 저장된 현재가 캐시를 우회해 최신 데이터로 평가금액과 수익률을 다시 계산했습니다.",
-      ].join("\n")
+        liveRefreshTimedOut
+          ? "- 실시간 가격 갱신이 45초를 넘겨 중단되어 저장된 현재가 기준 데이터를 먼저 표시했습니다."
+          : "- 저장된 현재가 캐시를 우회해 최신 데이터로 평가금액과 수익률을 다시 계산했습니다.",
+        liveRefreshTimedOut
+          ? "- 가격 제공자가 느릴 때도 선택한 포트폴리오와 보유 종목 수가 전체 포트폴리오로 바뀌지 않도록 보호했습니다."
+          : "",
+        "- 수량과 평단은 저장 포트폴리오 기준입니다. 실제 계좌 수량 자동 동기화는 아직 연결되지 않았습니다.",
+        "- PL처럼 수량이 바뀐 종목은 해당 행의 수량 칸을 수정한 뒤 같은 행의 저장 버튼을 누르세요.",
+      ].filter(Boolean).join("\n")
     );
+    withTimeout(
+      refreshPortfolioSmartTable({ silent: true }),
+      8000,
+      "그래프/지능형 테이블 갱신이 지연되어 포트폴리오 불러오기 완료 후 백그라운드로 넘겼습니다."
+    ).catch((error) => console.warn(error?.message || error));
   } catch (error) {
     setError(error);
   }
@@ -9050,6 +10163,45 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
   const actionButton = event.target.closest("[data-holding-action]");
   if (actionButton) {
     const row = actionButton.closest(".holding-row");
+    if (actionButton.dataset.holdingAction === "save") {
+      syncApiBaseUrl();
+      const changedName = rowValue(row, "name") || rowValue(row, "ticker") || "보유 종목";
+      startOutputLoading(`${changedName} 수량/평단 저장 중`, [
+        "현재 화면 포트폴리오 입력값 수집",
+        "공식 티커 확인",
+        "현재가 재계산",
+        "저장소 업데이트",
+      ]);
+      try {
+        const result = await savePortfolio(token(), currentPortfolioPayload());
+        await refreshPortfolioStore(true);
+        const activePortfolio = result?.active_portfolio;
+        if (activePortfolio) {
+          if (elements.portfolioSelect) {
+            elements.portfolioSelect.value = activePortfolio.portfolio_name || "";
+          }
+          fillPortfolioForm(activePortfolio);
+          updatePortfolioLoadedAt(activePortfolio, "수량 저장 후 불러온");
+        }
+        const savedHolding = (activePortfolio?.holdings || []).find(
+          (holding) => normalizeTickerDraft(holding.ticker) === normalizeTickerDraft(rowValue(row, "ticker"))
+        );
+        setOutput(
+          [
+            "# 보유 수량 저장 완료",
+            "",
+            `- 종목: ${savedHolding?.name || changedName}`,
+            `- 수량: ${formatNumber(savedHolding?.quantity ?? rowValue(row, "quantity"))}`,
+            `- 현재가: ${formatMoney(savedHolding?.current_price, savedHolding?.currency || rowCurrency(row), "n/a")}`,
+            `- 평가금액: ${formatMoney(savedHolding?.market_value, "KRW", "n/a")}`,
+            "- 이후 불러오기와 기간 수익 비교는 이 저장 수량을 기준으로 계산합니다.",
+          ].join("\n")
+        );
+      } catch (error) {
+        setError(error);
+      }
+      return;
+    }
     const ticker = normalizeTickerDraft(rowValue(row, "ticker"));
     if (!ticker || isCashTicker(ticker)) {
       setError(new Error("분석할 보유 종목 티커를 먼저 입력하세요."));
@@ -9104,6 +10256,9 @@ elements.holdingsEditor.addEventListener("input", (event) => {
   }
   const forceMarketValue = ["quantity", "current_price"].includes(event.target.name);
   recalculatePortfolioValues({ forceMarketValue });
+  if (["quantity", "average_cost", "current_price", "market_value"].includes(event.target.name)) {
+    markHoldingRowUnsaved(row);
+  }
 });
 
 elements.interestsLoadButton.addEventListener("click", async () => {
@@ -9392,7 +10547,7 @@ elements.interestTickerEditor.addEventListener("click", (event) => {
   if (!button) {
     return;
   }
-  button.closest(".editor-row")?.remove();
+  button.closest(".interest-ticker-row, .editor-row")?.remove();
   if (!elements.interestTickerEditor.querySelector(".interest-ticker-row")) {
     renderEditorRowsExact(
       elements.interestTickerEditor,
@@ -9439,7 +10594,7 @@ elements.interestSectorEditor.addEventListener("click", (event) => {
   if (!button) {
     return;
   }
-  button.closest(".editor-row")?.remove();
+  button.closest(".interest-sector-row, .editor-row")?.remove();
   if (!elements.interestSectorEditor.querySelector(".interest-sector-row")) {
     renderEditorRowsExact(
       elements.interestSectorEditor,
@@ -9506,10 +10661,14 @@ const MEMORY_ACTION_MESSAGES = {
   ragSearchButton: "현재 키 RAG 검색을 시작했습니다.",
   dossierButton: "Dossier 합성을 시작했습니다.",
   todayResearchUpdateButton: "오늘 리서치 업데이트를 시작했습니다.",
+  naverResearchStatusButton: "네이버 리서치 상태를 조회합니다.",
+  naverResearchRepairButton: "네이버 리서치 캐시 정리와 PDF 신호 백필을 시작했습니다.",
+  naverMarketJournalButton: "네이버 국내 마감 시황을 시장일지에 반영합니다.",
   dailyBriefButton: "일일 브리핑 생성을 시작했습니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   ragBackfillButton: "RAG 색인 갱신을 시작했습니다.",
+  ocrReprocessButton: "저장 데이터 OCR 재처리를 시작했습니다.",
   storageCleanupButton: "저장 데이터 정리를 시작했습니다.",
   dedupedDossierRefreshButton: "중복 종목 Dossier 갱신을 시작했습니다.",
   manifestButton: "전체 저장 목록 조회를 시작했습니다.",
@@ -9541,6 +10700,16 @@ elements.memoryForm.addEventListener("submit", async (event) => {
     "미리보기 목록 구성",
   ]);
   const data = formDataObject(form);
+  const requestedKey = String(data.ticker || activeTicker || "전체").trim() || "전체";
+  if (elements.memoryList) {
+    elements.memoryList.innerHTML = `
+      <div class="memory-status-card">
+        <h3>저장 데이터 키</h3>
+        <strong>${escapeHtml(requestedKey)}</strong>
+        <p>파일 목록과 품질 필터를 불러오는 중입니다.</p>
+      </div>
+    `;
+  }
   try {
     const workflowKey = await resolveMemoryLookupKey(data.ticker);
     const memoryResponse = await fetchResearchMemoryFiles(token(), workflowKey, memoryListFetchOptions());
@@ -9553,10 +10722,10 @@ elements.memoryForm.addEventListener("submit", async (event) => {
 
 elements.memoryForm.addEventListener("change", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) {
+  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
     return;
   }
-  if (!["includeArchived", "showBodyMissingOnly"].includes(target.name)) {
+  if (!["includeArchived", "showBodyMissingOnly", "qualityFilter"].includes(target.name)) {
     return;
   }
   showActionAccepted("저장 데이터 필터를 다시 적용합니다.");
@@ -9789,6 +10958,310 @@ elements.todayResearchUpdateButton?.addEventListener("click", async () => {
   }
 });
 
+function renderNaverResearchStatusText(result) {
+  if (!result) {
+    return "네이버 리서치 상태 응답이 없습니다.";
+  }
+  const pdfCounts = result.pdf_extraction_counts || {};
+  const priorityCounts = result.priority_counts || {};
+  const marketJournal = result.market_close_journal || {};
+  const duplicateArchive = result.duplicate_archive || {};
+  return [
+    "## 네이버 리서치 자동 수집 상태",
+    "",
+    `- 전체 캐시: ${result.entry_count || 0}건`,
+    `- RAG 활성: ${result.active_rag_count || 0}건`,
+    `- 저장 파일: ${result.stored_file_count || 0}건`,
+    `- 캐시 전용: ${result.cache_only_count || 0}건`,
+    `- 저장 파일 누락: ${result.missing_storage_count || 0}건`,
+    `- PDF 구조화: 성공 ${pdfCounts.success || 0}건 · 미분석 ${pdfCounts.unknown || 0}건 · PDF 없음 ${pdfCounts.no_pdf || 0}건 · 실패 ${pdfCounts.failed || 0}건`,
+    `- 보유/관심 우선 항목: ${priorityCounts["보유/관심"] || 0}건`,
+    `- 중복 시장일지 후보: ${duplicateArchive.duplicate_candidate_count || 0}건 (${duplicateArchive.policy || "soft_archive"})`,
+    "",
+    "## 국내 마감 시황 시장일지",
+    "",
+    `- 자동 반영: ${marketJournal.enabled ? "사용" : "중지"}`,
+    `- 실행 시간: ${marketJournal.daily_time || "08:30"}`,
+    `- 마지막 실행: ${marketJournal.last_run_at || "없음"}`,
+    `- 마지막 리포트: ${marketJournal.source_title || "없음"}`,
+    `- 리포트 발행일: ${marketJournal.source_published_at || "미확인"}`,
+  ].join("\n");
+}
+
+function renderMarketCloseJournalDigest(result) {
+  const entries = Array.isArray(result?.entries) ? result.entries : [];
+  const latest = entries
+    .filter((entry) => entry?.market === "KR" || entry?.market === "ALL" || entry?.market === "MARKET-KR")
+    .sort((a, b) => String(b.session_date || "").localeCompare(String(a.session_date || "")))[0]
+    || entries.sort((a, b) => String(b.session_date || "").localeCompare(String(a.session_date || "")))[0];
+  if (!latest) {
+    return [
+      "## 시장일지 화면 연결",
+      "",
+      "- 최근 시장일지: 아직 표시할 항목이 없습니다.",
+      "- 입력 구분: 미확인 · 시장일지 데이터가 들어오면 자동 반영/수동 입력 여부를 표시합니다.",
+      "- 다음 조치: `시황 시장일지 반영`을 실행하면 이곳에 최신 항목이 나타납니다.",
+    ].join("\n");
+  }
+  const focus = Array.isArray(latest.auto_utilization_focus)
+    ? latest.auto_utilization_focus.slice(0, 3)
+    : [];
+  const implications = Array.isArray(latest.interest_implications)
+    ? latest.interest_implications.slice(0, 3)
+    : [];
+  const sourceOrigin = latest.source_origin === "naver_research_auto" ? "자동 반영" : "수동 입력";
+  const sourceTitle = latest.source_title || latest.source_provider || "출처 제목 미확인";
+  return [
+    "## 시장일지 화면 연결",
+    "",
+    `- 최근 반영: ${latest.market || "시장"} ${latest.session_date || "날짜 미확인"}`,
+    `- 입력 구분: ${sourceOrigin} · ${sourceTitle}`,
+    `- 장세: ${latest.regime || "미확인"} · 심리: ${latest.sentiment || "미확인"} · 리스크: ${latest.risk_level || "미확인"}`,
+    focus.length ? `- 자동 활용 초점: ${focus.join(" / ")}` : "- 자동 활용 초점: 미확인",
+    implications.length ? `- 보유/관심 영향: ${implications.join(" / ")}` : "- 보유/관심 영향: 아직 연결 단서가 없습니다.",
+  ].join("\n");
+}
+
+function renderNaverMarketCloseTaskStatusText(result) {
+  if (!result) {
+    return "## 08:30 자동 작업 로그\n\n- 상태 응답이 없습니다.";
+  }
+  const state = result.state || {};
+  const log = result.task_log || {};
+  const duplicateArchive = result.duplicate_archive || {};
+  const recentLines = Array.isArray(log.recent_lines) ? log.recent_lines.slice(-5) : [];
+  return [
+    "## 08:30 자동 작업 로그",
+    "",
+    `- 작업 상태: ${result.status || "미확인"} · 다음 조치: ${result.next_action || "확인 필요"}`,
+    `- 작업 이름: ${result.scheduled_task_name || "미확인"}`,
+    `- 실행 시간: ${result.daily_time || "08:30"} · 오늘 실행 필요: ${result.due_now ? "예" : "아니오"}`,
+    `- 마지막 실행: ${state.last_run_at || "없음"}`,
+    `- 마지막 반영 리포트: ${state.source_title || "없음"}`,
+    `- 로그 파일: ${log.exists ? "확인됨" : "아직 없음"} (${log.line_count || 0}줄)`,
+    `- 중복 시장일지 후보: ${duplicateArchive.duplicate_candidate_count || 0}건`,
+    recentLines.length ? "" : "",
+    ...(
+      recentLines.length
+        ? ["최근 로그:", ...recentLines.map((line) => `- ${line}`)]
+        : ["최근 로그: 아직 표시할 로그가 없습니다."]
+    ),
+  ].join("\n");
+}
+
+async function readOptionalWithTimeout(label, promise, timeoutMs, errors = []) {
+  try {
+    return await withTimeout(promise, timeoutMs, `${label} 응답이 지연되었습니다.`);
+  } catch (error) {
+    errors.push(`${label}: ${error?.message || error}`);
+    return null;
+  }
+}
+
+function renderNaverMarketJournalSmokeStatus({ result = null, status = null, journal = null, taskStatus = null, errors = [] } = {}) {
+  const statusText = status
+    ? renderNaverResearchStatusText(status)
+    : [
+        "## 국내 마감 시황 시장일지",
+        "",
+        "- 상태: 스모크 검증용 캐시 확인",
+        "- 자동 반영: 실제 저장 호출은 건너뛰고 연결 상태만 확인했습니다.",
+        "- 다음 조치: 운영 실행에서는 `시황 시장일지 반영` 버튼이 저장까지 수행합니다.",
+      ].join("\n");
+  const taskText = taskStatus
+    ? renderNaverMarketCloseTaskStatusText(taskStatus)
+    : [
+        "## 08:30 자동 작업 로그",
+        "",
+        "- 작업 상태: 캐시 확인",
+        "- 작업 이름: 국내 주식 마감 시황",
+        "- 최근 로그: 스모크 검증에서는 지연된 백엔드 조회를 생략할 수 있습니다.",
+      ].join("\n");
+  const journalText = journal
+    ? renderMarketCloseJournalDigest(journal)
+    : [
+        "## 시장일지 화면 연결",
+        "",
+        "- 최근 시장일지: 캐시 확인 중",
+        "- 입력 구분: 스모크 검증 · 실제 저장은 운영 클릭에서 수행합니다.",
+        "- 다음 조치: 저장이 필요한 경우 스모크 모드가 아닌 일반 화면에서 다시 실행하세요.",
+      ].join("\n");
+  return [
+    statusText,
+    taskText,
+    journalText,
+    errors.length ? `## 지연/오류\n\n${errors.map((item) => `- ${item}`).join("\n")}` : "",
+    "```json",
+    JSON.stringify(result || { status: "smoke_cached", module: "naver_market_close_journal_refresh", save_result: false }, null, 2),
+    "```",
+  ].filter(Boolean).join("\n\n");
+}
+
+function renderNaverResearchSmokeStatus({ result = null, journal = null, taskStatus = null, errors = [] } = {}) {
+  const statusText = result
+    ? renderNaverResearchStatusText(result)
+    : [
+        "## 네이버 리서치 자동 수집 상태",
+        "",
+        "- 상태: 스모크 검증용 캐시 확인",
+        "- 중복 시장일지 후보: 확인 생략 (soft_archive)",
+        "- 다음 조치: 운영 조회에서는 캐시/RAG/시장일지 상태를 최신 값으로 다시 확인합니다.",
+        "",
+        "## 국내 마감 시황 시장일지",
+        "",
+        "- 자동 반영: 스모크 검증 중",
+        "- 실행 시간: 08:30",
+      ].join("\n");
+  const taskText = taskStatus
+    ? renderNaverMarketCloseTaskStatusText(taskStatus)
+    : [
+        "## 08:30 자동 작업 로그",
+        "",
+        "- 작업 상태: 캐시 확인",
+        "- 작업 이름: 국내 주식 마감 시황",
+        "- 최근 로그: 스모크 검증에서는 장시간 대기 없이 연결 여부만 확인합니다.",
+      ].join("\n");
+  const journalText = journal
+    ? renderMarketCloseJournalDigest(journal)
+    : [
+        "## 시장일지 화면 연결",
+        "",
+        "- 최근 시장일지: 캐시 확인 중",
+        "- 입력 구분: 스모크 검증 · 저장된 시장일지 화면 연결만 확인합니다.",
+        "- 다음 조치: 일반 조회에서 최신 시장일지 내용을 다시 불러오세요.",
+      ].join("\n");
+  return [
+    statusText,
+    taskText,
+    journalText,
+    errors.length ? `## 지연/오류\n\n${errors.map((item) => `- ${item}`).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+elements.naverResearchStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("네이버 리서치 상태 조회 중", [
+    "캐시/RAG 저장 건수 확인",
+    "PDF 구조화 분석 상태 집계",
+    "08:30 시장일지 자동 반영 상태 확인",
+  ]);
+  const smokeMode = isClickSmokeMode();
+  const errors = [];
+  if (smokeMode) {
+    setOutput(renderNaverResearchSmokeStatus());
+  }
+  const [result, journal, taskStatus] = smokeMode
+    ? await Promise.all([
+        readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 8000, errors),
+        readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 5000, errors),
+        readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
+      ])
+    : [
+        await readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 30000, errors),
+        await readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 15000, errors),
+        await readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 15000, errors),
+      ];
+  const statusText = result
+    ? renderNaverResearchStatusText(result)
+    : [
+        "## 네이버 리서치 자동 수집 상태",
+        "",
+        "- 상태: 확인 지연",
+        "- 중복 시장일지 후보: 확인 지연 (soft_archive)",
+        "- 다음 조치: 백엔드 상태가 안정되면 다시 조회하세요.",
+      ].join("\n");
+  const taskText = taskStatus
+      ? renderNaverMarketCloseTaskStatusText(taskStatus)
+      : [
+        "## 08:30 자동 작업 로그",
+        "",
+        "- 작업 상태: 확인 지연",
+        "- 작업 이름: 국내 주식 마감 시황",
+        "- 최근 로그: 백엔드 응답 지연으로 이번 조회에서는 생략했습니다.",
+      ].join("\n");
+  const journalText = journal
+    ? renderMarketCloseJournalDigest(journal)
+    : [
+        "## 시장일지 화면 연결",
+        "",
+        "- 최근 시장일지: 확인 지연",
+        "- 입력 구분: 확인 지연 · 시장일지 응답이 오면 자동 반영/수동 입력 여부를 표시합니다.",
+        "- 다음 조치: `시황 시장일지 반영` 또는 상태 조회를 다시 실행하세요.",
+      ].join("\n");
+  setOutput(
+    [
+      statusText,
+      taskText,
+      journalText,
+      errors.length ? `## 지연/오류\n\n${errors.map((item) => `- ${item}`).join("\n")}` : "",
+      result ? `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`` : "",
+    ].filter(Boolean).join("\n\n")
+  );
+});
+
+elements.naverResearchRepairButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("네이버 리서치 정리 중", [
+    "새 파서로 제목/증권사 메타데이터 재확인",
+    "보유/관심 우선순위 재계산",
+    "PDF 구조화 신호 백필",
+    "캐시 상태 재집계",
+  ]);
+  try {
+    const smokeMode = isClickSmokeMode();
+    const result = await repairNaverResearchCache(token(), {
+      pdfBackfillLimit: smokeMode ? 0 : 30,
+      refreshMetadata: !smokeMode,
+      saveResult: false,
+      archiveDuplicates: true,
+    });
+    const status = await fetchNaverResearchStatus(token());
+    const journal = await fetchMarketCloseJournal(token(), "KR");
+    const taskStatus = await fetchNaverMarketCloseTaskStatus(token(), 20);
+    setOutput(`${renderNaverResearchStatusText(status)}\n\n${renderNaverMarketCloseTaskStatusText(taskStatus)}\n\n${renderMarketCloseJournalDigest(journal)}\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``);
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.naverMarketJournalButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("국내 마감 시황 시장일지 반영 중", [
+    "네이버 시황정보 최신 리포트 확인",
+    "저작권 안전 요약/메타데이터 구성",
+    "시장일지 저장",
+    "상태 카드 갱신",
+  ]);
+  try {
+    const smokeMode = isClickSmokeMode();
+    if (smokeMode) {
+      const errors = [];
+      const [status, journal, taskStatus] = await Promise.all([
+        readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 8000, errors),
+        readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 5000, errors),
+        readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
+      ]);
+      setOutput(renderNaverMarketJournalSmokeStatus({
+        result: { status: "smoke_cached", module: "naver_market_close_journal_refresh", save_result: false },
+        status,
+        journal,
+        taskStatus,
+        errors,
+      }));
+      return;
+    }
+    const result = await refreshNaverMarketCloseJournal(token(), true);
+    const status = await fetchNaverResearchStatus(token());
+    const journal = await fetchMarketCloseJournal(token(), "KR");
+    const taskStatus = await fetchNaverMarketCloseTaskStatus(token(), 20);
+    setOutput(`${renderNaverResearchStatusText(status)}\n\n${renderNaverMarketCloseTaskStatusText(taskStatus)}\n\n${renderMarketCloseJournalDigest(journal)}\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``);
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
 elements.storageCleanupButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
   startOutputLoading("저장 데이터 중복 리뷰 생성 중", [
@@ -9852,6 +11325,34 @@ elements.ragBackfillButton.addEventListener("click", async () => {
   try {
     const result = await backfillRagMemoryDocuments(token());
     setOutput(result || "RAG 색인 갱신 결과를 확인하지 못했습니다.");
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.ocrReprocessButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  const includeArchived = Boolean(
+    elements.memoryForm?.querySelector('input[name="includeArchived"]')?.checked
+  );
+  startOutputLoading("저장 데이터 OCR 재처리 중", [
+    "OCR 런타임과 언어팩 확인",
+    "본문 0자/미연결 첨부 후보 선별",
+    "Markdown/JSON/Manifest 갱신",
+    "RAG 색인 다시 반영",
+  ]);
+  try {
+    const result = await reprocessResearchMemoryOcr(token(), {
+      includeArchived,
+      force: false,
+      saveResult: true,
+    });
+    setOutput(result || "OCR 재처리 결과를 확인하지 못했습니다.");
+    const data = formDataObject(elements.memoryForm);
+    const lookupKey = await resolveMemoryLookupKey(data.ticker || activeTicker || "POLICY");
+    const memoryResponse = await fetchResearchMemoryFiles(token(), lookupKey, memoryListFetchOptions());
+    renderMemoryList(memoryResponse, lookupKey);
     await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
   } catch (error) {
     setError(error);
@@ -10243,6 +11744,27 @@ function newsItemTone(item) {
   return "needs-action";
 }
 
+function currentNewsInboxFilter() {
+  return elements.newsInboxFilter?.value || "all";
+}
+
+function renderNewsInboxFilterSummary(payload) {
+  const counts = payload?.filter_counts || {};
+  if (!counts || !Object.keys(counts).length) {
+    return "";
+  }
+  return `
+    <div class="news-filter-summary">
+      <b>전체 ${escapeHtml(formatNumber(counts.all || payload?.count || 0))}</b>
+      <span>승격 전 ${escapeHtml(formatNumber(counts.unpromoted || 0))}</span>
+      <span>본문 보강 ${escapeHtml(formatNumber(counts.needs_body || 0))}</span>
+      <span>URL-only ${escapeHtml(formatNumber(counts.url_only || 0))}</span>
+      <span>시장일지 ${escapeHtml(formatNumber(counts.market_journal || 0))}</span>
+      <span>품질 확인 ${escapeHtml(formatNumber(counts.quality_issue || 0))}</span>
+    </div>
+  `;
+}
+
 function renderNewsInboxCards(payload) {
   if (!elements.newsInboxList) {
     return;
@@ -10250,15 +11772,16 @@ function renderNewsInboxCards(payload) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   if (!items.length) {
     elements.newsInboxList.innerHTML =
-      '<div class="news-inbox-empty">저장된 뉴스가 없습니다. 뉴스 본문이나 URL을 입력해 먼저 인박스에 저장하세요.</div>';
+      `${renderNewsInboxFilterSummary(payload)}<div class="news-inbox-empty">현재 필터에 표시할 뉴스가 없습니다. 필터를 전체로 바꾸거나 새 메모/URL을 저장하세요.</div>`;
     return;
   }
-  elements.newsInboxList.innerHTML = items
+  elements.newsInboxList.innerHTML = renderNewsInboxFilterSummary(payload) + items
     .slice(0, 30)
     .map((item) => {
       const tone = newsItemTone(item);
       const quality = item.capture_quality || {};
       const status = item.promoted ? "승격 완료" : item.review_status || "대기";
+      const policy = item.copyright_policy?.message || "뉴스 원문 본문은 저장하지 않는 안전 모드";
       const sourceUrl = item.source_url
         ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">원문</a>`
         : "";
@@ -10268,7 +11791,8 @@ function renderNewsInboxCards(payload) {
             <span>${escapeHtml(status)} · ${escapeHtml(item.scope_label || item.scope || "일반 뉴스")}</span>
             <strong>${escapeHtml(item.title || "제목 없음")}</strong>
             <p>${escapeHtml(compactOutputText(item.summary || item.input_preview || "", 240))}</p>
-            <small>품질 ${escapeHtml(quality.status || "미확인")} · 본문 ${escapeHtml(formatNumber(quality.text_length || 0))}자 · 신뢰도 ${escapeHtml(toPercent(item.confidence))} ${sourceUrl}</small>
+            <small>품질 ${escapeHtml(quality.status || "미확인")} · 저장 메모 ${escapeHtml(formatNumber(quality.text_length || 0))}자 · 신뢰도 ${escapeHtml(toPercent(item.confidence))} ${sourceUrl}</small>
+            <em>${escapeHtml(policy)}</em>
           </div>
           <div class="news-inbox-actions">
             <button data-news-action="promote" type="button" ${item.promoted ? "disabled" : ""}>저장 데이터로 반영</button>
@@ -10320,6 +11844,22 @@ function formatKoreanResult(value) {
     return value.map((item, index) => formatListItem(item, index)).join("\n\n");
   }
 
+  const displayCompanyName = (item, fallback = "회사명 확인 필요") => {
+    const source = item || {};
+    return String(
+      source.company_name ||
+        source.companyName ||
+        source.holding_name ||
+        source.name ||
+        source.verification?.company_name ||
+        source.ticker_verification?.company_name ||
+        source.ticker_profile?.company_name ||
+        source.profile?.company_name ||
+        source.signal?.company_name ||
+        fallback
+    ).trim();
+  };
+
   if (value.module === "news_inbox" || value.module === "news_promotion") {
     const item = value.item || {};
     const qualityLines = buildCaptureQualityLines(item.capture_quality || value.capture?.capture_quality);
@@ -10331,6 +11871,7 @@ function formatKoreanResult(value) {
       item.source_url ? `- **원문:** ${item.source_url}` : "",
       `- **중복:** ${value.duplicate_check?.is_duplicate_suspected ? "중복 의심" : "신규"}`,
       `- **신뢰도:** ${toPercent(item.confidence)}`,
+      item.copyright_policy?.message ? `- **저장 정책:** ${item.copyright_policy.message}` : "",
       item.promoted_storage?.relative_path ? `- **승격 저장:** ${item.promoted_storage.relative_path}` : "",
       ``,
       `### 요약`,
@@ -10357,8 +11898,11 @@ function formatKoreanResult(value) {
       `### 뉴스 인박스`,
       ``,
       `- **전체:** ${formatNumber(value.count || 0)}개`,
+      `- **현재 필터:** ${value.filter || "all"} / 표시 ${formatNumber(value.filtered_count || items.length)}개`,
       `- **미승격:** ${formatNumber(value.unpromoted_count || 0)}개`,
       `- **품질 확인 필요:** ${formatNumber(value.quality_issue_count || 0)}개`,
+      `- **본문 보강 필요:** ${formatNumber(value.filter_counts?.needs_body || 0)}개`,
+      `- **URL-only:** ${formatNumber(value.filter_counts?.url_only || 0)}개`,
       ``,
       `### 최근 뉴스`,
       ...formatBulletList(
@@ -10375,6 +11919,7 @@ function formatKoreanResult(value) {
       ``,
       `### 사용법`,
       "- 뉴스는 여기서 먼저 중복과 품질을 확인합니다.",
+      "- 뉴스/기사 원문 본문은 저장하지 않고 링크와 짧은 메모 중심으로 보관합니다.",
       "- 투자 논거로 쓸 자료만 `최근 뉴스 승격`으로 저장 데이터에 반영합니다.",
     ].join("\n");
   }
@@ -10406,6 +11951,76 @@ function formatKoreanResult(value) {
       .join("\n");
   }
 
+  if (value.module === "storage_quality_dashboard") {
+    const bodyMissingItems = value.body_missing_items || [];
+    const ocrNeededItems = value.ocr_needed_items || [];
+    return [
+      `### 저장 데이터 품질 대시보드`,
+      ``,
+      `- **전체 저장 문서:** ${formatNumber(value.manifest_count || 0)}개`,
+      `- **정상 문서:** ${formatNumber(value.normal_count || 0)}개`,
+      `- **본문 보강 필요:** ${formatNumber(value.body_missing_count || 0)}개`,
+      `- **OCR 필요:** ${formatNumber(value.ocr_needed_count || 0)}개`,
+      `- **보관 문서:** ${formatNumber(value.archived_count || 0)}개`,
+      `- **중복/레거시 의심:** ${formatNumber(value.legacy_or_duplicate_count || 0)}개`,
+      bodyMissingItems.length ? `` : "",
+      bodyMissingItems.length ? `### 본문 보강 대상` : "",
+      ...bodyMissingItems.map(
+        (item) =>
+          `- ${displayCompanyName(item)} · ${item.file_name || item.relative_path || "파일 미확인"} · ${item.quality_status || "본문 보강 필요"}`
+      ),
+      ocrNeededItems.length ? `` : "",
+      ocrNeededItems.length ? `### OCR 보강 대상` : "",
+      ...ocrNeededItems.map(
+        (item) =>
+          `- ${displayCompanyName(item)} · ${item.file_name || item.relative_path || "파일 미확인"} · ${item.ocr_status || "OCR 필요"}`
+      ),
+      ``,
+      `### 뉴스 인박스`,
+      `- 승격 전 ${formatNumber(value.news_filter_counts?.unpromoted || 0)}개`,
+      `- 본문 보강 ${formatNumber(value.news_filter_counts?.needs_body || 0)}개`,
+      `- URL-only ${formatNumber(value.news_filter_counts?.url_only || 0)}개`,
+      `- 시장일지 후보 ${formatNumber(value.news_filter_counts?.market_journal || 0)}개`,
+      ``,
+      `### 저장 정책`,
+      value.policy?.message || "뉴스 원문 본문은 저장하지 않습니다.",
+      ``,
+      `### 다음 액션`,
+      ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180)),
+    ].join("\n");
+  }
+
+  if (value.module === "research_memory_ocr_reprocess") {
+    const runtime = value.ocr_runtime || {};
+    const limits = runtime.limits || {};
+    const samples = value.samples || [];
+    return [
+      `### 저장 데이터 OCR 재처리`,
+      ``,
+      `- **점검 파일:** ${formatNumber(value.checked_count || 0)}개`,
+      `- **재처리 후보:** ${formatNumber(value.candidate_count || 0)}개`,
+      `- **재처리 완료:** ${formatNumber(value.reprocessed_count || 0)}개`,
+      `- **누락 파일:** ${formatNumber(value.missing_file_count || 0)}개`,
+      `- **실패:** ${formatNumber(value.failed_count || 0)}개`,
+      `- **RAG 갱신:** ${formatNumber(value.rag_updated_count || value.rag_backfill?.updated_count || 0)}개`,
+      runtime.message ? `- **OCR 런타임:** ${runtime.ready ? "연결됨" : "확인 필요"} · ${runtime.message}` : "",
+      limits.message ? `- **처리 한계:** ${limits.message}` : "",
+      ``,
+      `### 재처리 샘플`,
+      ...formatBulletList(
+        samples.slice(0, 10),
+        (item) =>
+          `${displayCompanyName(item, item.key || "저장 키 미확인")} · ${item.file_name || "파일명 없음"} · 본문 ${formatNumber(item.char_count || 0)}자 · ${item.ocr_status || "텍스트 추출"}`,
+        "이번 실행에서 새로 재처리한 파일이 없습니다."
+      ),
+      ``,
+      `### 다음 액션`,
+      ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180)),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   if (value.module === "storage_duplicate_review") {
     const groups = value.groups || [];
     const tickerBreakdown = value.ticker_breakdown || [];
@@ -10422,7 +12037,7 @@ function formatKoreanResult(value) {
       ...formatBulletList(
         tickerBreakdown.slice(0, 8),
         (item) =>
-          `${item.company_name || item.ticker || "대상 미확인"} · 중복 자료 ${
+          `${displayCompanyName(item, "대상 미확인")} · 중복 자료 ${
             item.duplicate_entry_count || 0
           }개 / 묶음 ${item.duplicate_group_count || 0}개`,
         "중복 의심이 많은 종목이 없습니다."
@@ -10457,7 +12072,7 @@ function formatKoreanResult(value) {
     return [
       `### 레거시 파일 소프트 보관`,
       ``,
-      `- **저장 키:** ${value.ticker || "미확인"}`,
+      `- **저장 키:** ${displayCompanyName(value, "미확인")}`,
       `- **정책:** ${policy.policy === "soft_archive" ? "삭제 금지 · 소프트 보관" : policy.policy || "정책 미확인"}`,
       `- **보관 후보:** ${formatNumber(value.candidate_count || 0)}개`,
       `- **보관 완료:** ${formatNumber(value.archived_count || 0)}개`,
@@ -10490,7 +12105,7 @@ function formatKoreanResult(value) {
       ...formatBulletList(
         value.refreshed,
         (item) =>
-          `${item.company_name || item.ticker} (${item.ticker}) · 고유 자료 ${item.source_count || 0}개 · 중복 제외 ${
+          `${displayCompanyName(item)} · 고유 자료 ${item.source_count || 0}개 · 중복 제외 ${
             item.duplicate_count || 0
           }개 · 신뢰도 ${toPercent(item.confidence)}${
             item.storage?.relative_path ? `\n  저장: ${item.storage.relative_path}` : ""
@@ -10500,12 +12115,12 @@ function formatKoreanResult(value) {
       ``,
       value.skipped?.length ? `### 스킵된 종목` : "",
       ...(value.skipped?.length
-        ? formatBulletList(value.skipped, (item) => `${item.company_name || item.ticker} (${item.ticker}) · ${item.reason}`)
+        ? formatBulletList(value.skipped, (item) => `${displayCompanyName(item)} · ${item.reason}`)
         : []),
       value.failed?.length ? `` : "",
       value.failed?.length ? `### 실패한 종목` : "",
       ...(value.failed?.length
-        ? formatBulletList(value.failed, (item) => `${item.company_name || item.ticker} (${item.ticker}) · ${item.error}`)
+        ? formatBulletList(value.failed, (item) => `${displayCompanyName(item)} · ${item.error}`)
         : []),
       ``,
       `### 다음 액션`,
@@ -10654,7 +12269,7 @@ function formatKoreanResult(value) {
       ...formatBulletList(
         sourceDocuments.slice(0, 8),
         (item) =>
-          `${item.ticker || "GENERAL"} · ${translateReportType(item.report_type)} · ${
+          `${displayCompanyName(item, "전체/공통 자료")} · ${translateReportType(item.report_type)} · ${
             item.source_date || "날짜 없음"
           } · ${compactOutputText(item.title || item.source_file_name || item.summary, 160)}`,
         "사용한 저장 데이터가 없습니다."
@@ -10668,7 +12283,7 @@ function formatKoreanResult(value) {
     return [
       `### Dossier 합성 보고서`,
       ``,
-      `- **종목:** ${value.company_name || value.ticker} (${value.ticker})`,
+      `- **종목:** ${displayCompanyName(value)}`,
       `- **기준일:** ${value.date || "미확인"}`,
       `- **고유 자료:** ${value.source_count || 0}개`,
       `- **중복 제외:** ${value.duplicate_count || 0}개`,
@@ -10741,7 +12356,7 @@ function formatKoreanResult(value) {
           const confidence = item.confidence === null || item.confidence === undefined ? "n/a" : toPercent(item.confidence);
           const status = item.status ? ` · ${item.status}` : "";
           const action = item.recommended_action ? ` · ${compactOutputText(item.recommended_action, 90)}` : "";
-          return `${item.company_name || item.ticker} (${item.ticker}) · 신뢰도 ${confidence}${status} · ${compactOutputText(item.summary, 170)}${action}`;
+          return `${displayCompanyName(item)} · 신뢰도 ${confidence}${status} · ${compactOutputText(item.summary, 170)}${action}`;
         },
         "표시할 종목 스냅샷이 없습니다."
       ),
@@ -10755,7 +12370,7 @@ function formatKoreanResult(value) {
           const bear = (item.bear_triggers || []).length
             ? ` · 약세: ${compactOutputText((item.bear_triggers || []).join(" / "), 110)}`
             : "";
-          return `${item.company_name || item.ticker} (${item.ticker}) · ${item.status || "상태 미확인"} · 신뢰도 ${confidence} · 확인 KPI ${kpis} · ${compactOutputText(item.recommended_action, 120)}${bear}`;
+          return `${displayCompanyName(item)} · ${item.status || "상태 미확인"} · 신뢰도 ${confidence} · 확인 KPI ${kpis} · ${compactOutputText(item.recommended_action, 120)}${bear}`;
         },
         "우선 점검 종목이 없습니다."
       ),
@@ -10810,7 +12425,7 @@ function formatKoreanResult(value) {
       ...formatBulletList(
         value.dossiers,
         (item) =>
-          `${item.ticker} · 고유 자료 ${item.source_count || 0}개 · 중복 ${
+          `${displayCompanyName(item)} · 고유 자료 ${item.source_count || 0}개 · 중복 ${
             item.duplicate_count || 0
           }개 · 신뢰도 ${toPercent(item.confidence)}`,
         "이번 실행에서 합성된 Dossier가 없습니다."
@@ -10831,7 +12446,7 @@ function formatKoreanResult(value) {
       `실패 항목`,
       ...formatBulletList(
         value.failed,
-        (item) => `${item.ticker || item.source || "대상 미확인"} · ${item.error || item.reason || "원인 미확인"}`,
+        (item) => `${displayCompanyName(item, item.source || "대상 미확인")} · ${item.error || item.reason || "원인 미확인"}`,
         "실패 항목이 없습니다."
       ),
     ].join("\n");
@@ -10903,7 +12518,7 @@ function formatKoreanResult(value) {
     return [
       `네이버 차트 분석`,
       ``,
-      `종목: ${value.company_name || value.ticker}${value.company_name ? ` (${value.ticker})` : ""}`,
+      `종목: ${displayCompanyName(value)}`,
       `기준일: ${value.as_of || "미확인"}`,
       `데이터: ${value.data_points || 0}개 일봉`,
       `종합 판단: ${value.overall_signal || "미확인"}`,
@@ -10978,10 +12593,9 @@ function formatKoreanResult(value) {
     return [
       `티커 대시보드`,
       ``,
-      `종목: ${profile?.company_name || verification?.company_name || tickerLabelForOutput(value.ticker)}`,
-      `공식 코드: ${value.ticker}`,
+      `종목: ${displayCompanyName({ ...value, company_name: profile?.company_name || verification?.company_name })}`,
       verification?.company_name
-        ? `공식 인증: ${verification.company_name} (${verification.exchange})`
+        ? `공식 인증: ${verification.company_name} · ${verification.exchange || "거래소 미확인"}`
         : `공식 인증: 확인 정보 없음`,
       `저장 데이터: 공식 ${value.verified_report_count || 0}개 / 전체 ${value.file_count || 0}개 / 레거시 ${value.legacy_report_count || 0}개`,
       `실적 기준: ${earningsReference.official_quarter || "미등록"} · 발표일 ${earningsReference.official_earnings_report_date || "미입력"}`,
@@ -11018,7 +12632,7 @@ function formatKoreanResult(value) {
     return [
       `저장 리포트 미리보기`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value, "전체/공통 자료")}`,
       `파일: ${value.file_name}`,
       `경로: ${value.relative_path}`,
       `수정일: ${formatDateTime(value.modified_at)}`,
@@ -11032,7 +12646,7 @@ function formatKoreanResult(value) {
     return [
       `종합 팀 리포트`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       ...(queueSource
         ? [
             `자동 실행 출처: 포트폴리오 기준 리포트 큐 ${queueSource.queue_rank || 1}순위`,
@@ -11077,7 +12691,7 @@ function formatKoreanResult(value) {
     return [
       `최신 데이터 스냅샷`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       `프로바이더 모드: ${translateProviderMode(value.provider_mode)}`,
       `자동 주입: ${value.auto_inject_analysis_data ? "켜짐" : "꺼짐"}`,
       ``,
@@ -11098,24 +12712,60 @@ function formatKoreanResult(value) {
   }
 
   if (value.module === "ticker_registry_cache") {
+    const sourceStatus = value.source_status || {};
+    const sourceLines = (sourceStatus.sources || []).map(
+      (item) =>
+        `- ${translateTickerRegistrySourceName(item.source)}: ${formatNumber(item.count || 0)}개 · ${translateLookupStatus(item.status)}${item.fetched_at ? ` · ${formatDateTime(item.fetched_at)}` : ""}`
+    );
     return [
       `티커 자동 인증 캐시`,
       ``,
-      `로컬 공식 등록: ${value.local_registry_count || 0}개`,
-      `자동 인증 캐시: ${value.cache_count || 0}개`,
+      `로컬 공식 등록: ${formatNumber(value.local_registry_count || 0)}개`,
+      `자동 인증 캐시: ${formatNumber(value.cache_count || 0)}개`,
+      `원천 갱신: ${formatNumber(sourceStatus.success_count || 0)}/${formatNumber(sourceStatus.source_count || 0)}개 성공`,
+      sourceStatus.updated_at ? `최근 갱신: ${formatDateTime(sourceStatus.updated_at)}` : `최근 갱신: 확인 안 됨`,
       `캐시 경로: ${value.cache_path || "미확인"}`,
+      ``,
+      `원천별 확보 현황`,
+      ...(sourceLines.length ? sourceLines : ["- 아직 원천별 갱신 이력이 없습니다."]),
       ``,
       `캐시 항목`,
       ...((value.entries || []).length
         ? value.entries.map(
             (item, index) =>
-              `${index + 1}. ${item.ticker} · ${item.company_name || "회사명 없음"} · ${item.exchange || "거래소 미확인"} · ${translateVerificationSource(item.verification_source)}`
+              `${index + 1}. ${displayCompanyName(item)} · ${item.exchange || "거래소 미확인"} · ${translateVerificationSource(item.verification_source)}`
           )
         : ["- 현재 자동 인증 캐시에 저장된 티커가 없습니다."]),
+      value.hidden_entry_count
+        ? `- 화면 속도 보호를 위해 결과 출력은 ${formatNumber(value.displayed_entry_count || 0)}개만 표시하고, 나머지 ${formatNumber(value.hidden_entry_count)}개는 자동 인증 캐시로만 사용합니다.`
+        : "",
       ``,
       `사용 방식`,
-      `- 로컬 공식 등록에 없는 티커도 FMP에서 회사 프로필이 확인되면 자동 캐시에 저장됩니다.`,
-      `- 캐시된 티커는 다음 분석부터 수동 등록 없이 재사용됩니다.`,
+      `- 한국 상장사는 KRX/KIND 목록, 미국 상장사는 Nasdaq Trader 목록을 우선 사용합니다.`,
+      `- 로컬 공식 등록에 없는 티커도 원천 목록 또는 외부 프로필에서 확인되면 자동 캐시에 저장됩니다.`,
+      `- 숫자만 있고 6자리가 아닌 값은 공식 티커로 보지 않아 10 같은 오분류를 차단합니다.`,
+    ].join("\n");
+  }
+
+  if (value.module === "llm_bridge_storage_status") {
+    const entries = value.latest_entries || [];
+    return [
+      `LLM 연동 저장/RAG 상태`,
+      ``,
+      `저장된 LLM 응답: ${formatNumber(value.saved_count || 0)}개`,
+      `RAG 연결 문서: ${formatNumber(value.rag_document_count || 0)}개`,
+      `저장 정책: ${value.storage_policy || "LLM 응답과 원 프롬프트를 저장 데이터로 보관합니다."}`,
+      `다음 조치: ${value.next_action || "최근 항목을 확인하세요."}`,
+      ``,
+      `최근 저장 항목`,
+      ...(entries.length
+        ? entries.map((item, index) => {
+            const promptStatus = item.raw_content_includes_prompt ? "프롬프트 저장" : "프롬프트 확인 필요";
+            const responseStatus = item.raw_content_includes_llm_response ? "응답 저장" : "응답 확인 필요";
+            const ragStatus = item.rag_connected ? "RAG 연결" : "RAG 제외/보관";
+            return `${index + 1}. ${displayCompanyName(item)} · ${item.file_name || item.relative_path || "파일 미확인"} · ${promptStatus} · ${responseStatus} · ${ragStatus}`;
+          })
+        : ["- 최근 LLM 저장 항목이 없습니다."]),
     ].join("\n");
   }
 
@@ -11123,7 +12773,7 @@ function formatKoreanResult(value) {
     return [
       `티커 인증 진단`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value.verification || value)}`,
       `상태: ${value.verification?.verified ? "인증 완료" : "인증 실패"}`,
       `해결 경로: ${translateVerificationSource(value.resolution)}`,
       `회사: ${value.verification?.company_name || "확인 안 됨"}`,
@@ -11155,7 +12805,7 @@ function formatKoreanResult(value) {
     return [
       `스마트 매매 전략`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       `현재가: ${formatTradePrice(value.current_price, tradeCurrency)}`,
       `스타일: ${translateTradeStyle(value.style)}`,
       `허용 리스크: ${value.risk_tolerance}`,
@@ -11199,7 +12849,7 @@ function formatKoreanResult(value) {
     return [
       `실적 발표 반응 분석`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       `분기: ${value.quarter}`,
       `기준 상태: ${value.earnings_reference_status || "확인 필요"}`,
       `공식 최신 발표 분기: ${value.official_latest_quarter || "미등록"}`,
@@ -11254,15 +12904,65 @@ function formatKoreanResult(value) {
     ].join("\n");
   }
 
-  if (value.module === "sector_opportunity") {
+  if (value.module === "kcif_reports_watch") {
+    const relatedReports = Array.isArray(value.related_reports) ? value.related_reports : [];
+    const reports = relatedReports.length
+      ? relatedReports
+      : Array.isArray(value.reports)
+        ? value.reports.slice(0, 8)
+        : [];
+    const policy = value.policy || {};
     return [
-      `섹터 기회 발굴`,
+      `KCIF 보고서 Watch`,
+      ``,
+      `상태: ${value.source_status || "확인"}`,
+      `로그인: ${value.auth_status === "authenticated" ? "사용 중" : "미사용 또는 미설정"} / 상세 확인: ${value.detail_status || "미확인"}`,
+      `접속 방식: ${value.connection_mode || "확인 불가"}`,
+      `공개 목록: ${formatNumber(value.report_count || 0)}개 / 관련 후보 ${formatNumber(value.related_count || 0)}개`,
+      `매칭 대상: ${formatNumber(value.target_count || 0)}개`,
+      `저장 정책: ${policy.message || "원문/PDF는 자동 저장하지 않고 메타데이터와 자체 분석만 저장합니다."}`,
+      ``,
+      `관련 보고서`,
+      ...(reports.length
+        ? reports.slice(0, 10).map((item, index) => {
+            const targets = (item.matched_targets || [])
+              .map((target) => target.label)
+              .filter(Boolean)
+              .slice(0, 3)
+              .join(", ");
+            const themes = (item.matched_themes || []).slice(0, 4).join(", ") || "테마 미확인";
+            const targetText = targets ? ` · 연결: ${targets}` : "";
+            const detail = item.detail_analysis || {};
+            const detailLines = Array.isArray(detail.derived_points)
+              ? detail.derived_points.slice(0, 3).map((point) => `   - ${point}`).join("\n")
+              : "";
+            const detailText = detailLines ? `\n   상세 신호\n${detailLines}` : "";
+            return `${index + 1}. ${item.title} (${item.published_at || "일자 미확인"})\n   분류: ${item.category || "KCIF"} · 점수 ${item.relevance_score || 0}/100 · ${themes}${targetText}\n   조치: ${item.recommended_action || "사용자가 원문을 직접 확인한 뒤 핵심 메모만 저장하세요."}${detailText}`;
+          })
+        : ["- 표시할 관련 보고서가 없습니다."]),
+      ``,
+      `다음 조치`,
+      ...((value.next_actions || []).map((item) => `- ${item}`)),
+      ...((value.warnings || []).length ? [``, `경고`, ...(value.warnings || []).map((item) => `- ${item}`)] : []),
+    ].join("\n");
+  }
+
+  if (value.module === "sector_opportunity") {
+    const isMacroAnalysis = value.display_mode === "macro_analysis";
+    const companyDisplayName = (item) =>
+      String(item?.company_name || item?.name || item?.label || "회사명 확인 필요").trim();
+    const leaderNamesForTrend = (item) => {
+      const names = (item.leader_companies || []).map(companyDisplayName);
+      return Array.from(new Set(names.filter(Boolean))).join(", ") || "회사명 확인 필요";
+    };
+    return [
+      isMacroAnalysis ? `매크로 분석` : `섹터 기회 발굴`,
       ``,
       `저장 키: ${value.research_key}`,
       `지역: ${translateRegion(value.region)}`,
       `기간: ${value.period}`,
       `스타일: ${value.style}`,
-      `입력 테마: ${value.focus_theme || "미입력"}`,
+      isMacroAnalysis ? `중점 변수: ${value.focus_theme || "매크로 전체"}` : `입력 테마: ${value.focus_theme || "미입력"}`,
       ``,
       `매크로 요약`,
       `${value.macro_summary}`,
@@ -11281,7 +12981,7 @@ function formatKoreanResult(value) {
       ...((value.peer_comparison || []).length
         ? (value.peer_comparison || []).map(
             (item, index) =>
-              `${index + 1}. ${item.company_name} (${item.ticker}) · ${item.role} · 적합도 ${item.fit_score}/100\n   강점: ${(item.strengths || []).join(" / ") || "없음"}\n   리스크: ${(item.risks || []).join(" / ") || "없음"}`
+              `${index + 1}. ${companyDisplayName(item)} · ${item.role} · 적합도 ${item.fit_score}/100\n   강점: ${(item.strengths || []).join(" / ") || "없음"}\n   리스크: ${(item.risks || []).join(" / ") || "없음"}`
           )
         : ["- 표시할 피어 비교가 없습니다."]),
       ``,
@@ -11289,7 +12989,7 @@ function formatKoreanResult(value) {
       ...((value.idea_shortlist || []).length
         ? (value.idea_shortlist || []).map(
             (item, index) =>
-              `${index + 1}. ${item.company_name} (${item.ticker}) · ${item.sector} · 적합도 ${item.fit_score}/100 - ${item.thesis}`
+              `${index + 1}. ${companyDisplayName(item)} · ${item.sector} · 적합도 ${item.fit_score}/100 - ${item.thesis}`
           )
         : ["- 표시할 아이디어 후보가 없습니다."]),
       ``,
@@ -11307,7 +13007,7 @@ function formatKoreanResult(value) {
                 `${index + 1}. ${item.sector} - ${item.trend_label} (${item.flow_score}/100)`,
                 `   흐름: ${item.market_flow}`,
                 `   대응: ${item.investment_solution}`,
-                `   주도주: ${(item.leader_tickers || []).join(", ") || "없음"}`,
+                `   주도 기업: ${leaderNamesForTrend(item)}`,
                 `   근거: ${(item.evidence || []).join(" / ") || "없음"}`,
               ].join("\n")
           )
@@ -11317,7 +13017,7 @@ function formatKoreanResult(value) {
       ...((value.sector_leaders || []).length
         ? (value.sector_leaders || []).slice(0, 10).map(
             (item, index) =>
-              `${index + 1}. ${item.company_name} (${item.ticker}) · ${item.sector} · ${item.leader_score}/100 - ${item.thesis}`
+              `${index + 1}. ${companyDisplayName(item)} · ${item.sector} · ${item.leader_score}/100 - ${item.thesis}`
           )
         : ["- 표시할 주도주 후보가 없습니다."]),
       ``,
@@ -11329,7 +13029,7 @@ function formatKoreanResult(value) {
       `후보 기업`,
       ...(value.recommended_companies || []).map(
         (item) =>
-          `- ${item.ticker} ${item.company_name}: ${item.thesis} (적합도 ${item.fit_score}/100)`
+          `- ${companyDisplayName(item)}: ${item.thesis} (적합도 ${item.fit_score}/100)`
       ),
       ``,
       `배분 관점`,
@@ -11351,7 +13051,7 @@ function formatKoreanResult(value) {
     return [
       `어닝 콜/공시 기반 모델 업데이트 노트`,
       ``,
-      `종목: ${value.company_name || value.ticker} (${value.ticker})`,
+      `종목: ${displayCompanyName(value)}`,
       `저장/RAG: ${ragDocument ? "연결 완료" : "저장 후 연결 대기"}`,
       ``,
       `첨부 파일 처리`,
@@ -11425,13 +13125,27 @@ function formatKoreanResult(value) {
   }
 
   if (value.module === "korea_customs_trade_snapshot") {
+    const hasValidData = Boolean(value.has_valid_data);
+    const storageStatus = value.storage_skipped
+      ? "건너뜀"
+      : value.rag_document
+        ? "연결 완료"
+        : hasValidData
+          ? "저장 후 연결 대기"
+          : "실제 수치 없음";
     return [
       `관세청 수출입 동향 투자 참고자료`,
       ``,
       `기간: ${value.start_yymm || "미확인"} ~ ${value.end_yymm || "미확인"}`,
       `발표 주기: ${value.release_schedule || "1일, 11일, 21일"}`,
       `현재 기준: ${value.release_cycle || "미확인"}`,
-      `저장/RAG: ${value.rag_document ? "연결 완료" : "저장 후 연결 대기"}`,
+      `상태: ${value.status === "warning" ? "확인 필요" : "완료"}`,
+      `데이터 품질: ${value.data_quality_label || (value.data_quality === "no_valid_trade_rows" ? "실제 수출입 수치 없음" : "수치 확인됨")}`,
+      `유효 행 수: ${formatNumber(value.valid_row_count || 0)}개`,
+      `저장 정책: ${value.storage_policy || "실제 수출입 수치가 있는 자료만 저장합니다."}`,
+      `저장/RAG: ${storageStatus}`,
+      value.storage_skip_reason ? `저장 제외 사유: ${value.storage_skip_reason}` : "",
+      value.next_action ? `다음 조치: ${value.next_action}` : "",
       ``,
       `핵심 신호`,
       ...((value.key_takeaways || []).map((item) => `- ${item}`)),
@@ -11439,7 +13153,9 @@ function formatKoreanResult(value) {
       `품목별 요약`,
       ...((value.aggregates || []).map(
         (item) =>
-          `- ${item.label}(${item.item_code}): ${item.signal} / 수출 $${Math.round(item.export_value_usd || 0).toLocaleString()} / 수입 $${Math.round(item.import_value_usd || 0).toLocaleString()} / ${item.inventory_signal}`
+          item.row_count
+            ? `- ${item.label}(${item.item_code}): ${item.signal} / 수출 $${Math.round(item.export_value_usd || 0).toLocaleString()} / 수입 $${Math.round(item.import_value_usd || 0).toLocaleString()} / ${item.inventory_signal}`
+            : `- ${item.label}(${item.item_code}): 실제 수출입 수치 없음 / 투자 신호 반영 제외`
       )),
       ``,
       `섹터 시사점`,
@@ -11450,12 +13166,47 @@ function formatKoreanResult(value) {
       ``,
       `데이터 경고`,
       ...((value.warnings || []).map((item) => `- ${item}`)),
+      ...(value.total_trend_status
+        ? [
+            ``,
+            `수출입총괄 진단`,
+            `- 상태: ${value.total_trend_status.authorized ? "연결 가능" : "권한/연결 확인 필요"}`,
+            `- HTTP: ${value.total_trend_status.http_status_code || "미확인"}`,
+            `- 메시지: ${value.total_trend_status.message || "미확인"}`,
+            `- 다음 조치: ${value.total_trend_status.next_action || "data.go.kr 활용 승인 상태 확인"}`,
+          ]
+        : []),
       ``,
       `저장 데이터: ${value.storage?.relative_path || "저장 안 됨"}`,
+    ].filter((line) => line !== "").join("\n");
+  }
+
+  if (value.module === "korea_customs_trade_total_trend_status") {
+    return [
+      `관세청 수출입총괄(GW) 진단`,
+      ``,
+      `기간: ${value.start_yymm || "미확인"} ~ ${value.end_yymm || "미확인"}`,
+      `발표 주기: ${value.release_cycle || "미확인"}`,
+      `상태: ${value.status === "success" ? "연결 가능" : "확인 필요"}`,
+      `권한 상태: ${value.authorized ? "승인됨" : "확인 필요"}`,
+      `HTTP 상태: ${value.http_status_code || "미확인"}`,
+      `행 수: ${formatNumber(value.row_count || 0)}개`,
+      `저장 정책: ${value.storage_policy || "진단 전용"}`,
+      ``,
+      `확인 메시지`,
+      `- ${value.message || "확인 필요"}`,
+      ...((value.warnings || []).map((item) => `- ${item}`)),
+      ``,
+      `다음 조치`,
+      `- ${value.next_action || "data.go.kr 활용 승인 상태와 인증키 권한을 확인하세요."}`,
+      ``,
+      `문서: ${value.docs_url || "미확인"}`,
+      `API: ${value.source_url || "미확인"}`,
     ].join("\n");
   }
 
   if (value.module === "long_term_compounder") {
+    const candidateName = (item) => item.company_name || item.name || item.ticker || "회사명 미확인";
     return [
       `장기 복리 성장주 발굴`,
       ``,
@@ -11472,13 +13223,13 @@ function formatKoreanResult(value) {
       `후보 기업`,
       ...(value.candidates || []).map(
         (item, index) =>
-          `${index + 1}. ${item.ticker} ${item.company_name} (${item.compounder_score}/100, 시가총액 ${formatCompounderMarketCap(item.market_cap, value.region)}) - ${item.thesis}`
+          `${index + 1}. ${candidateName(item)} (${item.compounder_score}/100, 시가총액 ${formatCompounderMarketCap(item.market_cap, value.region)}) - ${item.thesis}`
       ),
       ``,
       `핵심 지표`,
       ...(value.candidates || []).map(
         (item) =>
-          `- ${item.ticker}: 매출 성장률 ${toPercent(item.revenue_growth)}, 매출총이익률 ${toPercent(item.gross_margin)}, FCF 마진 ${toPercent(item.free_cash_flow_margin)}, 경쟁 우위 ${item.moat_score}/100`
+          `- ${candidateName(item)}: 매출 성장률 ${toPercent(item.revenue_growth)}, 매출총이익률 ${toPercent(item.gross_margin)}, FCF 마진 ${toPercent(item.free_cash_flow_margin)}, 경쟁 우위 ${item.moat_score}/100`
       ),
       ``,
       `제외/주의 사유`,
@@ -11628,11 +13379,11 @@ function formatKoreanResult(value) {
             item.unrealized_gain === undefined || item.unrealized_gain === null
               ? "손익 n/a"
               : `손익 ${formatMoney(item.unrealized_gain, "KRW", "n/a")} (${toPercent(item.unrealized_return)})`;
-          const priceText =
-            item.current_price === undefined || item.current_price === null
-              ? "현재가 미확인"
-              : `현재가 ${formatMoney(item.current_price, item.currency || "KRW", "n/a")}`;
-          return `${index + 1}. ${item.ticker} · ${item.name || "이름 없음"} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")} · ${priceText} · ${gainText}`;
+      const priceText =
+        item.current_price === undefined || item.current_price === null
+          ? "현재가 미확인"
+          : `현재가 ${formatMoney(item.current_price, item.currency || "KRW", "n/a")}`;
+          return `${index + 1}. ${displayCompanyName(item, "이름 없음")} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")} · ${priceText} · ${gainText}`;
         })
       : ["- 선택 포트폴리오의 종목 내역 없음"];
     return [
@@ -11667,7 +13418,7 @@ function formatKoreanResult(value) {
           ? `목표가 미등록 (${item.target_status || "상태 없음"})`
           : `목표 여력 ${formatSmartPercent(item.target_upside)} · 목표주가 ${formatSmartPrice(item.target_price, item.target_price_currency || item.currency)}`;
       return [
-        `${index + 1}. ${item.company_name || item.ticker} · ${item.ticker} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")}`,
+        `${index + 1}. ${displayCompanyName(item)} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")}`,
         `   현재가 ${formatSmartPrice(item.current_price, item.currency, "n/a")} · 수익 ${formatMoney(item.unrealized_gain, "KRW", "n/a")} (${toPercent(item.unrealized_return)})`,
         `   ${week52Text}`,
         `   ${targetText}`,
@@ -11698,7 +13449,7 @@ function formatKoreanResult(value) {
       const gainers =
         (period.top_gainers || [])
           .slice(0, 2)
-          .map((item) => `${item.name || item.ticker} ${formatMoney(item.net_profit, "KRW", "n/a")}`)
+          .map((item) => `${displayCompanyName(item)} ${formatMoney(item.net_profit, "KRW", "n/a")}`)
           .join(", ") || "없음";
       return [
         `- **${period.label}**: 순수익 ${formatMoney(period.net_profit, "KRW", "n/a")} / 수익률 ${
@@ -11711,13 +13462,31 @@ function formatKoreanResult(value) {
       ].join("\n");
     });
     const skippedLines = (value.skipped_holdings || []).slice(0, 8).map(
-      (item) => `- ${item.name || item.ticker}: ${item.reason || "기간 가격 데이터 없음"} / ${item.impact || "기간 비교에서 제외"}`
+      (item) => {
+        const manualReturn = item.manual_unrealized_return === null || item.manual_unrealized_return === undefined
+          ? ""
+          : ` / 수동 수익률 ${toPercent(item.manual_unrealized_return)}`;
+        const manualGain = item.manual_unrealized_gain === null || item.manual_unrealized_gain === undefined
+          ? ""
+          : ` / 수동 손익 ${formatMoney(item.manual_unrealized_gain, "KRW", "n/a")}`;
+        return `- ${displayCompanyName(item)}: ${item.reason || "기간 가격 데이터 없음"} / ${item.impact || "기간 비교에서 제외"}${manualGain}${manualReturn}`;
+      }
     );
     const priceCache = value.price_history_cache || {};
     const resultCache = value.result_cache || {};
+    const priceRefresh = value.current_price_refresh || {};
+    const quality = value.performance_quality || {};
+    const priceComparison = value.current_price_comparison || {};
+    const priceComparisonLines = (priceComparison.items || []).slice(0, 8).map(
+      (item) =>
+        `- ${displayCompanyName(item)}: 저장 ${formatSmartPrice(item.stored_current_price, "KRW", "n/a")} / 최신 종가 ${formatSmartPrice(item.history_latest_close, "KRW", "n/a")} / 차이 ${toPercent(item.difference_rate)}`
+    );
     const cacheLine = resultCache.enabled
       ? `결과 캐시 사용`
       : `결과 캐시 없음, 가격 히스토리 ${priceCache.enabled ? `메모리 캐시 사용(hit ${priceCache.hit_count || 0}, miss ${priceCache.miss_count || 0})` : "캐시 없음"}`;
+    const refreshLine = priceRefresh.enabled
+      ? `현재가 강제 갱신: 업데이트 ${priceRefresh.updated || 0}개 · 확인 ${priceRefresh.confirmed || 0}개 · 미확인 ${priceRefresh.unavailable || 0}개 · 기준 ${formatDateTime(priceRefresh.latest_checked_at)}`
+      : `저장 현재가 사용: ${priceRefresh.description || "빠른 응답을 위해 제공자 강제 갱신은 생략했습니다."}`;
     return [
       `포트폴리오 기간 수익 비교`,
       ``,
@@ -11725,16 +13494,25 @@ function formatKoreanResult(value) {
       `기준 시각: ${formatDateTime(value.as_of)} · 가격 기준일: ${value.price_data_as_of || "미확인"}`,
       `현재 평가금액: ${formatMoney(value.portfolio_value, "KRW", "n/a")}`,
       `현재 누적 미실현 손익: ${formatMoney(value.current_unrealized_gain, "KRW", "n/a")} (${toPercent(value.current_unrealized_return)})`,
+      `정확도: ${quality.confidence_label || "확인 전"} · 최소 커버리지 ${
+        quality.min_coverage_rate === null || quality.min_coverage_rate === undefined ? "n/a" : toPercent(quality.min_coverage_rate)
+      } · 가격 기준 ${value.price_basis || quality.price_basis || "저장 현재가"}`,
+      `저장 현재가 확인: ${formatDateTime(value.latest_stored_price_checked_at || quality.latest_stored_price_checked_at)} · 가격 차이 ${priceComparison.difference_count || 0}개`,
       ``,
       `기간별 순수익/수익률`,
       ...(periodLines.length ? periodLines : ["- 계산된 기간 수익이 없습니다."]),
       ``,
       `계산 방식`,
       `- ${value.method || "현재 수량과 기간별 과거 종가를 비교했습니다."}`,
+      `- ${refreshLine}`,
       `- ${value.coverage_note || "가격 히스토리가 확인된 종목만 기간 수익률에 반영했습니다."}`,
       `- 계산/캐시: ${value.calculation_mode === "recomputed_on_request" ? "요청 시 현재 저장 포트폴리오 기준으로 재계산" : value.calculation_mode || "미확인"} / ${cacheLine}`,
       `- 해외/미지원 제외: ${value.unsupported_history_count || 0}개, ${formatMoney(value.unsupported_history_market_value, "KRW", "0원")}`,
+      `- ${value.price_refresh_guidance || "가격 갱신 불러오기를 먼저 실행하면 저장 현재가 기준 정확도가 올라갑니다."}`,
       ...((value.data_limitations || []).map((item) => `- 한계: ${item}`)),
+      ``,
+      `저장 현재가와 국내 최신 종가 차이`,
+      ...(priceComparisonLines.length ? priceComparisonLines : ["- 큰 차이 없음"]),
       ``,
       `제외/보류 종목`,
       ...(skippedLines.length ? skippedLines : ["- 없음"]),
@@ -11749,7 +13527,7 @@ function formatKoreanResult(value) {
         ? "목표주가 미등록"
         : `${formatSmartPrice(item.consensus_target_price, item.consensus_target_currency || item.currency)} · 상승여력 ${formatSmartPercent(item.target_upside, "계산 보류")}`;
       return [
-        `${index + 1}. ${item.company_name || item.ticker} · ${item.ticker} · ${item.valuation_signal || "계산 보류"}`,
+        `${index + 1}. ${displayCompanyName(item)} · ${item.valuation_signal || "계산 보류"}`,
         `   현재가 ${formatSmartPrice(item.current_price, item.currency, "미확인")} · ${targetText}`,
         `   자료수 ${item.source_count || 0}개 · 신뢰도 ${formatSmartPercent(item.confidence, "n/a")} · 범위 ${item.source_scope || "저장 데이터"}`,
       ].join("\n");
@@ -11758,9 +13536,10 @@ function formatKoreanResult(value) {
       `증권사 컨센서스 목표주가 저평가 스캔`,
       ``,
       value.summary || "목표주가와 현재가를 비교했습니다.",
+      `가격 기준: ${value.price_refresh_mode === "stored_prices_only" ? "저장 현재가만 사용" : "누락 현재가 보강"}`,
       `대상: ${value.universe_count || rows.length}개 · 계산 완료: ${value.calculated_count || 0}개`,
       best
-        ? `가장 저평가 후보: ${best.company_name || best.ticker} (${best.ticker}) · 상승여력 ${formatSmartPercent(best.target_upside)}`
+        ? `가장 저평가 후보: ${displayCompanyName(best)} · 상승여력 ${formatSmartPercent(best.target_upside)}`
         : "가장 저평가 후보: 계산 가능한 종목 없음",
       ``,
       `저평가 순위`,
@@ -11792,7 +13571,7 @@ function formatKoreanResult(value) {
     const exposureMax = Math.max(...exposureChart.map((item) => Number(item.portfolio_weight || 0)), 0);
     const ratioLines = ratioChart.slice(0, 8).map((item) =>
       barLine(
-        `${item.holding_name || item.ticker} (${item.ticker})`,
+        displayCompanyName(item),
         item.nps_holding_ratio,
         ratioMax,
         "%"
@@ -11800,7 +13579,7 @@ function formatKoreanResult(value) {
     );
     const exposureLines = exposureChart.slice(0, 8).map((item) =>
       barLine(
-        `${item.holding_name || item.ticker} (${item.ticker})`,
+        displayCompanyName(item),
         Number(item.portfolio_weight || 0) * 100,
         exposureMax * 100,
         "%"
@@ -11815,7 +13594,7 @@ function formatKoreanResult(value) {
         item.portfolio_weight === undefined || item.portfolio_weight === null
           ? "비중 n/a"
           : `포트폴리오 비중 ${toPercent(item.portfolio_weight)}`;
-      return `${index + 1}. ${item.holding_name || item.ticker} · ${item.ticker} · ${ratioText} · 최근 기준일 ${item.latest_event_date || "미확인"} · ${weightText} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")}`;
+      return `${index + 1}. ${displayCompanyName(item)} · ${ratioText} · 최근 기준일 ${item.latest_event_date || "미확인"} · ${weightText} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")}`;
     });
     const unmatchedCount = signals.length - matched.length;
     return [
@@ -11840,7 +13619,7 @@ function formatKoreanResult(value) {
       ...(alerts.length
         ? alerts.slice(0, 8).map(
             (item, index) =>
-              `${index + 1}. [${translateSeverity(item.severity)}] ${item.holding_name || item.ticker} · ${item.reason} 조치: ${item.action}`
+              `${index + 1}. [${translateSeverity(item.severity)}] ${displayCompanyName(item)} · ${item.reason} 조치: ${item.action}`
           )
         : ["- 현재 대형 수급 이탈 경고는 없습니다."]),
       ``,
@@ -11875,7 +13654,7 @@ function formatKoreanResult(value) {
     return [
       `국민연금 수급 상세`,
       ``,
-      `종목: ${signal.company_name || value.company_name || value.ticker || "미확인"} (${value.ticker || signal.ticker || "n/a"})`,
+      `종목: ${displayCompanyName(signal.company_name ? signal : value, "미확인")}`,
       `매칭 상태: ${signal.domestic_match_found || events.length ? "자료 확인" : "직접 매칭 없음"}`,
       `국민연금 지분율: ${ratio}`,
       `국내주식 내 비중: ${weight}`,
@@ -11924,7 +13703,7 @@ function formatKoreanResult(value) {
       const memoryText = `저장 ${item.research_memory_count || 0}건`;
       const ragText = item.rag_connected ? "RAG 연결" : "RAG 미연결";
       const thesisText = item.thesis_snapshot_connected ? "논거 스냅샷 있음" : "논거 스냅샷 없음";
-      return `${index + 1}. ${status} · ${item.official_symbol || item.ticker} · ${item.company_name || "회사명 미확인"} · ${item.exchange || "거래소 미확인"} · ${item.sector || "섹터 미분류"} · ${priceText} · ${memoryText} · ${ragText} · ${thesisText} · 포함: ${portfolioText}${missingText}`;
+      return `${index + 1}. ${status} · ${displayCompanyName(item)} · ${item.exchange || "거래소 미확인"} · ${item.sector || "섹터 미분류"} · ${priceText} · ${memoryText} · ${ragText} · ${thesisText} · 포함: ${portfolioText}${missingText}`;
     });
     return [
       `포트폴리오 전체 종목 시스템 연결 점검`,
@@ -11957,7 +13736,7 @@ function formatKoreanResult(value) {
         ? `부족: ${(item.missing_modules || []).join(", ")}`
         : "필수 분석 연결 완료";
       return [
-        `${index + 1}. ${item.official_symbol || item.ticker} · ${item.company_name || "회사명 미확인"} · 완료율 ${toPercent(item.completion_rate)}`,
+        `${index + 1}. ${displayCompanyName(item)} · 완료율 ${toPercent(item.completion_rate)}`,
         `   ${marks}`,
         `   포함: ${portfolioText}`,
         `   ${missingText}`,
@@ -11985,7 +13764,7 @@ function formatKoreanResult(value) {
       const portfolioText = (item.portfolios || []).join(", ") || "포트폴리오 미확인";
       const kpiText = (item.watch_kpis || []).slice(0, 4).join(", ") || "핵심 KPI 미등록";
       return [
-        `${index + 1}. ${item.official_symbol || item.ticker} · ${item.company_name || "회사명 미확인"} · ${formatMoney(item.market_value, "KRW", "0원")}`,
+        `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, "KRW", "0원")}`,
         `   포함: ${portfolioText}`,
         `   중점 분석: ${item.analysis_focus || "사업 모델, 성장성, 리스크"}`,
         `   확인 KPI: ${kpiText}`,
@@ -11994,11 +13773,11 @@ function formatKoreanResult(value) {
     });
     const readyLines = ready.slice(0, 8).map(
       (item, index) =>
-        `${index + 1}. ${item.official_symbol || item.ticker} · ${item.company_name || "회사명 미확인"} · ${item.latest_team_report_date || "날짜 미확인"} · ${item.latest_team_report_file || "파일 미확인"}`
+        `${index + 1}. ${displayCompanyName(item)} · ${item.latest_team_report_date || "날짜 미확인"} · ${item.latest_team_report_file || "파일 미확인"}`
     );
     const blockedLines = blocked.map(
       (item, index) =>
-        `${index + 1}. ${item.ticker} · ${item.reason || "보류"} · ${item.message || "세부 메시지 없음"}`
+        `${index + 1}. ${displayCompanyName(item)} · ${item.reason || "보류"} · ${item.message || "세부 메시지 없음"}`
     );
     return [
       `포트폴리오 기준 리포트 생성 큐`,
@@ -12033,7 +13812,7 @@ function formatKoreanResult(value) {
       ...(holdings.length
         ? holdings.map(
             (item, index) =>
-              `${index + 1}. ${item.ticker} · ${item.name || "이름 없음"} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.weight)}`
+              `${index + 1}. ${displayCompanyName(item, "이름 없음")} · 평가금액 ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.weight)}`
           )
         : ["- 없음"]),
       ``,
@@ -12054,7 +13833,7 @@ function formatKoreanResult(value) {
       `향후 매수 관심종목`,
       ...((value.tickers || []).map(
         (item, index) =>
-          `${index + 1}. ${item.verification?.company_name || item.ticker || "회사명 미확인"} · 공식 코드 ${item.ticker || "미확인"} · ${translatePriority(item.priority)} · ${item.thesis || item.notes || "메모 없음"}`
+          `${index + 1}. ${displayCompanyName(item)} · ${translatePriority(item.priority)} · ${item.thesis || item.notes || "메모 없음"}`
       )),
       ``,
       `관심 섹터`,
@@ -12073,7 +13852,7 @@ function formatKoreanResult(value) {
         ? `   시장일지 단서: ${compactOutputText(matches[0].summary || matches[0].title || matches[0].session_date, 150)}`
         : "";
       return [
-        `${index + 1}. ${item.company_name || item.ticker} · ${item.ticker || "코드 미확인"} · ${translatePriority(item.priority)} · ${item.source === "portfolio_holding" ? "보유종목" : "관심종목"}`,
+        `${index + 1}. ${displayCompanyName(item)} · ${translatePriority(item.priority)} · ${item.source === "portfolio_holding" ? "보유종목" : "관심종목"}`,
         `   저장 자료 ${item.recent_document_count || 0}개 / RAG ${item.rag_document_count || 0}개 / 중복 의심 ${item.duplicate_suspected_count || 0}개 / 시장일지 연결 ${marketMatches}개`,
         `   검색 예시: ${(item.rag_query_examples || []).slice(0, 2).join(" · ") || "없음"}`,
         latestMarket,
@@ -12116,6 +13895,7 @@ function formatKoreanResult(value) {
 
   if (value.module === "market_close_review") {
     const entry = value.entry || {};
+    const sourceOrigin = entry.source_origin === "naver_research_auto" ? "자동 반영" : "수동 입력";
     const marketAttachment = value.attachment || entry.attachment || null;
     const marketDocumentPreview = truncateDisplayText(
       cleanDocumentPreviewText(marketAttachment?.extracted_text || marketAttachment?.extraction_preview || ""),
@@ -12126,6 +13906,7 @@ function formatKoreanResult(value) {
       ``,
       `시장: ${translateMarket(entry.market)}`,
       `기준일: ${entry.session_date || "미입력"}`,
+      `입력 구분: ${sourceOrigin}${entry.source_title ? ` · ${entry.source_title}` : ""}`,
       `시장 심리: ${entry.sentiment || "확인 필요"}`,
       `리스크 레벨: ${entry.risk_level || "확인 필요"}`,
       `장세 판정: ${entry.regime || "확인 필요"}`,
@@ -12180,8 +13961,10 @@ function formatKoreanResult(value) {
       ``,
       `최근 기록`,
       ...((value.entries || []).slice(0, 20).map(
-        (entry, index) =>
-          `${index + 1}. ${entry.session_date} · ${translateMarket(entry.market)} · ${entry.regime} · 심리 ${entry.sentiment} · 리스크 ${entry.risk_level} · 태그 ${(entry.tags || []).join(", ") || "없음"}`
+        (entry, index) => {
+          const sourceOrigin = entry.source_origin === "naver_research_auto" ? "자동" : "수동";
+          return `${index + 1}. ${entry.session_date} · ${translateMarket(entry.market)} · ${sourceOrigin} · ${entry.regime} · 심리 ${entry.sentiment} · 리스크 ${entry.risk_level} · 태그 ${(entry.tags || []).join(", ") || "없음"}`;
+        }
       )),
     ].join("\n");
   }
@@ -12237,7 +14020,7 @@ function formatKoreanResult(value) {
       ...((value.allocation_adjustments || []).length
         ? value.allocation_adjustments.map(
             (item, index) =>
-              `${index + 1}. ${item.ticker}: ${item.action} · 현재 ${toPercent(
+              `${index + 1}. ${displayCompanyName(item)}: ${item.action} · 현재 ${toPercent(
                 item.current_weight
               )} → 제안 ${toPercent(item.suggested_weight)} · ${item.rationale}`
           )
@@ -12257,7 +14040,7 @@ function formatKoreanResult(value) {
     return [
       `리서치 체크리스트 투자 준비도 평가`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       `완료 항목: ${value.completed_count}/${value.total_count}`,
       `완료율: ${toPercent(value.completion_rate)}`,
       `준비도: ${translateReadiness(value.readiness_level)}`,
@@ -12308,7 +14091,7 @@ function formatKoreanResult(value) {
       `RAG 문서 색인 갱신`,
       ``,
       `갱신 문서: ${value.updated_count}개`,
-      `대상 키: ${(value.tickers || []).join(", ") || "없음"}`,
+      `대상 키: ${(value.ticker_names || value.company_names || []).join(", ") || "저장 키 기준 갱신"}`,
       ``,
       `최근 색인`,
       ...((value.documents || []).slice(0, 12).map((item, index) => `${index + 1}. ${item}`)),
@@ -12334,7 +14117,7 @@ function formatKoreanResult(value) {
     return [
       `저장 데이터`,
       ``,
-      `티커: ${value.ticker}`,
+      `대상: ${displayCompanyName(value)}`,
       `공식 인증 파일: ${value.verified_file_count || 0}개`,
       `레거시 파일: ${value.legacy_file_count || 0}개`,
       ``,
@@ -12366,6 +14149,8 @@ function tabHelpText(tabName) {
       "차트분석 탭입니다.\n\n네이버 증권 국내 종목 일별 시세로 거래량, 볼린저 밴드, 이동평균선, MACD, RSI 14, DMI를 계산해 매매전략에 쓸 차트 상태를 저장합니다.",
     earnings:
       "실적 분석 탭입니다.\n\n분기 실적 수치, 주가 반응, 가이던스 변경을 입력하면 시장 반응 패턴과 다음 실적 전 추적 항목을 생성합니다.",
+    macro:
+      "매크로 분석 탭입니다.\n\n금리, 환율, 정책, 수급, 원자재 같은 거시 변수를 정리하고 유리한 섹터와 리스크 체크포인트를 연결합니다.",
     sector:
       "섹터 발굴 탭입니다.\n\n금리, AI, 에너지 가격 같은 매크로 환경을 입력하면 유망 섹터와 후보 기업을 저장 가능한 리포트로 생성합니다.",
     compounder:
@@ -12824,6 +14609,7 @@ function buildAttachmentLines(attachment) {
     return ["- 첨부 파일 없음"];
   }
   const quality = Number(attachment.extraction_quality);
+  const scopeLines = buildInferredInvestmentScopeLines(attachment.inferred_investment_scope);
   const lines = [
     `- 처리 판정: ${describeExtractionQuality(attachment)}`,
     `- 파일명: ${attachment.file_name || "이름 없음"}`,
@@ -12840,7 +14626,49 @@ function buildAttachmentLines(attachment) {
   if (Array.isArray(attachment.extraction_warnings) && attachment.extraction_warnings.length) {
     lines.push(`- 추출 경고: ${attachment.extraction_warnings.join(" / ")}`);
   }
+  if (scopeLines.length) {
+    lines.push(...scopeLines);
+  }
   return lines;
+}
+
+function buildInferredInvestmentScopeLines(scope) {
+  if (!scope || typeof scope !== "object") {
+    return [];
+  }
+  const themeLabels = Array.isArray(scope.theme_candidates)
+    ? scope.theme_candidates.map((item) => item?.label).filter(Boolean)
+    : [];
+  const interests = Array.isArray(scope.matched_interest_tickers)
+    ? scope.matched_interest_tickers.map((item) => item?.company_name || item?.ticker).filter(Boolean)
+    : [];
+  const sectors = Array.isArray(scope.matched_interest_sectors)
+    ? scope.matched_interest_sectors.map((item) => item?.name).filter(Boolean)
+    : [];
+  const holdings = Array.isArray(scope.matched_portfolio_holdings)
+    ? scope.matched_portfolio_holdings.map((item) => item?.company_name || item?.ticker).filter(Boolean)
+    : [];
+  const lines = [];
+  if (themeLabels.length) {
+    lines.push(`- 관심 범위 추정: ${uniqueList(themeLabels).join(", ")}`);
+  }
+  if (interests.length) {
+    lines.push(`- 관심종목 매칭: ${uniqueList(interests).slice(0, 10).join(", ")}`);
+  }
+  if (sectors.length) {
+    lines.push(`- 관심섹터 매칭: ${uniqueList(sectors).slice(0, 10).join(", ")}`);
+  }
+  if (holdings.length) {
+    lines.push(`- 보유종목 매칭: ${uniqueList(holdings).slice(0, 10).join(", ")}`);
+  }
+  if (scope.next_action) {
+    lines.push(`- 투자 반영 다음 조치: ${scope.next_action}`);
+  }
+  return lines;
+}
+
+function uniqueList(values = []) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
 function truncateDisplayText(value, maxChars = 1800) {

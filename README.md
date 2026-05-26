@@ -18,6 +18,8 @@
 
 경로별 역할과 이관 순서는 [docs/structure-map.md](docs/structure-map.md)와 [docs/long-term-architecture.md](docs/long-term-architecture.md)를 기준으로 합니다.
 
+관세청 수출입 데이터는 빈 응답을 저장하지 않고, 품목별 실적 API와 총괄/잠정 동향 진단 API를 분리합니다. 운영 기준은 [docs/customs-trade-data-quality.md](docs/customs-trade-data-quality.md)를 확인하세요.
+
 ## 현재 구조
 
 ```text
@@ -67,6 +69,20 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 
+## 여러 앱 동시 개발 포트
+
+현재 PC에서 여러 앱을 동시에 제작하므로 포트는 [docs/dev-server-port-registry.md](docs/dev-server-port-registry.md)의 예약표를 기준으로 사용한다. 충돌 확인은 아래 스크립트로 먼저 실행한다.
+
+```powershell
+.\tools\show_dev_server_ports.ps1
+```
+
+`Conflict=True`가 표시되면 해당 포트를 정리한 뒤 앱별 예약 포트로 다시 실행한다. 특히 Expo 기본 포트 `8081`, Vite 기본 포트 `5173`, Next 기본 포트 `3000`은 앱이 많을 때 충돌이 잦으므로 예약표의 포트를 우선한다.
+
+`tools\verify_mobile_stack.ps1`는 기본적으로 `show_dev_server_ports.ps1 -OnlyConflicts`를 먼저 실행해 예약 포트 충돌을 검증 전에 잡는다. 이미 알고 있는 로컬 포트 이슈를 남긴 채 백엔드/모바일 정적 검증만 돌려야 할 때는 `-SkipPortRegistryCheck`를 명시한다.
+
+`tools\start_backend.ps1`와 `tools\start_mobile_web.ps1`는 포트가 이미 사용 중이면 새 프로세스를 띄우기 전에 중단하고 점유 PID를 안내한다. PID가 `unknown`인 프로세스는 기본적으로 강제 종료하지 않는다. 정말 강제 종료해야 할 때만 `-ForceExistingPortProcess`를 `-StopExistingPortProcess`와 함께 사용한다.
+
 ## Research OS 백엔드 실행
 
 ```powershell
@@ -97,16 +113,139 @@ http://127.0.0.1:5500/index.html
 
 이 주소는 Classic Research Console입니다. React Research Console 개발 서버는 `apps\research-console`에서 별도로 실행합니다.
 
+Classic Research Console과 8001 백엔드 상태를 빠르게 확인하려면 아래 읽기 전용 점검을 사용합니다.
+
+```powershell
+.\tools\status_research_console.ps1 -Strict
+```
+
+저장소 품질과 포트폴리오 수량 보호처럼 반복 확인이 필요한 안전장치는 별도 스크립트로 확인할 수 있습니다.
+
+```powershell
+.\tools\check_core_safeguards.ps1 -Strict
+.\tools\check_storage_quality_safeguards.ps1 -Strict
+.\tools\check_portfolio_quantity_protection.ps1 -Strict
+```
+
+Classic Research Console 회귀 검증에 안전장치 점검까지 포함하려면 아래 명령을 사용합니다.
+
+```powershell
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCoreSafeguards
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckFeedbackSmoke
+```
+
 ## 모바일 앱 실행
 
 Expo/React Native 이관용 모바일 앱은 `apps\mobile`에 있다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp\apps\mobile
-Copy-Item .env.example .env
-npm install
-npm run start
+cd C:\Users\lib20\InvestmentJournalApp
+.\tools\start_mobile_web.ps1
 ```
+
+위 스크립트는 프로젝트 루트가 `C:\Users\lib20\InvestmentJournalApp`인지 확인한 뒤, Expo 웹 미리보기를 `http://localhost:8082`로 실행한다. 백엔드는 먼저 `.\tools\start_backend.ps1`로 8010 포트에서 실행한다. `start_backend.ps1`은 기본적으로 reload 없이 실행해 중복 리스너를 줄이고, 코드 자동 재시작이 필요할 때만 `-Reload`를 붙인다.
+
+8082 포트에 오래된 Metro 프로세스가 남아 있거나 빈 화면이 보이면 아래처럼 실행한다.
+
+```powershell
+.\tools\start_mobile_web.ps1 -StopExistingPortProcess -ClearCache
+```
+
+백엔드와 모바일 웹이 떠 있는지 빠르게 확인하려면 아래 스모크 테스트를 실행한다.
+
+```powershell
+.\tools\smoke_mobile_web.ps1
+```
+
+웹 스모크는 백엔드 루트, 분석, CSV 템플릿 API, 모바일 root HTML을 함께 확인한다. 포트폴리오 API는 키움 인증/장중 API 상태에 영향을 받을 수 있어 기본값에서는 선택 점검이며, 필수로 확인하려면 `-RequirePortfolio`를 붙인다.
+CSV 템플릿 API만 404인 경우에는 오래된 백엔드가 8010 포트를 잡고 있을 가능성과 복구 명령을 함께 안내한다. 기본 API URL을 직접 지정하지 않은 경우 `8020`, `8021`, `8022` fallback API도 순서대로 확인한다.
+
+빈 화면, 404, 포트 충돌이 의심될 때는 상태 점검 스크립트로 현재 포트 주인과 핵심 API 응답을 먼저 확인한다. 이 스크립트는 CSV 템플릿 API도 함께 확인하므로, 오래된 백엔드 프로세스가 새 라우트만 404로 응답하는 상황을 바로 볼 수 있다.
+
+```powershell
+.\tools\status_dev_servers.ps1
+```
+
+자동화나 엄격한 점검에서 실패 exit code가 필요하면 `-Strict`를 붙인다.
+
+```powershell
+.\tools\status_dev_servers.ps1 -Strict
+```
+
+8010의 오래된 백엔드 프로세스를 정리하고 새 라우트까지 검증하며 다시 띄우려면 아래 스크립트를 사용한다. 성공하면 CSV 템플릿 API까지 확인한 뒤 백그라운드 서버 PID와 로그 위치를 출력한다.
+
+```powershell
+.\tools\restart_backend_verified.ps1
+```
+
+8010이 `unknown` PID로 잡혀 사용자 권한에서 해제되지 않으면 아래처럼 fallback 포트까지 함께 지정한다.
+
+```powershell
+.\tools\restart_backend_verified.ps1 -Port 8010 -FallbackPorts @(8020,8021,8022)
+.\tools\start_mobile_web.ps1 -Port 8082 -ApiBaseUrl http://127.0.0.1:8020 -StopExistingPortProcess -ClearCache
+.\tools\smoke_mobile_web.ps1
+```
+
+작업을 마치고 개발 서버를 정리할 때는 8010/8082 포트만 대상으로 종료한다.
+
+```powershell
+.\tools\stop_dev_servers.ps1
+```
+
+종료 대상만 먼저 확인하려면 다음처럼 dry-run으로 실행한다. 기본 개발 포트가 아닌 포트를 직접 지정한 경우에는 `python`, `node`, `pwsh`, `powershell` 같은 개발 프로세스만 종료 대상이 되며, 다른 프로세스를 강제로 종료하려면 `-ForceAnyProcess`를 명시해야 한다.
+
+```powershell
+.\tools\stop_dev_servers.ps1 -DryRun
+```
+
+분석 차트가 데이터 있는 상태에서도 집계되는지 확인하려면 임시 CSV 샘플 스모크 테스트를 실행한다. 기본 실행은 샘플 데이터를 가져온 뒤 바로 삭제한다.
+
+```powershell
+.\tools\smoke_mobile_analytics_sample.ps1
+```
+
+수동 CSV 가져오기와 분석 API의 집계 계약은 백엔드 회귀 테스트로도 고정한다. 이 테스트는 프로젝트 내부 임시 SQLite DB만 사용하며 실제 투자 DB는 건드리지 않는다.
+
+```powershell
+python -m unittest tests.test_backend_regressions.InvestmentJournalManualImportTests
+```
+
+이 회귀 테스트에는 키움 과거 거래 불러오기 1일/1개월/1년 범위, 중지 후 이어받기, 1년 초과 차단, 수동 입력과 키움 원천 거래의 중복 방지, 분석 화면용 연간/분기/월간/추이/비중/배당/세금/수수료 집계 확인이 포함된다. 실제 키움 API 장기 호출 전에 이 테스트를 먼저 통과시킨다.
+
+실제 키움 API로 하루치만 확인할 때는 라이브 전용 스모크를 사용한다. 이 스크립트는 `-ConfirmLiveApi` 없이는 실행되지 않으며, 토큰 원문과 계좌번호를 출력하지 않는다.
+
+```powershell
+.\tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25
+.\tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25 -ConfirmLiveApi
+.\tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25 -ConfirmLiveApi -CheckTokenFirst
+```
+
+라이브 스모크 결과는 `job_id`, `status`, 처리 일수, 재시도 횟수, 생성 전후 초안 수만 요약한다. 제한 시간 안에 끝나지 않으면 기본적으로 cancel 요청을 보내며, 오래된 8010 서버가 응답하면 `8020`, `8021`, `8022` fallback API를 순서대로 확인한다.
+
+1일 스모크가 성공한 뒤에는 월 단위 장기 조회 전 관문으로 최대 31일 범위 스모크를 사용한다. 이 스크립트도 실제 키움 API를 사용하므로 `-ConfirmLiveApi`가 없으면 중단한다.
+
+```powershell
+.\tools\smoke_kiwoom_history_range_live.ps1 -StartDate 2026-05-01 -EndDate 2026-05-31
+.\tools\smoke_kiwoom_history_range_live.ps1 -StartDate 2026-05-01 -EndDate 2026-05-31 -ConfirmLiveApi
+.\tools\smoke_kiwoom_history_range_live.ps1 -StartDate 2026-05-01 -EndDate 2026-05-31 -ConfirmLiveApi -CheckTokenFirst
+```
+
+31일을 넘는 범위는 이 스모크에서 차단한다. 연 단위 불러오기는 백엔드 작업의 rate limit, resume, cancel 동작을 먼저 확인한 뒤 앱 기능에서 실행한다.
+
+모바일 관련 검증을 한 번에 돌리려면 아래 통합 스크립트를 사용한다. 백엔드/모바일 서버가 이미 떠 있으면 스모크까지 실행하고, 서버 없이 정적 검증만 할 때는 `-SkipLiveSmoke`를 붙인다.
+
+```powershell
+.\tools\verify_mobile_stack.ps1
+.\tools\verify_mobile_stack.ps1 -SkipLiveSmoke
+.\tools\verify_mobile_stack.ps1 -SkipLiveSmoke -SkipPortRegistryCheck
+```
+
+이 검증에는 모바일 `testID` 정적 점검도 포함된다. CSV 가져오기, 분석 기간/기준 전환, 분석 빈 상태, 차트 블록의 자동화 타깃이 빠지면 실패한다.
+개발 스크립트 계약 점검도 포함된다. 백엔드 검증 재시작, 상태 점검 Strict 모드, CSV 템플릿 스모크, 임의 포트 종료 안전장치가 빠지면 실패한다.
+
+이 스크립트의 `npm audit` 기준은 high/critical 이상이다. 현재 Expo 내부 개발 도구 체인에서 `uuid` moderate 경고가 표시될 수 있지만, `npm audit fix --force`가 Expo 다운그레이드를 제안하므로 자동 적용하지 않는다.
+
+모바일 웹 탭과 분석 전환 버튼은 브라우저 검증용 `testID`를 제공한다. 주요 값은 `tab-portfolio`, `tab-drafts`, `tab-entries`, `tab-manual`, `tab-analytics`, `analytics-profit-basis-monthly`, `analytics-profit-basis-quarterly`, `analytics-profit-basis-annual`, `analytics-allocation-basis-ticker`, `analytics-allocation-basis-type`, `analytics-allocation-basis-account`, `analytics-empty-range`, `analytics-profit-empty`, `analytics-trend-empty`, `analytics-allocation-empty`, `analytics-dividend-empty`, `analytics-cost-empty`, `manual-csv-template-button`이다.
 
 실제 휴대폰의 Expo Go에서 테스트할 때는 `apps\mobile\.env`의 `EXPO_PUBLIC_API_BASE_URL`을 `http://<PC의_내부_IP>:8010` 형식으로 바꿔야 합니다. Android 에뮬레이터는 보통 `http://10.0.2.2:8010`을 사용합니다.
 
@@ -125,6 +264,12 @@ cd C:\Users\lib20\InvestmentJournalApp
 
 ```powershell
 .\tools\start_backend.ps1 -SkipLegacyPortCleanup
+```
+
+8010 포트에 오래된 백엔드 프로세스가 남아 새 서버가 뜨지 않으면 아래처럼 현재 백엔드 포트도 정리한 뒤 실행한다.
+
+```powershell
+.\tools\start_backend.ps1 -StopExistingPortProcess
 ```
 
 ## 현재 결정 사항
@@ -207,6 +352,7 @@ RN 이전 시 추가 구현할 항목:
 - `apps/mobile/src/api/client.ts`: 백엔드 API 클라이언트와 공통 에러 처리
 - `apps/mobile/src/hooks/useInvestmentQueries.ts`: 포트폴리오, 일지 초안, 수동입력, 분석 Query 훅
 - `apps/mobile/src/hooks/useInvestmentQueries.ts`: 수동 거래 저장/삭제 mutation과 관련 Query 자동 갱신
+- `apps/mobile/src/hooks/useInvestmentQueries.ts`: 수동 거래 CSV 가져오기 mutation과 관련 Query 자동 갱신
 - `apps/mobile/src/hooks/useInvestmentQueries.ts`: 일지 초안 작성 완료 mutation과 관련 Query 자동 갱신
 - `apps/mobile/src/hooks/useInvestmentQueries.ts`: 작성 완료 일지 목록 조회/삭제와 관련 Query 자동 갱신
 - `apps/mobile/src/screens/AppShell.tsx`: 모바일 탭형 화면 골격, 일지 작성/수정 폼, 수동입력 폼, 분석 차트
@@ -217,6 +363,10 @@ CSV 가져오기 지원 컬럼:
 - `수량`, `가격`, `매수금액`, `매도금액`, `매매손익`
 - `배당`, `세금`, `수수료`, `통화`, `환율`
 - `분할보정비율`, `보정메모`, `메모`
+
+CSV 템플릿은 `GET /api/v1/manual-transactions/import.csv/template`에서 받을 수 있다. 응답은 Excel에서 바로 열기 쉽도록 UTF-8 BOM이 포함된 한글 헤더 CSV다.
+
+Expo 모바일 앱의 수동입력 화면은 CSV 템플릿 불러오기, 파일 선택, 텍스트 붙여넣기 가져오기를 지원한다. 템플릿 버튼은 `GET /api/v1/manual-transactions/import.csv/template` 응답을 입력칸에 채우며, 파일 선택은 원본 인코딩 보존을 위해 `multipart/form-data`로 전송하고, 텍스트 붙여넣기는 `text/csv` 요청으로 `POST /api/v1/manual-transactions/import.csv`에 전송한다.
 
 React Native 일지 초안 화면:
 

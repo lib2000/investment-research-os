@@ -338,6 +338,26 @@ export async function fetchTickerRegistryCache(accessToken) {
 }
 
 /**
+ * 수동 LLM 연동으로 저장한 응답과 원 프롬프트가 저장 데이터/RAG에 연결됐는지 확인합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {number} limit 최근 항목 조회 개수
+ * @returns {Promise<Object|null>} LLM 저장 및 RAG 연결 상태
+ */
+export async function fetchLlmBridgeStorageStatus(accessToken, limit = 10) {
+  const query = new URLSearchParams({ limit: String(limit || 10) });
+  try {
+    return request(`/api/v1/llm-bridge/storage-status?${query}`, {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("LLM 연동 저장 상태를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
  * 자동 인증 티커 캐시에서 특정 티커를 삭제합니다. 로컬 공식 레지스트리는 삭제하지 않습니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
@@ -603,7 +623,7 @@ export async function runSectorOpportunityFinder(
   {
     macroEnvironment,
     period = "6개월",
-    region = "US",
+    region = "KR",
     style = "균형형",
     focusTheme = "",
     autoInjectData = true,
@@ -710,7 +730,7 @@ export async function runLongTermCompounderFinder(
     minMarketCap = null,
     maxMarketCap = null,
     sector = "전체",
-    region = "US",
+    region = "KR",
     style = "퀄리티 성장",
     autoInjectData = true,
     realtimeData = [],
@@ -886,6 +906,26 @@ export async function backfillRagMemoryDocuments(accessToken) {
     console.error("RAG 문서 색인을 백필하는 중 오류 발생:", error);
     return null;
   }
+}
+
+/**
+ * 기존 저장 데이터의 첨부 파일 OCR을 현재 런타임 기준으로 다시 처리합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {{ includeArchived?: boolean, force?: boolean, limit?: number, saveResult?: boolean }} [options] 재처리 옵션
+ * @returns {Promise<Object|null>} OCR 재처리 결과
+ */
+export async function reprocessResearchMemoryOcr(accessToken, options = {}) {
+  return request("/api/v1/research-memory/ocr/reprocess", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({
+      include_archived: Boolean(options.includeArchived),
+      force: Boolean(options.force),
+      limit: options.limit || null,
+      save_result: options.saveResult !== false,
+    }),
+  });
 }
 
 /**
@@ -1292,9 +1332,72 @@ export async function previewSourceUrl(accessToken, sourceUrl) {
   });
 }
 
-export async function fetchNewsInbox(accessToken, limit = 30) {
-  return request(`/api/v1/news/inbox?limit=${encodeURIComponent(limit)}`, {
+export async function fetchNewsInbox(accessToken, limit = 30, filter = "all") {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    filter: filter || "all",
+  });
+  return request(`/api/v1/news/inbox?${query.toString()}`, {
     method: "GET",
+    accessToken,
+  });
+}
+
+export async function fetchStorageQualityDashboard(accessToken) {
+  return request("/api/v1/storage/quality-dashboard", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function fetchKcifReportsWatch(accessToken, { limit = 30, refresh = false, saveResult = true } = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    refresh: refresh ? "true" : "false",
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/kcif/reports/watch?${query.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function refreshKcifReportsWatch(accessToken, { limit = 30, saveResult = true } = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/kcif/reports/refresh?${query.toString()}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+export async function fetchRegionalBusinessSourcesWatch(
+  accessToken,
+  { limit = 40, refresh = false, saveResult = true } = {}
+) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    refresh: refresh ? "true" : "false",
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/regional-sources/business/watch?${query.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function refreshRegionalBusinessSourcesWatch(
+  accessToken,
+  { limit = 40, saveResult = true } = {}
+) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/regional-sources/business/refresh?${query.toString()}`, {
+    method: "POST",
     accessToken,
   });
 }
@@ -1445,6 +1548,7 @@ export async function fetchPortfolio(accessToken, portfolioName, options = {}) {
   return request(`/api/v1/portfolios/${encodeURIComponent(portfolioName)}${query ? `?${query}` : ""}`, {
     method: "GET",
     accessToken,
+    signal: options.signal,
   });
 }
 
@@ -1469,9 +1573,16 @@ export async function fetchPortfolioIntelligentTable(accessToken, portfolioName,
   );
 }
 
-export async function fetchPortfolioPerformance(accessToken, portfolioName) {
+export async function fetchPortfolioPerformance(
+  accessToken,
+  portfolioName,
+  { forcePriceRefresh = false } = {}
+) {
+  const params = new URLSearchParams({
+    force_price_refresh: forcePriceRefresh ? "true" : "false",
+  });
   return request(
-    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/performance`,
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/performance?${params.toString()}`,
     {
       method: "GET",
       accessToken,
@@ -1481,11 +1592,12 @@ export async function fetchPortfolioPerformance(accessToken, portfolioName) {
 
 export async function fetchTargetConsensusScan(
   accessToken,
-  { portfolioName = "__all__", includeInterests = true } = {}
+  { portfolioName = "__all__", includeInterests = true, refreshMissingPrices = false } = {}
 ) {
   const query = new URLSearchParams({
     portfolio_name: portfolioName || "__all__",
     include_interests: includeInterests ? "true" : "false",
+    refresh_missing_prices: refreshMissingPrices ? "true" : "false",
   });
   return request(`/api/v1/valuation/target-consensus-scan?${query}`, {
     method: "GET",
@@ -1576,6 +1688,37 @@ export async function deletePortfolio(accessToken, portfolioName) {
   });
 }
 
+export async function syncKiwoomDomesticPortfolio(accessToken, portfolioName) {
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/sync/kiwoom-domestic`,
+    {
+      method: "POST",
+      accessToken,
+    }
+  );
+}
+
+export async function previewKiwoomDomesticPortfolioSync(accessToken, portfolioName) {
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/sync/kiwoom-domestic/preview`,
+    {
+      method: "POST",
+      accessToken,
+    }
+  );
+}
+
+export async function fetchPortfolioSyncHistory(accessToken, portfolioName, { limit = 10 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/sync-history?${params.toString()}`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
 export async function fetchInterests(accessToken) {
   return request("/api/v1/interests", {
     method: "GET",
@@ -1620,6 +1763,53 @@ export async function fetchInterestAutomationBoard(accessToken, saveResult = tru
 export async function fetchMarketCloseJournal(accessToken, market = "ALL") {
   return request(
     `/api/v1/market-close-journal?market=${encodeURIComponent(market)}`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
+export async function fetchNaverResearchStatus(accessToken) {
+  return request("/api/v1/naver-research/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function repairNaverResearchCache(
+  accessToken,
+  {
+    pdfBackfillLimit = 20,
+    refreshMetadata = true,
+    saveResult = false,
+    archiveDuplicates = false,
+  } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("pdf_backfill_limit", String(pdfBackfillLimit));
+  params.set("refresh_metadata", refreshMetadata ? "true" : "false");
+  params.set("save_result", saveResult ? "true" : "false");
+  params.set("archive_duplicates", archiveDuplicates ? "true" : "false");
+  return request(`/api/v1/naver-research/repair?${params.toString()}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+export async function refreshNaverMarketCloseJournal(accessToken, force = true) {
+  return request(
+    `/api/v1/naver-research/market-close-journal/refresh?force=${force ? "true" : "false"}`,
+    {
+      method: "POST",
+      accessToken,
+    }
+  );
+}
+
+export async function fetchNaverMarketCloseTaskStatus(accessToken, logLimit = 20) {
+  return request(
+    `/api/v1/naver-research/market-close-journal/task-status?log_limit=${encodeURIComponent(logLimit)}`,
     {
       method: "GET",
       accessToken,

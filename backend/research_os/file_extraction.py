@@ -108,6 +108,17 @@ def ocr_runtime_status() -> dict:
         "tessdata_dir": str(tessdata_dir) if tessdata_dir else None,
         "message": message,
         "next_action": next_action,
+        "limits": {
+            "pdf_text_max_chars": PDF_TEXT_MAX_CHARS,
+            "pdf_ocr_max_pages": PDF_OCR_MAX_PAGES,
+            "pdf_ocr_text_max_chars": PDF_OCR_TEXT_MAX_CHARS,
+            "image_ocr_text_max_chars": IMAGE_OCR_TEXT_MAX_CHARS,
+            "message": (
+                f"긴 PDF OCR은 앞부분 {PDF_OCR_MAX_PAGES:,}페이지, "
+                f"OCR 본문은 앞부분 {PDF_OCR_TEXT_MAX_CHARS:,}자까지 분석에 사용합니다. "
+                "누락 가능성이 있으면 원문 텍스트를 함께 저장하세요."
+            ),
+        },
         "image_upload_behavior": (
             "OCR 미연결 상태에서 이미지를 업로드하면 원본 파일과 파일명/크기/이미지 크기 메타데이터는 저장하지만, "
             "이미지 속 글자는 분석 본문으로 쓰지 않습니다. 결과에는 OCR 미연결과 보강 필요 경고가 표시됩니다."
@@ -770,6 +781,31 @@ def extract_uploaded_file_text(
         extraction_note,
         warnings,
     )
+    if document_type == "PDF":
+        if extracted_text and "OCR" in extraction_note.upper():
+            extraction_profile["ocr_available"] = True
+            extraction_profile["ocr_status"] = "success"
+            extraction_profile["ocr_language"] = "kor+eng"
+            extraction_profile["ocr_next_action"] = "OCR 본문이 저장 데이터와 RAG 색인에 반영되었습니다."
+        elif "Tesseract OCR 실행 파일을 찾지 못" in extraction_note:
+            extraction_profile["ocr_available"] = False
+            extraction_profile["ocr_status"] = "unavailable"
+            extraction_profile["ocr_missing_reason"] = "tesseract_not_found"
+            extraction_profile["ocr_next_action"] = "Tesseract 설치 또는 TESSERACT_CMD 지정 후 다시 업로드"
+        elif "언어팩" in extraction_note or "kor+eng" in extraction_note:
+            extraction_profile["ocr_available"] = False
+            extraction_profile["ocr_status"] = "unavailable"
+            extraction_profile["ocr_missing_reason"] = "language_pack_missing"
+            extraction_profile["ocr_next_action"] = "kor.traineddata와 eng.traineddata가 있는 tessdata 경로를 TESSDATA_PREFIX로 지정"
+        elif "인식 가능한 텍스트를 찾지 못" in extraction_note:
+            extraction_profile["ocr_available"] = True
+            extraction_profile["ocr_status"] = "empty"
+            extraction_profile["ocr_next_action"] = "스캔 품질을 확인하거나 본문 텍스트를 직접 입력"
+        elif "OCR" in extraction_note.upper():
+            extraction_profile["ocr_available"] = False
+            extraction_profile["ocr_status"] = "error"
+            extraction_profile["ocr_error"] = extraction_note
+            extraction_profile["ocr_next_action"] = "OCR 런타임과 PDF 렌더링 환경 확인"
     if image_profile:
         extraction_profile["image_profile"] = image_profile
         extraction_profile["ocr_available"] = image_profile.get("ocr_available")

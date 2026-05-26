@@ -12,12 +12,15 @@
   },
   "dependencies": {
     "@tanstack/react-query": "5.100.9",
-    "expo": "~55.0.0",
+    "expo": "~55.0.26",
+    "expo-document-picker": "~55.0.13",
     "expo-linear-gradient": "~55.0.14",
     "react": "19.2.0",
-    "react-native": "0.83.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
     "react-native-gifted-charts": "^1.4.76",
-    "react-native-svg": "15.15.3"
+    "react-native-svg": "15.15.3",
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",

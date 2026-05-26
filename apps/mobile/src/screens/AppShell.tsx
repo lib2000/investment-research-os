@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
   type KeyboardTypeOptions,
@@ -13,18 +14,22 @@ import {
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 
+import { apiConfig } from "../api/client";
 import {
   useCreateManualTransaction,
   useCreateJournalEntry,
   useDeleteJournalEntry,
   useDeleteManualTransaction,
+  useImportManualTransactionsCsv,
+  useImportManualTransactionsCsvFile,
   useJournalAnalytics,
   useJournalDrafts,
   useJournalEntries,
+  useManualTransactionsCsvTemplate,
   useManualTransactions,
   usePortfolio,
 } from "../hooks/useInvestmentQueries";
-import type { JournalEntry } from "../api/types";
+import type { JournalEntry, ManualTransactionsImportError } from "../api/types";
 
 type TabKey = "portfolio" | "drafts" | "entries" | "manual" | "analytics";
 type AnalyticsRangeKey = "1m" | "3m" | "6m" | "1y" | "all";
@@ -89,6 +94,11 @@ const allocationBasisOptions: Array<{ key: AllocationBasisKey; label: string }> 
   { key: "account", label: "계좌별" },
 ];
 
+const manualCsvSampleText =
+  "거래일,증권사,계좌,유형,종목코드,종목명,수량,가격,매매손익,배당,세금,수수료,통화\n" +
+  "2026-05-22,타증권,기타,trade,005930,삼성전자,1,80000,0,0,0,0,KRW";
+const apiBaseLabel = apiConfig.baseUrl.replace(/^https?:\/\//, "");
+
 const defaultManualForm = (): ManualFormState => ({
   tradeDate: formatDateParam(new Date()),
   broker: "MANUAL",
@@ -126,12 +136,15 @@ export function AppShell() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.title}>InvestLog</Text>
-        <Text style={styles.subtitle}>KIWOOM · 8010</Text>
+        <Text numberOfLines={1} style={styles.subtitle}>
+          {`KIWOOM · ${apiBaseLabel}`}
+        </Text>
       </View>
       <View style={styles.tabs}>
         {tabs.map((tab) => (
           <Pressable
             key={tab.key}
+            testID={`tab-${tab.key}`}
             onPress={() => setActiveTab(tab.key)}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
           >
@@ -379,8 +392,15 @@ function JournalEntriesScreen() {
 function ManualTransactionsScreen() {
   const transactions = useManualTransactions();
   const createManualTransaction = useCreateManualTransaction();
+  const importManualTransactionsCsv = useImportManualTransactionsCsv();
+  const importManualTransactionsCsvFile = useImportManualTransactionsCsvFile();
+  const loadCsvTemplate = useManualTransactionsCsvTemplate();
   const deleteManualTransaction = useDeleteManualTransaction();
   const [form, setForm] = useState<ManualFormState>(() => defaultManualForm());
+  const [csvText, setCsvText] = useState("");
+  const [csvAsset, setCsvAsset] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvImportErrors, setCsvImportErrors] = useState<ManualTransactionsImportError[]>([]);
   const [formMessage, setFormMessage] = useState("");
 
   if (transactions.isLoading) return <Loading />;
@@ -414,6 +434,64 @@ function ManualTransactionsScreen() {
     }
   };
 
+  const importCsv = async () => {
+    if (!csvText.trim() && !csvAsset) {
+      setFormMessage("가져올 CSV 내용을 붙여넣거나 파일을 선택하세요.");
+      return;
+    }
+    try {
+      const result = csvAsset
+        ? await importManualTransactionsCsvFile.mutateAsync(buildCsvFormData(csvAsset))
+        : await importManualTransactionsCsv.mutateAsync(csvText);
+      setCsvText("");
+      setCsvAsset(null);
+      setCsvFileName("");
+      setCsvImportErrors(result.errors || []);
+      setFormMessage(
+        `CSV 가져오기 완료: ${result.imported_count}건 저장, ${result.failed_count}건 실패, ${result.skipped_count}건 건너뜀`,
+      );
+    } catch (error) {
+      setCsvImportErrors([]);
+      setFormMessage(error instanceof Error ? error.message : "CSV 가져오기에 실패했습니다.");
+    }
+  };
+
+  const pickCsvFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["text/csv", "text/comma-separated-values", "application/csv", "application/vnd.ms-excel", "*/*"],
+        copyToCacheDirectory: true,
+        multiple: false,
+        base64: false,
+      });
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      setCsvText("");
+      setCsvAsset(asset);
+      setCsvFileName(asset.name);
+      setCsvImportErrors([]);
+      setFormMessage(`CSV 파일을 불러왔습니다: ${asset.name}`);
+    } catch (error) {
+      setCsvImportErrors([]);
+      setFormMessage(error instanceof Error ? error.message : "CSV 파일을 읽지 못했습니다.");
+    }
+  };
+
+  const fillCsvTemplate = async () => {
+    try {
+      const template = await loadCsvTemplate.mutateAsync();
+      setCsvText(template.replace(/^\uFEFF/, ""));
+      setCsvAsset(null);
+      setCsvFileName("");
+      setCsvImportErrors([]);
+      setFormMessage("CSV 템플릿을 불러왔습니다.");
+    } catch (error) {
+      setCsvImportErrors([]);
+      setFormMessage(error instanceof Error ? error.message : "CSV 템플릿을 불러오지 못했습니다.");
+    }
+  };
+
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>수동 입력</Text>
@@ -442,7 +520,95 @@ function ManualTransactionsScreen() {
           {createManualTransaction.isPending ? "저장 중" : "수동 거래 저장"}
         </Text>
       </Pressable>
+      <View style={styles.csvImportBox}>
+        <Text style={styles.reviewTitle}>CSV 가져오기</Text>
+        <Text style={styles.muted}>
+          타 증권사 거래내역을 CSV 파일로 선택하거나 붙여넣으면 수동 입력 목록에 저장됩니다.
+        </Text>
+        {csvFileName ? <Text style={styles.rowDetail}>{`선택 파일: ${csvFileName}`}</Text> : null}
+        <TextInput
+          testID="manual-csv-input"
+          value={csvText}
+          onChangeText={(value) => {
+            setCsvText(value);
+            setCsvAsset(null);
+            setCsvFileName("");
+            setCsvImportErrors([]);
+            setFormMessage("");
+          }}
+          placeholder={manualCsvSampleText}
+          multiline
+          style={[styles.textInput, styles.csvInput]}
+          placeholderTextColor="#94a3b8"
+        />
+        <View style={styles.csvActionRow}>
+          <Pressable
+            testID="manual-csv-template-button"
+            onPress={fillCsvTemplate}
+            disabled={loadCsvTemplate.isPending}
+            style={[
+              styles.secondaryButton,
+              styles.csvActionButton,
+              loadCsvTemplate.isPending && styles.disabledButton,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {loadCsvTemplate.isPending ? "로딩" : "템플릿"}
+            </Text>
+          </Pressable>
+          <Pressable
+            testID="manual-csv-pick-file-button"
+            onPress={pickCsvFile}
+            style={[styles.secondaryButton, styles.csvActionButton]}
+          >
+            <Text style={styles.secondaryButtonText}>파일</Text>
+          </Pressable>
+          <Pressable
+            testID="manual-csv-fill-sample-button"
+            onPress={() => {
+              setCsvText(manualCsvSampleText);
+              setCsvAsset(null);
+              setCsvFileName("");
+              setCsvImportErrors([]);
+              setFormMessage("");
+            }}
+            style={[styles.secondaryButton, styles.csvActionButton]}
+          >
+            <Text style={styles.secondaryButtonText}>샘플</Text>
+          </Pressable>
+          <Pressable
+            testID="manual-csv-import-button"
+            onPress={importCsv}
+            disabled={importManualTransactionsCsv.isPending || importManualTransactionsCsvFile.isPending}
+            style={[
+              styles.secondaryButton,
+              styles.csvActionButton,
+              (importManualTransactionsCsv.isPending || importManualTransactionsCsvFile.isPending) &&
+                styles.disabledButton,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {importManualTransactionsCsv.isPending || importManualTransactionsCsvFile.isPending
+                ? "처리 중"
+                : "가져오기"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
       {formMessage ? <Text style={styles.formMessage}>{formMessage}</Text> : null}
+      {csvImportErrors.length ? (
+        <View style={styles.csvErrorBox}>
+          <Text style={styles.csvErrorTitle}>가져오기 실패 행</Text>
+          {csvImportErrors.slice(0, 5).map((error, index) => (
+            <Text key={`${error.row ?? index}`} style={styles.csvErrorText}>
+              {`행 ${String(error.row ?? "-")}: ${String(error.message ?? "확인 필요")}`}
+            </Text>
+          ))}
+          {csvImportErrors.length > 5 ? (
+            <Text style={styles.csvErrorText}>{`외 ${csvImportErrors.length - 5}건`}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <Metric label="전체" value={`${transactions.data?.total ?? 0}건`} />
       {(transactions.data?.transactions ?? []).map((item) => (
         <View key={item.id} style={styles.row}>
@@ -486,6 +652,7 @@ function AnalyticsScreen() {
   const dividendBars = toAmountBarData(analytics.data?.dividend_by_year ?? [], "#047857");
   const taxBars = toAmountBarData(analytics.data?.tax_by_year ?? [], "#dc2626");
   const commissionBars = toAmountBarData(analytics.data?.commission_by_year ?? [], "#f59e0b");
+  const hasCostBars = taxBars.length > 0 || commissionBars.length > 0;
 
   return (
     <View style={styles.panel}>
@@ -494,6 +661,7 @@ function AnalyticsScreen() {
         {analyticsRanges.map((range) => (
           <Pressable
             key={range.key}
+            testID={`analytics-range-${range.key}`}
             onPress={() => setRangeKey(range.key)}
             style={[styles.filterButton, rangeKey === range.key && styles.activeFilterButton]}
           >
@@ -512,11 +680,15 @@ function AnalyticsScreen() {
       <Metric label="거래 수" value={`${analytics.data?.total_entries ?? 0}건`} />
       <Metric label="총손익" value={`${formatKrw(analytics.data?.realized_profit_loss_total)}원`} />
       <Metric label="승률" value={analytics.data?.win_rate == null ? "-" : `${analytics.data.win_rate}%`} />
-      <ChartBlock title={`${profitBasisLabel(profitBasis)} 수익`}>
+      {(analytics.data?.total_entries ?? 0) === 0 ? (
+        <AnalyticsNotice testID="analytics-empty-range" message="선택 기간에 집계된 거래가 없습니다." />
+      ) : null}
+      <ChartBlock title={`${profitBasisLabel(profitBasis)} 수익`} testID="analytics-profit-chart">
         <SegmentedControl
           options={profitBasisOptions}
           value={profitBasis}
           onChange={setProfitBasis}
+          testIDPrefix="analytics-profit-basis"
         />
         {profitBars.length ? (
           <BarChart
@@ -534,10 +706,10 @@ function AnalyticsScreen() {
             isAnimated
           />
         ) : (
-          <EmptyChart />
+          <EmptyChart testID="analytics-profit-empty" message={`${profitBasisLabel(profitBasis)} 수익 데이터가 없습니다.`} />
         )}
       </ChartBlock>
-      <ChartBlock title="수익 추이">
+      <ChartBlock title="수익 추이" testID="analytics-trend-chart">
         {trendLine.length ? (
           <LineChart
             data={trendLine}
@@ -556,14 +728,18 @@ function AnalyticsScreen() {
             isAnimated
           />
         ) : (
-          <EmptyChart />
+          <EmptyChart testID="analytics-trend-empty" message="수익 추이 데이터가 없습니다." />
         )}
       </ChartBlock>
-      <ChartBlock title={`${allocationBasisLabel(allocationBasis)} 비중`}>
+      <ChartBlock
+        title={`${allocationBasisLabel(allocationBasis)} 비중`}
+        testID="analytics-allocation-chart"
+      >
         <SegmentedControl
           options={allocationBasisOptions}
           value={allocationBasis}
           onChange={setAllocationBasis}
+          testIDPrefix="analytics-allocation-basis"
         />
         {allocationPie.length ? (
           <View style={styles.pieRow}>
@@ -586,10 +762,10 @@ function AnalyticsScreen() {
             </View>
           </View>
         ) : (
-          <EmptyChart />
+          <EmptyChart testID="analytics-allocation-empty" message={`${allocationBasisLabel(allocationBasis)} 비중 데이터가 없습니다.`} />
         )}
       </ChartBlock>
-      <ChartBlock title="배당">
+      <ChartBlock title="배당" testID="analytics-dividend-chart">
         <Metric label="배당 합계" value={`${formatKrw(analytics.data?.dividend_total)}원`} />
         {dividendBars.length ? (
           <BarChart
@@ -607,48 +783,58 @@ function AnalyticsScreen() {
             isAnimated
           />
         ) : (
-          <EmptyChart />
+          <EmptyChart testID="analytics-dividend-empty" message="배당 데이터가 없습니다." />
         )}
       </ChartBlock>
-      <ChartBlock title="세금/수수료">
+      <ChartBlock title="세금/수수료" testID="analytics-cost-chart">
         <View style={styles.metricGrid}>
           <Metric label="세금 합계" value={`${formatKrw(analytics.data?.tax_total)}원`} />
           <Metric label="수수료 합계" value={`${formatKrw(analytics.data?.commission_total)}원`} />
         </View>
-        {taxBars.length ? (
-          <BarChart
-            data={taxBars}
-            width={chartWidth}
-            height={150}
-            barWidth={28}
-            spacing={20}
-            noOfSections={4}
-            hideRules
-            yAxisThickness={0}
-            xAxisThickness={0}
-            yAxisTextStyle={styles.chartAxis}
-            xAxisLabelTextStyle={styles.chartAxis}
-            isAnimated
-          />
+        {hasCostBars ? (
+          <>
+            {taxBars.length ? (
+              <>
+                <Text style={styles.chartCaption}>세금</Text>
+                <BarChart
+                  data={taxBars}
+                  width={chartWidth}
+                  height={150}
+                  barWidth={28}
+                  spacing={20}
+                  noOfSections={4}
+                  hideRules
+                  yAxisThickness={0}
+                  xAxisThickness={0}
+                  yAxisTextStyle={styles.chartAxis}
+                  xAxisLabelTextStyle={styles.chartAxis}
+                  isAnimated
+                />
+              </>
+            ) : null}
+            {commissionBars.length ? (
+              <>
+                <Text style={styles.chartCaption}>수수료</Text>
+                <BarChart
+                  data={commissionBars}
+                  width={chartWidth}
+                  height={120}
+                  barWidth={28}
+                  spacing={20}
+                  noOfSections={3}
+                  hideRules
+                  yAxisThickness={0}
+                  xAxisThickness={0}
+                  yAxisTextStyle={styles.chartAxis}
+                  xAxisLabelTextStyle={styles.chartAxis}
+                  isAnimated
+                />
+              </>
+            ) : null}
+          </>
         ) : (
-          <EmptyChart />
+          <EmptyChart testID="analytics-cost-empty" message="세금/수수료 데이터가 없습니다." />
         )}
-        {commissionBars.length ? (
-          <BarChart
-            data={commissionBars}
-            width={chartWidth}
-            height={120}
-            barWidth={28}
-            spacing={20}
-            noOfSections={3}
-            hideRules
-            yAxisThickness={0}
-            xAxisThickness={0}
-            yAxisTextStyle={styles.chartAxis}
-            xAxisLabelTextStyle={styles.chartAxis}
-            isAnimated
-          />
-        ) : null}
       </ChartBlock>
     </View>
   );
@@ -707,16 +893,19 @@ function SegmentedControl<TKey extends string>({
   options,
   value,
   onChange,
+  testIDPrefix,
 }: {
   options: Array<{ key: TKey; label: string }>;
   value: TKey;
   onChange: (value: TKey) => void;
+  testIDPrefix?: string;
 }) {
   return (
     <View style={styles.segmentRow}>
       {options.map((option) => (
         <Pressable
           key={option.key}
+          testID={testIDPrefix ? `${testIDPrefix}-${option.key}` : undefined}
           onPress={() => onChange(option.key)}
           style={[styles.segmentButton, value === option.key && styles.activeSegmentButton]}
         >
@@ -734,17 +923,39 @@ function SegmentedControl<TKey extends string>({
   );
 }
 
-function ChartBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartBlock({
+  title,
+  children,
+  testID,
+}: {
+  title: string;
+  children: React.ReactNode;
+  testID?: string;
+}) {
   return (
-    <View style={styles.chartBlock}>
+    <View testID={testID} style={styles.chartBlock}>
       <Text style={styles.chartTitle}>{title}</Text>
       {children}
     </View>
   );
 }
 
-function EmptyChart() {
-  return <Text style={styles.muted}>표시할 차트 데이터가 없습니다.</Text>;
+function AnalyticsNotice({ message, testID }: { message: string; testID?: string }) {
+  return (
+    <View testID={testID} style={styles.analyticsNotice}>
+      <Text style={styles.analyticsNoticeText}>{message}</Text>
+    </View>
+  );
+}
+
+function EmptyChart({
+  message = "표시할 차트 데이터가 없습니다.",
+  testID,
+}: {
+  message?: string;
+  testID?: string;
+}) {
+  return <Text testID={testID} style={styles.muted}>{message}</Text>;
 }
 
 function Loading() {
@@ -767,6 +978,21 @@ function ErrorText({ message }: { message: string }) {
 
 function formatKrw(value?: number) {
   return Number(value || 0).toLocaleString("ko-KR");
+}
+
+function buildCsvFormData(asset: DocumentPicker.DocumentPickerAsset) {
+  const formData = new FormData();
+  if (asset.file) {
+    formData.append("file", asset.file, asset.name);
+    return formData;
+  }
+
+  formData.append("file", {
+    uri: asset.uri,
+    name: asset.name || "manual-transactions.csv",
+    type: asset.mimeType || "text/csv",
+  } as unknown as Blob);
+  return formData;
 }
 
 function buildManualPayload(form: ManualFormState) {
@@ -873,11 +1099,11 @@ function getAllocationRows(
 }
 
 function toProfitBarData(rows: Array<Record<string, unknown>>) {
-  return rows
+  const bars = rows
     .slice(0, 10)
     .reverse()
     .map((row) => {
-      const value = Number(row.profit_loss_total || 0);
+      const value = toFiniteNumber(row.profit_loss_total);
       const period = String(row.period || "").replace(String(new Date().getFullYear()), "");
       return {
         value,
@@ -885,6 +1111,7 @@ function toProfitBarData(rows: Array<Record<string, unknown>>) {
         frontColor: value < 0 ? "#dc2626" : "#047857",
       };
     });
+  return hasNonZeroValue(bars) ? bars : [];
 }
 
 function toAmountBarData(rows: Array<Record<string, unknown>>, color: string) {
@@ -892,7 +1119,7 @@ function toAmountBarData(rows: Array<Record<string, unknown>>, color: string) {
     .slice(0, 6)
     .reverse()
     .map((row) => ({
-      value: Math.max(Number(row.amount || 0), 0),
+      value: Math.max(toFiniteNumber(row.amount), 0),
       label: String(row.period || "").replace(String(new Date().getFullYear()), "") || "-",
       frontColor: color,
     }))
@@ -900,10 +1127,11 @@ function toAmountBarData(rows: Array<Record<string, unknown>>, color: string) {
 }
 
 function toTrendLineData(rows: Array<Record<string, unknown>>) {
-  return rows.slice(-12).map((row) => ({
-    value: Number(row.cumulative_profit_loss || 0),
+  const points = rows.slice(-12).map((row) => ({
+    value: toFiniteNumber(row.cumulative_profit_loss),
     label: shortDate(String(row.date || "")),
   }));
+  return hasNonZeroValue(points) ? points : [];
 }
 
 function toAllocationPieData(rows: Array<Record<string, unknown>>, basis: AllocationBasisKey) {
@@ -911,11 +1139,20 @@ function toAllocationPieData(rows: Array<Record<string, unknown>>, basis: Alloca
   return rows
     .slice(0, 6)
     .map((row, index) => ({
-      value: Math.max(Number(row.amount || 0), 0),
+      value: Math.max(toFiniteNumber(row.amount), 0),
       color: colors[index % colors.length],
       text: allocationRowLabel(row, basis),
     }))
     .filter((row) => row.value > 0);
+}
+
+function toFiniteNumber(value: unknown) {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function hasNonZeroValue(rows: Array<{ value: number }>) {
+  return rows.some((row) => Math.abs(row.value) > 0);
 }
 
 function allocationRowLabel(row: Record<string, unknown>, basis: AllocationBasisKey) {
@@ -1114,6 +1351,37 @@ const styles = StyleSheet.create({
     minHeight: 72,
     textAlignVertical: "top",
   },
+  csvImportBox: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#dce5f1",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  csvInput: {
+    fontSize: 13,
+    minHeight: 140,
+    textAlignVertical: "top",
+  },
+  csvErrorBox: {
+    backgroundColor: "#fff7ed",
+    borderColor: "#fed7aa",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  csvErrorTitle: {
+    color: "#9a3412",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  csvErrorText: {
+    color: "#9a3412",
+    fontSize: 12,
+    lineHeight: 18,
+  },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#07111f",
@@ -1138,6 +1406,15 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  csvActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  csvActionButton: {
+    flexGrow: 1,
+    minWidth: 96,
   },
   disabledButton: {
     opacity: 0.55,
@@ -1242,6 +1519,18 @@ const styles = StyleSheet.create({
   muted: {
     color: "#607085",
   },
+  analyticsNotice: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#dce5f1",
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  analyticsNoticeText: {
+    color: "#536174",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   chartBlock: {
     borderTopColor: "#e3ebf5",
     borderTopWidth: 1,
@@ -1257,6 +1546,11 @@ const styles = StyleSheet.create({
   chartAxis: {
     color: "#607085",
     fontSize: 10,
+  },
+  chartCaption: {
+    color: "#536174",
+    fontSize: 12,
+    fontWeight: "800",
   },
   pieRow: {
     alignItems: "center",

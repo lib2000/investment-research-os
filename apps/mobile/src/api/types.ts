@@ -122,6 +122,22 @@ export type ManualTransactionMutationResponse = {
   transaction: ManualTransaction;
 };
 
+export type ManualTransactionsImportError = {
+  row?: number;
+  message?: string;
+};
+
+export type ManualTransactionsImportResponse = {
+  status: string;
+  file_name: string;
+  total_rows: number;
+  imported_count: number;
+  failed_count: number;
+  skipped_count: number;
+  transactions: ManualTransaction[];
+  errors: ManualTransactionsImportError[];
+};
+
 export type ManualTransactionDeleteResponse = {
   status: string;
   deleted_transaction_id: number;

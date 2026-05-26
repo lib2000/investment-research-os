@@ -721,7 +721,7 @@ C:\Users\lib20\InvestmentJournalApp
 - Expo 모바일 앱 의존성 설치 확인
 - Expo 모바일 앱 TypeScript 타입체크 통과
 - Expo public config에서 SDK 55 설정 확인
-- 모바일 앱 운영 의존성 기준 npm audit 취약점 0건 확인
+- 모바일 앱 운영 의존성 기준 npm audit 확인
 - `react-native-gifted-charts` 설치 및 RN 분석 탭 import/사용 위치 확인
 - RN 분석 탭 막대/라인/도넛 차트 타입체크 통과
 - RN 분석 탭 수익/비중 기준 전환 타입체크 통과
@@ -743,3 +743,130 @@ C:\Users\lib20\InvestmentJournalApp
 - 프론트 API 주소가 `8010`으로 설정된 것 확인
 
 민감정보는 검증 출력과 문서에 포함하지 않았다.
+
+## 16. 2026-05-22 모바일 실행/검증 정리
+
+이번 추가 작업은 `C:\Users\lib20\InvestmentJournalApp`에서만 진행했다. OneDrive 경로는 사용하지 않았다.
+
+적용한 내용:
+
+- Expo 모바일 앱 의존성을 SDK 55 권장 버전으로 정렬했다.
+- `react-dom`, `react-native-web`을 추가해 Expo 웹 검증을 가능하게 했다.
+- `expo-document-picker`를 추가해 모바일 CSV 파일 선택을 지원했다.
+- `tools\start_mobile_web.ps1`를 추가했다.
+- `tools\start_mobile_web.ps1 -StopExistingPortProcess -ClearCache`로 8082 잔류 Metro 프로세스와 캐시 문제를 복구할 수 있게 했다.
+- `tools\start_backend.ps1 -StopExistingPortProcess` 옵션을 추가해 8010에 다른 서버가 떠 있는 상황을 복구할 수 있게 했다.
+- `tools\stop_dev_servers.ps1`를 추가해 작업 종료 시 8010/8082 개발 서버만 정리할 수 있게 했다.
+- `tools\smoke_mobile_web.ps1`를 추가해 백엔드 루트, 포트폴리오 API, 분석 API, CSV 템플릿 API, 모바일 웹 HTML을 한 번에 확인하게 했다.
+- `tools\smoke_mobile_web.ps1`는 CSV 템플릿 API만 404일 때 오래된 8010 백엔드 가능성과 복구 명령을 안내한다.
+- `tools\status_dev_servers.ps1`를 추가해 8010/8082 포트 주인, 핵심 API, CSV 템플릿 API, 모바일 웹 응답을 빠르게 확인할 수 있게 했다.
+- `tools\status_dev_servers.ps1`와 `tools\stop_dev_servers.ps1`는 `Get-NetTCPConnection`이 놓치는 Windows 리스너를 `netstat` fallback으로 함께 탐지한다.
+- `tools\status_dev_servers.ps1 -Strict`로 상태 점검 실패를 exit code 실패로 전환할 수 있게 했다.
+- `tools\stop_dev_servers.ps1 -DryRun`으로 종료 대상 PID를 먼저 확인할 수 있게 했다.
+- `tools\stop_dev_servers.ps1`는 기본 개발 포트가 아닌 포트에서는 허용된 개발 프로세스만 종료하고, 그 외 프로세스는 `-ForceAnyProcess` 없이는 건너뛴다.
+- `tools\restart_backend_verified.ps1`를 추가해 백엔드를 백그라운드로 재시작하고 CSV 템플릿 API 라우트까지 검증할 수 있게 했다.
+- `tools\restart_backend_verified.ps1 -FallbackPorts @(8020,8021,8022)`로 8010 포트가 Windows 잔류 리스너에 잡혀 있어도 대체 포트에서 최신 백엔드를 검증할 수 있게 했다.
+- `tools\status_dev_servers.ps1 -ApiPort 8020`처럼 포트만 넘겨도 해당 포트의 API URL을 점검하도록 보강했다.
+- `tools\status_dev_servers.ps1`의 포트폴리오 API는 키움 인증 정보가 없는 로컬 개발 환경에서 선택 점검으로 처리하고, 필요 시 `-RequirePortfolio`로 필수 점검으로 올릴 수 있게 했다.
+- `tools\verify_mobile_stack.ps1` 시작 단계에 `tools\show_dev_server_ports.ps1 -OnlyConflicts`를 연결해 예약 포트 충돌을 회귀 검증 전에 잡게 했다.
+- 포트 충돌을 일부러 남긴 환경에서 정적 검증만 해야 할 때를 위해 `tools\verify_mobile_stack.ps1 -SkipPortRegistryCheck`를 추가했다.
+- `tools\start_backend.ps1`와 `tools\start_mobile_web.ps1`는 `unknown` PID 리스너를 기본값으로 강제 종료하지 않고 안내만 하며, 정말 필요한 경우에만 `-ForceExistingPortProcess`를 함께 사용하게 했다.
+- `tools\smoke_mobile_web.ps1`는 기본 API가 실패하면 `8020`, `8021`, `8022` fallback API를 순서대로 확인하고, 포트폴리오 API는 기본값에서 선택 점검으로 처리하게 했다.
+- `tools\smoke_kiwoom_history_live.ps1`를 추가해 실제 키움 API 1일 과거 거래 조회를 명시 확인 플래그 기반으로만 실행하게 했다.
+- 키움 라이브 스모크는 `-ConfirmLiveApi` 없이는 중단하며, `job_id`, 처리 일수, 재시도 횟수, 초안 증감만 출력하고 토큰 원문/계좌번호는 출력하지 않는다.
+- 키움 라이브 스모크는 제한 시간 초과 시 기본적으로 cancel 요청을 보내고, 필요 시 `-NoCancelOnTimeout`으로 취소 요청을 생략할 수 있게 했다.
+- `tools\smoke_kiwoom_history_range_live.ps1`를 추가해 1일 스모크 성공 이후 최대 31일 범위의 키움 라이브 조회를 별도 관문으로 확인할 수 있게 했다.
+- 범위 라이브 스모크도 `-ConfirmLiveApi` 없이는 중단하며, 31일 초과 범위는 실행 전에 차단한다.
+- FastAPI startup 훅은 `@app.on_event("startup")` 대신 lifespan 방식으로 전환해 최신 FastAPI 경고를 줄였다.
+- RN Web 자동화 안정화를 위해 주요 탭과 분석 전환 버튼에 `testID`를 추가했다.
+- 모바일 헤더의 API 표시를 고정 `8010` 문구 대신 실제 `EXPO_PUBLIC_API_BASE_URL` 기반으로 표시하게 했다.
+- 수동입력 화면에 CSV 텍스트 붙여넣기 가져오기를 추가했다.
+- 수동입력 화면에 CSV 파일 선택 가져오기를 추가했다.
+- CSV 파일 선택은 원본 인코딩 보존을 위해 `multipart/form-data`로 전송한다.
+- CSV 텍스트 붙여넣기는 `POST /api/v1/manual-transactions/import.csv`에 `text/csv`로 전송한다.
+- CSV 가져오기 실패 행은 수동입력 화면에 행 번호와 오류 메시지로 표시한다.
+- CSV 가져오기는 일부 행이 실패해도 유효 행은 저장하고, 실패/건너뜀 카운트와 실패 행 번호를 응답한다.
+- CSV 가져오기 성공 후 `manual-transactions`, `journal-analytics` Query를 다시 불러온다.
+- `tools\smoke_mobile_analytics_sample.ps1`를 추가해 임시 CSV 샘플을 가져오고 분석 집계를 확인한 뒤 기본적으로 즉시 삭제하게 했다.
+- `.sqlite3-wal`, `.sqlite3-shm` 보조 파일이 Git 상태에 표시되지 않도록 `.gitignore`를 보강했다.
+- 수동 CSV 가져오기와 분석 집계 계약을 `InvestmentJournalManualImportTests` 회귀 테스트로 고정했다.
+- 키움 과거 거래 백그라운드 작업의 진행률, 누적 카운트, 마지막 성공일, 재시도 백오프 체크포인트를 회귀 테스트로 고정했다.
+- 키움 과거 거래 불러오기는 1일 단위 작업, 1개월 범위 중지/재개 기준, 윤년 포함 1년 366일 허용, 1년 초과 400 응답을 회귀 테스트로 고정했다.
+- SQLite WAL/foreign key/busy timeout 설정과 수동 입력 계좌번호 마스킹/해시 저장을 회귀 테스트로 고정했다.
+- 키움 OAuth 토큰 캐시가 유효할 때 네트워크 재발급 없이 저장 토큰을 재사용하는 동작을 회귀 테스트로 고정했다.
+- 수동 입력 거래가 먼저 저장되고 같은 날짜/종목/수량/가격의 키움 원천 거래가 나중에 들어와도 수동 거래를 `duplicate_kiwoom`으로 전환하고 분석 합산에서 제외하도록 보강했다.
+- 분석 API의 연간/분기/월간 수익, 수익 추이, 종목별/유형별/계좌별 비중, 배당/세금/수수료 집계가 샘플 CSV에서 생성되는지 회귀 테스트와 스모크로 확인했다.
+- multipart CSV 업로드에서 한글 헤더와 CP949 인코딩, 쉼표가 포함된 금액 문자열 파싱을 회귀 테스트로 고정했다.
+- `GET /api/v1/manual-transactions/import.csv/template`로 한글 헤더 CSV 템플릿을 내려받을 수 있게 했다.
+- CSV 템플릿은 Excel 호환성을 위해 UTF-8 BOM을 포함한다.
+- 수동입력 화면의 `템플릿` 버튼은 CSV 템플릿 API 응답을 붙여넣기 입력칸에 채운다.
+- 로컬 개발 중 임시 Expo 포트를 써도 막히지 않도록 백엔드 CORS를 `localhost`/`127.0.0.1` 개발 포트 정규식으로 보강했다.
+- CSV 템플릿 API의 localhost 개발 포트 CORS 허용을 회귀 테스트로 고정했다.
+- 분석 화면의 빈 상태 문구를 수익, 추이, 비중, 배당, 세금/수수료별로 구체화했다.
+- 세금/수수료 차트는 한쪽 데이터만 있을 때도 불필요한 빈 상태 문구 없이 해당 차트만 보여주도록 정리했다.
+- 수익/추이 차트는 값이 전부 0원인 경우 축만 있는 그래프 대신 빈 상태 문구를 보여주도록 정리했다.
+- 분석 빈 상태 문구에도 브라우저 검증용 `testID`를 부여했다.
+- 회귀 테스트 임시 SQLite DB는 프로젝트 내부 `.test-tmp` 아래에 만들고, Git에는 포함하지 않는다.
+- `tools\verify_mobile_stack.ps1`를 추가해 백엔드 회귀 테스트, 모바일 타입체크, high 이상 audit, Expo export, 라이브 스모크를 한 번에 실행할 수 있게 했다.
+- `tools\assert_mobile_testids.ps1`를 추가하고 통합 검증에 포함해 CSV/분석 자동화 타깃 누락을 정적으로 잡게 했다.
+- `tools\assert_dev_scripts_contract.ps1`를 추가하고 통합 검증에 포함해 개발 서버 스크립트의 핵심 안전장치 누락을 정적으로 잡게 했다.
+
+확인한 명령:
+
+```powershell
+cd C:\Users\lib20\InvestmentJournalApp
+.\tools\assert_project_root.ps1 -PassThru
+.\tools\start_backend.ps1 -StopExistingPortProcess
+.\tools\start_mobile_web.ps1 -StopExistingPortProcess -ClearCache
+.\tools\status_dev_servers.ps1
+.\tools\smoke_mobile_web.ps1
+.\tools\smoke_mobile_analytics_sample.ps1
+python -m unittest tests.test_backend_regressions.InvestmentJournalManualImportTests
+.\tools\assert_mobile_testids.ps1
+.\tools\assert_dev_scripts_contract.ps1
+.\tools\verify_mobile_stack.ps1 -SkipLiveSmoke
+.\tools\verify_mobile_stack.ps1 -SkipLiveSmoke -SkipPortRegistryCheck
+.\tools\restart_backend_verified.ps1 -Port 8012
+.\tools\restart_backend_verified.ps1 -Port 8010 -FallbackPorts @(8020,8021,8022)
+.\tools\status_dev_servers.ps1 -ApiPort 8020 -Strict
+.\tools\show_dev_server_ports.ps1 -OnlyConflicts
+.\tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25
+.\tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25 -ConfirmLiveApi
+.\tools\smoke_kiwoom_history_range_live.ps1 -StartDate 2026-05-01 -EndDate 2026-05-31
+.\tools\smoke_kiwoom_history_range_live.ps1 -StartDate 2026-05-01 -EndDate 2026-05-31 -ConfirmLiveApi
+```
+
+검증 결과:
+
+- `python -m unittest tests.test_backend_regressions.InvestmentJournalManualImportTests` 14개 테스트 통과
+- `python -m unittest tests.test_backend_regressions` 45개 테스트 통과
+- `npm run typecheck` 통과
+- `tools\assert_mobile_testids.ps1` 통과
+- `tools\assert_dev_scripts_contract.ps1` 통과
+- `npm audit --audit-level=high` 통과
+- 현재 Expo 내부 개발 도구 체인에서 `uuid` moderate 경고가 표시될 수 있다. `npm audit fix --force`는 Expo 46 다운그레이드를 제안하므로 적용하지 않았다.
+- `npx expo export --platform web` 통과
+- `npx expo install --check` 결과 `Dependencies are up to date`
+- `tools\smoke_mobile_web.ps1` 통과 또는 오래된 8010 프로세스가 있을 때 CSV 템플릿 API 404를 명확히 표시
+- `tools\smoke_mobile_web.ps1`가 기본 API 실패 시 fallback API를 확인하도록 보강
+- `tools\smoke_kiwoom_history_live.ps1`가 `-ConfirmLiveApi` 없이 실제 API 호출을 차단하는 것 확인
+- `tools\smoke_kiwoom_history_live.ps1 -TradeDate 2026-05-25 -ConfirmLiveApi -CheckTokenFirst` 실조회 성공 확인. 토큰은 cache source였고, 1일 작업은 `success`, 처리일수 1/1, retry 0, 초안 증감 0으로 완료됐다.
+- `tools\smoke_mobile_analytics_sample.ps1` 통과
+- `tools\verify_mobile_stack.ps1` 라이브 스모크 포함 통과
+- `tools\verify_mobile_stack.ps1`가 예약 포트 충돌 점검을 기본 포함하도록 보강
+- `tools\status_dev_servers.ps1`로 8010/8082 포트, 백엔드 루트, 포트폴리오 API, 분석 API, CSV 템플릿 API, 모바일 root 엘리먼트 확인
+- `tools\status_dev_servers.ps1 -Strict`가 오래된 8010 서버의 CSV 템플릿 API 404를 실패로 반환하는 것 확인
+- `tools\restart_backend_verified.ps1 -Port 8012`가 임시 포트에서 새 백엔드와 CSV 템플릿 API를 검증하는 것 확인
+- `tools\restart_backend_verified.ps1 -Port 8010 -FallbackPorts @(8020,8021,8022)`로 8010 실패 후 8020 대체 포트 백엔드가 시작되는 것 확인
+- `tools\status_dev_servers.ps1 -ApiPort 8020 -Strict`로 대체 포트 백엔드 루트, 분석 API, CSV 템플릿 API, 모바일 root 엘리먼트 점검 통과 확인
+- 통합 검증의 audit 요약: critical 0, high 0, moderate 9, low 0
+- 브라우저에서 `http://localhost:8082` 첫 화면과 분석 탭 로딩 완료 상태 확인
+- 브라우저 자동화에서 `testID` 기반 5개 탭 클릭 확인
+- 분석 화면의 수익 기준과 비중 기준 전환 확인
+- 수동입력 화면의 CSV 붙여넣기 UI와 `manual-csv-input`, `manual-csv-import-button` 확인
+- 브라우저에서 수동입력 화면의 CSV 파일 선택 버튼 `manual-csv-pick-file-button` 확인
+- 브라우저에서 수동입력 화면의 CSV 템플릿 버튼 `manual-csv-template-button`으로 한글 헤더와 예시 행이 입력칸에 채워지는 것 확인
+- 브라우저에서 잘못된 CSV 입력 시 `가져오기 실패 행`과 행별 오류 메시지 표시 확인
+- 신규 PowerShell 스크립트 `status_dev_servers.ps1`, `verify_mobile_stack.ps1`, `stop_dev_servers.ps1` 문법 파싱 확인
+- 수동입력 화면의 `샘플 채우기` 버튼으로 CSV 템플릿을 채우고 UI에서 가져오기 성공 확인
+- UI CSV 가져오기 검증으로 생성한 샘플 거래는 검증 직후 삭제 확인

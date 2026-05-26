@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiDelete, apiGet, apiPost } from "../api/client";
+import {
+  apiDelete,
+  apiGet,
+  apiGetText,
+  apiPost,
+  apiPostFormData,
+  apiPostText,
+} from "../api/client";
 import type {
   JournalAnalyticsResponse,
   JournalAnalyticsFilter,
@@ -12,6 +19,7 @@ import type {
   ManualTransaction,
   ManualTransactionCreateInput,
   ManualTransactionDeleteResponse,
+  ManualTransactionsImportResponse,
   ManualTransactionMutationResponse,
   PaginatedResponse,
   PortfolioResponse,
@@ -99,6 +107,44 @@ export function useDeleteManualTransaction() {
       queryClient.invalidateQueries({ queryKey: ["manual-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["journal-analytics"] });
     },
+  });
+}
+
+export function useImportManualTransactionsCsv() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (csvText: string) =>
+      apiPostText<ManualTransactionsImportResponse>(
+        "/api/v1/manual-transactions/import.csv",
+        csvText,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["manual-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["journal-analytics"] });
+    },
+  });
+}
+
+export function useImportManualTransactionsCsvFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (formData: FormData) =>
+      apiPostFormData<ManualTransactionsImportResponse>(
+        "/api/v1/manual-transactions/import.csv",
+        formData,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["manual-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["journal-analytics"] });
+    },
+  });
+}
+
+export function useManualTransactionsCsvTemplate() {
+  return useMutation({
+    mutationFn: () => apiGetText("/api/v1/manual-transactions/import.csv/template"),
   });
 }
 

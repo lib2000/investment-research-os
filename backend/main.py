@@ -1,6 +1,7 @@
 import csv
 import io
 import time
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from email.parser import BytesParser
 from email.policy import default as email_default_policy
@@ -85,8 +86,19 @@ from app.security import verify_user_token
 from app.settings import Settings, get_settings, mask_secret
 
 
-app = FastAPI(title="Investment Journal API Gateway")
 MAX_HISTORICAL_SYNC_DAYS = 366
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    init_db(settings)
+    pause_stale_history_sync_jobs(settings)
+    backup_database_if_due(settings, reason="startup")
+    yield
+
+
+app = FastAPI(title="Investment Journal API Gateway", lifespan=lifespan)
 
 
 class AppError(Exception):
@@ -163,18 +175,11 @@ app.add_middleware(
         "http://127.0.0.1:8081",
         "http://localhost:8081",
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    settings = get_settings()
-    init_db(settings)
-    pause_stale_history_sync_jobs(settings)
-    backup_database_if_due(settings, reason="startup")
 
 
 @app.get("/")
@@ -848,6 +853,21 @@ async def import_manual_transactions_csv(
     )
 
 
+@app.get(
+    "/api/v1/manual-transactions/import.csv/template",
+    dependencies=[Depends(verify_user_token)],
+)
+def download_manual_transactions_csv_template() -> Response:
+    csv_text = _manual_transactions_csv_template()
+    return Response(
+        content=csv_text.encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="manual-transactions-template.csv"',
+        },
+    )
+
+
 @app.post(
     "/api/v1/reference/fx-rates",
     response_model=FxRateResponse,
@@ -1027,6 +1047,57 @@ def _parse_optional_filter_date(value: str | None, field_name: str) -> date | No
 
 def _normalize_manual_trade_date(value: str) -> str:
     return _parse_sync_date(value).strftime("%Y-%m-%d")
+
+
+def _manual_transactions_csv_template() -> str:
+    rows = [
+        [
+            "거래일",
+            "증권사",
+            "계좌",
+            "유형",
+            "종목코드",
+            "종목명",
+            "수량",
+            "가격",
+            "매수금액",
+            "매도금액",
+            "매매손익",
+            "배당",
+            "세금",
+            "수수료",
+            "통화",
+            "환율",
+            "분할보정비율",
+            "보정메모",
+            "메모",
+        ],
+        [
+            "2026-05-22",
+            "타증권",
+            "기타",
+            "trade",
+            "005930",
+            "삼성전자",
+            "1",
+            "80000",
+            "80000",
+            "",
+            "0",
+            "0",
+            "0",
+            "0",
+            "KRW",
+            "",
+            "1",
+            "",
+            "예시 행은 삭제 후 사용",
+        ],
+    ]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(rows)
+    return buffer.getvalue()
 
 
 async def _extract_csv_upload(request: Request) -> tuple[str, bytes]:
