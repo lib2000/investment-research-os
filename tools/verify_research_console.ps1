@@ -19,6 +19,7 @@ param(
   [string]$PortfolioQuantityTicker = "PL",
   [double]$PortfolioQuantityExpected = 100,
   [string]$PortfolioQuantityCurrency = "USD",
+  [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD",
   [string]$StorageQualityBaseUrl = "http://127.0.0.1:8001",
   [string]$StorageQualityDevUserToken = "dev-local-token",
   [int]$StorageQualityMaxBodyMissing = 0,
@@ -96,6 +97,7 @@ if ($CheckCoreSafeguards) {
       -PortfolioTicker $PortfolioQuantityTicker `
       -PortfolioExpectedQuantity $PortfolioQuantityExpected `
       -PortfolioExpectedCurrency $PortfolioQuantityCurrency `
+      -PortfolioExpectedHoldings $PortfolioQuantityExpectedHoldings `
       -MaxBodyMissing $StorageQualityMaxBodyMissing `
       -MaxOcrNeeded $StorageQualityMaxOcrNeeded `
       -Strict
@@ -147,12 +149,15 @@ if ($CheckPortfolioQuantityProtection) {
       -Ticker $PortfolioQuantityTicker `
       -ExpectedQuantity $PortfolioQuantityExpected `
       -ExpectedCurrency $PortfolioQuantityCurrency `
+      -ExpectedHoldings $PortfolioQuantityExpectedHoldings `
       -Strict
     $portfolioQuantity = $portfolioQuantityJson | ConvertFrom-Json
     Write-Host (
-      "상태={0}; 포트폴리오={1}; 종목={2}; 수량={3}; 기대수량={4}; 통화={5}; 수량보호={6}; 갱신시각={7}" -f
+      "상태={0}; 포트폴리오={1}; 점검종목={2}; 실패={3}; 대표종목={4}; 수량={5}; 기대수량={6}; 통화={7}; 수량보호={8}; 갱신시각={9}" -f
       $portfolioQuantity.Status,
       $portfolioQuantity.PortfolioName,
+      $portfolioQuantity.CheckedCount,
+      $portfolioQuantity.FailedCount,
       $portfolioQuantity.Ticker,
       $portfolioQuantity.Quantity,
       $portfolioQuantity.ExpectedQuantity,

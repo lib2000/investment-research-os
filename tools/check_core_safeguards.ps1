@@ -9,6 +9,7 @@ param(
   [string]$PortfolioTicker = "PL",
   [double]$PortfolioExpectedQuantity = 100,
   [string]$PortfolioExpectedCurrency = "USD",
+  [string]$PortfolioExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD",
   [int]$MaxBodyMissing = 0,
   [int]$MaxOcrNeeded = 0,
   [switch]$Strict
@@ -38,6 +39,7 @@ $portfolioJson = & (Join-Path $PSScriptRoot "check_portfolio_quantity_protection
   -Ticker $PortfolioTicker `
   -ExpectedQuantity $PortfolioExpectedQuantity `
   -ExpectedCurrency $PortfolioExpectedCurrency `
+  -ExpectedHoldings $PortfolioExpectedHoldings `
   -Strict
 $portfolio = $portfolioJson | ConvertFrom-Json
 
@@ -72,8 +74,11 @@ $result = [pscustomobject]@{
     Ticker = $portfolio.Ticker
     Quantity = $portfolio.Quantity
     ExpectedQuantity = $portfolio.ExpectedQuantity
+    CheckedCount = $portfolio.CheckedCount
+    FailedCount = $portfolio.FailedCount
     Currency = $portfolio.Currency
     SyncProtected = $portfolio.SyncProtected
+    Items = @($portfolio.Items)
   }
   StorageQuality = [pscustomobject]@{
     Status = $storage.Status
