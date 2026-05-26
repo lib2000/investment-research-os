@@ -183,6 +183,10 @@ if ($CheckStorageQualitySafeguards) {
       $storageQuality.LegacyOrDuplicateCount,
       $storageQuality.NewsBodyStoragePolicy
     )
+    $bodyMissingTargets = @($storageQuality.BodyMissingItems | ForEach-Object { $_.RelativePath }) -join ", "
+    if (-not [string]::IsNullOrWhiteSpace($bodyMissingTargets)) {
+      Write-Host "본문 보강 대상=$bodyMissingTargets"
+    }
   }
 }
 

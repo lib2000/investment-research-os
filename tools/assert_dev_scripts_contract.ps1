@@ -214,7 +214,9 @@ $contracts = @(
       'MaxBodyMissing',
       'LatestStorageSkipped',
       'SyncProtected',
+      'BodyMissingItems',
       'NewsBodyStoragePolicy',
+      'NextActions',
       '핵심 안전장치 확인 완료',
       '[switch]$Strict'
     )
@@ -258,7 +260,8 @@ $contracts = @(
       '포트폴리오 수량 보호 확인',
       'SyncProtected',
       '저장소 품질 안전장치 확인',
-      'NewsBodyStoragePolicy'
+      'NewsBodyStoragePolicy',
+      '본문 보강 대상='
     )
   },
   @{

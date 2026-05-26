@@ -78,10 +78,12 @@ $result = [pscustomobject]@{
   StorageQuality = [pscustomobject]@{
     Status = $storage.Status
     BodyMissingCount = $storage.BodyMissingCount
+    BodyMissingItems = @($storage.BodyMissingItems)
     OcrNeededCount = $storage.OcrNeededCount
     ArchivedCount = $storage.ArchivedCount
     LegacyOrDuplicateCount = $storage.LegacyOrDuplicateCount
     NewsBodyStoragePolicy = $storage.NewsBodyStoragePolicy
+    NextActions = @($storage.NextActions)
   }
   Message = if ($allOk) {
     "핵심 안전장치 확인 완료"
