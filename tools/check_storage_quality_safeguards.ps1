@@ -4,6 +4,7 @@ param(
   [string]$DevUserToken = "dev-local-token",
   [int]$MaxBodyMissing = 0,
   [int]$MaxOcrNeeded = 0,
+  [int]$BodyMissingItemLimit = 10,
   [switch]$Strict
 )
 
@@ -48,8 +49,50 @@ $ocrNeededOk = $ocrNeeded -le $MaxOcrNeeded
 $softArchiveVisible = $archivedCount -ge 0 -and $legacyOrDuplicate -ge 0
 $copyrightPolicyOk = $metadataOnlyPolicy
 
+$bodyMissingItemRows = @(
+  foreach ($item in @($quality.body_missing_items)) {
+    if ($null -eq $item) {
+      continue
+    }
+
+    $tags = @($item.tags) | Where-Object { $null -ne $_ -and "$_".Trim() -ne "" }
+    [pscustomobject]@{
+      Ticker = [string](Get-ValueOrDefault $item.ticker "")
+      Date = [string](Get-ValueOrDefault $item.date "")
+      FileName = [string](Get-ValueOrDefault $item.file_name "")
+      RelativePath = [string](Get-ValueOrDefault $item.relative_path "")
+      QualityStatus = [string](Get-ValueOrDefault $item.quality_status "")
+      Tags = $tags
+      Summary = [string](Get-ValueOrDefault $item.summary "")
+    }
+  }
+)
+$bodyMissingItems = @($bodyMissingItemRows | Select-Object -First ([Math]::Max(0, $BodyMissingItemLimit)))
+
+$bodyMissingItemDetailsOk = (
+  $bodyMissing -eq 0 -or
+  (
+    $bodyMissingItems.Count -gt 0 -and
+    (
+      @($bodyMissingItems | Where-Object {
+        [string]::IsNullOrWhiteSpace($_.FileName) -or
+        [string]::IsNullOrWhiteSpace($_.RelativePath) -or
+        [string]::IsNullOrWhiteSpace($_.QualityStatus)
+      }).Count -eq 0
+    )
+  )
+)
+
+$nextActions = @(
+  foreach ($action in @($quality.next_actions)) {
+    if ($null -ne $action -and "$action".Trim() -ne "") {
+      [string]$action
+    }
+  }
+)
+
 $result = [pscustomobject]@{
-  Status = if ($bodyMissingOk -and $ocrNeededOk -and $softArchiveVisible -and $copyrightPolicyOk) { "success" } else { "warning" }
+  Status = if ($bodyMissingOk -and $ocrNeededOk -and $softArchiveVisible -and $copyrightPolicyOk -and $bodyMissingItemDetailsOk) { "success" } else { "warning" }
   Module = $quality.module
   AsOf = $quality.as_of
   ManifestCount = [int](Get-ValueOrDefault $quality.manifest_count 0)
@@ -57,6 +100,8 @@ $result = [pscustomobject]@{
   BodyMissingCount = $bodyMissing
   MaxBodyMissing = $MaxBodyMissing
   BodyMissingOk = $bodyMissingOk
+  BodyMissingItemDetailsOk = $bodyMissingItemDetailsOk
+  BodyMissingItems = $bodyMissingItems
   OcrNeededCount = $ocrNeeded
   MaxOcrNeeded = $MaxOcrNeeded
   OcrNeededOk = $ocrNeededOk
@@ -66,8 +111,13 @@ $result = [pscustomobject]@{
   NewsQualityIssueCount = $newsQualityIssues
   NewsBodyStoragePolicy = $policy.news_body_storage
   CopyrightPolicyOk = $copyrightPolicyOk
+  NextActions = $nextActions
   Message = if ($bodyMissingOk -and $ocrNeededOk -and $softArchiveVisible -and $copyrightPolicyOk) {
-    "저장소 품질 안전장치 확인 완료"
+    if ($bodyMissingItemDetailsOk) {
+      "저장소 품질 안전장치 확인 완료"
+    } else {
+      "저장소 품질 대상 항목 세부정보 확인 필요"
+    }
   } else {
     "저장소 품질 안전장치 확인 필요"
   }
