@@ -9,7 +9,7 @@ param(
   [string]$PortfolioTicker = "PL",
   [double]$PortfolioExpectedQuantity = 100,
   [string]$PortfolioExpectedCurrency = "USD",
-  [string]$PortfolioExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD",
+  [string]$PortfolioExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW",
   [int]$MaxBodyMissing = 0,
   [int]$MaxOcrNeeded = 0,
   [switch]$Strict

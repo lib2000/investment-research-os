@@ -29,8 +29,36 @@ $beforeCount = Get-CustomsVaultFileCount -Path $customsDir
 $latestUri = "$BaseUrl/api/v1/macro/customs-trade/latest?start_yymm=$StartYymm&end_yymm=$EndYymm&save_result=true"
 $totalTrendUri = "$BaseUrl/api/v1/macro/customs-trade/total-trend/status?start_yymm=$StartYymm&end_yymm=$EndYymm"
 
-$latest = Invoke-RestMethod -Headers $headers -Uri $latestUri -TimeoutSec 45
-$totalTrend = Invoke-RestMethod -Headers $headers -Uri $totalTrendUri -TimeoutSec 30
+try {
+  $latest = Invoke-RestMethod -Headers $headers -Uri $latestUri -TimeoutSec 45
+  $totalTrend = Invoke-RestMethod -Headers $headers -Uri $totalTrendUri -TimeoutSec 30
+} catch {
+  $afterCount = Get-CustomsVaultFileCount -Path $customsDir
+  $customsDirExistsAfter = Test-Path -LiteralPath $customsDir
+  $customsDirCreatedDuringCheck = (-not $customsDirExistsBefore) -and $customsDirExistsAfter
+  $customsFileCountChanged = $afterCount -ne $beforeCount
+  $result = [pscustomobject]@{
+    Status = "warning"
+    BaseUrl = $BaseUrl
+    Period = "$StartYymm~$EndYymm"
+    Reason = "provider_timeout_or_unavailable"
+    Error = $_.Exception.Message
+    CustomsDirExistsBefore = [bool]$customsDirExistsBefore
+    CustomsDirExistsAfter = [bool]$customsDirExistsAfter
+    CustomsDirCreatedDuringCheck = [bool]$customsDirCreatedDuringCheck
+    CustomsFilesBefore = $beforeCount
+    CustomsFilesAfter = $afterCount
+    CustomsFileCountChanged = [bool]$customsFileCountChanged
+    NextAction = "관세청 제공자 지연으로 품질 점검을 보류했습니다. 기존 CUSTOMS 저장 파일 수가 바뀌지 않았는지만 확인하고 다음 자동 점검에서 재시도하세요."
+  }
+  if ($customsFileCountChanged -or $customsDirCreatedDuringCheck) {
+    $result.Status = "failed"
+    $result | ConvertTo-Json -Depth 6
+    throw "관세청 수출입 데이터 품질 점검 중 저장소 변경이 감지되었습니다."
+  }
+  $result | ConvertTo-Json -Depth 6
+  return
+}
 
 $afterCount = Get-CustomsVaultFileCount -Path $customsDir
 $customsDirExistsAfter = Test-Path -LiteralPath $customsDir

@@ -607,6 +607,47 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
         self.assertNotIn("body", item)
         self.assertNotIn("raw_text", item)
 
+    def test_kiep_report_source_parser_keeps_metadata_only(self):
+        from research_os.regional_sources import (
+            KIEP_REPORTS_URL,
+            REGIONAL_BUSINESS_SOURCES,
+            RegionalBusinessSource,
+            parse_regional_business_list,
+            regional_business_copyright_policy,
+        )
+
+        source = RegionalBusinessSource(
+            source_key="kiep_macro_reports",
+            provider="KIEP",
+            source_url=KIEP_REPORTS_URL,
+            source_scope="대외경제정책연구원 전체보고서",
+        )
+        html = """
+        <ul class="gallery-list">
+          <li>
+            <a href="/gallery.es?mid=a10101010000&bid=0001&list_no=12345">세계경제 전망과 공급망 재편 분석</a>
+            <span>발간일 2026.05.27</span>
+            <span>KIEP</span>
+          </li>
+        </ul>
+        """
+
+        items = parse_regional_business_list(html, source=source, limit=5)
+        policy = regional_business_copyright_policy()
+
+        self.assertIn("KIEP", {item.provider for item in REGIONAL_BUSINESS_SOURCES})
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item["source_provider"], "KIEP")
+        self.assertEqual(item["source_scope"], "대외경제정책연구원 전체보고서")
+        self.assertEqual(item["published_at"], "2026-05-27")
+        self.assertIn("세계경제", item["title"])
+        self.assertTrue(item["detail_url"].startswith("https://www.kiep.go.kr/"))
+        self.assertNotIn("body", item)
+        self.assertNotIn("raw_text", item)
+        self.assertIn("KIEP", policy["message"])
+        self.assertFalse(policy["full_text_stored"])
+
     def test_regional_business_watch_matches_targets_and_keeps_metadata_only_policy(self):
         from research_os.regional_sources import (
             match_regional_business_items_to_targets,
@@ -643,6 +684,68 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
         self.assertGreater(matched[0]["relevance_score"], 0)
         self.assertFalse(policy["full_text_stored"])
         self.assertFalse(policy["page_body_stored"])
+
+    def test_regional_business_watch_ignores_single_generic_target_keyword(self):
+        from research_os.regional_sources import match_regional_business_items_to_targets
+
+        items = [
+            {
+                "item_id": "generic-ai",
+                "title": "중국 전자상거래 기업의 대화형 AI 쇼핑 확산",
+                "source_provider": "CSF",
+                "source_scope": "중국 비즈니스 정보",
+                "agency": "KOTRA",
+                "published_at": "2026-05-20",
+                "detail_url": "https://csf.kiep.go.kr/example",
+                "source_url": "https://csf.kiep.go.kr/consultingInfo.es",
+            }
+        ]
+        targets = [
+            {
+                "label": "KODEX AI반도체 ETF",
+                "ticker": "395160",
+                "source": "portfolio_holding",
+                "keywords": ["AI"],
+            }
+        ]
+
+        matched = match_regional_business_items_to_targets(items, targets)
+
+        self.assertIn("AI/디지털", matched[0]["matched_themes"])
+        self.assertFalse(matched[0]["portfolio_related"])
+        self.assertEqual(matched[0]["target_matches"], [])
+
+
+class ExternalSourceScheduleStatusTests(unittest.TestCase):
+    def test_external_source_schedule_status_includes_regional_macro_sources(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(
+            research_vault_dir="unused",
+            regional_business_sources_auto_refresh=True,
+            regional_business_sources_refresh_hours=24,
+            naver_research_auto_refresh=True,
+            shinhan_research_auto_refresh=True,
+            dart_api_key="dummy",
+        )
+
+        with (
+            patch.object(main, "read_kcif_reports_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_reports": [{"id": "k"}], "source_status": "cached"}),
+            patch.object(main, "read_regional_business_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "r"}], "source_status": "cached"}),
+            patch.object(main, "read_naver_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"a": {}}, "status": "success"}),
+            patch.object(main, "read_shinhan_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"b": {}}, "status": "success"}),
+            patch.object(main, "read_dart_filing_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "items": [{"id": "d"}], "status": "success"}),
+            patch.object(main, "dart_daily_check_status", return_value={"due": False}),
+        ):
+            status = main.build_external_source_schedule_status(settings)
+
+        by_key = {item["key"]: item for item in status}
+        self.assertIn("regional_business_sources_watch", by_key)
+        self.assertEqual(by_key["regional_business_sources_watch"]["label"], "EMERiCs/CSF/KIEP 지역·매크로 자료")
+        self.assertTrue(by_key["regional_business_sources_watch"]["auto_refresh"])
+        self.assertEqual(by_key["regional_business_sources_watch"]["related_count"], 1)
+        self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
 
 class TargetConsensusScanTests(unittest.TestCase):

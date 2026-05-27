@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=671fa510a820" />
+    <link rel="stylesheet" href="./styles.css?v=f5b3f620998e" />
   </head>
   <body>
     <main class="app-shell">
@@ -343,8 +343,8 @@
             <button type="submit">매크로 분석 실행</button>
             <button id="kcifReportsWatchButton" class="secondary" type="button">KCIF 보고서 Watch</button>
             <button id="kcifReportsRefreshButton" class="secondary" type="button">KCIF 새로 확인</button>
-            <button id="regionalBusinessSourcesWatchButton" class="secondary" type="button">EMERiCs/CSF Watch</button>
-            <button id="regionalBusinessSourcesRefreshButton" class="secondary" type="button">EMERiCs/CSF 새로 확인</button>
+            <button id="regionalBusinessSourcesWatchButton" class="secondary" type="button">EMERiCs/CSF/KIEP Watch</button>
+            <button id="regionalBusinessSourcesRefreshButton" class="secondary" type="button">EMERiCs/CSF/KIEP 새로 확인</button>
           </div>
         </form>
       </section>
@@ -798,6 +798,13 @@
               </div>
             </div>
             <div id="portfolioImportStatus" class="editor-hint">텍스트, CSV, TSV, JSON, XLSX 형식의 보유 종목 파일을 불러올 수 있습니다. 사진은 OCR 연결 전까지 안내만 표시합니다.</div>
+            <div class="portfolio-execution-box">
+              <label>
+                체결 문자 반영
+                <textarea id="portfolioExecutionText" rows="3" placeholder="[KB증권] 주식 체결 안내&#10;종목명: 스튜디오드래곤&#10;주문수량: 36주&#10;체결금액: 27,500원"></textarea>
+              </label>
+              <button id="portfolioApplyExecutionButton" class="secondary" type="button">체결 반영</button>
+            </div>
             <div class="portfolio-toolbar">
               <label>
                 종목 검색
@@ -1079,6 +1086,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=6b0902611d88"></script>
+  <script type="module" src="./console.js?v=5d1be1fccd5d"></script>
 </body>
 </html>

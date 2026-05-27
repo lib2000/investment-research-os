@@ -204,6 +204,7 @@ async def lifespan(app: FastAPI):
     start_dart_filing_scheduler()
     start_shinhan_research_scheduler()
     start_naver_research_scheduler()
+    start_regional_macro_sources_scheduler()
     yield
 
 
@@ -4040,6 +4041,39 @@ def start_naver_research_scheduler() -> None:
     thread = threading.Thread(
         target=naver_research_scheduler_loop,
         name="naver-research-refresh",
+        daemon=True,
+    )
+    thread.start()
+
+
+_REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED = False
+
+
+def regional_macro_sources_scheduler_loop() -> None:
+    settings = get_settings()
+    interval_seconds = min(max(settings.regional_business_sources_refresh_hours, 1) * 3600, 15 * 60)
+    while True:
+        try:
+            build_kcif_reports_watch_payload(settings, limit=30, force=False, save_result=True)
+            build_regional_business_sources_watch_payload(settings, limit=40, force=False, save_result=True)
+        except Exception:
+            pass
+        threading.Event().wait(interval_seconds)
+
+
+def start_regional_macro_sources_scheduler() -> None:
+    global _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED
+    settings = get_settings()
+    if (
+        _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED
+        or not settings.regional_business_sources_enabled
+        or not settings.regional_business_sources_auto_refresh
+    ):
+        return
+    _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED = True
+    thread = threading.Thread(
+        target=regional_macro_sources_scheduler_loop,
+        name="regional-macro-sources-refresh",
         daemon=True,
     )
     thread.start()
@@ -13961,6 +13995,76 @@ def read_latest_daily_brief(settings: Settings) -> dict:
     return read_json_store(latest_daily_brief_path(settings), {})
 
 
+def build_external_source_schedule_status(settings: Settings) -> list[dict]:
+    kcif_watch = read_kcif_reports_watch(settings)
+    regional_watch = read_regional_business_sources_watch(settings)
+    naver_cache = read_naver_research_cache(settings)
+    shinhan_cache = read_shinhan_research_cache(settings)
+    dart_cache = read_dart_filing_cache(settings)
+    return [
+        {
+            "key": "kcif_reports_watch",
+            "label": "KCIF 매크로 보고서",
+            "enabled": True,
+            "auto_refresh": settings.regional_business_sources_auto_refresh,
+            "refresh_hours": settings.regional_business_sources_refresh_hours,
+            "last_checked_at": kcif_watch.get("updated_at") if isinstance(kcif_watch, dict) else None,
+            "due": should_refresh_kcif_cache(kcif_watch),
+            "related_count": len(kcif_watch.get("related_reports") or []) if isinstance(kcif_watch, dict) else 0,
+            "source_status": kcif_watch.get("source_status") if isinstance(kcif_watch, dict) else "not_checked",
+            "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "regional_business_sources_watch",
+            "label": "EMERiCs/CSF/KIEP 지역·매크로 자료",
+            "enabled": settings.regional_business_sources_enabled,
+            "auto_refresh": settings.regional_business_sources_auto_refresh,
+            "refresh_hours": settings.regional_business_sources_refresh_hours,
+            "last_checked_at": regional_watch.get("updated_at") if isinstance(regional_watch, dict) else None,
+            "due": should_refresh_regional_business_cache(regional_watch),
+            "related_count": len(regional_watch.get("related_items") or []) if isinstance(regional_watch, dict) else 0,
+            "source_status": regional_watch.get("source_status") if isinstance(regional_watch, dict) else "not_checked",
+            "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "naver_research",
+            "label": "네이버 금융 리서치/시황",
+            "enabled": settings.naver_research_enabled,
+            "auto_refresh": settings.naver_research_auto_refresh,
+            "refresh_hours": settings.naver_research_refresh_hours,
+            "last_checked_at": naver_cache.get("updated_at") if isinstance(naver_cache, dict) else None,
+            "due": not isinstance(naver_cache, dict) or not naver_cache.get("updated_at"),
+            "related_count": len(naver_cache.get("entries") or {}) if isinstance(naver_cache, dict) else 0,
+            "source_status": naver_cache.get("status") if isinstance(naver_cache, dict) else "not_checked",
+            "policy": "metadata_and_pdf_snippets_only",
+        },
+        {
+            "key": "shinhan_research",
+            "label": "신한 리서치",
+            "enabled": settings.shinhan_research_enabled,
+            "auto_refresh": settings.shinhan_research_auto_refresh,
+            "refresh_hours": settings.shinhan_research_refresh_hours,
+            "last_checked_at": shinhan_cache.get("updated_at") if isinstance(shinhan_cache, dict) else None,
+            "due": not isinstance(shinhan_cache, dict) or not shinhan_cache.get("updated_at"),
+            "related_count": len(shinhan_cache.get("entries") or {}) if isinstance(shinhan_cache, dict) else 0,
+            "source_status": shinhan_cache.get("status") if isinstance(shinhan_cache, dict) else "not_checked",
+            "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "dart_filing_watch",
+            "label": "DART 보유·관심 공시",
+            "enabled": bool(settings.dart_api_key),
+            "auto_refresh": settings.dart_filing_auto_refresh,
+            "refresh_hours": settings.dart_filing_refresh_hours,
+            "last_checked_at": dart_cache.get("updated_at") if isinstance(dart_cache, dict) else None,
+            "due": bool(dart_daily_check_status(dart_cache, settings).get("due")),
+            "related_count": len(dart_cache.get("items") or []) if isinstance(dart_cache, dict) else 0,
+            "source_status": dart_cache.get("status") if isinstance(dart_cache, dict) else "not_checked",
+            "policy": "official_filings_metadata_and_links",
+        },
+    ]
+
+
 def safe_rag_memory_status(vault_dir: Path) -> dict:
     try:
         return rag_memory_status(vault_dir)
@@ -13997,6 +14101,7 @@ def build_research_automation_feature_status(settings: Settings) -> dict:
     latest_brief_payload = latest_brief.get("payload") if isinstance(latest_brief, dict) else {}
     if not isinstance(latest_brief_payload, dict):
         latest_brief_payload = {}
+    source_schedule = build_external_source_schedule_status(settings)
     source_tags = {
         tag
         for entry in manifest_entries
@@ -14088,6 +14193,7 @@ def build_research_automation_feature_status(settings: Settings) -> dict:
             },
         ],
         "last_run": last_run,
+        "source_schedule": source_schedule,
         "duplicate_review": duplicate_review if isinstance(duplicate_review, dict) else {},
         "dossier_refresh_queue": refresh_queue if isinstance(refresh_queue, dict) else {},
         "storage_quality_dashboard": build_storage_quality_dashboard(settings),
@@ -14149,12 +14255,19 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         target_rag_count,
     )
     news_payload = build_news_inbox_payload(settings, limit=10)
+    source_schedule = build_external_source_schedule_status(settings)
     kcif_watch = read_kcif_reports_watch(settings)
     kcif_related_count = 0
     kcif_due = True
     if isinstance(kcif_watch, dict) and kcif_watch:
         kcif_related_count = len(kcif_watch.get("related_reports") or [])
         kcif_due = should_refresh_kcif_cache(kcif_watch)
+    regional_sources_watch = read_regional_business_sources_watch(settings)
+    regional_sources_related_count = 0
+    regional_sources_due = True
+    if isinstance(regional_sources_watch, dict) and regional_sources_watch:
+        regional_sources_related_count = len(regional_sources_watch.get("related_items") or [])
+        regional_sources_due = should_refresh_regional_business_cache(regional_sources_watch)
     dart_cache = read_dart_filing_cache(settings)
     dart_daily = dart_daily_check_status(dart_cache, settings)
     news_items = news_payload.get("items") if isinstance(news_payload, dict) else []
@@ -14192,6 +14305,12 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         next_actions.append("KCIF 매크로 보고서 목록 일일 점검이 필요합니다.")
     elif kcif_related_count:
         next_actions.append(f"KCIF 관련 매크로 보고서 {kcif_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요.")
+    if regional_sources_due:
+        next_actions.append("EMERiCs/CSF/KIEP 지역·매크로 자료 일일 점검이 필요합니다.")
+    elif regional_sources_related_count:
+        next_actions.append(
+            f"EMERiCs/CSF/KIEP 관련 자료 {regional_sources_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요."
+        )
     if dart_daily.get("due"):
         next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")
     elif dart_daily.get("failure_count"):
@@ -14227,6 +14346,13 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         "kcif_related_count": kcif_related_count,
         "kcif_due": bool(kcif_due),
         "kcif_last_checked_at": kcif_watch.get("updated_at") if isinstance(kcif_watch, dict) else None,
+        "regional_sources_related_count": regional_sources_related_count,
+        "regional_sources_due": bool(regional_sources_due),
+        "regional_sources_last_checked_at": regional_sources_watch.get("updated_at")
+        if isinstance(regional_sources_watch, dict)
+        else None,
+        "source_schedule": source_schedule,
+        "source_schedule_due_count": sum(1 for item in source_schedule if item.get("due")),
         "dart_daily_check": dart_daily,
         "dart_due": bool(dart_daily.get("due")),
         "dart_failure_count": int(dart_daily.get("failure_count") or 0),
@@ -14289,6 +14415,20 @@ def run_research_automation_pipeline(
         )
     except Exception as exc:
         source_results.append({"source": "kcif_reports_watch", "status": "failed", "error": str(exc)})
+    try:
+        source_results.append(
+            {
+                "source": "regional_business_sources_watch",
+                "result": build_regional_business_sources_watch_payload(
+                    settings,
+                    limit=min(limit, 40),
+                    force=False,
+                    save_result=save_result,
+                ),
+            }
+        )
+    except Exception as exc:
+        source_results.append({"source": "regional_business_sources_watch", "status": "failed", "error": str(exc)})
 
     rag_backfill = backfill_research_memory_documents_from_manifest(vault_dir)
     dossier_results: list[dict] = []
@@ -15570,7 +15710,7 @@ def write_regional_business_sources_watch(settings: Settings, payload: dict) -> 
 def build_regional_business_watch_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
     actions: list[str] = []
     if warnings:
-        actions.append("EMERiCs/CSF 목록 확인이 지연되면 이전 캐시 기준으로 관련 테마만 먼저 확인하세요.")
+        actions.append("EMERiCs/CSF/KIEP 목록 확인이 지연되면 이전 캐시 기준으로 관련 테마만 먼저 확인하세요.")
     if related_items:
         top = related_items[0]
         provider = top.get("source_provider") or "지역 포털"
@@ -15578,7 +15718,9 @@ def build_regional_business_watch_next_actions(related_items: list[dict], warnin
         actions.append(f"{provider} `{top.get('title')}`를 {themes} 관점의 시장일지/매크로 분석 후보로 검토하세요.")
         actions.append("보유종목과 직접 연결되는 경우 원문 링크를 열어 핵심 투자 메모만 정보입력에 별도로 남기세요.")
     else:
-        actions.append("보유·관심종목과 직접 매칭되는 EMERiCs/CSF 비즈니스 정보는 아직 낮습니다. 중국/신흥국 테마 변화만 참고하세요.")
+        actions.append(
+            "보유·관심종목과 직접 매칭되는 EMERiCs/CSF/KIEP 자료는 아직 낮습니다. 중국/신흥국/세계경제 테마 변화만 참고하세요."
+        )
     actions.append("저작권 보호를 위해 원문 본문은 자동 저장하지 않고 제목·기관·발행일·링크·관련성 점수만 보관합니다.")
     return actions[:5]
 
@@ -15611,7 +15753,7 @@ def build_regional_business_sources_watch_payload(
             source_status = "refreshed"
         except Exception as exc:
             source_status = "cache_fallback" if items else "failed"
-            warnings.append(f"EMERiCs/CSF 목록 확인 실패: {provider_error_message(exc, settings)}")
+            warnings.append(f"EMERiCs/CSF/KIEP 목록 확인 실패: {provider_error_message(exc, settings)}")
     portfolio_payload = portfolio_store_response(settings)
     interest_payload = read_interest_list(settings)
     targets = build_kcif_watch_targets(portfolio_payload, interest_payload)

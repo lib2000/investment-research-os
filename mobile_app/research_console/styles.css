@@ -1900,19 +1900,20 @@ label {
 
 .holding-row {
   --holding-control-height: 44px;
-  min-width: 1040px;
+  min-width: 900px;
+  gap: 5px;
   grid-template-columns:
-    minmax(156px, 1.12fr)
-    minmax(66px, 0.48fr)
-    minmax(116px, 0.82fr)
-    minmax(106px, 0.76fr)
-    minmax(82px, 0.5fr)
-    minmax(108px, 0.76fr)
-    minmax(58px, 0.4fr)
-    minmax(112px, 0.8fr)
-    minmax(74px, 0.52fr)
-    minmax(56px, 0.4fr)
-    minmax(132px, 0.74fr);
+    minmax(136px, 1.08fr)
+    minmax(56px, 0.43fr)
+    minmax(100px, 0.74fr)
+    minmax(88px, 0.64fr)
+    minmax(68px, 0.42fr)
+    minmax(82px, 0.54fr)
+    minmax(82px, 0.56fr)
+    minmax(54px, 0.34fr)
+    minmax(72px, 0.48fr)
+    minmax(48px, 0.3fr)
+    minmax(78px, 0.42fr);
   align-items: stretch;
   margin: 0;
   padding: 6px 8px;
@@ -1949,8 +1950,8 @@ label {
   height: var(--holding-control-height);
   min-height: var(--holding-control-height);
   max-height: var(--holding-control-height);
-  padding: 6px 7px;
-  font-size: 15px;
+  padding: 6px 5px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -1990,6 +1991,10 @@ label {
   padding-inline: 5px;
 }
 
+.average-cost-field {
+  white-space: pre-line;
+}
+
 .portfolio-refresh-badge,
 .portfolio-sync-badge {
   display: flex;
@@ -2012,7 +2017,7 @@ label {
   align-items: center;
   justify-content: center;
   min-height: 28px;
-  padding: 5px 8px;
+  padding: 5px 7px;
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 12px;
@@ -2080,7 +2085,7 @@ label {
 .holding-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
   align-content: start;
   align-self: stretch;
   min-width: 0;
@@ -2103,9 +2108,30 @@ label {
   width: 100%;
   min-height: 22px;
   min-width: 0;
-  padding: 3px 5px;
-  font-size: 12px;
+  padding: 3px 4px;
+  font-size: 10.5px;
   font-weight: 800;
+}
+
+.portfolio-execution-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.portfolio-execution-box textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.portfolio-execution-box button {
+  min-width: 120px;
+  min-height: 42px;
 }
 
 .intelligent-portfolio-block {

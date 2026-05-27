@@ -6,6 +6,7 @@ param(
   [switch]$CheckFeedbackSmoke,
   [switch]$CheckCoreSafeguards,
   [switch]$CheckCustomsTradeQuality,
+  [switch]$CheckExternalSourceButtons,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckStorageQualitySafeguards,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
@@ -19,7 +20,7 @@ param(
   [string]$PortfolioQuantityTicker = "PL",
   [double]$PortfolioQuantityExpected = 100,
   [string]$PortfolioQuantityCurrency = "USD",
-  [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD",
+  [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW",
   [string]$StorageQualityBaseUrl = "http://127.0.0.1:8001",
   [string]$StorageQualityDevUserToken = "dev-local-token",
   [int]$StorageQualityMaxBodyMissing = 0,
@@ -73,6 +74,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os\storage_quality.py `
     backend\research_os\system_health.py `
     tools\smoke_research_console_clicks.py `
+    tools\smoke_research_console_external_sources.py `
     tools\smoke_research_console_menus.py `
     tools\smoke_research_console_write_actions.py
 }
@@ -192,6 +194,12 @@ if ($CheckStorageQualitySafeguards) {
     if (-not [string]::IsNullOrWhiteSpace($bodyMissingTargets)) {
       Write-Host "본문 보강 대상=$bodyMissingTargets"
     }
+  }
+}
+
+if ($CheckExternalSourceButtons) {
+  Invoke-VerifyStep "외부 소스 버튼 스모크" {
+    python tools\smoke_research_console_external_sources.py --url $ConsoleUrl
   }
 }
 

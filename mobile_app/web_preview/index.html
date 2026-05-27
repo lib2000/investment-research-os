@@ -227,6 +227,33 @@
         padding: 10px;
       }
 
+      .notice {
+        background: #f8fafc;
+        border: 1px solid #dbe3ef;
+        border-radius: 8px;
+        color: #334155;
+        margin-top: 10px;
+        padding: 10px;
+      }
+
+      .notice.success {
+        background: #ecfdf5;
+        border-color: #99f6e4;
+        color: #0f766e;
+      }
+
+      .notice.warning {
+        background: #fffbeb;
+        border-color: #fde68a;
+        color: #92400e;
+      }
+
+      .notice.danger {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #b91c1c;
+      }
+
       .bar-track {
         background: #e5e7eb;
         border-radius: 999px;
@@ -599,6 +626,8 @@
         const historyJob = state.historyJob || {};
         const historyRange = historyDateRange(state.historyPeriod);
         const isHistoryRunning = state.isHistorySyncing || isActiveHistoryJob(historyJob);
+        const historyStatus = historyJobStatus(historyJob, isHistoryRunning);
+        const progressValue = Number(historyJob.progress_rate || 0);
         content.innerHTML = `
           <div class="panel">
             <div class="panel-title">최근 동기화</div>
@@ -641,17 +670,22 @@
                     <div class="grid">
                       ${metric("진행률", historyJob.progress_rate == null ? "준비 중" : `${historyJob.progress_rate}%`)}
                       ${metric("처리 일수", `${historyJob.processed_days || 0}/${historyJob.total_days || 0}일`)}
-                      ${metric("생성 초안", `${historyJob.total_needs_review_count || 0}건`)}
-                      ${metric("상태", historyJob.status || "running")}
+                      ${metric("복기 대기", `${historyJob.total_needs_review_count || 0}건`)}
+                      ${metric("상태", historyStatus.label, historyStatus.tone)}
+                      ${metric("매매 요약", `${historyJob.total_journal_items_count || 0}건`)}
+                      ${metric("체결 상세", `${historyJob.total_order_executions_count || 0}건`)}
                       ${metric("현재 처리일", historyJob.current_date ? formatSyncDate(historyJob.current_date) : "-")}
                       ${metric("마지막 성공일", historyJob.last_success_date ? formatSyncDate(historyJob.last_success_date) : "-")}
                       ${metric("다음 재개일", historyJob.next_date ? formatSyncDate(historyJob.next_date) : "-")}
                       ${metric("재시도/대기", `${historyJob.retry_count || 0}회 · ${historyJob.last_backoff_seconds || 0}초`)}
                     </div>
                     <div class="bar-track">
-                      <div class="bar-fill" style="width:${Math.max(Number(historyJob.progress_rate || 0), isHistoryRunning ? 4 : 0)}%"></div>
+                      <div class="bar-fill ${historyStatus.tone === "danger" ? "negative" : ""}" style="width:${Math.max(progressValue, isHistoryRunning ? 4 : 0)}%"></div>
                     </div>
-                    <div class="muted" style="margin-top:8px">${historyJob.status === "cancel_requested" ? "멈춤 요청을 보냈습니다. 현재 날짜 처리가 끝나면 중단됩니다." : historyJob.status === "paused" ? "서버 재시작으로 일시정지되었습니다. 같은 기간으로 다시 불러오면 다음 재개일부터 이어받습니다." : isHistoryRunning ? "서버에서 백그라운드로 처리 중입니다. 다른 화면으로 이동해도 계속 진행됩니다." : "과거 거래 불러오기가 종료되었습니다."}</div>
+                    <div class="notice ${historyStatus.noticeTone}">
+                      <strong>${historyStatus.title}</strong>
+                      <div style="margin-top:4px">${historyStatus.message}</div>
+                    </div>
                   </div>`
                 : historyResult
                 ? `<div style="margin-top:14px">
@@ -1503,6 +1537,76 @@
         `;
       }
 
+      function historyJobStatus(job, isRunning) {
+        const status = String(job?.status || (isRunning ? "running" : ""));
+        const drafts = Number(job?.total_needs_review_count || 0);
+        const journals = Number(job?.total_journal_items_count || 0);
+        const executions = Number(job?.total_order_executions_count || 0);
+        const processed = Number(job?.processed_days || 0);
+        const total = Number(job?.total_days || 0);
+        if (status === "success") {
+          if (drafts || journals || executions) {
+            return {
+              label: "완료",
+              title: "과거 거래 불러오기 완료",
+              message: `총 ${processed}/${total || processed}일 처리, 복기 대기 ${drafts}건, 매매 요약 ${journals}건, 체결 상세 ${executions}건을 확인했습니다.`,
+              tone: "good",
+              noticeTone: "success",
+            };
+          }
+          return {
+            label: "완료",
+            title: "거래 없음",
+            message: `총 ${processed}/${total || processed}일을 정상 조회했지만, 해당 기간에 키움에서 가져올 매매 요약이나 체결 상세가 없습니다.`,
+            tone: "good",
+            noticeTone: "success",
+          };
+        }
+        if (status === "failed") {
+          return {
+            label: "실패",
+            title: "불러오기 실패",
+            message: job?.error_message || "키움 과거 거래 불러오기가 실패했습니다. 잠시 후 같은 기간으로 다시 시도하세요.",
+            tone: "danger",
+            noticeTone: "danger",
+          };
+        }
+        if (status === "cancelled") {
+          return {
+            label: "중지됨",
+            title: "불러오기 중지됨",
+            message: "사용자 요청으로 작업이 중지되었습니다. 같은 기간으로 다시 불러오면 다음 재개일부터 이어받습니다.",
+            tone: "",
+            noticeTone: "warning",
+          };
+        }
+        if (status === "cancel_requested") {
+          return {
+            label: "중지 요청",
+            title: "멈춤 요청 처리 중",
+            message: "현재 날짜 처리가 끝나는 즉시 중지됩니다. 완료 전까지 창을 닫아도 서버 작업 상태는 저장됩니다.",
+            tone: "",
+            noticeTone: "warning",
+          };
+        }
+        if (status === "paused") {
+          return {
+            label: "재개 대기",
+            title: "이어받기 가능",
+            message: "서버 재시작이나 중단으로 일시정지되었습니다. 같은 기간으로 다시 불러오면 다음 재개일부터 이어받습니다.",
+            tone: "",
+            noticeTone: "warning",
+          };
+        }
+        return {
+          label: "진행 중",
+          title: "백그라운드 처리 중",
+          message: "서버에서 날짜별로 천천히 조회 중입니다. API 속도 제한을 피하기 위해 지연 처리되며, 다른 화면으로 이동해도 계속 진행됩니다.",
+          tone: "",
+          noticeTone: "",
+        };
+      }
+
       function draftRow(item) {
         const payload = item.payload || {};
         const meta = draftMeta(item, payload);
@@ -1514,6 +1618,7 @@
               <div class="muted">수량: ${meta.quantityText}</div>
               <div class="muted">가격: ${meta.priceText}</div>
               <div class="muted">금액/시간: ${meta.valueText}</div>
+              <div class="muted">상세: ${meta.detailText}</div>
             </div>
             <div class="row-side">
               <div>${item.ticker || payload.ticker || "-"}</div>
@@ -1535,6 +1640,7 @@
             quantityText: `매수 ${payload.buy_quantity || 0}주 / 매도 ${payload.sell_quantity || 0}주`,
             priceText: `매수평균 ${krw(payload.buy_average_price)} / 매도평균 ${krw(payload.sell_average_price)}`,
             valueText: `매수 ${krw(payload.buy_amount)} / 매도 ${krw(payload.sell_amount)}`,
+            detailText: `손익 ${krw(payload.profit_loss_amount)} / 수익률 ${pct(payload.profit_rate)}`,
             resultText: `${krw(payload.profit_loss_amount)} · ${pct(payload.profit_rate)}`,
             resultTone: amount < 0 ? "danger" : "good",
           };
@@ -1546,6 +1652,7 @@
           quantityText: `주문 ${payload.order_quantity || 0}주 / 체결 ${payload.filled_quantity || 0}주 / 잔량 ${payload.remaining_quantity || 0}주`,
           priceText: `주문가 ${krw(payload.order_price)} / 체결가 ${krw(payload.filled_price)}`,
           valueText: `주문 ${payload.order_time || "-"} / 확인 ${payload.confirm_time || "-"}`,
+          detailText: `구분 ${payload.trade_side_name || "-"} / 주문상태 ${payload.order_status || "-"}`,
           resultText: payload.trade_side_name || payload.order_type_name || payload.order_status || "-",
           resultTone: "",
         };

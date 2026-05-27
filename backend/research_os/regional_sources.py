@@ -13,8 +13,24 @@ import httpx
 
 EMERICS_BUSINESS_URL = "https://www.emerics.org:446/business.es?mid=a10400000000&systemcode=05"
 CSF_BUSINESS_URL = "https://csf.kiep.go.kr/consultingInfo.es?mid=a20400000000"
+KIEP_REPORTS_URL = (
+    "https://www.kiep.go.kr/gallery.es?"
+    "mid=a10101010000&bid=0001&cg_code=C03%2CC05%2CC02%2CC13%2CC01%2CC19%2CC17%2CC11%2CC20"
+)
 
 DATE_PATTERN = re.compile(r"20\d{2}[-./]\d{1,2}[-./]\d{1,2}")
+GENERIC_TARGET_KEYWORDS = {
+    "ai",
+    "kr",
+    "korea",
+    "etf",
+    "미국",
+    "한국",
+    "중국",
+    "플랫폼",
+    "성장",
+    "기술",
+}
 SKIP_LINK_TEXTS = {
     "",
     "HOME",
@@ -72,6 +88,12 @@ REGIONAL_BUSINESS_SOURCES = [
         provider="CSF",
         source_url=CSF_BUSINESS_URL,
         source_scope="중국 비즈니스 정보",
+    ),
+    RegionalBusinessSource(
+        source_key="kiep_macro_reports",
+        provider="KIEP",
+        source_url=KIEP_REPORTS_URL,
+        source_scope="대외경제정책연구원 전체보고서",
     ),
 ]
 
@@ -267,8 +289,9 @@ def fetch_regional_business_sources(
 def regional_theme_keywords() -> dict[str, list[str]]:
     return {
         "중국/아시아": ["중국", "홍콩", "대만", "아시아", "차이나", "CSF"],
-        "신흥국/중동": ["중동", "아프리카", "유라시아", "중남미", "신흥국", "EMERiCs"],
-        "무역/수출": ["무역", "수출", "수입", "관세", "FTA", "공급망", "통상"],
+        "신흥국/중동": ["중동", "아프리카", "유라시아", "중남미", "브라질", "신흥국", "EMERiCs"],
+        "세계경제/통상": ["KIEP", "세계경제", "대외경제", "경제안보", "통상", "FTA", "CPTPP"],
+        "무역/수출": ["무역", "수출", "수입", "관세", "FTA", "공급망", "통상", "다변화"],
         "전기차/배터리": ["전기차", "EV", "배터리", "자동차", "모빌리티", "충전"],
         "AI/디지털": ["AI", "인공지능", "데이터", "디지털", "플랫폼", "반도체", "GPU"],
         "에너지/원자재": ["에너지", "석유", "가스", "원자재", "태양광", "풍력", "전력"],
@@ -301,6 +324,29 @@ def _keyword_in_text(keyword: str, text: str) -> bool:
     return cleaned in text
 
 
+def _strong_regional_target_hits(keywords: list[str], hit_keywords: list[str], text: str) -> list[str]:
+    strong_hits: list[str] = []
+    normalized_hits = {clean_regional_text(keyword).lower(): keyword for keyword in hit_keywords}
+    for keyword in keywords:
+        cleaned = clean_regional_text(keyword)
+        lowered = cleaned.lower()
+        if lowered not in normalized_hits:
+            continue
+        if lowered in GENERIC_TARGET_KEYWORDS:
+            continue
+        if len(cleaned) <= 2 and not re.fullmatch(r"[A-Z0-9]{3,}", cleaned):
+            continue
+        strong_hits.append(cleaned)
+    if strong_hits:
+        return strong_hits
+    label_like_hits = [
+        keyword
+        for keyword in hit_keywords
+        if len(clean_regional_text(keyword)) >= 6 and clean_regional_text(keyword).lower() in text
+    ]
+    return label_like_hits
+
+
 def match_regional_business_items_to_targets(items: list[dict], targets: list[dict]) -> list[dict]:
     theme_map = regional_theme_keywords()
     matched: list[dict] = []
@@ -319,6 +365,7 @@ def match_regional_business_items_to_targets(items: list[dict], targets: list[di
             if any(_keyword_in_text(keyword, text) for keyword in keywords)
         ]
         target_matches = []
+        matched_target_keys: set[tuple[str, str, str]] = set()
         score = min(45, len(matched_themes) * 8)
         for target in targets:
             keywords = normalize_regional_keywords(
@@ -327,13 +374,24 @@ def match_regional_business_items_to_targets(items: list[dict], targets: list[di
             hit_keywords = [keyword for keyword in keywords if _keyword_in_text(keyword, text)]
             if not hit_keywords:
                 continue
-            score += 18 + min(20, len(hit_keywords) * 4)
+            strong_hits = _strong_regional_target_hits(keywords, hit_keywords, text)
+            if not strong_hits:
+                continue
+            target_key = (
+                clean_regional_text(target.get("label")).lower(),
+                clean_regional_text(target.get("ticker")).upper(),
+                clean_regional_text(target.get("source")).lower(),
+            )
+            if target_key in matched_target_keys:
+                continue
+            matched_target_keys.add(target_key)
+            score += 18 + min(20, len(strong_hits) * 4)
             target_matches.append(
                 {
                     "label": target.get("label"),
                     "ticker": target.get("ticker"),
                     "source": target.get("source"),
-                    "matched_keywords": hit_keywords[:8],
+                    "matched_keywords": strong_hits[:8],
                 }
             )
         enriched = dict(item)
@@ -367,5 +425,5 @@ def regional_business_copyright_policy() -> dict:
         "full_text_stored": False,
         "page_body_stored": False,
         "attachment_downloaded": False,
-        "message": "EMERiCs/CSF 자료는 제목, 기관, 발행일, 링크, 자체 관련성 분석만 저장하고 원문 본문은 자동 저장하지 않습니다.",
+        "message": "EMERiCs/CSF/KIEP 자료는 제목, 기관, 발행일, 링크, 자체 관련성 분석만 저장하고 원문 본문은 자동 저장하지 않습니다.",
     }

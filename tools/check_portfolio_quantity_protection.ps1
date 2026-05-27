@@ -85,7 +85,17 @@ $items = foreach ($check in $expectedChecks) {
   $currencyOk = ([string]$holding.currency).ToUpperInvariant() -eq $check.ExpectedCurrency
   $syncStatus = [string]$holding.sync_status
   $syncSource = [string]$holding.sync_source
-  $syncProtected = $syncStatus -eq "manual_or_overseas_protected" -or $syncSource -eq "manual_quantity_protected"
+  $protectedSources = @(
+    "manual_quantity_protected",
+    "manual_execution_notice",
+    "kb_trade_execution_notice",
+    "user_account_statement",
+    "portfolio_state_guard"
+  )
+  $syncProtected =
+    $syncStatus -eq "manual_or_overseas_protected" -or
+    ($syncStatus -eq "manual" -and $protectedSources -contains $syncSource) -or
+    $protectedSources -contains $syncSource
   $priceStatus = [string]$holding.price_refresh_status
 
   [pscustomobject]@{
