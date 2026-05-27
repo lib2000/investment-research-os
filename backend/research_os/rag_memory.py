@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from research_os.models import InvestmentThesis, WatchItem
 from research_os.research_memory import read_manifest
@@ -186,8 +187,18 @@ def _connect(vault_dir: Path) -> sqlite3.Connection:
     return connection
 
 
+@contextmanager
+def connect_rag_db(vault_dir: Path) -> Iterator[sqlite3.Connection]:
+    connection = _connect(vault_dir)
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
+
 def initialize_rag_db(vault_dir: Path) -> None:
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS ticker_thesis_snapshots (
@@ -303,7 +314,7 @@ def upsert_ticker_thesis_snapshot(
         "updated_at": now,
     }
 
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         connection.execute(
             """
             INSERT INTO ticker_thesis_snapshots (
@@ -367,7 +378,7 @@ def upsert_ticker_thesis_snapshot(
 def read_ticker_thesis_snapshot(vault_dir: Path, ticker: str) -> dict[str, Any] | None:
     initialize_rag_db(vault_dir)
     normalized_ticker = ticker.strip().upper()
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         row = connection.execute(
             """
             SELECT *
@@ -508,7 +519,7 @@ def upsert_research_memory_document(
         "updated_at": now,
     }
 
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         connection.execute(
             """
             INSERT INTO research_memory_documents (
@@ -681,7 +692,7 @@ def search_research_memory_documents(
     normalized_key = key.strip().upper()
     normalized_query = (query or "").strip().lower()
     terms = [term for term in normalized_query.split() if term]
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         rows = connection.execute(
             """
             SELECT *
@@ -755,7 +766,7 @@ def search_all_research_memory_documents(
             "documents": [],
         }
 
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         rows = connection.execute(
             """
             SELECT *
@@ -843,7 +854,7 @@ def count_research_memory_documents_by_ticker(
         return {}
 
     placeholders = ",".join("?" for _ in normalized_tickers)
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         rows = connection.execute(
             f"""
             SELECT *
@@ -866,7 +877,7 @@ def count_research_memory_documents_by_ticker(
 
 def rag_memory_status(vault_dir: Path) -> dict[str, Any]:
     initialize_rag_db(vault_dir)
-    with _connect(vault_dir) as connection:
+    with connect_rag_db(vault_dir) as connection:
         row = connection.execute(
             """
             SELECT COUNT(*) AS snapshot_count, MAX(updated_at) AS latest_updated_at
