@@ -7,6 +7,7 @@ param(
   [switch]$CheckCoreSafeguards,
   [switch]$CheckCustomsTradeQuality,
   [switch]$CheckExternalSourceButtons,
+  [switch]$CheckSourceAutomationStatus,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckStorageQualitySafeguards,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
@@ -24,7 +25,9 @@ param(
   [string]$StorageQualityBaseUrl = "http://127.0.0.1:8001",
   [string]$StorageQualityDevUserToken = "dev-local-token",
   [int]$StorageQualityMaxBodyMissing = 0,
-  [int]$StorageQualityMaxOcrNeeded = 0
+  [int]$StorageQualityMaxOcrNeeded = 0,
+  [string]$SourceAutomationBaseUrl = "http://127.0.0.1:8001",
+  [string]$SourceAutomationDevUserToken = "dev-local-token"
 )
 
 $ErrorActionPreference = "Stop"
@@ -200,6 +203,25 @@ if ($CheckStorageQualitySafeguards) {
 if ($CheckExternalSourceButtons) {
   Invoke-VerifyStep "외부 소스 버튼 스모크" {
     python tools\smoke_research_console_external_sources.py --url $ConsoleUrl
+  }
+}
+
+if ($CheckSourceAutomationStatus) {
+  Invoke-VerifyStep "리서치 소스 자동화 상태 확인" {
+    $sourceAutomationJson = & (Join-Path $PSScriptRoot "check_research_source_automation.ps1") `
+      -BaseUrl $SourceAutomationBaseUrl `
+      -DevUserToken $SourceAutomationDevUserToken `
+      -Strict
+    $sourceAutomation = $sourceAutomationJson | ConvertFrom-Json
+    Write-Host (
+      "상태={0}; 점검소스={1}; 실패={2}; 예정={3}; DART={4}; 커버리지={5}" -f
+      $sourceAutomation.Status,
+      $sourceAutomation.CheckedSourceCount,
+      $sourceAutomation.FailedSourceCount,
+      $sourceAutomation.SourceScheduleDueCount,
+      $sourceAutomation.DartDailyCheck.ReliabilityStatus,
+      $sourceAutomation.DartDailyCheck.CoverageRate
+    )
   }
 }
 
