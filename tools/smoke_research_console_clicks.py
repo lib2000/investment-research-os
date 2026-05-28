@@ -637,20 +637,19 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         const feedback = document.querySelector("#actionFeedback")?.textContent || "";
                         const combined = `${{text}}\n${{feedback}}`;
                         return combined.includes("네이버") &&
+                          combined.includes("완료") &&
                           (
                             combined.includes("soft_archive") ||
                             combined.includes("소프트 보관") ||
                             combined.includes("중복 시장일지 후보") ||
                             combined.includes("중복 리포트") ||
                             combined.includes("리서치 캐시 정리") ||
-                            combined.includes("PDF 신호 백필") ||
-                            combined.includes("처리 중") ||
-                            combined.includes("요청 접수")
+                            combined.includes("PDF 신호 백필")
                           )
                           ? combined
                           : "";
                       }},
-                      70000,
+                      180000,
                       "naver research repair"
                     );
                   }} catch (error) {{
@@ -679,14 +678,16 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
                       const feedback = document.querySelector("#actionFeedback")?.textContent || "";
-                      const combined = `${{text}}\n${{feedback}}`;
+                      const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
+                      const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
                       return combined.includes("매일 추천 후보 1~3위") &&
                         combined.includes("추천 후보") &&
-                        combined.includes("사후 추적")
+                        combined.includes("사후 추적") &&
+                        combined.includes("추천 성과 추적표")
                         ? combined
                         : "";
                     }},
-                    90000,
+                    120000,
                     "daily recommendations button"
                   );
                   document.querySelector("#dailyRecommendationsStatusButton")?.click();
@@ -694,14 +695,16 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
                       const feedback = document.querySelector("#actionFeedback")?.textContent || "";
-                      const combined = `${{text}}\n${{feedback}}`;
+                      const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
+                      const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
                       return combined.includes("매일 추천 후보 1~3위") &&
                         combined.includes("추천일") &&
-                        combined.includes("추천 후 1주일")
+                        combined.includes("추천 후 1주일") &&
+                        combined.includes("추천 성과 추적표")
                         ? combined
                         : "";
                     }},
-                    90000,
+                    120000,
                     "daily recommendations status button"
                   );
 

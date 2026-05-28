@@ -21707,6 +21707,18 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             row["company_name"] = company_name
         return row
 
+    def add_candidate_score(candidate: dict, points: int | float, label: str) -> None:
+        try:
+            numeric_points = int(points)
+        except (TypeError, ValueError):
+            numeric_points = 0
+        if numeric_points <= 0:
+            return
+        candidate["score"] += numeric_points
+        candidate.setdefault("score_components", []).append(
+            {"label": label, "points": numeric_points}
+        )
+
     for item in rows:
         ticker = normalize_ticker(item.get("ticker"))
         company_name = str(item.get("company_name") or ticker).strip()
@@ -21721,25 +21733,29 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
         target_upside = item.get("target_upside")
         if target_upside is not None:
-            candidate["score"] += max(0, min(35, int(float(target_upside) * 100)))
+            add_candidate_score(
+                candidate,
+                max(0, min(35, int(float(target_upside) * 100))),
+                "증권사 목표가 상승여력",
+            )
             candidate["reasons"].append(
                 f"저장된 증권사 목표주가 대비 상승여력 {float(target_upside) * 100:.1f}%"
             )
         if item.get("valuation_signal") and item.get("valuation_signal") != "계산 보류":
-            candidate["score"] += 10
+            add_candidate_score(candidate, 10, "밸류에이션 신호")
             candidate["reasons"].append(f"밸류에이션 신호: {item.get('valuation_signal')}")
         if item.get("source_count"):
-            candidate["score"] += min(15, int(item.get("source_count") or 0) * 3)
+            add_candidate_score(candidate, min(15, int(item.get("source_count") or 0) * 3), "리포트 근거 수")
             candidate["evidence_sources"].append(
                 f"목표가/리포트 근거 {item.get('source_count')}건"
             )
         if item.get("market_value"):
-            candidate["score"] += 20
+            add_candidate_score(candidate, 20, "실제 보유 포트폴리오 비중")
             candidate["portfolio_context"].append(
                 f"보유 포트폴리오 평가금액 {round(float(item.get('market_value') or 0)):,}원"
             )
         if item.get("interest"):
-            candidate["score"] += 10
+            add_candidate_score(candidate, 10, "관심종목 등록")
             candidate["portfolio_context"].append("관심종목 등록")
         if item.get("latest_source_file"):
             candidate["evidence_sources"].append(f"최근 근거 파일: {item.get('latest_source_file')}")
@@ -21757,21 +21773,21 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
         )
         priority = str(target.get("priority") or "medium")
-        candidate["score"] += {"high": 20, "medium": 10, "low": 3}.get(priority, 10)
+        add_candidate_score(candidate, {"high": 20, "medium": 10, "low": 3}.get(priority, 10), "보유/관심 우선순위")
         recent_count = int(target.get("recent_document_count") or 0)
         rag_count = int(target.get("rag_document_count") or 0)
         if recent_count:
-            candidate["score"] += min(15, recent_count)
+            add_candidate_score(candidate, min(15, recent_count), "최근 저장자료")
             candidate["reasons"].append(f"최근 저장자료 {recent_count}건")
         if rag_count:
-            candidate["score"] += min(15, rag_count)
+            add_candidate_score(candidate, min(15, rag_count), "RAG 연결 문서")
             candidate["evidence_sources"].append(f"RAG 연결 문서 {rag_count}건")
         if target.get("thesis_snapshot_connected"):
-            candidate["score"] += 12
+            add_candidate_score(candidate, 12, "최신 투자 논거 스냅샷")
             candidate["evidence_sources"].append("최신 투자 논거 스냅샷 연결")
         market_matches = target.get("market_journal_matches") or []
         if market_matches:
-            candidate["score"] += min(10, len(market_matches) * 3)
+            add_candidate_score(candidate, min(10, len(market_matches) * 3), "시장일지 연결")
             latest_market = market_matches[0]
             candidate["reasons"].append(
                 "시장일지 연결: "
@@ -21794,9 +21810,9 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 dart_cache,
             )
             if freshness.get("tone") == "ok":
-                candidate["score"] += 10
+                add_candidate_score(candidate, 10, "저장자료 신선도 양호")
             elif freshness.get("tone") == "warning":
-                candidate["score"] += 5
+                add_candidate_score(candidate, 5, "저장자료 신선도 확인 필요")
             candidate["evidence_sources"].append(freshness.get("summary") or "저장자료 신선도 확인")
             if profile.get("analysis_focus"):
                 candidate["reasons"].append(f"분석 초점: {profile.get('analysis_focus')}")
@@ -21809,7 +21825,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 candidate["baseline_price"] = price
                 candidate["baseline_price_source"] = source or "data_provider"
                 candidate["baseline_price_checked_at"] = current_storage_timestamp()
-                candidate["score"] += 5
+                add_candidate_score(candidate, 5, "현재가 확인")
             else:
                 candidate["risk_notes"].append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
 
@@ -21863,14 +21879,19 @@ def run_daily_stock_recommendations(
                 checked_at=checked_at,
                 price_lookup=_daily_recommendation_price_lookup(settings),
             )
+            updated_status = summarize_daily_recommendation_store(settings, limit=10)
             result = {
                 "status": "skipped_existing",
                 "module": "daily_stock_recommendations",
                 "message": "오늘 추천 후보는 이미 저장되어 있어 중복 저장하지 않고 추적 상태만 갱신했습니다.",
                 "recommendation_date": recommendation_date.isoformat(),
-                "records": existing_today[:3],
+                "records": updated_status.get("latest_records") or existing_today[:3],
+                "record_count": updated_status.get("record_count"),
+                "recommendation_dates": updated_status.get("recommendation_dates"),
+                "performance_summary": updated_status.get("performance_summary"),
+                "due_or_pending_milestones": updated_status.get("due_or_pending_milestones"),
                 "tracking": tracking,
-                "storage_path": current_status.get("storage_path"),
+                "storage_path": updated_status.get("storage_path") or current_status.get("storage_path"),
                 "disclaimer": "자동 추천은 매수 지시가 아니라 보유/관심 데이터 기반 일일 검토 후보입니다.",
             }
             write_json_store(
@@ -21912,6 +21933,7 @@ def run_daily_stock_recommendations(
         )
         result = {
             **save_payload,
+            **summarize_daily_recommendation_store(settings, limit=10),
             "candidate_ranking": candidate_payload,
             "tracking": tracking,
             "disclaimer": "자동 추천은 매수 지시가 아니라 보유/관심 데이터 기반 일일 검토 후보입니다.",

@@ -84,11 +84,17 @@ def normalize_candidate(candidate: dict) -> dict:
     company_name = str(candidate.get("company_name") or candidate.get("name") or ticker).strip()
     reasons = [str(item).strip() for item in candidate.get("reasons", []) if str(item or "").strip()]
     evidence = [str(item).strip() for item in candidate.get("evidence_sources", []) if str(item or "").strip()]
+    score_components = [
+        item
+        for item in candidate.get("score_components", [])
+        if isinstance(item, dict) and str(item.get("label") or "").strip()
+    ]
     return {
         **candidate,
         "ticker": ticker,
         "company_name": company_name,
         "score": int(candidate.get("score") or 0),
+        "score_components": score_components[:10],
         "reasons": reasons[:6],
         "evidence_sources": evidence[:8],
     }
@@ -127,6 +133,7 @@ def build_recommendation_record(
         "ticker": normalized["ticker"],
         "company_name": normalized["company_name"],
         "score": normalized["score"],
+        "score_components": normalized.get("score_components") or [],
         "recommendation_type": "daily_review_candidate",
         "action_label": "오늘의 검토 후보",
         "baseline_price": baseline_price,
@@ -144,6 +151,64 @@ def build_recommendation_record(
         "tracking_milestones": build_tracking_milestones(recommendation_date),
     }
     return record
+
+
+def summarize_tracking_performance(records: list[dict]) -> dict:
+    summary = {
+        "total_milestones": 0,
+        "complete_count": 0,
+        "pending_count": 0,
+        "price_unavailable_count": 0,
+        "positive_count": 0,
+        "negative_count": 0,
+        "flat_count": 0,
+        "best": None,
+        "worst": None,
+    }
+    completed_rows: list[dict] = []
+    for record in records:
+        for milestone in record.get("tracking_milestones", []):
+            if not isinstance(milestone, dict):
+                continue
+            summary["total_milestones"] += 1
+            status = milestone.get("status") or "pending"
+            if status == "complete":
+                summary["complete_count"] += 1
+                try:
+                    change_pct = float(milestone.get("price_change_pct") or 0)
+                except (TypeError, ValueError):
+                    change_pct = 0.0
+                if change_pct > 0:
+                    summary["positive_count"] += 1
+                elif change_pct < 0:
+                    summary["negative_count"] += 1
+                else:
+                    summary["flat_count"] += 1
+                completed_rows.append(
+                    {
+                        "record_id": record.get("record_id"),
+                        "company_name": record.get("company_name"),
+                        "ticker": record.get("ticker"),
+                        "rank": record.get("rank"),
+                        "recommendation_date": record.get("recommendation_date"),
+                        "milestone": milestone.get("label") or milestone.get("key"),
+                        "target_date": milestone.get("target_date"),
+                        "baseline_price": record.get("baseline_price"),
+                        "price": milestone.get("price"),
+                        "price_change": milestone.get("price_change"),
+                        "price_change_pct": change_pct,
+                        "investment_situation": milestone.get("investment_situation"),
+                    }
+                )
+            elif status == "price_unavailable":
+                summary["price_unavailable_count"] += 1
+            else:
+                summary["pending_count"] += 1
+    completed_rows.sort(key=lambda item: item.get("price_change_pct") or 0, reverse=True)
+    if completed_rows:
+        summary["best"] = completed_rows[0]
+        summary["worst"] = completed_rows[-1]
+    return summary
 
 
 def upsert_daily_recommendations(
@@ -313,6 +378,14 @@ def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30)
     latest_records = [
         item for item in records if item.get("recommendation_date") == latest_date
     ] if latest_date else []
+    recommendation_dates = sorted(
+        {
+            str(item.get("recommendation_date"))
+            for item in records
+            if item.get("recommendation_date")
+        },
+        reverse=True,
+    )
     due_milestones = []
     for record in records:
         for milestone in record.get("tracking_milestones", []):
@@ -339,8 +412,10 @@ def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30)
         "tracking_updated_at": store.get("tracking_updated_at"),
         "latest_recommendation_date": latest_date,
         "record_count": len(records),
+        "recommendation_dates": recommendation_dates[:30],
         "latest_records": sorted(latest_records, key=lambda item: int(item.get("rank") or 999))[:3],
         "records": records[: max(1, min(limit, 200))],
         "due_or_pending_milestones": due_milestones[:30],
+        "performance_summary": summarize_tracking_performance(records),
         "storage_path": str(daily_recommendation_store_path(settings)),
     }

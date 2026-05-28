@@ -30,6 +30,7 @@ class DailyRecommendationsTests(unittest.TestCase):
                     "baseline_price": 100000,
                     "baseline_price_source": "test",
                     "currency": "KRW",
+                    "score_components": [{"label": "목표가", "points": 35}],
                     "reasons": ["목표가 상승여력"],
                     "evidence_sources": ["저장 리포트 3건"],
                 },
@@ -81,9 +82,14 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(status["record_count"], 3)
         first = status["latest_records"][0]
         self.assertEqual(first["company_name"], "삼양식품")
+        self.assertEqual(first["score_components"][0]["label"], "목표가")
         week = first["tracking_milestones"][0]
         self.assertEqual(week["status"], "complete")
         self.assertEqual(week["price_change_pct"], 0.1)
+        self.assertEqual(status["performance_summary"]["complete_count"], 1)
+        self.assertEqual(status["performance_summary"]["pending_count"], 12)
+        self.assertEqual(status["performance_summary"]["price_unavailable_count"], 2)
+        self.assertEqual(status["performance_summary"]["positive_count"], 1)
 
     def test_copyright_safe_url_only_is_not_body_missing_warning(self):
         import research_os_main as main

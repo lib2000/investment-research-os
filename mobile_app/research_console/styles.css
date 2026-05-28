@@ -3111,6 +3111,23 @@ label {
   font-size: 13px;
 }
 
+.daily-recommendation-score {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.daily-recommendation-score em {
+  padding: 3px 6px;
+  color: #1f2937;
+  background: #eef2f7;
+  border: 1px solid #d8e1ec;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
+}
+
 .daily-recommendation-card ul {
   margin: 0;
   padding-left: 18px;
@@ -3131,6 +3148,44 @@ label {
   border: 1px solid rgba(20, 184, 166, 0.24);
   border-radius: 999px;
   font-size: 11px;
+}
+
+.daily-recommendation-tracking {
+  grid-column: 1 / -1;
+}
+
+.daily-recommendation-tracking-table {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.daily-recommendation-tracking-table div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.daily-recommendation-tracking-table b,
+.daily-recommendation-tracking-table em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-tracking-table b {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.daily-recommendation-tracking-table em {
+  color: #0f766e;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
 }
 
 .ticker-cache-card {
@@ -3867,6 +3922,7 @@ pre {
   .dashboard-link-list,
   .ticker-cache-list,
   .daily-recommendation-cards,
+  .daily-recommendation-tracking-table,
   .checklist-grid,
   .editor-row,
   .holding-row,
