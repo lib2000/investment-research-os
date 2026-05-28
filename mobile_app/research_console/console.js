@@ -12024,6 +12024,9 @@ function formatKoreanResult(value) {
     return String(
       source.company_name ||
         source.companyName ||
+        source.display_label ||
+        source.label ||
+        source.scope_label ||
         source.holding_name ||
         source.name ||
         source.verification?.company_name ||
@@ -12951,8 +12954,9 @@ function formatKoreanResult(value) {
         ? entries.map((item, index) => {
             const promptStatus = item.raw_content_includes_prompt ? "프롬프트 저장" : "프롬프트 확인 필요";
             const responseStatus = item.raw_content_includes_llm_response ? "응답 저장" : "응답 확인 필요";
-            const ragStatus = item.rag_connected ? "RAG 연결" : "RAG 제외/보관";
-            return `${index + 1}. ${displayCompanyName(item)} · ${item.file_name || item.relative_path || "파일 미확인"} · ${promptStatus} · ${responseStatus} · ${ragStatus}`;
+            const ragStatus = item.rag_status_label || (item.rag_connected ? "RAG 연결" : "RAG 제외/보관");
+            const scopeText = item.scope_label ? ` · ${item.scope_label}` : "";
+            return `${index + 1}. ${displayCompanyName(item)}${scopeText} · ${item.file_name || item.relative_path || "파일 미확인"} · ${promptStatus} · ${responseStatus} · ${ragStatus}`;
           })
         : ["- 최근 LLM 저장 항목이 없습니다."]),
     ].join("\n");

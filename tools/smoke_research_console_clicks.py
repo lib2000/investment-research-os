@@ -793,6 +793,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     llmStorageStatusShowsSaved:
                       llmStorageStatusText.includes("저장된 LLM 응답") ||
                       llmStorageStatusText.includes("최근 수동 LLM 응답 저장 파일 확인"),
+                    llmStorageAvoidsMissingCompanyLabel: !llmStorageStatusText.includes("회사명 확인 필요"),
                     llmReset,
                     dashboardPreview: dashboardText.split("\\n").slice(0, 12).join("\\n"),
                     macroPreview: macroText.split("\\n").slice(0, 10).join("\\n"),
@@ -885,6 +886,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("LLM 프롬프트 복사 버튼 피드백 검증에 실패했습니다.")
             if not result["llmStorageStatusShowsRag"] or not result["llmStorageStatusShowsSaved"]:
                 raise AssertionError("LLM 저장/RAG 상태 버튼 검증에 실패했습니다.")
+            if not result["llmStorageAvoidsMissingCompanyLabel"]:
+                raise AssertionError("LLM 저장/RAG 상태 화면에 불필요한 '회사명 확인 필요' 표시가 남아 있습니다.")
             if include_llm_save and result["llmReset"] != {"target": "", "sourceContext": "", "prompt": "", "result": ""}:
                 raise AssertionError(f"LLM 저장 후 초기화 검증 실패: {result['llmReset']}")
             return result
