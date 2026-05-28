@@ -497,7 +497,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   const portfolioRiskText = await waitFor(
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("포트폴리오 리스크 스캔")
+                      return text.includes("완료되었습니다.") &&
+                        text.includes("포트폴리오 리스크 스캔")
                         ? text
                         : "";
                     }},

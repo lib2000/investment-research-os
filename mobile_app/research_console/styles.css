@@ -3066,6 +3066,73 @@ label {
   margin-top: 14px;
 }
 
+.daily-recommendation-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.daily-recommendation-card {
+  display: grid;
+  gap: 8px;
+  min-height: 146px;
+  padding: 12px;
+  background: #f8fbfd;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.daily-recommendation-card.ok {
+  border-color: #99d5cb;
+  background: #eefaf7;
+}
+
+.daily-recommendation-card.warning {
+  border-color: #f7c873;
+  background: #fff8e7;
+}
+
+.daily-recommendation-card span,
+.daily-recommendation-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.daily-recommendation-card strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.daily-recommendation-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.daily-recommendation-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.daily-recommendation-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.daily-recommendation-milestones b {
+  padding: 4px 7px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
 .ticker-cache-card {
   display: grid;
   gap: 8px;
@@ -3799,6 +3866,7 @@ pre {
   .dashboard-operating-lists,
   .dashboard-link-list,
   .ticker-cache-list,
+  .daily-recommendation-cards,
   .checklist-grid,
   .editor-row,
   .holding-row,

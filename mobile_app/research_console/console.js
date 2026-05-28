@@ -215,6 +215,7 @@ const elements = {
   naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
   dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
+  dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
   ocrReprocessButton: document.querySelector("#ocrReprocessButton"),
@@ -2564,6 +2565,26 @@ function addDashboardCandidate(target, sourceMap, item = {}, source = "후보") 
     label: company && company !== ticker ? company : "회사명 확인 필요",
   });
   sourceMap.add(ticker);
+}
+
+function displayCompanyName(item, fallback = "회사명 확인 필요") {
+  const source = item || {};
+  return String(
+    source.company_name ||
+      source.companyName ||
+      source.display_label ||
+      source.label ||
+      source.scope_label ||
+      source.holding_name ||
+      source.name ||
+      source.company ||
+      source.verification?.company_name ||
+      source.ticker_verification?.company_name ||
+      source.ticker_profile?.company_name ||
+      source.profile?.company_name ||
+      source.signal?.company_name ||
+      fallback
+  ).trim();
 }
 
 function portfolioDashboardCandidates() {
@@ -7683,6 +7704,82 @@ function renderTickerCache(cache) {
       : "");
 }
 
+function dailyRecommendationStatusLabel(status) {
+  return {
+    success: "저장 완료",
+    skipped_existing: "오늘 저장됨",
+    pending: "추적 대기",
+    complete: "추적 완료",
+    price_unavailable: "가격 미확인",
+    not_found: "후보 없음",
+    warning: "확인 필요",
+  }[status] || status || "상태 미확인";
+}
+
+function renderDailyRecommendationCards(payload) {
+  if (!elements.dailyRecommendationCards || !payload || typeof payload !== "object") {
+    return;
+  }
+  const records = (payload.latest_records || payload.records || []).slice(0, 3);
+  if (!records.length) {
+    elements.dailyRecommendationCards.innerHTML = `
+      <article class="daily-recommendation-card daily-recommendation-summary warning">
+        <span>매일 추천 후보</span>
+        <strong>저장된 후보 없음</strong>
+        <p>${escapeHtml(payload.message || "오늘 추천 후보 1~3위를 생성하면 이 영역에 저장 이력과 추적 일정이 표시됩니다.")}</p>
+      </article>
+    `;
+    return;
+  }
+  const milestoneCounts = records.reduce(
+    (acc, record) => {
+      (record.tracking_milestones || []).forEach((milestone) => {
+        const status = milestone.status || "pending";
+        acc[status] = (acc[status] || 0) + 1;
+      });
+      return acc;
+    },
+    {}
+  );
+  const cards = records
+    .map((record) => {
+      const reasons = (record.reasons || []).slice(0, 3);
+      const evidence = (record.evidence_sources || []).slice(0, 3);
+      const milestones = (record.tracking_milestones || []).slice(0, 5);
+      return `
+        <article class="daily-recommendation-card">
+          <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")} · ${escapeHtml(record.rank || "-")}위</span>
+          <strong>${escapeHtml(displayCompanyName(record))}</strong>
+          <p>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</p>
+          <ul>
+            ${reasons.map((item) => `<li>${escapeHtml(compactOutputText(item, 110))}</li>`).join("") || "<li>근거 요약 없음</li>"}
+          </ul>
+          <small>${escapeHtml(evidence.join(" · ") || "저장 근거 없음")}</small>
+          <div class="daily-recommendation-milestones">
+            ${milestones
+              .map(
+                (milestone) => `
+                  <b title="${escapeHtml(milestone.target_date || "")}">
+                    ${escapeHtml(milestone.label || milestone.key || "추적")} · ${escapeHtml(dailyRecommendationStatusLabel(milestone.status))}
+                  </b>
+                `
+              )
+              .join("")}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+  elements.dailyRecommendationCards.innerHTML = `
+    <article class="daily-recommendation-card daily-recommendation-summary ok">
+      <span>매일 추천 후보 1~3위</span>
+      <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
+      <p>저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 추적 완료 ${escapeHtml(formatNumber(milestoneCounts.complete || 0))}개 · 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(milestoneCounts.price_unavailable || 0))}개</p>
+    </article>
+    ${cards}
+  `;
+}
+
 function translateTickerRegistrySourceName(source) {
   const labels = {
     krx_kind: "KRX/KIND",
@@ -11136,6 +11233,7 @@ elements.dailyRecommendationsButton?.addEventListener("click", async () => {
   ]);
   try {
     const result = await runDailyRecommendations(token(), { force: false, saveResult: true });
+    renderDailyRecommendationCards(result);
     setOutput(result || "오늘 추천 후보 결과를 확인하지 못했습니다.");
     await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
   } catch (error) {
@@ -11153,6 +11251,7 @@ elements.dailyRecommendationsStatusButton?.addEventListener("click", async () =>
   try {
     await trackDailyRecommendations(token());
     const result = await fetchDailyRecommendationsStatus(token());
+    renderDailyRecommendationCards(result);
     setOutput(result || "추천 추적 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
@@ -12069,25 +12168,6 @@ function formatKoreanResult(value) {
     }
     return value.map((item, index) => formatListItem(item, index)).join("\n\n");
   }
-
-  const displayCompanyName = (item, fallback = "회사명 확인 필요") => {
-    const source = item || {};
-    return String(
-      source.company_name ||
-        source.companyName ||
-        source.display_label ||
-        source.label ||
-        source.scope_label ||
-        source.holding_name ||
-        source.name ||
-        source.verification?.company_name ||
-        source.ticker_verification?.company_name ||
-        source.ticker_profile?.company_name ||
-        source.profile?.company_name ||
-        source.signal?.company_name ||
-        fallback
-    ).trim();
-  };
 
   if (value.module === "news_inbox" || value.module === "news_promotion") {
     const item = value.item || {};

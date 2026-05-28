@@ -21766,6 +21766,17 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if rag_count:
             candidate["score"] += min(15, rag_count)
             candidate["evidence_sources"].append(f"RAG 연결 문서 {rag_count}건")
+        if target.get("thesis_snapshot_connected"):
+            candidate["score"] += 12
+            candidate["evidence_sources"].append("최신 투자 논거 스냅샷 연결")
+        market_matches = target.get("market_journal_matches") or []
+        if market_matches:
+            candidate["score"] += min(10, len(market_matches) * 3)
+            latest_market = market_matches[0]
+            candidate["reasons"].append(
+                "시장일지 연결: "
+                + compact_interest_text(latest_market.get("summary") or latest_market.get("session_date"), 90)
+            )
         if target.get("next_action"):
             candidate["risk_notes"].append(str(target.get("next_action")))
 
