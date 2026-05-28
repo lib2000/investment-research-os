@@ -1075,6 +1075,69 @@ export async function fetchDailyBriefing(accessToken, saveResult = false) {
 }
 
 /**
+ * 매일 추천 후보 1~3위와 사후 추적 상태를 조회합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @returns {Promise<Object|null>} 일일 추천/추적 상태
+ */
+export async function fetchDailyRecommendationsStatus(accessToken) {
+  try {
+    return request("/api/v1/daily-recommendations/status", {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("일일 추천 상태 조회 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
+ * 오늘의 추천 후보 1~3위를 생성하고 별도 항목으로 저장합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {Object} options 실행 옵션
+ * @returns {Promise<Object|null>} 일일 추천 실행 결과
+ */
+export async function runDailyRecommendations(
+  accessToken,
+  { force = false, saveResult = true } = {}
+) {
+  try {
+    return request(
+      `/api/v1/daily-recommendations/run?force=${force ? "true" : "false"}&save_result=${
+        saveResult ? "true" : "false"
+      }`,
+      {
+        method: "POST",
+        accessToken,
+      }
+    );
+  } catch (error) {
+    console.error("일일 추천 실행 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
+ * 저장된 추천 후보의 1주/15일/1달/3달/6달 추적 상태를 갱신합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @returns {Promise<Object|null>} 추적 갱신 결과
+ */
+export async function trackDailyRecommendations(accessToken) {
+  try {
+    return request("/api/v1/daily-recommendations/track", {
+      method: "POST",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("일일 추천 추적 갱신 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
  * 티커 또는 리서치 키 기준으로 검색 가능한 RAG 문서를 조회합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰

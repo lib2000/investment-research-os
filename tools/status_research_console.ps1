@@ -82,6 +82,7 @@ $systemHealth = Invoke-JsonStatus -Name "system health" -Path "/api/v1/system/he
 $provider = Invoke-JsonStatus -Name "data providers" -Path "/api/v1/data-providers/status"
 $ocr = Invoke-JsonStatus -Name "ocr status" -Path "/api/v1/ocr/status"
 $storageQuality = Invoke-JsonStatus -Name "storage quality" -Path "/api/v1/storage/quality-dashboard" -Headers $authHeaders
+$dailyRecommendations = Invoke-JsonStatus -Name "daily recommendations" -Path "/api/v1/daily-recommendations/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 
 if ($root -and $root.message) {
@@ -103,6 +104,11 @@ if ($storageQuality) {
   Write-Host "저장 데이터 본문 누락: $($storageQuality.body_missing_count)"
   Write-Host "저장 데이터 OCR 필요: $($storageQuality.ocr_needed_count)"
   Write-Host "보관 처리 건수: $($storageQuality.archived_count)"
+}
+if ($dailyRecommendations) {
+  Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
+  Write-Host "일일 추천 저장 건수: $($dailyRecommendations.record_count)"
+  Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
 }
 if ($console) {
   Write-Host "콘솔 HTML 크기: $($console.RawContentLength) bytes"

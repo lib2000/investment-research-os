@@ -659,11 +659,17 @@ def read_latest_sync(
 def read_journal_drafts(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
+    include_completed: bool = Query(default=False),
     settings: Settings = Depends(get_settings),
 ) -> JournalDraftsResponse:
     offset = _pagination_offset(page, page_size)
-    total = count_journal_drafts(settings)
-    drafts = list_journal_drafts(settings, limit=page_size, offset=offset)
+    total = count_journal_drafts(settings, include_completed=include_completed)
+    drafts = list_journal_drafts(
+        settings,
+        limit=page_size,
+        offset=offset,
+        include_completed=include_completed,
+    )
     return JournalDraftsResponse(
         drafts_count=len(drafts),
         drafts=drafts,

@@ -118,10 +118,22 @@ def storage_quality_entry_needs_body(entry: dict) -> bool:
     """Classify URL-only or failed body extraction records that need manual body notes."""
     tags = set(entry.get("tags") or [])
     capture_quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+    if storage_quality_entry_is_policy_url_only(entry):
+        return False
     return bool(
         "needs_body_copy" in tags
         or "url_text_unavailable" in tags
         or capture_quality.get("status") in {"보강 필요", "실패"}
+    )
+
+
+def storage_quality_entry_is_policy_url_only(entry: dict) -> bool:
+    """Return True for copyright-safe metadata-only news that should not be a warning."""
+    tags = {str(tag).strip().lower() for tag in (entry.get("tags") or [])}
+    return bool(
+        "copyright_safe_metadata" in tags
+        and "url_only" in tags
+        and "needs_body_copy" not in tags
     )
 
 
@@ -162,6 +174,11 @@ def build_storage_quality_dashboard_payload(
         for entry in active_entries
         if storage_quality_entry_needs_body(entry)
     ]
+    policy_url_only_entries = [
+        entry
+        for entry in active_entries
+        if storage_quality_entry_is_policy_url_only(entry)
+    ]
     ocr_needed_entries = [
         entry
         for entry in active_entries
@@ -173,6 +190,8 @@ def build_storage_quality_dashboard_payload(
     next_actions = []
     if body_missing_count or news_counts.get("needs_body"):
         next_actions.append("본문 보강 필요 자료는 원문 링크를 열어 사용자가 직접 요약/메모를 추가하세요.")
+    if policy_url_only_entries:
+        next_actions.append("저작권 보호 URL-only 뉴스는 정상 보관으로 처리하며, 필요 시 사용자 메모만 추가하세요.")
     if news_counts.get("unpromoted"):
         next_actions.append("미승격 뉴스는 투자 논거 반영, 시장일지 반영, 보류, 삭제 중 하나로 분류하세요.")
     if duplicate_count:
@@ -188,10 +207,15 @@ def build_storage_quality_dashboard_payload(
         "manifest_count": len(manifest_entries),
         "normal_count": normal_count,
         "body_missing_count": body_missing_count,
+        "policy_url_only_count": len(policy_url_only_entries),
         "ocr_needed_count": ocr_needed_count,
         "body_missing_items": [
             compact_storage_quality_entry(entry)
             for entry in body_missing_entries[:10]
+        ],
+        "policy_url_only_items": [
+            compact_storage_quality_entry(entry)
+            for entry in policy_url_only_entries[:10]
         ],
         "ocr_needed_items": [
             compact_storage_quality_entry(entry, include_ocr_status=True)

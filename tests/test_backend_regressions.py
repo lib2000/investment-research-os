@@ -3936,6 +3936,7 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
     def test_manual_trade_entered_before_kiwoom_sync_is_marked_duplicate_and_excluded(self):
         from app.application_models import JournalSourceTradesResponse, PortfolioResponse
         from app.database import (
+            count_journal_drafts,
             create_manual_transaction,
             create_or_update_journal_entry,
             finish_sync_run,
@@ -4018,6 +4019,14 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
             self.assertEqual(analytics["manual_transactions_count"], 1)
             self.assertEqual(analytics["total_entries"], 1)
             self.assertEqual(analytics["realized_profit_loss_total"], 5000)
+
+            self.assertEqual(count_journal_drafts(settings), 0)
+            self.assertEqual(list_journal_drafts(settings), [])
+            self.assertEqual(count_journal_drafts(settings, include_completed=True), 1)
+            self.assertEqual(
+                list_journal_drafts(settings, include_completed=True)[0]["draft_status"],
+                "completed",
+            )
 
 
 if __name__ == "__main__":

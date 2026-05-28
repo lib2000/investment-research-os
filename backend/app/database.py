@@ -1279,13 +1279,18 @@ def get_latest_sync_run(settings: Settings) -> dict | None:
     return dict(row) if row else None
 
 
-def count_journal_drafts(settings: Settings) -> int:
+def count_journal_drafts(
+    settings: Settings,
+    include_completed: bool = False,
+) -> int:
+    status_filter = "" if include_completed else "AND draft_status = 'needs_review'"
     with connect_db(settings) as connection:
         row = connection.execute(
-            """
+            f"""
             SELECT COUNT(*) AS total
             FROM journal_drafts
             WHERE deleted_at IS NULL
+              {status_filter}
             """
         ).fetchone()
     return int(row["total"] if row else 0)
@@ -1295,14 +1300,17 @@ def list_journal_drafts(
     settings: Settings,
     limit: int = 50,
     offset: int = 0,
+    include_completed: bool = False,
 ) -> list[dict]:
+    status_filter = "" if include_completed else "AND draft_status = 'needs_review'"
     with connect_db(settings) as connection:
         rows = connection.execute(
-            """
+            f"""
             SELECT id, sync_run_id, broker, source_type, source_key,
                    ticker, name, draft_status, payload_json, created_at, updated_at
             FROM journal_drafts
             WHERE deleted_at IS NULL
+              {status_filter}
             ORDER BY updated_at DESC, id DESC
             LIMIT ? OFFSET ?
             """,

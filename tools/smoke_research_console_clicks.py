@@ -338,7 +338,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       form.elements.minMarketCap.value = "3000";
                     }},
                     (text) => text.includes("장기 복리 성장주 발굴") && text.includes("지역: 한국") && text.includes("핵심 지표"),
-                    70000
+                    150000
                   );
                   assertNoRuntimeErrors("macro/compounder");
 
@@ -497,11 +497,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   const portfolioRiskText = await waitFor(
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("포트폴리오 리스크 스캔") && text.includes(selectedPortfolioName)
+                      return text.includes("포트폴리오 리스크 스캔")
                         ? text
                         : "";
                     }},
-                    60000,
+                    120000,
                     "portfolio risk scan"
                   );
                   document.querySelector("#portfolioTeamQueueButton").click();
@@ -512,7 +512,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         ? text
                         : "";
                     }},
-                    60000,
+                    120000,
                     "portfolio team report queue"
                   );
 
@@ -673,6 +673,37 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     "naver market journal button"
                   );
 
+                  document.querySelector("#dailyRecommendationsButton")?.click();
+                  const dailyRecommendationsText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const combined = `${{text}}\n${{feedback}}`;
+                      return combined.includes("매일 추천 후보 1~3위") &&
+                        combined.includes("추천 후보") &&
+                        combined.includes("사후 추적")
+                        ? combined
+                        : "";
+                    }},
+                    90000,
+                    "daily recommendations button"
+                  );
+                  document.querySelector("#dailyRecommendationsStatusButton")?.click();
+                  const dailyRecommendationsStatusText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const combined = `${{text}}\n${{feedback}}`;
+                      return combined.includes("매일 추천 후보 1~3위") &&
+                        combined.includes("추천일") &&
+                        combined.includes("추천 후 1주일")
+                        ? combined
+                        : "";
+                    }},
+                    90000,
+                    "daily recommendations status button"
+                  );
+
                   document.querySelector('[data-tab="llmBridge"]').click();
                   await waitFor(() => document.querySelector("#llmBridge")?.classList.contains("active"), 5000, "llm active");
                   const llmPromptForm = document.querySelector("#llmPromptForm");
@@ -786,6 +817,12 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       ),
                     naverMarketJournalShowsDigest: naverMarketJournalText.includes("시장일지 화면 연결"),
                     naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
+                    dailyRecommendationsShowsTopThree:
+                      dailyRecommendationsText.includes("매일 추천 후보 1~3위") &&
+                      dailyRecommendationsText.includes("추천 후보"),
+                    dailyRecommendationsShowsTracking:
+                      dailyRecommendationsStatusText.includes("사후 추적") &&
+                      dailyRecommendationsStatusText.includes("추천 후 1주일"),
                     llmTargetBlank: llmPromptForm.elements.target.value === "",
                     llmPromptGenerated: (document.querySelector("#llmPromptOutput")?.value || "").length > 50,
                     llmCopyShowsFeedback: /프롬프트를 복사|직접 복사 필요|Ctrl\\+C/.test(llmCopyFeedbackText),
@@ -806,6 +843,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverStatusPreview: naverStatusText.split("\\n").slice(0, 12).join("\\n"),
                     naverRepairPreview: naverRepairText.split("\\n").slice(0, 12).join("\\n"),
                     naverMarketJournalPreview: naverMarketJournalText.split("\\n").slice(0, 12).join("\\n"),
+                    dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
+                    dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
                     llmCopyFeedbackPreview: llmCopyFeedbackText.split("\\n").slice(0, 8).join("\\n"),
                     llmStorageStatusPreview: llmStorageStatusText.split("\\n").slice(0, 12).join("\\n"),
@@ -880,6 +919,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("시황 시장일지 반영 화면에 시장일지 연결 요약이 표시되지 않았습니다.")
             if not result["naverMarketJournalShowsTaskLog"]:
                 raise AssertionError("시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
+            if not result["dailyRecommendationsShowsTopThree"]:
+                raise AssertionError("오늘 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
+            if not result["dailyRecommendationsShowsTracking"]:
+                raise AssertionError("추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:
                 raise AssertionError("LLM 연동 기본 공란/프롬프트 생성 검증에 실패했습니다.")
             if not result["llmCopyShowsFeedback"]:

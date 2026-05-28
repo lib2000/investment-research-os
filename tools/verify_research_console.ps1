@@ -8,6 +8,7 @@ param(
   [switch]$CheckCustomsTradeQuality,
   [switch]$CheckExternalSourceButtons,
   [switch]$CheckSourceAutomationStatus,
+  [switch]$CheckDailyRecommendations,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckStorageQualitySafeguards,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
@@ -27,7 +28,9 @@ param(
   [int]$StorageQualityMaxBodyMissing = 0,
   [int]$StorageQualityMaxOcrNeeded = 0,
   [string]$SourceAutomationBaseUrl = "http://127.0.0.1:8001",
-  [string]$SourceAutomationDevUserToken = "dev-local-token"
+  [string]$SourceAutomationDevUserToken = "dev-local-token",
+  [string]$DailyRecommendationsBaseUrl = "http://127.0.0.1:8001",
+  [string]$DailyRecommendationsDevUserToken = "dev-local-token"
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,6 +70,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
   python -m py_compile `
     backend\research_os_main.py `
     backend\research_os\customs_trade.py `
+    backend\research_os\daily_recommendations.py `
     backend\research_os\kcif_reports.py `
     backend\research_os\market_journal.py `
     backend\research_os\portfolio_import.py `
@@ -83,7 +87,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
 }
 
 Invoke-VerifyStep "백엔드 회귀 테스트" {
-  python -m unittest tests.test_backend_regressions
+  python -m unittest tests.test_backend_regressions tests.test_daily_recommendations
 }
 
 Invoke-VerifyStep "QA 쓰기 액션 정리" {
@@ -221,6 +225,24 @@ if ($CheckSourceAutomationStatus) {
       $sourceAutomation.SourceScheduleDueCount,
       $sourceAutomation.DartDailyCheck.ReliabilityStatus,
       $sourceAutomation.DartDailyCheck.CoverageRate
+    )
+  }
+}
+
+if ($CheckDailyRecommendations) {
+  Invoke-VerifyStep "일일 추천 후보/추적 저장 상태 확인" {
+    $dailyRecommendationsJson = & (Join-Path $PSScriptRoot "check_daily_recommendations.ps1") `
+      -BaseUrl $DailyRecommendationsBaseUrl `
+      -DevUserToken $DailyRecommendationsDevUserToken `
+      -Strict
+    $dailyRecommendations = $dailyRecommendationsJson | ConvertFrom-Json
+    Write-Host (
+      "상태={0}; 최근추천일={1}; 최근후보={2}; 추적마일스톤={3}; 저장={4}" -f
+      $dailyRecommendations.Status,
+      $dailyRecommendations.LatestRecommendationDate,
+      $dailyRecommendations.LatestRecordCount,
+      $dailyRecommendations.MilestoneCount,
+      $dailyRecommendations.StoragePath
     )
   }
 }

@@ -29,6 +29,12 @@ from research_os.data_providers import (
     fetch_nps_institutional_signal,
     get_analysis_data_provider,
 )
+from research_os.daily_recommendations import (
+    daily_recommendation_state_path,
+    summarize_daily_recommendation_store,
+    update_recommendation_tracking,
+    upsert_daily_recommendations,
+)
 from research_os.export_utils import build_simple_xlsx, collect_result_export_sheets
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -176,6 +182,7 @@ from research_os.storage_quality import (
     is_archived_research_entry,
     research_memory_entry_quality_metadata,
     research_memory_legacy_policy,
+    storage_quality_entry_is_policy_url_only,
 )
 from research_os.system_health import (
     build_data_provider_status_payload,
@@ -205,6 +212,7 @@ async def lifespan(app: FastAPI):
     start_shinhan_research_scheduler()
     start_naver_research_scheduler()
     start_regional_macro_sources_scheduler()
+    start_daily_recommendations_scheduler()
     yield
 
 
@@ -3850,6 +3858,14 @@ def refresh_naver_market_close_journal(settings: Settings, force: bool = False) 
         refresh_naver_research_cache(settings, force=force, save_result=True)
         item = latest_naver_domestic_market_close_report(settings)
     if not item:
+        state = {
+            **read_json_store(naver_market_close_journal_state_path(settings), {}),
+            "status": "not_found",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": "네이버 시황정보에서 국내 마감 시황 리포트를 찾지 못했습니다.",
+        }
+        write_json_store(naver_market_close_journal_state_path(settings), state)
         return {
             "status": "not_found",
             "module": "naver_market_close_journal",
@@ -3864,12 +3880,20 @@ def refresh_naver_market_close_journal(settings: Settings, force: bool = False) 
         and previous_state.get("source_item_id") == item.get("item_id")
         and previous_state.get("source_published_at") == item.get("published_at")
     ):
+        state = {
+            **previous_state,
+            "status": "skipped_duplicate",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": "같은 네이버 국내 마감 시황 리포트라 중복 저장하지 않았습니다.",
+        }
+        write_json_store(state_path, state)
         return {
             "status": "skipped",
             "module": "naver_market_close_journal",
             "message": "이미 같은 네이버 국내 마감 시황 리포트를 시장일지에 반영했습니다.",
             "source": item,
-            "previous_state": previous_state,
+            "previous_state": state,
             "state_path": str(state_path),
         }
     source_metadata = naver_market_close_source_metadata(item.get("title"))
@@ -3921,7 +3945,8 @@ def should_run_naver_market_close_journal(settings: Settings, now: datetime | No
     if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
         return False
     state = read_json_store(naver_market_close_journal_state_path(settings), {})
-    return state.get("last_run_date") != now.date().isoformat()
+    today = now.date().isoformat()
+    return state.get("last_run_date") != today and state.get("last_attempt_date") != today
 
 
 def read_naver_market_close_task_log(settings: Settings, limit: int = 20) -> dict:
@@ -3987,6 +4012,12 @@ def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20
     elif should_run_naver_market_close_journal(settings):
         next_action = "오늘 자동 반영이 아직 실행되지 않았습니다. 스케줄러 또는 수동 반영을 확인하세요."
         status = "due"
+    elif state.get("status") == "skipped_duplicate":
+        next_action = "오늘 자동 점검이 실행됐고 같은 원본은 중복 저장하지 않았습니다."
+        status = "ok_duplicate_skipped"
+    elif state.get("status") == "not_found":
+        next_action = "오늘 자동 점검이 실행됐지만 신규 국내 마감 시황 리포트가 없어 저장하지 않았습니다."
+        status = "ok_no_new_report"
     else:
         next_action = "최근 상태가 정상입니다. 같은 원본은 중복 저장하지 않습니다."
         status = "ok"
@@ -14256,6 +14287,9 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
     )
     news_payload = build_news_inbox_payload(settings, limit=10)
     source_schedule = build_external_source_schedule_status(settings)
+    daily_recommendations = summarize_daily_recommendation_store(settings, limit=10)
+    daily_recommendation_state = read_json_store(daily_recommendation_state_path(settings), {})
+    daily_recommendations_due = should_run_daily_recommendations(settings)
     kcif_watch = read_kcif_reports_watch(settings)
     kcif_related_count = 0
     kcif_due = True
@@ -14281,7 +14315,7 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
 
     tone = "ok"
     headline = "자동화 정상"
-    if failed_count or duplicate_count or news_quality_issue_count:
+    if failed_count or news_quality_issue_count:
         tone = "warning"
         headline = "확인 필요"
     if not target_count or not daily_brief_date:
@@ -14315,6 +14349,12 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")
     elif dart_daily.get("failure_count"):
         next_actions.append(f"DART 공시 점검 실패 {dart_daily.get('failure_count')}개 종목을 확인하세요.")
+    if daily_recommendations_due:
+        next_actions.append("오늘의 추천 후보 1~3위 생성과 사후 추적 저장이 필요합니다.")
+    elif daily_recommendations.get("latest_recommendation_date"):
+        next_actions.append(
+            f"{daily_recommendations.get('latest_recommendation_date')} 추천 후보 1~3위가 별도 항목에 저장되어 있습니다."
+        )
     if not next_actions:
         next_actions.append("보유·관심 대상의 새 자료를 수집하고 Dossier/일일 브리핑에 반영할 준비가 되어 있습니다.")
 
@@ -14356,6 +14396,14 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         "dart_daily_check": dart_daily,
         "dart_due": bool(dart_daily.get("due")),
         "dart_failure_count": int(dart_daily.get("failure_count") or 0),
+        "daily_recommendations": {
+            "enabled": settings.daily_recommendations_enabled,
+            "daily_time": settings.daily_recommendations_time,
+            "due": daily_recommendations_due,
+            "latest_recommendation_date": daily_recommendations.get("latest_recommendation_date"),
+            "record_count": daily_recommendations.get("record_count"),
+            "state": daily_recommendation_state,
+        },
         "last_run_at": status.get("updated_at"),
         "priority_targets": [
             {
@@ -14610,14 +14658,20 @@ def news_filter_key(item: dict) -> set[str]:
     tags = {str(tag).lower() for tag in (item.get("tags") or [])}
     quality_status = str((item.get("capture_quality") or {}).get("status") or "")
     review_status = str(item.get("review_status") or "")
+    policy_url_only = storage_quality_entry_is_policy_url_only(item)
+    promoted_storage_handled = bool(item.get("promoted") and item.get("promoted_storage"))
     keys = {"all"}
     if not item.get("promoted"):
         keys.add("unpromoted")
     if item.get("source_url") and ("url_only" in tags or not str(item.get("safe_user_note") or "").strip()):
         keys.add("url_only")
-    if "needs_body_copy" in tags or "url_text_unavailable" in tags or quality_status in {"보강 필요", "실패"}:
+    if not (policy_url_only or promoted_storage_handled) and (
+        "needs_body_copy" in tags
+        or "url_text_unavailable" in tags
+        or quality_status in {"보강 필요", "실패"}
+    ):
         keys.add("needs_body")
-    if quality_status not in {None, "", "정상"}:
+    if not (policy_url_only or promoted_storage_handled) and quality_status not in {None, "", "정상"}:
         keys.add("quality_issue")
     if item.get("market_journal_candidate") or "시장일지" in review_status:
         keys.add("market_journal")
@@ -14675,7 +14729,9 @@ def build_news_inbox_payload(settings: Settings, limit: int = 30, filter_key: st
         "quality_issue_count": sum(
             1
             for item in items
-            if (item.get("capture_quality") or {}).get("status") not in {None, "정상"}
+            if not storage_quality_entry_is_policy_url_only(item)
+            and not bool(item.get("promoted") and item.get("promoted_storage"))
+            and (item.get("capture_quality") or {}).get("status") not in {None, "정상"}
         ),
         "filter": filter_key or "all",
         "filter_counts": counts,
@@ -21576,6 +21632,412 @@ def build_target_consensus_scan(
         "warnings": warnings[:30],
         "rows": rows,
     }
+
+
+def _daily_recommendation_target_key(item: dict) -> str:
+    return normalize_ticker(str(item.get("ticker") or item.get("key") or ""))
+
+
+def _daily_recommendation_priority_targets(settings: Settings) -> dict[str, dict]:
+    try:
+        board = build_interest_automation_board(settings, save_result=True)
+    except Exception:
+        return {}
+    targets = [item for item in board.get("ticker_targets", []) if isinstance(item, dict)]
+    result: dict[str, dict] = {}
+    for item in targets:
+        key = _daily_recommendation_target_key(item)
+        if not key:
+            continue
+        result[key] = item
+    return result
+
+
+def _daily_recommendation_price_lookup(settings: Settings):
+    def lookup(ticker: str) -> tuple[float | None, str | None]:
+        return latest_provider_price(ticker, settings, force_refresh=True)
+
+    return lookup
+
+
+def _daily_recommendation_candidate_is_valid(ticker: str, company_name: str) -> bool:
+    if not ticker or ticker in {"CASH", "UNKNOWN"}:
+        return False
+    if fullmatch(r"\d+", ticker) and not fullmatch(r"\d{6}", ticker):
+        return False
+    if not company_name or company_name.upper().startswith("UNKNOWN"):
+        return False
+    return True
+
+
+def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3) -> dict:
+    """Rank daily review candidates from portfolio, interest, RAG, filings, and consensus data."""
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    manifest_entries = read_manifest(vault_dir)
+    dart_cache = read_dart_filing_cache(settings)
+    priority_targets = _daily_recommendation_priority_targets(settings)
+    consensus_scan = build_target_consensus_scan(
+        settings,
+        portfolio_name=None,
+        include_interests=True,
+        refresh_missing_prices=True,
+    )
+    rows = [item for item in consensus_scan.get("rows", []) if isinstance(item, dict)]
+    candidates_by_ticker: dict[str, dict] = {}
+
+    def ensure_candidate(ticker: str, company_name: str) -> dict:
+        key = normalize_ticker(ticker)
+        row = candidates_by_ticker.setdefault(
+            key,
+            {
+                "ticker": key,
+                "company_name": company_name,
+                "score": 0,
+                "reasons": [],
+                "evidence_sources": [],
+                "risk_notes": [],
+                "portfolio_context": [],
+                "currency": "KRW" if fullmatch(r"\d{6}", key) else "USD",
+                "baseline_price": None,
+                "baseline_price_source": None,
+                "baseline_price_checked_at": None,
+            },
+        )
+        if company_name and (row.get("company_name") == key or not row.get("company_name")):
+            row["company_name"] = company_name
+        return row
+
+    for item in rows:
+        ticker = normalize_ticker(item.get("ticker"))
+        company_name = str(item.get("company_name") or ticker).strip()
+        if not _daily_recommendation_candidate_is_valid(ticker, company_name):
+            continue
+        candidate = ensure_candidate(ticker, company_name)
+        candidate["currency"] = item.get("currency") or candidate["currency"]
+        if item.get("current_price") is not None:
+            candidate["baseline_price"] = item.get("current_price")
+            candidate["baseline_price_source"] = item.get("price_source") or consensus_scan.get("price_refresh_mode")
+            candidate["baseline_price_checked_at"] = consensus_scan.get("as_of")
+
+        target_upside = item.get("target_upside")
+        if target_upside is not None:
+            candidate["score"] += max(0, min(35, int(float(target_upside) * 100)))
+            candidate["reasons"].append(
+                f"저장된 증권사 목표주가 대비 상승여력 {float(target_upside) * 100:.1f}%"
+            )
+        if item.get("valuation_signal") and item.get("valuation_signal") != "계산 보류":
+            candidate["score"] += 10
+            candidate["reasons"].append(f"밸류에이션 신호: {item.get('valuation_signal')}")
+        if item.get("source_count"):
+            candidate["score"] += min(15, int(item.get("source_count") or 0) * 3)
+            candidate["evidence_sources"].append(
+                f"목표가/리포트 근거 {item.get('source_count')}건"
+            )
+        if item.get("market_value"):
+            candidate["score"] += 20
+            candidate["portfolio_context"].append(
+                f"보유 포트폴리오 평가금액 {round(float(item.get('market_value') or 0)):,}원"
+            )
+        if item.get("interest"):
+            candidate["score"] += 10
+            candidate["portfolio_context"].append("관심종목 등록")
+        if item.get("latest_source_file"):
+            candidate["evidence_sources"].append(f"최근 근거 파일: {item.get('latest_source_file')}")
+        if item.get("source_scope"):
+            candidate["evidence_sources"].append(f"대상 범위: {item.get('source_scope')}")
+
+    for ticker, target in priority_targets.items():
+        if not _daily_recommendation_candidate_is_valid(
+            ticker,
+            str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
+        ):
+            continue
+        candidate = ensure_candidate(
+            ticker,
+            str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
+        )
+        priority = str(target.get("priority") or "medium")
+        candidate["score"] += {"high": 20, "medium": 10, "low": 3}.get(priority, 10)
+        recent_count = int(target.get("recent_document_count") or 0)
+        rag_count = int(target.get("rag_document_count") or 0)
+        if recent_count:
+            candidate["score"] += min(15, recent_count)
+            candidate["reasons"].append(f"최근 저장자료 {recent_count}건")
+        if rag_count:
+            candidate["score"] += min(15, rag_count)
+            candidate["evidence_sources"].append(f"RAG 연결 문서 {rag_count}건")
+        if target.get("next_action"):
+            candidate["risk_notes"].append(str(target.get("next_action")))
+
+    for ticker, candidate in list(candidates_by_ticker.items()):
+        try:
+            verification = verify_ticker_symbol_local_cached(ticker, settings)
+            official_symbol = normalize_ticker(verification.official_symbol or ticker)
+            profile = official_ticker_profile(official_symbol, settings, refresh_external=False)
+            if verification.company_name and candidate.get("company_name") == ticker:
+                candidate["company_name"] = verification.company_name
+            freshness = build_ticker_freshness_status(
+                ticker,
+                official_symbol,
+                manifest_entries,
+                dart_cache,
+            )
+            if freshness.get("tone") == "ok":
+                candidate["score"] += 10
+            elif freshness.get("tone") == "warning":
+                candidate["score"] += 5
+            candidate["evidence_sources"].append(freshness.get("summary") or "저장자료 신선도 확인")
+            if profile.get("analysis_focus"):
+                candidate["reasons"].append(f"분석 초점: {profile.get('analysis_focus')}")
+        except Exception as exc:
+            candidate["risk_notes"].append(f"티커/신선도 점검 일부 제한: {provider_error_message(exc, settings)}")
+
+        if candidate.get("baseline_price") is None:
+            price, source = latest_provider_price(ticker, settings, force_refresh=True)
+            if price is not None:
+                candidate["baseline_price"] = price
+                candidate["baseline_price_source"] = source or "data_provider"
+                candidate["baseline_price_checked_at"] = current_storage_timestamp()
+                candidate["score"] += 5
+            else:
+                candidate["risk_notes"].append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
+
+        if not candidate["reasons"]:
+            candidate["reasons"].append("보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다.")
+        candidate["reasons"] = list(dict.fromkeys(candidate["reasons"]))[:6]
+        candidate["evidence_sources"] = list(dict.fromkeys(candidate["evidence_sources"]))[:8]
+        candidate["risk_notes"] = list(dict.fromkeys(candidate["risk_notes"]))[:5]
+
+    candidates = sorted(
+        candidates_by_ticker.values(),
+        key=lambda item: (
+            int(item.get("score") or 0),
+            item.get("baseline_price") is not None,
+            str(item.get("company_name") or ""),
+        ),
+        reverse=True,
+    )
+    return {
+        "status": "success",
+        "module": "daily_recommendation_candidate_ranking",
+        "as_of": current_storage_timestamp(),
+        "universe_count": len(candidates_by_ticker),
+        "selected_count": min(limit, len(candidates)),
+        "consensus_summary": consensus_scan.get("summary"),
+        "candidates": candidates[: max(1, min(limit, 10))],
+        "warnings": consensus_scan.get("warnings", [])[:10],
+    }
+
+
+def run_daily_stock_recommendations(
+    settings: Settings,
+    *,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    recommendation_date = current_storage_date()
+    generated_at = current_storage_timestamp()
+    if save_result and not force:
+        current_status = summarize_daily_recommendation_store(settings, limit=10)
+        existing_today = [
+            item
+            for item in current_status.get("latest_records", [])
+            if item.get("recommendation_date") == recommendation_date.isoformat()
+        ]
+        if existing_today:
+            checked_at = current_storage_timestamp()
+            tracking = update_recommendation_tracking(
+                settings,
+                as_of=recommendation_date,
+                checked_at=checked_at,
+                price_lookup=_daily_recommendation_price_lookup(settings),
+            )
+            result = {
+                "status": "skipped_existing",
+                "module": "daily_stock_recommendations",
+                "message": "오늘 추천 후보는 이미 저장되어 있어 중복 저장하지 않고 추적 상태만 갱신했습니다.",
+                "recommendation_date": recommendation_date.isoformat(),
+                "records": existing_today[:3],
+                "tracking": tracking,
+                "storage_path": current_status.get("storage_path"),
+                "disclaimer": "자동 추천은 매수 지시가 아니라 보유/관심 데이터 기반 일일 검토 후보입니다.",
+            }
+            write_json_store(
+                daily_recommendation_state_path(settings),
+                {
+                    "status": result["status"],
+                    "last_run_at": checked_at,
+                    "last_run_date": recommendation_date.isoformat(),
+                    "last_tracking_at": checked_at,
+                    "last_tracking_date": recommendation_date.isoformat(),
+                    "selected_count": len(existing_today[:3]),
+                    "message": result["message"],
+                },
+            )
+            return result
+
+    candidate_payload = build_daily_recommendation_candidates(settings, limit=3)
+    candidates = candidate_payload.get("candidates") or []
+    if not candidates:
+        result = {
+            "status": "not_found",
+            "module": "daily_stock_recommendations",
+            "message": "오늘 추천 후보를 만들 수 있는 보유/관심/리서치 데이터가 부족합니다.",
+            "candidate_ranking": candidate_payload,
+        }
+    elif save_result:
+        save_payload = upsert_daily_recommendations(
+            settings,
+            candidates=candidates,
+            recommendation_date=recommendation_date,
+            generated_at=generated_at,
+            force=force,
+        )
+        tracking = update_recommendation_tracking(
+            settings,
+            as_of=recommendation_date,
+            checked_at=current_storage_timestamp(),
+            price_lookup=_daily_recommendation_price_lookup(settings),
+        )
+        result = {
+            **save_payload,
+            "candidate_ranking": candidate_payload,
+            "tracking": tracking,
+            "disclaimer": "자동 추천은 매수 지시가 아니라 보유/관심 데이터 기반 일일 검토 후보입니다.",
+        }
+    else:
+        result = {
+            "status": "preview",
+            "module": "daily_stock_recommendations",
+            "recommendation_date": recommendation_date.isoformat(),
+            "records": candidates,
+            "candidate_ranking": candidate_payload,
+            "disclaimer": "저장하지 않은 미리보기입니다.",
+        }
+
+    if save_result:
+        write_json_store(
+            daily_recommendation_state_path(settings),
+            {
+                "status": result.get("status"),
+                "last_run_at": current_storage_timestamp(),
+                "last_run_date": recommendation_date.isoformat(),
+                "last_tracking_at": current_storage_timestamp(),
+                "last_tracking_date": recommendation_date.isoformat(),
+                "selected_count": len(candidates),
+                "message": result.get("message") or "일일 추천 후보 생성/추적을 완료했습니다.",
+            },
+        )
+    return result
+
+
+def parse_daily_recommendations_time(settings: Settings) -> tuple[int, int]:
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.daily_recommendations_time or "09:00").strip())
+    if not match:
+        return 9, 0
+    hour = min(max(int(match.group(1)), 0), 23)
+    minute = min(max(int(match.group(2)), 0), 59)
+    return hour, minute
+
+
+def should_run_daily_recommendations(settings: Settings, now: datetime | None = None) -> bool:
+    if not settings.daily_recommendations_enabled:
+        return False
+    now = now or current_storage_datetime()
+    hour, minute = parse_daily_recommendations_time(settings)
+    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
+        return False
+    state = read_json_store(daily_recommendation_state_path(settings), {})
+    return state.get("last_run_date") != now.date().isoformat()
+
+
+_DAILY_RECOMMENDATIONS_SCHEDULER_STARTED = False
+
+
+def daily_recommendations_scheduler_loop() -> None:
+    settings = get_settings()
+    interval_seconds = 15 * 60
+    while True:
+        try:
+            now = current_storage_datetime()
+            if should_run_daily_recommendations(settings, now):
+                run_daily_stock_recommendations(settings, force=False, save_result=True)
+            elif settings.daily_recommendations_tracking_enabled:
+                state = read_json_store(daily_recommendation_state_path(settings), {})
+                today = current_storage_date().isoformat()
+                if state.get("last_tracking_date") != today:
+                    checked_at = current_storage_timestamp()
+                    update_recommendation_tracking(
+                        settings,
+                        as_of=current_storage_date(),
+                        checked_at=checked_at,
+                        price_lookup=_daily_recommendation_price_lookup(settings),
+                    )
+                    write_json_store(
+                        daily_recommendation_state_path(settings),
+                        {
+                            **state,
+                            "last_tracking_at": checked_at,
+                            "last_tracking_date": today,
+                        },
+                    )
+        except Exception:
+            pass
+        threading.Event().wait(interval_seconds)
+
+
+def start_daily_recommendations_scheduler() -> None:
+    global _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED
+    settings = get_settings()
+    if _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED or not settings.daily_recommendations_enabled:
+        return
+    _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED = True
+    thread = threading.Thread(
+        target=daily_recommendations_scheduler_loop,
+        name="daily-stock-recommendations",
+        daemon=True,
+    )
+    thread.start()
+
+
+@app.get(
+    "/api/v1/daily-recommendations/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_daily_recommendations_status(settings: Settings = Depends(get_settings)) -> dict:
+    payload = summarize_daily_recommendation_store(settings)
+    state = read_json_store(daily_recommendation_state_path(settings), {})
+    payload["enabled"] = settings.daily_recommendations_enabled
+    payload["daily_time"] = settings.daily_recommendations_time
+    payload["tracking_enabled"] = settings.daily_recommendations_tracking_enabled
+    payload["due_now"] = should_run_daily_recommendations(settings)
+    payload["state"] = state
+    return payload
+
+
+@app.post(
+    "/api/v1/daily-recommendations/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_daily_recommendations_endpoint(
+    force: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return run_daily_stock_recommendations(settings, force=force, save_result=save_result)
+
+
+@app.post(
+    "/api/v1/daily-recommendations/track",
+    dependencies=[Depends(verify_user_token)],
+)
+def track_daily_recommendations_endpoint(settings: Settings = Depends(get_settings)) -> dict:
+    return update_recommendation_tracking(
+        settings,
+        as_of=current_storage_date(),
+        checked_at=current_storage_timestamp(),
+        price_lookup=_daily_recommendation_price_lookup(settings),
+    )
 
 
 @app.get(

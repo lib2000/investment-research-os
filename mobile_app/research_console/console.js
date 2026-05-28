@@ -47,6 +47,9 @@ import {
   fetchRegionalBusinessSourcesWatch,
   refreshRegionalBusinessSourcesWatch,
   ingestNewsInbox,
+  fetchDailyRecommendationsStatus,
+  runDailyRecommendations,
+  trackDailyRecommendations,
   promoteNewsInboxItem,
   updateNewsInboxItem,
   runPortfolioRiskScan,
@@ -81,7 +84,7 @@ import {
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=09425f9ab307";
+} from "./api.js?v=44284a8c72b0";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -210,6 +213,8 @@ const elements = {
   naverResearchStatusButton: document.querySelector("#naverResearchStatusButton"),
   naverResearchRepairButton: document.querySelector("#naverResearchRepairButton"),
   naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
+  dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
+  dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
   ocrReprocessButton: document.querySelector("#ocrReprocessButton"),
@@ -10627,9 +10632,20 @@ async function addInterestSectorDraftToList({ autoSave = true, announce = true }
       fillInterestsForm(result);
       resetInterestSectorDraft();
       updateInterestsSummary(result);
-      const addedRow = [...elements.interestSectorEditor.querySelectorAll(".interest-sector-row")].find(
+      let addedRow = [...elements.interestSectorEditor.querySelectorAll(".interest-sector-row")].find(
         (row) => rowValue(row, "name").trim().toLowerCase() === draft.name.trim().toLowerCase()
       );
+      if (!addedRow) {
+        elements.interestSectorEditor.querySelector(".editor-empty-state")?.remove();
+        addedRow = addEditorRow(
+          elements.interestSectorEditor,
+          () => makeInterestSectorSummaryRow(draft)
+        );
+        await saveCurrentInterestList({ quiet: true });
+        addedRow = [...elements.interestSectorEditor.querySelectorAll(".interest-sector-row")].find(
+          (row) => rowValue(row, "name").trim().toLowerCase() === draft.name.trim().toLowerCase()
+        ) || addedRow;
+      }
       addedRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       if (announce) {
         setOutput(`관심섹터에 **${draft.name}**${koreanObjectParticle(draft.name)} 추가하고 저장했습니다.\n\n아래 목록에서 지역, 우선순위, 태그, 관심 이유를 바로 편집할 수 있습니다.`);
@@ -10840,6 +10856,8 @@ const MEMORY_ACTION_MESSAGES = {
   naverResearchRepairButton: "네이버 리서치 캐시 정리와 PDF 신호 백필을 시작했습니다.",
   naverMarketJournalButton: "네이버 국내 마감 시황을 시장일지에 반영합니다.",
   dailyBriefButton: "일일 브리핑 생성을 시작했습니다.",
+  dailyRecommendationsButton: "오늘 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
+  dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   ragBackfillButton: "RAG 색인 갱신을 시작했습니다.",
@@ -11103,6 +11121,39 @@ elements.dailyBriefButton.addEventListener("click", async () => {
     renderDailyBriefCards(result);
     setOutput(result || "일일 브리핑 결과를 확인하지 못했습니다.");
     await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.dailyRecommendationsButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("오늘 추천 후보 생성 중", [
+    "보유/관심 종목과 저장 리포트 확인",
+    "목표가·공시·RAG 근거 점수화",
+    "추천 후보 1~3위 저장",
+    "1주/15일/1달/3달/6달 추적표 갱신",
+  ]);
+  try {
+    const result = await runDailyRecommendations(token(), { force: false, saveResult: true });
+    setOutput(result || "오늘 추천 후보 결과를 확인하지 못했습니다.");
+    await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.dailyRecommendationsStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("추천 추적 상태 조회 중", [
+    "저장된 추천 후보 확인",
+    "도래한 추적일 확인",
+    "현재가 기준 사후 성과 갱신",
+  ]);
+  try {
+    await trackDailyRecommendations(token());
+    const result = await fetchDailyRecommendationsStatus(token());
+    setOutput(result || "추천 추적 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -12308,6 +12359,66 @@ function formatKoreanResult(value) {
       .join("\n");
   }
 
+  if (
+    value.module === "daily_stock_recommendations" ||
+    value.module === "daily_recommendation_tracking"
+  ) {
+    const records = value.records || value.latest_records || [];
+    const state = value.state || {};
+    const recommendationLines = records.slice(0, 3).map((item) => {
+      const reasons = (item.reasons || []).slice(0, 2).join(" / ");
+      const evidence = (item.evidence_sources || []).slice(0, 2).join(" / ");
+      const baseline = formatSmartPrice(item.baseline_price, item.currency || "KRW", "기준가 미확인");
+      return `${item.rank || "-"}위. ${displayCompanyName(item)} · 기준가 ${baseline} · 점수 ${
+        item.score ?? "n/a"
+      }\n  근거: ${reasons || "근거 요약 없음"}\n  출처: ${evidence || "저장 근거 없음"}`;
+    });
+    const milestones = [];
+    records.forEach((record) => {
+      (record.tracking_milestones || []).forEach((milestone) => {
+        milestones.push({
+          company_name: record.company_name,
+          ticker: record.ticker,
+          currency: record.currency,
+          ...milestone,
+        });
+      });
+    });
+    const milestoneLines = milestones.slice(0, 12).map((item) => {
+      const price = item.price === null || item.price === undefined
+        ? "가격 미확인"
+        : formatSmartPrice(item.price, item.currency || "KRW", "가격 미확인");
+      const change = item.price_change_pct === null || item.price_change_pct === undefined
+        ? ""
+        : ` · 변동 ${toPercent(item.price_change_pct)}`;
+      return `${displayCompanyName(item)} · ${item.label || item.key || "추적"} · ${
+        item.target_date || "일자 미확인"
+      } · ${item.status || "pending"} · ${price}${change}`;
+    });
+    return [
+      `### 매일 추천 후보 1~3위`,
+      ``,
+      `- **상태:** ${value.status || "미확인"}`,
+      `- **추천일:** ${value.recommendation_date || value.latest_recommendation_date || state.last_run_date || "미확인"}`,
+      `- **저장 위치:** ${value.storage_path || "미확인"}`,
+      value.message ? `- **메시지:** ${value.message}` : "",
+      value.disclaimer ? `- **주의:** ${value.disclaimer}` : "",
+      ``,
+      `### 추천 후보`,
+      ...formatBulletList(recommendationLines, (item) => item, "저장된 추천 후보가 없습니다."),
+      ``,
+      `### 사후 추적`,
+      value.tracking
+        ? `- 갱신: 도래 ${formatNumber(value.tracking.due_count || 0)}개 / 대기 ${formatNumber(
+            value.tracking.pending_count || 0
+          )}개 / 가격 미확인 ${formatNumber(value.tracking.price_unavailable_count || 0)}개`
+        : `- 추적 상태: ${formatNumber(value.due_or_pending_milestones?.length || 0)}개 대기`,
+      ...formatBulletList(milestoneLines, (item) => item, "표시할 추적 마일스톤이 없습니다."),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   if (value.module === "research_automation_feature_status") {
     const statusLabel = (status) =>
       ({
@@ -12333,6 +12444,8 @@ function formatKoreanResult(value) {
     const digest = value.dashboard_digest || {};
     const duplicateReview = value.duplicate_review || {};
     const refreshQueue = value.dossier_refresh_queue || digest.last_deduped_dossier_refresh || {};
+    const dailyRecommendations = digest.daily_recommendations || {};
+    const dailyState = dailyRecommendations.state || {};
     const sourceSchedule = Array.isArray(value.source_schedule)
       ? value.source_schedule
       : Array.isArray(digest.source_schedule)
@@ -12375,6 +12488,11 @@ function formatKoreanResult(value) {
       `- 매크로/외부 소스: 점검 필요 ${digest.source_schedule_due_count || sourceSchedule.filter((item) => item.due).length}개`,
       `- Dossier: ${digest.dossier_count || 0}개 / 실패 ${digest.failed_count || 0}개`,
       `- Delivers 일일 브리핑: ${digest.daily_brief_date || "미생성"}`,
+      `- 추천 후보: ${dailyRecommendations.latest_recommendation_date || "미생성"} · ${formatNumber(
+        dailyRecommendations.record_count || 0
+      )}개 저장 · ${dailyRecommendations.due ? "오늘 실행 필요" : "오늘 상태 확인"}${
+        dailyState.last_tracking_at ? ` · 추적 ${formatDateTime(dailyState.last_tracking_at)}` : ""
+      }`,
       ``,
       `외부 소스 자동 점검`,
       ...formatBulletList(sourceScheduleLines, (item) => item, "외부 소스 자동 점검 상태가 없습니다."),
