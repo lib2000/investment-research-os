@@ -13199,6 +13199,9 @@ def build_storage_duplicate_review(
                     "representative": compact_manifest_review_entry(representative),
                     "duplicates": [],
                     "duplicate_count": 0,
+                    "excluded_duplicate_count": 0,
+                    "dossier_usage": "representative_only",
+                    "duplicate_usage": "excluded_from_dossier",
                     "reasons": {},
                     "recommended_action": "대표 자료 1개만 Dossier 합성에 사용하고, 중복 자료는 복기용 원문으로만 유지합니다.",
                 }
@@ -13213,6 +13216,7 @@ def build_storage_duplicate_review(
             }
         )
         group["duplicate_count"] = len(group["duplicates"])
+        group["excluded_duplicate_count"] = group["duplicate_count"]
         reasons = group.setdefault("reasons", {})
         reasons[reason] = int(reasons.get(reason) or 0) + 1
 
@@ -13245,6 +13249,19 @@ def build_storage_duplicate_review(
         "unique_representative_count": len(representatives),
         "duplicate_group_count": len(groups),
         "duplicate_entry_count": duplicate_entry_count,
+        "representative_policy": {
+            "dossier_usage": "representative_only",
+            "duplicate_usage": "excluded_from_dossier",
+            "archive_policy": "soft_archive_only",
+            "hard_delete_allowed": False,
+            "message": "Dossier 합성과 추천 근거에는 대표 자료만 사용하고 중복 의심 자료는 복기/원문 추적용으로 유지합니다.",
+        },
+        "dossier_usage_summary": {
+            "representative_count": len(representatives),
+            "duplicate_excluded_count": duplicate_entry_count,
+            "archived_excluded_count": archived_input_count,
+            "needs_dossier_refresh_count": len(ticker_breakdown),
+        },
         "groups": groups,
         "ticker_breakdown": sorted(
             ticker_breakdown.values(),
@@ -13252,6 +13269,7 @@ def build_storage_duplicate_review(
             reverse=True,
         )[:20],
         "next_actions": [
+            "Dossier 합성/추천 근거에는 representative_only 정책을 적용해 중복 의심 자료를 제외했습니다.",
             "중복 의심이 많은 종목부터 Dossier 재합성을 실행해 최신 투자 논거를 다시 고정하세요.",
             "source_url/content_hash 일치 자료는 사실상 같은 자료로 보고 대표 자료만 의사결정에 반영하세요.",
             "제목·본문 유사 자료는 원문이 다른 업데이트일 수 있으므로 요약 차이가 있는지 우선 확인하세요.",

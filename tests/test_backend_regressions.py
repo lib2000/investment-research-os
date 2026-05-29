@@ -1812,6 +1812,14 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
 
         self.assertEqual(result["skipped_archived_count"], 1)
         self.assertEqual(result["duplicate_entry_count"], 1)
+        self.assertEqual(result["representative_policy"]["dossier_usage"], "representative_only")
+        self.assertEqual(result["representative_policy"]["duplicate_usage"], "excluded_from_dossier")
+        self.assertFalse(result["representative_policy"]["hard_delete_allowed"])
+        self.assertEqual(result["dossier_usage_summary"]["duplicate_excluded_count"], 1)
+        self.assertEqual(result["dossier_usage_summary"]["archived_excluded_count"], 1)
+        self.assertEqual(result["groups"][0]["excluded_duplicate_count"], 1)
+        self.assertEqual(result["groups"][0]["dossier_usage"], "representative_only")
+        self.assertEqual(result["groups"][0]["duplicate_usage"], "excluded_from_dossier")
         duplicate_names = [
             item["file_name"]
             for group in result["groups"]

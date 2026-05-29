@@ -12453,6 +12453,14 @@ function formatKoreanResult(value) {
   if (value.module === "storage_duplicate_review") {
     const groups = value.groups || [];
     const tickerBreakdown = value.ticker_breakdown || [];
+    const policy = value.representative_policy || {};
+    const usage = value.dossier_usage_summary || {};
+    const policyLabel =
+      policy.dossier_usage === "representative_only" ? "대표 자료만 사용" : policy.dossier_usage || "정책 미확인";
+    const duplicateLabel =
+      policy.duplicate_usage === "excluded_from_dossier"
+        ? "중복 의심 자료 제외"
+        : policy.duplicate_usage || "중복 처리 미확인";
     return [
       `### 저장 데이터 중복 리뷰`,
       ``,
@@ -12460,6 +12468,13 @@ function formatKoreanResult(value) {
       `- **대표 자료:** ${formatNumber(value.unique_representative_count || 0)}개`,
       `- **중복 묶음:** ${formatNumber(value.duplicate_group_count || 0)}개`,
       `- **중복 의심 자료:** ${formatNumber(value.duplicate_entry_count || 0)}개`,
+      `- **Dossier 사용 정책:** ${policyLabel} · ${duplicateLabel}`,
+      `- **Dossier 반영 요약:** 대표 ${formatNumber(
+        usage.representative_count ?? value.unique_representative_count ?? 0
+      )}개 · 중복 제외 ${formatNumber(
+        usage.duplicate_excluded_count ?? value.duplicate_entry_count ?? 0
+      )}개 · 보관 제외 ${formatNumber(usage.archived_excluded_count ?? value.skipped_archived_count ?? 0)}개`,
+      policy.message ? `- **정책 메모:** ${compactOutputText(policy.message, 180)}` : "",
       value.storage?.relative_path ? `- **저장 위치:** ${value.storage.relative_path}` : "",
       ``,
       `### 우선 정리 종목`,
@@ -12479,11 +12494,17 @@ function formatKoreanResult(value) {
           const rep = group.representative || {};
           const duplicates = group.duplicates || [];
           const sample = duplicates[0] || {};
+          const groupPolicy =
+            group.dossier_usage === "representative_only" ? "대표 자료만 Dossier 반영" : "Dossier 정책 미확인";
+          const excludedCount = group.excluded_duplicate_count ?? group.duplicate_count ?? 0;
           return `**${group.company_name || group.ticker || "공통 자료"}** · 중복 ${
             group.duplicate_count || 0
-          }개 · 대표: ${compactOutputText(rep.title || rep.file_name, 120)}\n  예: ${
-            sample.title || sample.file_name || "샘플 없음"
-          } · ${translateDuplicateReason(sample.duplicate_reason)}`;
+          }개 · Dossier 제외 ${excludedCount}개 · ${groupPolicy} · 대표: ${compactOutputText(
+            rep.title || rep.file_name,
+            120
+          )}\n  예: ${sample.title || sample.file_name || "샘플 없음"} · ${translateDuplicateReason(
+            sample.duplicate_reason
+          )}`;
         },
         "중복 묶음이 없습니다."
       ),
