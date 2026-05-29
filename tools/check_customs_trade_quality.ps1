@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",

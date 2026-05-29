@@ -12661,7 +12661,7 @@ function formatKoreanResult(value) {
           item.related_count || 0
         )}개 · 저작권: ${item.copyright_policy || "정책 미확인"} · 중복: ${
           item.duplicate_guard || "가드 미확인"
-        } · 최근 ${formatDateTime(item.last_checked_at)}`
+        } · 활용: ${item.detail || "시장일지/RAG/추천 후보 점검"} · 최근 ${formatDateTime(item.last_checked_at)}`
     );
     const priorityTargets = (digest.priority_targets || [])
       .slice(0, 5)

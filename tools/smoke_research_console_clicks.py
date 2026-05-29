@@ -124,16 +124,24 @@ class CdpClient:
         raise TimeoutError(f"CDP command timed out: {method}")
 
     def evaluate(self, expression: str, timeout: float = 30) -> object:
-        result = self.call(
-            "Runtime.evaluate",
-            {
-                "expression": expression,
-                "awaitPromise": True,
-                "returnByValue": True,
-                "timeout": int(timeout * 1000),
-            },
-            timeout=timeout + 5,
-        )
+        params = {
+            "expression": expression,
+            "awaitPromise": True,
+            "returnByValue": True,
+            "timeout": int(timeout * 1000),
+        }
+        last_error: RuntimeError | None = None
+        for _ in range(5):
+            try:
+                result = self.call("Runtime.evaluate", params, timeout=timeout + 5)
+                break
+            except RuntimeError as error:
+                last_error = error
+                if "Cannot find default execution context" not in str(error):
+                    raise
+                time.sleep(1)
+        else:
+            raise last_error or RuntimeError("Runtime.evaluate failed before execution context was ready.")
         if result.get("exceptionDetails"):
             raise RuntimeError(result["exceptionDetails"])
         return (result.get("result") or {}).get("value")
@@ -621,13 +629,31 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       return text.includes("네이버 리서치 자동 수집 상태") &&
                         text.includes("중복 시장일지 후보") &&
                         text.includes("08:30 자동 작업 로그") &&
-                        text.includes("시장일지 화면 연결")
+                        text.includes("시장일지 화면 연결") &&
+                        (text.includes("전체 캐시:") || text.includes("상태: 확인 지연"))
                         ? text
                         : "";
                     }},
                     60000,
                     "naver research status"
                   );
+                  document.querySelector("#researchAutomationStatusButton")?.click();
+                  const researchAutomationStatusText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      return text.includes("리서치 자동화 적용 상태") &&
+                        text.includes("수집 품질 대시보드") &&
+                        text.includes("저작권:") &&
+                        text.includes("중복:") &&
+                        text.includes("활용:")
+                        ? text
+                        : "";
+                    }},
+                    70000,
+                    "research automation status"
+                  );
+                  await sleep(1000);
+
                   document.querySelector("#naverResearchRepairButton")?.click();
                   let naverRepairText = "";
                   try {{
@@ -804,6 +830,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                     naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
                     naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
+                    researchAutomationShowsSourceQuality:
+                      researchAutomationStatusText.includes("수집 품질 대시보드") &&
+                      researchAutomationStatusText.includes("저작권:") &&
+                      researchAutomationStatusText.includes("중복:") &&
+                      researchAutomationStatusText.includes("활용:"),
                     memoryQualityFilterWorks: memoryFilterResults.every((item) => item.ok && item.sawExpectedText),
                     memoryQualityFilterFeedbackWorks: memoryFilterResults.every((item) => item.sawFeedback),
                     memoryFilterResults,
@@ -849,6 +880,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverStatusPreview: naverStatusText.split("\\n").slice(0, 12).join("\\n"),
                     naverRepairPreview: naverRepairText.split("\\n").slice(0, 12).join("\\n"),
                     naverMarketJournalPreview: naverMarketJournalText.split("\\n").slice(0, 12).join("\\n"),
+                    researchAutomationStatusPreview: researchAutomationStatusText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
@@ -915,6 +947,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("네이버 리서치 상태 화면의 작업 로그 한글 제목이 정상 표시되지 않았습니다.")
             if not result["naverStatusShowsJournalSource"]:
                 raise AssertionError("시장일지 화면 연결 요약에 자동/수동 입력 구분이 표시되지 않았습니다.")
+            if not result["researchAutomationShowsSourceQuality"]:
+                raise AssertionError("리서치 자동화 상태 화면에 수집 품질 대시보드가 표시되지 않았습니다.")
             if not result["memoryQualityFilterWorks"]:
                 raise AssertionError("저장 데이터 품질 필터가 화면에서 적용되지 않았습니다.")
             if not result["memoryQualityFilterFeedbackWorks"]:
