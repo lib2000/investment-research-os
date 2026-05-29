@@ -3111,6 +3111,32 @@ label {
   font-size: 13px;
 }
 
+.daily-recommendation-card .daily-recommendation-warning,
+.daily-recommendation-card .daily-recommendation-fx,
+.daily-recommendation-card .daily-recommendation-portfolio {
+  padding: 7px 8px;
+  border-radius: 6px;
+  line-height: 1.45;
+}
+
+.daily-recommendation-card .daily-recommendation-warning {
+  color: #92400e;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.daily-recommendation-card .daily-recommendation-fx {
+  color: #1e3a8a;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.daily-recommendation-card .daily-recommendation-portfolio {
+  color: #115e59;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+}
+
 .daily-recommendation-score {
   display: flex;
   flex-wrap: wrap;

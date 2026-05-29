@@ -97,6 +97,19 @@ def normalize_candidate(candidate: dict) -> dict:
         "score_components": score_components[:10],
         "reasons": reasons[:6],
         "evidence_sources": evidence[:8],
+        "score_explanation": candidate.get("score_explanation") or {},
+        "score_penalties": [
+            str(item).strip()
+            for item in candidate.get("score_penalties", [])
+            if str(item or "").strip()
+        ][:6],
+        "quality_flags": [
+            str(item).strip()
+            for item in candidate.get("quality_flags", [])
+            if str(item or "").strip()
+        ][:6],
+        "overseas_tracking": candidate.get("overseas_tracking") or {},
+        "portfolio_risk_connection": candidate.get("portfolio_risk_connection") or {},
     }
 
 
@@ -134,6 +147,9 @@ def build_recommendation_record(
         "company_name": normalized["company_name"],
         "score": normalized["score"],
         "score_components": normalized.get("score_components") or [],
+        "score_explanation": normalized.get("score_explanation") or {},
+        "score_penalties": normalized.get("score_penalties") or [],
+        "quality_flags": normalized.get("quality_flags") or [],
         "recommendation_type": "daily_review_candidate",
         "action_label": "오늘의 검토 후보",
         "baseline_price": baseline_price,
@@ -148,6 +164,8 @@ def build_recommendation_record(
             if str(item or "").strip()
         ][:5],
         "portfolio_context": normalized.get("portfolio_context") or [],
+        "portfolio_risk_connection": normalized.get("portfolio_risk_connection") or {},
+        "overseas_tracking": normalized.get("overseas_tracking") or {},
         "tracking_milestones": build_tracking_milestones(recommendation_date),
     }
     return record

@@ -7774,6 +7774,11 @@ function renderDailyRecommendationCards(payload) {
       const reasons = (record.reasons || []).slice(0, 3);
       const evidence = (record.evidence_sources || []).slice(0, 3);
       const scoreComponents = (record.score_components || []).slice(0, 4);
+      const scoreWeights = (record.score_explanation?.component_weights || []).slice(0, 3);
+      const penalties = (record.score_penalties || []).slice(0, 3);
+      const qualityFlags = (record.quality_flags || []).slice(0, 3);
+      const overseasTracking = record.overseas_tracking || {};
+      const portfolioRisk = record.portfolio_risk_connection || {};
       const milestones = (record.tracking_milestones || []).slice(0, 5);
       return `
         <article class="daily-recommendation-card">
@@ -7788,6 +7793,34 @@ function renderDailyRecommendationCards(payload) {
               )
               .join("") || "<em>점수 구성 저장 전</em>"}
           </div>
+          <small>${escapeHtml(
+            scoreWeights.length
+              ? `주요 비중: ${scoreWeights
+                  .map((component) => `${component.label} ${component.weight_pct}%`)
+                  .join(" · ")}`
+              : "점수 비중은 다음 추천 생성부터 표시됩니다."
+          )}</small>
+          ${
+            penalties.length || qualityFlags.length
+              ? `<p class="daily-recommendation-warning">확인/감점: ${escapeHtml(
+                  [...penalties, ...qualityFlags].join(" · ")
+                )}</p>`
+              : ""
+          }
+          ${
+            overseasTracking.needs_fx_conversion
+              ? `<p class="daily-recommendation-fx">해외 추적: ${escapeHtml(
+                  overseasTracking.currency || record.currency || "USD"
+                )} 기준 가격과 USD/KRW 환율 반영 상태를 함께 확인합니다.</p>`
+              : ""
+          }
+          ${
+            portfolioRisk.linked
+              ? `<p class="daily-recommendation-portfolio">포트폴리오 연결: ${escapeHtml(
+                  portfolioRisk.message || "보유/관심 노출과 함께 확인하세요."
+                )}</p>`
+              : ""
+          }
           <ul>
             ${reasons.map((item) => `<li>${escapeHtml(compactOutputText(item, 110))}</li>`).join("") || "<li>근거 요약 없음</li>"}
           </ul>
@@ -12510,10 +12543,25 @@ function formatKoreanResult(value) {
         .slice(0, 4)
         .map((component) => `${component.label} +${formatNumber(component.points || 0)}`)
         .join(" / ");
+      const weights = (item.score_explanation?.component_weights || [])
+        .slice(0, 3)
+        .map((component) => `${component.label} ${component.weight_pct}%`)
+        .join(" / ");
+      const penalties = (item.score_penalties || []).slice(0, 2).join(" / ");
+      const overseas = item.overseas_tracking?.needs_fx_conversion
+        ? `\n  해외 추적: ${item.overseas_tracking.currency || item.currency || "USD"} 기준 가격 + USD/KRW 환율 확인`
+        : "";
+      const portfolioRisk = item.portfolio_risk_connection?.linked
+        ? `\n  포트폴리오 연결: ${item.portfolio_risk_connection.message || "보유/관심 노출과 함께 확인"}`
+        : "";
       const baseline = formatSmartPrice(item.baseline_price, item.currency || "KRW", "기준가 미확인");
       return `${item.rank || "-"}위. ${displayCompanyName(item)} · 기준가 ${baseline} · 점수 ${
         item.score ?? "n/a"
-      }\n  점수 구성: ${scoreComponents || "구성 저장 전"}\n  근거: ${reasons || "근거 요약 없음"}\n  출처: ${evidence || "저장 근거 없음"}`;
+      }\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
+        weights ? `\n  비중: ${weights}` : ""
+      }${penalties ? `\n  감점/확인: ${penalties}` : ""}${overseas}${portfolioRisk}\n  근거: ${
+        reasons || "근거 요약 없음"
+      }\n  출처: ${evidence || "저장 근거 없음"}`;
     });
     const milestones = [];
     records.forEach((record) => {
@@ -12604,6 +12652,17 @@ function formatKoreanResult(value) {
       const auto = item.auto_refresh ? `자동 ${item.refresh_hours || 24}시간` : "자동 꺼짐";
       return `${item.label || item.key || "외부 소스"} · ${status} · ${auto} · 관련 ${item.related_count || 0}개 · 최근 ${formatDateTime(item.last_checked_at)}`;
     });
+    const sourceQualityDashboard = Array.isArray(digest.source_quality_dashboard)
+      ? digest.source_quality_dashboard
+      : [];
+    const sourceQualityLines = sourceQualityDashboard.map(
+      (item) =>
+        `${item.source || "소스 미확인"} · ${item.status || "미확인"} · 관련 ${formatNumber(
+          item.related_count || 0
+        )}개 · 저작권: ${item.copyright_policy || "정책 미확인"} · 중복: ${
+          item.duplicate_guard || "가드 미확인"
+        } · 최근 ${formatDateTime(item.last_checked_at)}`
+    );
     const priorityTargets = (digest.priority_targets || [])
       .slice(0, 5)
       .map(
@@ -12644,6 +12703,9 @@ function formatKoreanResult(value) {
       ``,
       `외부 소스 자동 점검`,
       ...formatBulletList(sourceScheduleLines, (item) => item, "외부 소스 자동 점검 상태가 없습니다."),
+      ``,
+      `수집 품질 대시보드`,
+      ...formatBulletList(sourceQualityLines, (item) => item, "소스 품질 대시보드가 없습니다."),
       ``,
       `우선 점검 대상`,
       ...formatBulletList(priorityTargets, (item) => item, "우선 점검 대상이 없습니다."),

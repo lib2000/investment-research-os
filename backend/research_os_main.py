@@ -14312,6 +14312,46 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         int(news_payload.get("quality_issue_count") or 0) if isinstance(news_payload, dict) else 0
     )
     daily_brief_date = status.get("daily_brief_date") or brief_payload.get("date")
+    source_quality_dashboard = [
+        {
+            "source": "DART 공시",
+            "status": "점검 필요" if dart_daily.get("due") else ("주의" if dart_daily.get("failure_count") else "정상"),
+            "copyright_policy": "공시 원문/메타데이터 저장",
+            "duplicate_guard": "공시번호 기준 중복 제외",
+            "related_count": int(dart_daily.get("target_count") or dart_daily.get("coverage_count") or 0),
+            "last_checked_at": dart_daily.get("last_checked_at") or dart_daily.get("checked_at"),
+            "detail": dart_daily.get("summary") or f"실패 {dart_daily.get('failure_count') or 0}건",
+        },
+        {
+            "source": "네이버 리서치/시장일지",
+            "status": "주의" if news_quality_issue_count else "정상",
+            "copyright_policy": "저작권 안전 요약/메타데이터 중심",
+            "duplicate_guard": "source_url/content_hash/제목 유사도 중복 제외",
+            "related_count": len(news_items),
+            "last_checked_at": status.get("naver_research_checked_at") or status.get("updated_at"),
+            "detail": f"뉴스 인박스 {len(news_items)}개 · 품질 확인 {news_quality_issue_count}개",
+        },
+        {
+            "source": "KIEP/KCIF 매크로",
+            "status": "점검 필요" if kcif_due else "정상",
+            "copyright_policy": "제목·발행일·링크·요약 메타데이터 활용",
+            "duplicate_guard": "보고서 URL/제목 기준 중복 제외",
+            "related_count": kcif_related_count,
+            "last_checked_at": kcif_watch.get("updated_at") if isinstance(kcif_watch, dict) else None,
+            "detail": "매크로 보고서 일일 점검",
+        },
+        {
+            "source": "EMERiCs/CSF/지역자료",
+            "status": "점검 필요" if regional_sources_due else "정상",
+            "copyright_policy": "제목·링크·발행기관·요약 메타데이터 활용",
+            "duplicate_guard": "URL/제목 기준 중복 제외",
+            "related_count": regional_sources_related_count,
+            "last_checked_at": regional_sources_watch.get("updated_at")
+            if isinstance(regional_sources_watch, dict)
+            else None,
+            "detail": "지역·중국·신흥국 리스크 소스 일일 점검",
+        },
+    ]
 
     tone = "ok"
     headline = "자동화 정상"
@@ -14393,6 +14433,7 @@ def build_research_automation_dashboard_digest(settings: Settings) -> dict:
         else None,
         "source_schedule": source_schedule,
         "source_schedule_due_count": sum(1 for item in source_schedule if item.get("due")),
+        "source_quality_dashboard": source_quality_dashboard,
         "dart_daily_check": dart_daily,
         "dart_due": bool(dart_daily.get("due")),
         "dart_failure_count": int(dart_daily.get("failure_count") or 0),
@@ -21697,6 +21738,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 "evidence_sources": [],
                 "risk_notes": [],
                 "portfolio_context": [],
+                "score_penalties": [],
+                "quality_flags": [],
+                "portfolio_risk_connection": {},
+                "overseas_tracking": {},
                 "currency": "KRW" if fullmatch(r"\d{6}", key) else "USD",
                 "baseline_price": None,
                 "baseline_price_source": None,
@@ -21718,6 +21763,19 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         candidate.setdefault("score_components", []).append(
             {"label": label, "points": numeric_points}
         )
+
+    def add_candidate_penalty(candidate: dict, label: str, points: int | float = 0) -> None:
+        try:
+            numeric_points = abs(int(points))
+        except (TypeError, ValueError):
+            numeric_points = 0
+        text = str(label or "").strip()
+        if not text:
+            return
+        if numeric_points:
+            candidate["score"] -= numeric_points
+            text = f"{text} (-{numeric_points})"
+        candidate.setdefault("score_penalties", []).append(text)
 
     for item in rows:
         ticker = normalize_ticker(item.get("ticker"))
@@ -21750,13 +21808,26 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 f"목표가/리포트 근거 {item.get('source_count')}건"
             )
         if item.get("market_value"):
+            market_value = float(item.get("market_value") or 0)
             add_candidate_score(candidate, 20, "실제 보유 포트폴리오 비중")
             candidate["portfolio_context"].append(
-                f"보유 포트폴리오 평가금액 {round(float(item.get('market_value') or 0)):,}원"
+                f"보유 포트폴리오 평가금액 {round(market_value):,}원"
             )
+            candidate["portfolio_risk_connection"] = {
+                "linked": True,
+                "priority": "high" if market_value >= 10_000_000 else "normal",
+                "market_value_krw": round(market_value),
+                "message": "보유 비중이 연결된 추천 후보입니다. 포트폴리오 리스크 스캔에서 비중·섹터 쏠림을 함께 확인하세요.",
+            }
         if item.get("interest"):
             add_candidate_score(candidate, 10, "관심종목 등록")
             candidate["portfolio_context"].append("관심종목 등록")
+            if not candidate.get("portfolio_risk_connection"):
+                candidate["portfolio_risk_connection"] = {
+                    "linked": True,
+                    "priority": "watch",
+                    "message": "관심종목 등록 후보입니다. 실제 보유 편입 전 가격 조건과 기존 보유 노출을 함께 확인하세요.",
+                }
         if item.get("latest_source_file"):
             candidate["evidence_sources"].append(f"최근 근거 파일: {item.get('latest_source_file')}")
         if item.get("source_scope"):
@@ -21813,6 +21884,8 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 add_candidate_score(candidate, 10, "저장자료 신선도 양호")
             elif freshness.get("tone") == "warning":
                 add_candidate_score(candidate, 5, "저장자료 신선도 확인 필요")
+                candidate["quality_flags"].append("저장자료 신선도 확인 필요")
+                add_candidate_penalty(candidate, "최근 자료 신선도 보강 필요", 2)
             candidate["evidence_sources"].append(freshness.get("summary") or "저장자료 신선도 확인")
             if profile.get("analysis_focus"):
                 candidate["reasons"].append(f"분석 초점: {profile.get('analysis_focus')}")
@@ -21828,12 +21901,58 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 add_candidate_score(candidate, 5, "현재가 확인")
             else:
                 candidate["risk_notes"].append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
+                candidate["quality_flags"].append("기준 현재가 미확인")
+                add_candidate_penalty(candidate, "현재가 미확인", 5)
+
+        currency = str(candidate.get("currency") or "KRW").upper()
+        if currency != "KRW":
+            candidate["overseas_tracking"] = {
+                "currency": currency,
+                "baseline_price": candidate.get("baseline_price"),
+                "needs_fx_conversion": True,
+                "fx_note": "해외 종목은 원통화 기준 수익률을 우선 추적하고, 포트폴리오 평가에는 USD/KRW 환율 반영 상태를 함께 확인합니다.",
+                "price_source": candidate.get("baseline_price_source"),
+                "price_checked_at": candidate.get("baseline_price_checked_at"),
+            }
+            candidate["quality_flags"].append("해외 종목: 환율·원화 평가 병행 확인")
+        else:
+            candidate["overseas_tracking"] = {
+                "currency": "KRW",
+                "needs_fx_conversion": False,
+            }
 
         if not candidate["reasons"]:
             candidate["reasons"].append("보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다.")
         candidate["reasons"] = list(dict.fromkeys(candidate["reasons"]))[:6]
         candidate["evidence_sources"] = list(dict.fromkeys(candidate["evidence_sources"]))[:8]
         candidate["risk_notes"] = list(dict.fromkeys(candidate["risk_notes"]))[:5]
+        candidate["score_penalties"] = list(dict.fromkeys(candidate.get("score_penalties", [])))[:6]
+        candidate["quality_flags"] = list(dict.fromkeys(candidate.get("quality_flags", [])))[:6]
+        positive_points = sum(int(component.get("points") or 0) for component in candidate.get("score_components", []))
+        penalty_points = sum(
+            int(match.group(1))
+            for item in candidate.get("score_penalties", [])
+            for match in [search(r"\(-(\d+)\)", str(item))]
+            if match
+        )
+        if positive_points:
+            candidate["score_explanation"] = {
+                "positive_points": positive_points,
+                "penalty_points": penalty_points,
+                "final_score": int(candidate.get("score") or 0),
+                "top_component": max(
+                    candidate.get("score_components", []),
+                    key=lambda component: int(component.get("points") or 0),
+                ),
+                "component_weights": [
+                    {
+                        "label": component.get("label"),
+                        "points": int(component.get("points") or 0),
+                        "weight_pct": round(int(component.get("points") or 0) / positive_points * 100, 1),
+                    }
+                    for component in candidate.get("score_components", [])[:8]
+                ],
+            }
 
     candidates = sorted(
         candidates_by_ticker.values(),

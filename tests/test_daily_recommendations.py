@@ -31,6 +31,19 @@ class DailyRecommendationsTests(unittest.TestCase):
                     "baseline_price_source": "test",
                     "currency": "KRW",
                     "score_components": [{"label": "목표가", "points": 35}],
+                    "score_explanation": {
+                        "positive_points": 35,
+                        "penalty_points": 0,
+                        "final_score": 88,
+                        "component_weights": [{"label": "목표가", "points": 35, "weight_pct": 100.0}],
+                    },
+                    "score_penalties": [],
+                    "quality_flags": [],
+                    "portfolio_risk_connection": {
+                        "linked": True,
+                        "priority": "high",
+                        "message": "보유 비중과 함께 확인",
+                    },
                     "reasons": ["목표가 상승여력"],
                     "evidence_sources": ["저장 리포트 3건"],
                 },
@@ -51,6 +64,11 @@ class DailyRecommendationsTests(unittest.TestCase):
                     "baseline_price": 40,
                     "baseline_price_source": "test",
                     "currency": "USD",
+                    "overseas_tracking": {
+                        "currency": "USD",
+                        "needs_fx_conversion": True,
+                        "fx_note": "환율 확인",
+                    },
                     "reasons": ["RAG 문서 연결"],
                     "evidence_sources": ["Dossier"],
                 },
@@ -83,6 +101,10 @@ class DailyRecommendationsTests(unittest.TestCase):
         first = status["latest_records"][0]
         self.assertEqual(first["company_name"], "삼양식품")
         self.assertEqual(first["score_components"][0]["label"], "목표가")
+        self.assertEqual(first["score_explanation"]["component_weights"][0]["weight_pct"], 100.0)
+        self.assertTrue(first["portfolio_risk_connection"]["linked"])
+        overseas = [item for item in status["latest_records"] if item["ticker"] == "PL"][0]
+        self.assertTrue(overseas["overseas_tracking"]["needs_fx_conversion"])
         week = first["tracking_milestones"][0]
         self.assertEqual(week["status"], "complete")
         self.assertEqual(week["price_change_pct"], 0.1)
