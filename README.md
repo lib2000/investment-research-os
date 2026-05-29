@@ -69,6 +69,14 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 
+`현재 작업 디렉토리가 없습니다` 또는 OneDrive 경로가 보이면 아래 명령으로 루트를 다시 맞춘다. 현재 PowerShell 창의 위치까지 바꾸려면 앞의 점(`.`)을 포함해 dot-source로 실행한다.
+
+```powershell
+. C:\Users\lib20\InvestmentJournalApp\scripts\enter-investment-research-os.ps1
+```
+
+매일 추천종목은 콘솔 첫 화면의 **오늘 추천 1~3위** 또는 저장 데이터 탭의 **오늘 추천 1~3위 / 추천 추적 상태**에서 확인한다. 저장 원본은 `research_vault\_system\daily_recommendations.json`이다.
+
 ## 여러 앱 동시 개발 포트
 
 현재 PC에서 여러 앱을 동시에 제작하므로 포트는 [docs/dev-server-port-registry.md](docs/dev-server-port-registry.md)의 예약표를 기준으로 사용한다. 충돌 확인은 아래 스크립트로 먼저 실행한다.

@@ -1,4 +1,4 @@
-import {
+﻿import {
   setApiBaseUrl,
   fetchDataProviderStatus,
   fetchOcrStatus,
@@ -214,7 +214,9 @@ const elements = {
   naverResearchRepairButton: document.querySelector("#naverResearchRepairButton"),
   naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
   dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
+  dailyRecommendationsQuickButton: document.querySelector("#dailyRecommendationsQuickButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
+  dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
@@ -7769,6 +7771,20 @@ function renderDailyRecommendationCards(payload) {
       }))
     )
     .slice(0, 15);
+  const qualitySummary = records.reduce(
+    (acc, record) => {
+      acc.penaltyCount += (record.score_penalties || []).length;
+      acc.flagCount += (record.quality_flags || []).length;
+      if (record.overseas_tracking?.needs_fx_conversion) {
+        acc.overseasCount += 1;
+      }
+      if (record.portfolio_risk_connection?.linked) {
+        acc.portfolioLinkedCount += 1;
+      }
+      return acc;
+    },
+    { penaltyCount: 0, flagCount: 0, overseasCount: 0, portfolioLinkedCount: 0 }
+  );
   const cards = records
     .map((record) => {
       const reasons = (record.reasons || []).slice(0, 3);
@@ -7845,6 +7861,9 @@ function renderDailyRecommendationCards(payload) {
       <span>매일 추천 후보 1~3위</span>
       <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
       <p>저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
+      <small>${escapeHtml(
+        `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
+      )}</small>
       <small>${escapeHtml(recommendationDates.length ? `추천 이력: ${recommendationDates.join(" · ")}` : "추천 이력은 저장 후 누적됩니다.")}</small>
     </article>
     ${cards}
@@ -11314,8 +11333,9 @@ elements.dailyBriefButton.addEventListener("click", async () => {
   }
 });
 
-elements.dailyRecommendationsButton?.addEventListener("click", async () => {
+async function runDailyRecommendationsFlow() {
   syncApiBaseUrl();
+  activateTab("memory");
   startOutputLoading("오늘 추천 후보 생성 중", [
     "보유/관심 종목과 저장 리포트 확인",
     "목표가·공시·RAG 근거 점수화",
@@ -11330,10 +11350,11 @@ elements.dailyRecommendationsButton?.addEventListener("click", async () => {
   } catch (error) {
     setError(error);
   }
-});
+}
 
-elements.dailyRecommendationsStatusButton?.addEventListener("click", async () => {
+async function runDailyRecommendationsStatusFlow() {
   syncApiBaseUrl();
+  activateTab("memory");
   startOutputLoading("추천 추적 상태 조회 중", [
     "저장된 추천 후보 확인",
     "도래한 추적일 확인",
@@ -11347,7 +11368,15 @@ elements.dailyRecommendationsStatusButton?.addEventListener("click", async () =>
   } catch (error) {
     setError(error);
   }
-});
+}
+
+[elements.dailyRecommendationsButton, elements.dailyRecommendationsQuickButton]
+  .filter(Boolean)
+  .forEach((button) => button.addEventListener("click", runDailyRecommendationsFlow));
+
+[elements.dailyRecommendationsStatusButton, elements.dailyRecommendationsStatusQuickButton]
+  .filter(Boolean)
+  .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
 
 elements.researchAutomationButton.addEventListener("click", async () => {
   syncApiBaseUrl();

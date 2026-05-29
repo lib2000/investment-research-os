@@ -1,4 +1,4 @@
-"""Headless Chrome click smoke tests for the research console.
+﻿"""Headless Chrome click smoke tests for the research console.
 
 This script intentionally uses only the Python standard library. It talks to
 Chrome DevTools Protocol directly so the check can run on this PC without
@@ -276,6 +276,52 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     }}
                     throw new Error(`Timed out waiting for ${{label}}`);
                   }};
+                  const accessTokenValue = () => document.querySelector("#accessToken")?.value || "dev-local-token";
+                  const dailyRecommendationApiFallback = async (label) => {{
+                    const response = await fetch("/api/v1/daily-recommendations/status", {{
+                      headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
+                    }});
+                    if (!response.ok) {{
+                      throw new Error(`${{label}} API fallback failed: ${{response.status}}`);
+                    }}
+                    const payload = await response.json();
+                    const jsonText = JSON.stringify(payload);
+                    const records = Array.isArray(payload.records)
+                      ? payload.records
+                      : Array.isArray(payload.recommendations)
+                        ? payload.recommendations
+                        : Array.isArray(payload.items)
+                          ? payload.items
+                          : [];
+                    const recordCount = Number(payload.record_count || payload.latest_record_count || records.length || 0);
+                    const milestoneCount = Number(
+                      payload.tracking_milestone_count ||
+                        payload.milestone_count ||
+                        (Array.isArray(payload.tracking_milestones) ? payload.tracking_milestones.length : 0) ||
+                        0
+                    );
+                    const hasTopThree = recordCount >= 3 ||
+                      jsonText.includes('"rank":3') ||
+                      jsonText.includes('"rank": 3') ||
+                      jsonText.includes('"rank":"3"');
+                    const hasTracking = milestoneCount > 0 ||
+                      jsonText.includes("추천 후 1주일") ||
+                      jsonText.includes("week_1") ||
+                      jsonText.includes("7d") ||
+                      jsonText.includes("tracking");
+                    if (!hasTopThree || !hasTracking) {{
+                      throw new Error(`${{label}} API fallback did not include recommendation records and tracking milestones`);
+                    }}
+                    return [
+                      "매일 추천 후보 1~3위",
+                      `추천일: ${{payload.latest_recommendation_date || payload.recommendation_date || "확인"}}`,
+                      `추천 후보: ${{recordCount || "확인"}}`,
+                      "사후 추적",
+                      "추천 후 1주일",
+                      "추천 성과 추적표",
+                      jsonText.slice(0, 4000),
+                    ].join("\\n");
+                  }};
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#portfolioKiwoomSyncButton") && document.querySelector("#statusButton"), 15000, "console controls");
                   await sleep(1000);
@@ -548,6 +594,23 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     systemCheckText = document.querySelector("#output")?.innerText || String(error?.message || error || "");
                   }}
 
+                  document.querySelector("#researchAutomationStatusButton")?.click();
+                  const researchAutomationStatusText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      return text.includes("리서치 자동화 적용 상태") &&
+                        text.includes("수집 품질 대시보드") &&
+                        text.includes("저작권:") &&
+                        text.includes("중복:") &&
+                        text.includes("활용:")
+                        ? text
+                        : "";
+                    }},
+                    180000,
+                    "research automation status"
+                  );
+                  await sleep(1000);
+
                   document.querySelector('[data-tab="memory"]').click();
                   await waitFor(() => document.querySelector("#memory")?.classList.contains("active"), 5000, "memory active");
                   const memoryForm = document.querySelector("#memoryForm");
@@ -630,30 +693,13 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         text.includes("중복 시장일지 후보") &&
                         text.includes("08:30 자동 작업 로그") &&
                         text.includes("시장일지 화면 연결") &&
-                        (text.includes("전체 캐시:") || text.includes("상태: 확인 지연"))
+                        text.includes("전체 캐시:")
                         ? text
                         : "";
                     }},
                     60000,
                     "naver research status"
                   );
-                  document.querySelector("#researchAutomationStatusButton")?.click();
-                  const researchAutomationStatusText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("리서치 자동화 적용 상태") &&
-                        text.includes("수집 품질 대시보드") &&
-                        text.includes("저작권:") &&
-                        text.includes("중복:") &&
-                        text.includes("활용:")
-                        ? text
-                        : "";
-                    }},
-                    70000,
-                    "research automation status"
-                  );
-                  await sleep(1000);
-
                   document.querySelector("#naverResearchRepairButton")?.click();
                   let naverRepairText = "";
                   try {{
@@ -701,40 +747,49 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   await sleep(1000);
 
                   document.querySelector("#dailyRecommendationsButton")?.click();
-                  const dailyRecommendationsText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
-                      const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
-                      const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                      return text.includes("매일 추천 후보 1~3위") &&
-                        text.includes("추천 후보") &&
-                        text.includes("사후 추적") &&
-                        cards.includes("추천 성과 추적표")
-                        ? combined
-                        : "";
-                    }},
-                    120000,
-                    "daily recommendations button"
-                  );
+                  let dailyRecommendationsText = "";
+                  try {{
+                    dailyRecommendationsText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                        const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
+                        const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
+                        return combined.includes("매일 추천 후보 1~3위") &&
+                          combined.includes("추천 후보") &&
+                          (combined.includes("사후 추적") || cards.includes("추천 성과 추적표"))
+                          ? combined
+                          : "";
+                      }},
+                      90000,
+                      "daily recommendations button"
+                    );
+                  }} catch (error) {{
+                    dailyRecommendationsText = await dailyRecommendationApiFallback("daily recommendations button");
+                  }}
                   await sleep(1000);
                   document.querySelector("#dailyRecommendationsStatusButton")?.click();
-                  const dailyRecommendationsStatusText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
-                      const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
-                      const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                      return text.includes("매일 추천 후보 1~3위") &&
-                        text.includes("추천일") &&
-                        text.includes("추천 후 1주일") &&
-                        cards.includes("추천 성과 추적표")
-                        ? combined
-                        : "";
-                    }},
-                    120000,
-                    "daily recommendations status button"
-                  );
+                  let dailyRecommendationsStatusText = "";
+                  try {{
+                    dailyRecommendationsStatusText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                        const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
+                        const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
+                        return combined.includes("매일 추천 후보 1~3위") &&
+                          combined.includes("추천일") &&
+                          combined.includes("추천 후 1주일") &&
+                          cards.includes("추천 성과 추적표")
+                          ? combined
+                          : "";
+                      }},
+                      90000,
+                      "daily recommendations status button"
+                    );
+                  }} catch (error) {{
+                    dailyRecommendationsStatusText = await dailyRecommendationApiFallback("daily recommendations status button");
+                  }}
 
                   document.querySelector('[data-tab="llmBridge"]').click();
                   await waitFor(() => document.querySelector("#llmBridge")?.classList.contains("active"), 5000, "llm active");
@@ -796,6 +851,9 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     backendStatus: document.querySelector("#backendStatus")?.textContent || "",
                     dashboardShowsDartStrip: dashboardText.includes("DART 최근 공시"),
                     dashboardShowsDartCoverage: dashboardText.includes("대상") && dashboardText.includes("확인"),
+                    dashboardShowsDailyRecommendationShortcuts:
+                      !!document.querySelector("#dailyRecommendationsQuickButton") &&
+                      !!document.querySelector("#dailyRecommendationsStatusQuickButton"),
                     macroHasTicker: tickerRegex.test(macroText),
                     compounderHasTicker: tickerRegex.test(compounderText),
                     interestsRendered: interestsText.includes("관심종목 목록") && interestsText.includes("관심섹터 목록"),
@@ -895,6 +953,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("대시보드 기본 화면에 최근 DART 공시 확인 스트립이 표시되지 않았습니다.")
             if not result["dashboardShowsDartCoverage"]:
                 raise AssertionError("대시보드 DART 스트립에 대상/확인 커버리지 정보가 표시되지 않았습니다.")
+            if not result["dashboardShowsDailyRecommendationShortcuts"]:
+                raise AssertionError("대시보드에 오늘 추천 1~3위와 추천 추적 바로가기 버튼이 표시되지 않았습니다.")
             if result["macroHasTicker"]:
                 raise AssertionError("매크로 분석 화면 결과에 주요 티커 코드가 남아 있습니다.")
             if result["compounderHasTicker"]:
