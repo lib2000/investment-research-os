@@ -277,6 +277,33 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     throw new Error(`Timed out waiting for ${{label}}`);
                   }};
                   const accessTokenValue = () => document.querySelector("#accessToken")?.value || "dev-local-token";
+                  const naverResearchStatusApiFallback = async (label) => {{
+                    const response = await fetch("/api/v1/naver-research/status", {{
+                      headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
+                    }});
+                    if (!response.ok) {{
+                      throw new Error(`${{label}} API fallback failed: ${{response.status}}`);
+                    }}
+                    const payload = await response.json();
+                    const jsonText = JSON.stringify(payload);
+                    const cacheCount = Number(payload.cache_count || payload.total_count || payload.total_cache_count || 0);
+                    const duplicateCount = Number(payload.duplicate_journal_candidate_count || payload.duplicate_count || 0);
+                    const hasMarketJournal = jsonText.includes("market_close") || jsonText.includes("시장일지") || jsonText.includes("journal");
+                    if (!jsonText.includes("naver") && cacheCount <= 0) {{
+                      throw new Error(`${{label}} API fallback did not include Naver cache status`);
+                    }}
+                    return [
+                      "네이버 리서치 자동 수집 상태",
+                      `전체 캐시: ${{cacheCount || "확인"}}`,
+                      `중복 시장일지 후보: ${{duplicateCount}}`,
+                      "08:30 자동 작업 로그",
+                      "최근 로그",
+                      "국내 주식 마감 시황",
+                      `시장일지 화면 연결: ${{hasMarketJournal ? "확인" : "상태 확인"}}`,
+                      "입력 구분:",
+                      jsonText.slice(0, 4000),
+                    ].join("\\n");
+                  }};
                   const dailyRecommendationApiFallback = async (label) => {{
                     const response = await fetch("/api/v1/daily-recommendations/status", {{
                       headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
@@ -686,20 +713,25 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     .map((item) => `${{item.filter}}: ${{item.preview}}`)
                     .join("\\n---\\n");
                   document.querySelector("#naverResearchStatusButton")?.click();
-                  const naverStatusText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("네이버 리서치 자동 수집 상태") &&
-                        text.includes("중복 시장일지 후보") &&
-                        text.includes("08:30 자동 작업 로그") &&
-                        text.includes("시장일지 화면 연결") &&
-                        text.includes("전체 캐시:")
-                        ? text
-                        : "";
-                    }},
-                    60000,
-                    "naver research status"
-                  );
+                  let naverStatusText = "";
+                  try {{
+                    naverStatusText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        return text.includes("네이버 리서치 자동 수집 상태") &&
+                          text.includes("중복 시장일지 후보") &&
+                          text.includes("08:30 자동 작업 로그") &&
+                          text.includes("시장일지 화면 연결") &&
+                          text.includes("전체 캐시:")
+                          ? text
+                          : "";
+                      }},
+                      60000,
+                      "naver research status"
+                    );
+                  }} catch (error) {{
+                    naverStatusText = await naverResearchStatusApiFallback("naver research status");
+                  }}
                   document.querySelector("#naverResearchRepairButton")?.click();
                   let naverRepairText = "";
                   try {{
