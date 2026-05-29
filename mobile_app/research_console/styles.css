@@ -347,7 +347,7 @@ label {
 
 .dashboard-command-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   gap: 10px;
   align-items: stretch;
 }
@@ -363,7 +363,6 @@ label {
 .dashboard-form button {
   width: 100%;
   min-height: 44px;
-  height: 44px;
 }
 
 .dashboard-form select {
@@ -371,9 +370,16 @@ label {
 }
 
 .dashboard-form button {
-  padding-inline: 10px;
-  white-space: nowrap;
-  line-height: 1.2;
+  min-width: 0;
+  padding: 8px 10px;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.22;
+}
+
+.dashboard-command-bar button {
+  min-width: 136px;
 }
 
 .dashboard-ticker-quick-list {

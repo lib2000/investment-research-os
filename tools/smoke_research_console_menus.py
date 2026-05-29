@@ -66,6 +66,16 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     .map((item) => item.dataset.tab || item.textContent.trim())[0] || "";
                   const activePanelKey = () => [...document.querySelectorAll(".panel.active, section.active, .tab-panel.active")]
                     .map((item) => item.id).filter(Boolean)[0] || "";
+                  const dashboardCommandLayout = () => [...document.querySelectorAll(".dashboard-command-bar button")]
+                    .filter(visible)
+                    .map((button) => ({{
+                      label: button.textContent.trim(),
+                      width: button.clientWidth,
+                      scrollWidth: button.scrollWidth,
+                      height: button.clientHeight,
+                      scrollHeight: button.scrollHeight,
+                      clipped: button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight,
+                    }}));
                   const outputText = () => document.querySelector("#output")?.innerText || "";
                   const outputStatus = () => document.querySelector("#outputStatus")?.textContent || "";
                   const actionFeedbackText = () => document.querySelector("#actionFeedback")?.textContent || "";
@@ -223,6 +233,10 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     ['#dashboard .dashboard-command-bar [data-workflow-action="system-check"]', '시스템 점검', 120000, false],
                     ['#dashboard .dashboard-command-bar [data-workflow-action="run-team"]', '리포트 실행', 120000, true],
                   ];
+                  await setDashboardTicker();
+                  const initialDashboardCommandLayout = dashboardCommandLayout();
+                  const clippedDashboardCommands = initialDashboardCommandLayout.filter((item) => item.clipped);
+
                   const shortcutResults = [];
                   for (const [selector, label, timeout, writeAction] of shortcutPlan) {{
                     if (writeAction && !includeWriteActions) {{
@@ -266,6 +280,8 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     cardActionResults,
                     failedShortcuts,
                     failedCardActions,
+                    dashboardCommandLayout: initialDashboardCommandLayout,
+                    clippedDashboardCommands,
                     runtimeErrors,
                   }};
                 }})()
@@ -276,6 +292,8 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                 raise AssertionError(f"메뉴 전환 실패: {result['failedMenus']}")
             if result["failedShortcuts"]:
                 raise AssertionError(f"대시보드 빠른 버튼 실패: {result['failedShortcuts']}")
+            if result.get("clippedDashboardCommands"):
+                raise AssertionError(f"대시보드 메뉴 버튼 잘림: {result["clippedDashboardCommands"]}")
             if result["failedCardActions"]:
                 raise AssertionError(f"대시보드 카드 버튼 실패: {result['failedCardActions']}")
             if result["runtimeErrors"]:
