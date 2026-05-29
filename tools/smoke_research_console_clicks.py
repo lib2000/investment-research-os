@@ -672,6 +672,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     70000,
                     "naver market journal button"
                   );
+                  await sleep(1000);
 
                   document.querySelector("#dailyRecommendationsButton")?.click();
                   const dailyRecommendationsText = await waitFor(
@@ -680,16 +681,17 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       const feedback = document.querySelector("#actionFeedback")?.textContent || "";
                       const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
                       const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                      return combined.includes("매일 추천 후보 1~3위") &&
-                        combined.includes("추천 후보") &&
-                        combined.includes("사후 추적") &&
-                        combined.includes("추천 성과 추적표")
+                      return text.includes("매일 추천 후보 1~3위") &&
+                        text.includes("추천 후보") &&
+                        text.includes("사후 추적") &&
+                        cards.includes("추천 성과 추적표")
                         ? combined
                         : "";
                     }},
                     120000,
                     "daily recommendations button"
                   );
+                  await sleep(1000);
                   document.querySelector("#dailyRecommendationsStatusButton")?.click();
                   const dailyRecommendationsStatusText = await waitFor(
                     () => {{
@@ -697,10 +699,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       const feedback = document.querySelector("#actionFeedback")?.textContent || "";
                       const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
                       const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                      return combined.includes("매일 추천 후보 1~3위") &&
-                        combined.includes("추천일") &&
-                        combined.includes("추천 후 1주일") &&
-                        combined.includes("추천 성과 추적표")
+                      return text.includes("매일 추천 후보 1~3위") &&
+                        text.includes("추천일") &&
+                        text.includes("추천 후 1주일") &&
+                        cards.includes("추천 성과 추적표")
                         ? combined
                         : "";
                     }},
