@@ -138,6 +138,52 @@ class DailyRecommendationsTests(unittest.TestCase):
             )
         )
 
+
+    def test_daily_recommendation_storage_quality_penalizes_weak_evidence(self):
+        import research_os_main as main
+
+        quality = main._daily_recommendation_manifest_quality_by_ticker(
+            [
+                {"ticker": "003230", "summary": "정상 리포트", "date": "2026-05-29"},
+                {
+                    "ticker": "003230",
+                    "duplicate_check": {"is_duplicate_suspected": True},
+                    "date": "2026-05-29",
+                },
+                {
+                    "ticker": "003230",
+                    "tags": ["url_text_unavailable", "needs_body_copy"],
+                    "capture_quality": {"status": "보강 필요"},
+                },
+                {
+                    "ticker": "003230",
+                    "attachment": {"ocr_required": True},
+                },
+                {
+                    "ticker": "003230",
+                    "status": "archived",
+                },
+            ]
+        )["003230"]
+        candidate = {
+            "ticker": "003230",
+            "company_name": "삼양식품",
+            "score": 10,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": [],
+        }
+
+        main._apply_daily_recommendation_storage_quality(candidate, quality)
+
+        self.assertEqual(candidate["score"], 5)
+        self.assertEqual(candidate["score_components"][0]["label"], "검증 저장자료 품질")
+        self.assertTrue(candidate["score_penalties"])
+        self.assertIn("중복 의심 자료는 대표 자료만 근거로 사용", candidate["quality_flags"])
+        self.assertIn("본문/OCR 보강 전 투자 근거 가중치 제한", candidate["quality_flags"])
+        self.assertTrue(candidate["evidence_sources"][0].startswith("저장 품질:"))
+
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):
         import research_os_main as main
 
