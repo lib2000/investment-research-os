@@ -35,6 +35,9 @@ EXPECTED_MAIN_IMPORTS = {
     "research_os.web_capture",
 }
 BANNED_TERMS = ("bigkinds", "빅카인즈")
+CURRENT_MAIN_LINE_BASELINE = 24016
+DEFAULT_MAIN_MAX_LINES = 26000
+DEFAULT_MIN_MODULE_COUNT = 24
 
 
 def project_root(start: Path) -> Path:
@@ -63,6 +66,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="백엔드 모듈 분리/문법/금지 소스 잔존 여부를 점검합니다.")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--main-large-warning-lines", type=int, default=20000)
+    parser.add_argument("--main-max-lines", type=int, default=DEFAULT_MAIN_MAX_LINES, help="research_os_main.py가 이 줄 수를 넘으면 실패")
+    parser.add_argument("--min-module-count", type=int, default=DEFAULT_MIN_MODULE_COUNT, help="분리 도메인 모듈 최소 개수")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -71,12 +76,15 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
 
-    module_files = {path.name for path in module_dir.glob("*.py")}
+    module_paths = sorted(module_dir.glob("*.py"))
+    module_files = {path.name for path in module_paths}
     missing = sorted(EXPECTED_MODULES - module_files)
     if missing:
         errors.append("분리 기대 모듈 누락: " + ", ".join(missing))
+    if len(module_files) < args.min_module_count:
+        errors.append(f"백엔드 분리 모듈 수 부족: {len(module_files)}개 / 필요 {args.min_module_count}개")
 
-    python_files = [backend / "research_os_main.py", *sorted(module_dir.glob("*.py"))]
+    python_files = [backend / "research_os_main.py", *module_paths]
     for path in python_files:
         try:
             parse_python(path)
@@ -95,13 +103,24 @@ def main() -> int:
         errors.append("research_os_main.py 분리 모듈 import 누락: " + ", ".join(missing_imports))
 
     main_lines = len(main_path.read_text(encoding="utf-8-sig").splitlines())
+    if main_lines > args.main_max_lines:
+        errors.append(f"research_os_main.py 줄 수 상한 초과: {main_lines}줄 / 상한 {args.main_max_lines}줄")
     if main_lines > args.main_large_warning_lines:
-        warnings.append(f"research_os_main.py가 아직 큼: {main_lines}줄. 라우터/도메인 분리 계속 권장")
+        delta = main_lines - CURRENT_MAIN_LINE_BASELINE
+        trend = f"기준 대비 {delta:+}줄"
+        warnings.append(f"research_os_main.py가 아직 큼: {main_lines}줄({trend}). 라우터/도메인 분리 계속 권장")
+
+    largest_modules = sorted(
+        ((path.name, len(path.read_text(encoding="utf-8-sig").splitlines())) for path in module_paths),
+        key=lambda item: item[1],
+        reverse=True,
+    )[:5]
 
     print(f"프로젝트 루트: {root}")
-    print(f"백엔드 모듈 수: {len(module_files)}개")
+    print(f"백엔드 모듈 수: {len(module_files)}개 / 최소 {args.min_module_count}개")
     print(f"Python 파싱 대상: {len(python_files)}개")
-    print(f"research_os_main.py: {main_lines}줄")
+    print(f"research_os_main.py: {main_lines}줄 / 상한 {args.main_max_lines}줄")
+    print("큰 도메인 모듈: " + ", ".join(f"{name}={lines}줄" for name, lines in largest_modules))
     if warnings:
         for warning in warnings:
             print(f"주의: {warning}")

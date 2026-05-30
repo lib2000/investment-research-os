@@ -361,6 +361,12 @@ $contracts = @(
       'EXPECTED_MODULES',
       'EXPECTED_MAIN_IMPORTS',
       'BANNED_TERMS',
+      'DEFAULT_MAIN_MAX_LINES',
+      'DEFAULT_MIN_MODULE_COUNT',
+      '--main-max-lines',
+      '--min-module-count',
+      '큰 도메인 모듈',
+      '줄 수 상한 초과',
       '백엔드 모듈 상태 정상'
     )
   },
