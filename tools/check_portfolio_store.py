@@ -110,6 +110,8 @@ def main() -> int:
     parser.add_argument("--portfolio", default="이형주", help="확인할 포트폴리오 이름 또는 키")
     parser.add_argument("--expected", default=DEFAULT_EXPECTED, help="예: PL=100:USD,253450=36:KRW")
     parser.add_argument("--min-holdings", type=int, default=1, help="최소 보유 종목 수")
+    parser.add_argument("--expected-holdings-count", type=int, default=0, help="정확히 기대하는 보유 종목 수. 0이면 비활성화")
+    parser.add_argument("--max-holdings", type=int, default=0, help="허용할 최대 보유 종목 수. 0이면 비활성화")
     parser.add_argument("--forbid-zero", action="store_true", help="수량 0 종목이 있으면 실패")
     parser.add_argument("--allow-cash", action="store_true", help="CASH/예수금 항목을 허용합니다")
     parser.add_argument("--require-price-fields", action="store_true", default=True, help="평단/현재가/평가금액/가격 출처를 강제합니다")
@@ -148,6 +150,10 @@ def main() -> int:
         errors.append("보유 종목 배열에 객체가 아닌 항목이 있습니다.")
     if len(holding_rows) < args.min_holdings:
         errors.append(f"보유 종목 수 부족: {len(holding_rows)}개 / 필요 {args.min_holdings}개")
+    if args.expected_holdings_count > 0 and len(holding_rows) != args.expected_holdings_count:
+        errors.append(f"보유 종목 수 불일치: {len(holding_rows)}개 / 기대 {args.expected_holdings_count}개")
+    if args.max_holdings > 0 and len(holding_rows) > args.max_holdings:
+        errors.append(f"보유 종목 수 상한 초과: {len(holding_rows)}개 / 상한 {args.max_holdings}개")
     if selected.get("holding_count") not in (None, len(holding_rows)):
         errors.append(f"holding_count 불일치: {selected.get('holding_count')} / 실제 {len(holding_rows)}")
 
