@@ -100,6 +100,23 @@ def rows_with_storage(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def missing_storage_files(root: Path, rows: list[dict[str, Any]]) -> list[str]:
+    missing: list[str] = []
+    for row in rows:
+        storage = row.get("storage")
+        if not isinstance(storage, dict):
+            continue
+        title = str(row.get("title") or "제목 미확인")
+        for key in ("relative_path", "json_relative_path"):
+            relative_path = str(storage.get(key) or "").strip()
+            if not relative_path:
+                continue
+            candidate = root / relative_path
+            if not candidate.exists():
+                missing.append(f"{title}: {relative_path}")
+    return missing
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -179,6 +196,7 @@ def main() -> int:
     naver_rows = rows_from_mapping_or_list(naver.get("entries"))
     naver_complete_rows = non_empty_rows(naver_rows, "title", "published_at", "url", "source", "summary")
     naver_storage_rows = rows_with_storage(naver_rows)
+    naver_missing_files = missing_storage_files(root, naver_storage_rows)
     naver_age = age_hours(naver.get("updated_at"))
     naver_category_counts = Counter(str(item.get("category") or "미확인") for item in naver_rows)
     add_issue(issues, len(naver_rows) < args.min_naver_reports, f"네이버 리서치 캐시 부족: {len(naver_rows)}개")
@@ -189,6 +207,7 @@ def main() -> int:
         naver_missing_storage > args.max_naver_missing_storage,
         f"네이버 리서치 저장 경로 누락 허용 초과: {naver_missing_storage}개 / 허용 {args.max_naver_missing_storage}개",
     )
+    add_issue(issues, bool(naver_missing_files), f"네이버 리서치 저장 파일 누락 {len(naver_missing_files)}개")
     add_issue(issues, naver_age is None or naver_age > args.max_source_age_hours, "네이버 리서치 캐시 최신성 확인 필요")
     add_issue(issues, naver_category_counts.get("시황정보", 0) < 1, "네이버 시황정보 리포트 캐시 확인 필요")
 
@@ -196,10 +215,12 @@ def main() -> int:
     shinhan_rows = rows_from_mapping_or_list(shinhan.get("entries"))
     shinhan_complete_rows = non_empty_rows(shinhan_rows, "title", "published_at", "url", "source", "summary")
     shinhan_storage_rows = rows_with_storage(shinhan_rows)
+    shinhan_missing_files = missing_storage_files(root, shinhan_storage_rows)
     shinhan_age = age_hours(shinhan.get("updated_at"))
     add_issue(issues, len(shinhan_rows) < args.min_shinhan_reports, f"신한 리서치 캐시 부족: {len(shinhan_rows)}개")
     add_issue(issues, len(shinhan_complete_rows) != len(shinhan_rows), "신한 리서치 메타데이터 누락")
     add_issue(issues, len(shinhan_storage_rows) != len(shinhan_rows), "신한 리서치 저장 경로 누락")
+    add_issue(issues, bool(shinhan_missing_files), f"신한 리서치 저장 파일 누락 {len(shinhan_missing_files)}개")
     add_issue(issues, shinhan_age is None or shinhan_age > args.max_source_age_hours, "신한 리서치 캐시 최신성 확인 필요")
 
     market_close_state = load_json(system_dir, "naver_market_close_journal_state.json")
@@ -243,8 +264,8 @@ def main() -> int:
     if isinstance(deduped_refresh, dict):
         print(f"리서치 자동화 Dossier 갱신: 후보 {deduped_refresh.get('candidate_count')}개 | 갱신 {deduped_refresh.get('refreshed_count')}개 | 실패 {deduped_refresh.get('failed_count')}개 | 갱신 {deduped_refresh.get('updated_at')}")
     naver_category_summary = ", ".join(f"{name}={count}" for name, count in naver_category_counts.most_common(4))
-    print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
-    print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 갱신 {shinhan.get('updated_at')}")
+    print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
+    print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 파일 누락 {len(shinhan_missing_files)}개 | 갱신 {shinhan.get('updated_at')}")
     print(f"마감 시황 자동 시도: 상태 {market_close_status or '미확인'} | 시도일 {market_close_state.get('last_attempt_date') or '미확인'} | 시각 {market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
 

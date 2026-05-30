@@ -120,6 +120,7 @@ python tools\check_llm_bridge_store.py --require-active-rag
 python tools\check_research_source_store.py --strict
 ```
 
+`check_research_source_store.py --strict`는 네이버/신한 리서치 캐시의 저장 경로뿐 아니라 실제 Markdown/JSON 파일 존재도 확인합니다.
 
 `check_llm_bridge_store.py --require-active-rag`는 LLM 연동으로 저장한 원 프롬프트와 응답이 Markdown/JSON 원본 및 RAG 색인에 모두 연결되어 있는지 백엔드 없이 확인합니다.
 
