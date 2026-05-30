@@ -12,6 +12,7 @@
   [switch]$CheckDailyRecommendations,
   [switch]$CheckDailyRecommendationStore,
   [switch]$CheckPortfolioQuantityProtection,
+  [switch]$CheckPortfolioStore,
   [switch]$CheckStorageQualitySafeguards,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
   [string]$CustomsDevUserToken = "dev-local-token",
@@ -85,6 +86,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     tools\smoke_research_console_clicks.py `
     tools\check_daily_recommendations_store.py `
     tools\check_research_source_store.py `
+    tools\check_portfolio_store.py `
     tools\smoke_research_console_external_sources.py `
     tools\smoke_research_console_menus.py `
     tools\smoke_research_console_write_actions.py
@@ -178,6 +180,12 @@ if ($CheckPortfolioQuantityProtection) {
       $portfolioQuantity.SyncProtected,
       $portfolioQuantity.UpdatedAt
     )
+  }
+}
+
+if ($CheckPortfolioStore) {
+  Invoke-VerifyStep "포트폴리오 저장 파일 오프라인 확인" {
+    python tools\check_portfolio_store.py --portfolio $PortfolioQuantityName --expected $PortfolioQuantityExpectedHoldings --min-holdings 1 --forbid-zero
   }
 }
 

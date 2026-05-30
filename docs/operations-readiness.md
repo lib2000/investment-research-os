@@ -28,12 +28,13 @@
 - 추천 후보가 보유 종목이면 포트폴리오 리스크 스캔 우선 확인 대상으로 표시한다.
 - 해외주식과 수동 관리 수량은 키움 국내 잔고 동기화가 덮어쓰지 않아야 한다.
 - 이형주 포트폴리오의 `PL` 100주 보존은 회귀 검증의 기준 사례다.
+- 백엔드가 꺼진 상태에서는 `python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --forbid-zero`로 저장 원본 수량을 먼저 확인한다.
 
 ## 검증 명령
 
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
-.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 python tools\check_daily_recommendations_store.py --require-milestones
 ```

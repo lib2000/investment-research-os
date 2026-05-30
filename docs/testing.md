@@ -71,6 +71,7 @@ node --check mobile_app\research_console\console.js
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckFeedbackSmoke
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCoreSafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioQuantityProtection
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckStorageQualitySafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckSourceAutomationStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckDailyRecommendationStore
@@ -91,7 +92,11 @@ node --check mobile_app\research_console\console.js
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 ```
 
-백엔드가 꺼져 있어도 소스 캐시와 매일 추천 저장 원본은 파일 기반 점검으로 확인할 수 있습니다.
+백엔드가 꺼져 있어도 포트폴리오 수량, 소스 캐시, 매일 추천 저장 원본은 파일 기반 점검으로 확인할 수 있습니다.
+
+```powershell
+python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --forbid-zero
+```
 
 ```powershell
 python tools\check_research_source_store.py --strict

@@ -231,6 +231,9 @@ $contracts = @(
       '[switch]$CheckCoreSafeguards',
       '[switch]$CheckCustomsTradeQuality',
       '[switch]$CheckPortfolioQuantityProtection',
+      '[switch]$CheckPortfolioStore',
+      'check_portfolio_store.py',
+      '포트폴리오 저장 파일 오프라인 확인',
       '[switch]$CheckStorageQualitySafeguards',
       '[switch]$CheckSourceAutomationStatus',
       '[switch]$CheckSourceAutomationStore',
@@ -288,6 +291,16 @@ $contracts = @(
   },
 
 
+
+  @{
+    Path = "tools\check_portfolio_store.py"
+    Snippets = @(
+      'DEFAULT_STORE',
+      'DEFAULT_EXPECTED',
+      '--forbid-zero',
+      '포트폴리오 저장 수량 상태 정상'
+    )
+  },
   @{
     Path = "tools\check_research_source_store.py"
     Snippets = @(
