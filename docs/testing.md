@@ -89,6 +89,12 @@ node --check mobile_app\research_console\console.js
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 ```
 
+백엔드가 꺼져 있어도 매일 추천 저장 원본과 사후 추적표만 확인하려면 파일 기반 점검을 사용합니다.
+
+```powershell
+python tools\check_daily_recommendations_store.py --require-milestones
+```
+
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.
 
 ```powershell
