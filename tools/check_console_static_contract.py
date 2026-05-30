@@ -108,12 +108,22 @@ REQUIRED_CSS_SNIPPETS = {
 REQUIRED_WORKFLOW_ACTIONS = {
     "capture",
     "chart",
+    "dart-refresh",
+    "dashboard-refresh",
     "diagnose-ticker",
+    "earnings",
+    "interest-automation",
+    "marketData",
     "memory",
+    "news",
+    "portfolio",
     "refresh-data",
+    "reportAutomation",
     "run-team",
     "storage-quality",
     "system-check",
+    "team",
+    "today-research-update",
 }
 
 REQUIRED_TABS = {
@@ -182,6 +192,10 @@ def selector_ids(js_text: str) -> set[str]:
     return ids
 
 
+def workflow_actions_in_js_templates(js_text: str) -> set[str]:
+    return set(re.findall(r"data-workflow-action=['\"]([^'\"]+)['\"]", js_text))
+
+
 def handled_workflow_actions(js_text: str) -> set[str]:
     actions = set(re.findall(r"action\s*===\s*['\"]([^'\"]+)['\"]", js_text))
     match = re.search(r"const\s+actionToTab\s*=\s*\{(?P<body>.*?)\n\s*\};", js_text, re.S)
@@ -227,9 +241,10 @@ def main() -> int:
         for button_id in REQUIRED_FEEDBACK_BUTTON_IDS & ids
         if not button_has_feedback(js, button_id)
     )
+    workflow_actions = parser_obj.workflow_actions | workflow_actions_in_js_templates(js)
     handled_actions = handled_workflow_actions(js)
-    missing_required_workflow_actions = sorted(REQUIRED_WORKFLOW_ACTIONS - parser_obj.workflow_actions)
-    workflow_actions_without_handler = sorted(parser_obj.workflow_actions - handled_actions)
+    missing_required_workflow_actions = sorted(REQUIRED_WORKFLOW_ACTIONS - workflow_actions)
+    workflow_actions_without_handler = sorted(workflow_actions - handled_actions)
     missing_tabs = sorted(REQUIRED_TABS - parser_obj.sections)
     tab_without_section = sorted(parser_obj.tab_targets - parser_obj.sections)
     section_without_tab = sorted((REQUIRED_TABS & parser_obj.sections) - parser_obj.tab_targets)
@@ -266,7 +281,7 @@ def main() -> int:
     print(f"탭 섹션: {len(parser_obj.sections & REQUIRED_TABS)}/{len(REQUIRED_TABS)}개")
     print(f"버튼 수: {len(parser_obj.buttons)}개")
     print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
-    print(f"워크플로우 버튼: {len(parser_obj.workflow_actions - set(workflow_actions_without_handler))}/{len(parser_obj.workflow_actions)}개")
+    print(f"워크플로우 버튼: {len(workflow_actions - set(workflow_actions_without_handler))}/{len(workflow_actions)}개")
     print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
     if errors:
         for error in errors:
