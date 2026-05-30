@@ -11,6 +11,7 @@
 - 스케줄 상태 위치: `research_vault/_system/daily_recommendations_state.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
+- 최신성 가드: 추천 저장 점검은 최신 추천일이 오늘 기준 허용 범위 안에 있고, 해당 일자 추천이 정확히 3개인지 확인한다.
 - 근거 분산 가드: 추천 후보별 근거가 `저장 품질`, `목표가/리포트`, `최근 저장/RAG`, `보유/관심 범위` 범주를 모두 포함하는지 오프라인 점검에서 확인한다. 한 범주에만 기대는 추천은 실패로 처리한다.
 - 추적 주기: 추천 후 1주일, 15일, 1달, 3달, 6달
 - 추적 점검: 오프라인 가드는 각 마일스톤의 목표일이 추천일 기준 7/15/30/90/180일 뒤인지, 추적 완료 항목에 가격·확인시각·수익률이 있는지 확인한다.
@@ -62,7 +63,7 @@ python tools\check_llm_bridge_store.py --require-active-rag
 cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
-python tools\check_daily_recommendations_store.py --require-milestones --require-quality
+python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 ```
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.

@@ -126,7 +126,7 @@ python tools\check_research_source_store.py --strict
 매일 추천 저장 원본과 사후 추적표만 확인하려면 아래 점검을 사용합니다.
 
 ```powershell
-python tools\check_daily_recommendations_store.py --require-milestones --require-quality
+python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 ```
 
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.

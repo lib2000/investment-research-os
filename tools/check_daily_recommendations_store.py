@@ -167,6 +167,8 @@ def main() -> int:
     parser.add_argument("--state", type=Path, default=None, help="daily_recommendations_state.json 경로")
     parser.add_argument("--date", default=None, help="확인할 추천일. 생략하면 latest_recommendation_date 사용")
     parser.add_argument("--min-latest", type=int, default=3, help="해당 일자에 필요한 최소 추천 수")
+    parser.add_argument("--expected-latest-count", type=int, default=3, help="해당 일자에 기대하는 정확한 추천 수. 0이면 비활성화")
+    parser.add_argument("--max-latest-age-days", type=int, default=1, help="최신 추천일이 오늘 기준 며칠 전까지 허용되는지")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
     args = parser.parse_args()
@@ -191,8 +193,21 @@ def main() -> int:
     counts = Counter(record_date(record) for record in records)
 
     errors: list[str] = []
+    latest_parsed = parse_iso_date(latest_date)
+    today = date.today()
+    latest_age_days: int | None = None
+    if not latest_parsed:
+        errors.append(f"최신 추천일 파싱 실패: {latest_date}")
+    else:
+        latest_age_days = (today - latest_parsed).days
+        if latest_age_days < 0:
+            errors.append(f"최신 추천일이 미래입니다: {latest_date} / 오늘 {today.isoformat()}")
+        if latest_age_days > args.max_latest_age_days:
+            errors.append(f"최신 추천일 오래됨: {latest_date} / 오늘 {today.isoformat()} / 허용 {args.max_latest_age_days}일")
     if len(latest) < args.min_latest:
         errors.append(f"{latest_date} 추천 수 부족: {len(latest)}개 / 필요 {args.min_latest}개")
+    if args.expected_latest_count > 0 and len(latest) != args.expected_latest_count:
+        errors.append(f"{latest_date} 추천 수 불일치: {len(latest)}개 / 기대 {args.expected_latest_count}개")
     if args.require_milestones:
         for record in latest:
             missing = EXPECTED_MILESTONES - milestone_keys(record)
@@ -299,7 +314,8 @@ def main() -> int:
     print(f"스케줄 상태: {state.get('status') or '미확인'} | 마지막 실행 {state.get('last_run_date') or '미확인'} | 마지막 추적 {state.get('last_tracking_date') or '미확인'} | 선택 {state.get('selected_count') or 0}개")
     print(f"전체 추천 기록: {len(records)}개")
     print("일자별 추천 수: " + ", ".join(f"{date}={count}" for date, count in sorted(counts.items())))
-    print(f"최신 추천일: {latest_date}")
+    age_label = "미확인" if latest_age_days is None else f"{latest_age_days}일 전"
+    print(f"최신 추천일: {latest_date} | 최신성 {age_label}")
     for record in latest[: args.min_latest]:
         company = record.get("company_name") or "회사명 확인 필요"
         score = record.get("score", "-")
