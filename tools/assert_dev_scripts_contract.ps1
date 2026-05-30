@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp"
 )
 
@@ -395,6 +395,9 @@ $contracts = @(
       '--require-milestones',
       '--require-quality',
       '점수 설명 누락',
+      '기준가 조회일 불일치 또는 누락',
+      '최신 추천 티커 중복',
+      '해외 종목 환율 추적 플래그 누락',
       '매일 추천 저장 상태 정상'
     )
   },

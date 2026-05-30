@@ -62,6 +62,12 @@ def milestone_keys(record: dict[str, Any]) -> set[str]:
     return keys
 
 
+def non_empty_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item or "").strip()]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="매일 추천 저장 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="daily_recommendations.json 경로")
@@ -117,13 +123,56 @@ def main() -> int:
                 value = record.get(field)
                 if not isinstance(value, expected_type) or len(value) == 0:
                     errors.append(f"{label} {field} 누락")
+            ticker = str(record.get("ticker") or "").strip().upper()
+            generated_at = str(record.get("generated_at") or "")
+            checked_at = str(record.get("baseline_price_checked_at") or "")
+            record_id = str(record.get("record_id") or "")
+            reasons = non_empty_strings(record.get("reasons"))
+            evidence = non_empty_strings(record.get("evidence_sources"))
+            risk_notes = non_empty_strings(record.get("risk_notes"))
+            quality_flags = non_empty_strings(record.get("quality_flags"))
+            currency = str(record.get("currency") or "KRW").upper()
+            overseas_tracking = record.get("overseas_tracking")
+            portfolio_risk = record.get("portfolio_risk_connection")
+
+            if not ticker:
+                errors.append(f"{label} 티커 누락")
+            if record_id and ticker and not record_id.endswith(ticker):
+                errors.append(f"{label} record_id/ticker 불일치: {record_id} / {ticker}")
+            if generated_at[:10] != latest_date:
+                errors.append(f"{label} 생성일 불일치: {generated_at} / 추천일 {latest_date}")
+            if checked_at[:10] != latest_date:
+                errors.append(f"{label} 기준가 조회일 불일치 또는 누락: {checked_at}")
             if record.get("baseline_price") in (None, ""):
                 errors.append(f"{label} 기준가 누락")
             if not record.get("baseline_price_source"):
                 errors.append(f"{label} 기준가 출처 누락")
+            if len(reasons) < 2:
+                errors.append(f"{label} 추천 사유 부족: {len(reasons)}개")
+            if len(evidence) < 2:
+                errors.append(f"{label} 근거 출처 부족: {len(evidence)}개")
+            if len(risk_notes) < 1:
+                errors.append(f"{label} 리스크 노트 누락")
             explanation = record.get("score_explanation")
             if not isinstance(explanation, dict) or explanation.get("final_score") in (None, ""):
                 errors.append(f"{label} 점수 설명 누락")
+            if currency != "KRW":
+                if not isinstance(overseas_tracking, dict) or overseas_tracking.get("needs_fx_conversion") is not True:
+                    errors.append(f"{label} 해외 종목 환율 추적 플래그 누락")
+                if not any("환율" in item or "원화" in item for item in quality_flags):
+                    errors.append(f"{label} 해외 종목 환율/원화 확인 문구 누락")
+            if isinstance(portfolio_risk, dict) and portfolio_risk.get("linked") is True and not portfolio_risk.get("message"):
+                errors.append(f"{label} 포트폴리오 연결 설명 누락")
+
+        latest_sample = latest[: args.min_latest]
+        latest_tickers = [str(record.get("ticker") or "").strip().upper() for record in latest_sample]
+        latest_companies = [str(record.get("company_name") or "").strip() for record in latest_sample]
+        duplicate_tickers = {ticker for ticker in latest_tickers if ticker and latest_tickers.count(ticker) > 1}
+        duplicate_companies = {company for company in latest_companies if company and latest_companies.count(company) > 1}
+        if duplicate_tickers:
+            errors.append(f"최신 추천 티커 중복: {', '.join(sorted(duplicate_tickers))}")
+        if duplicate_companies:
+            errors.append(f"최신 추천 회사명 중복: {', '.join(sorted(duplicate_companies))}")
 
     print(f"저장 파일: {store}")
     print(f"전체 추천 기록: {len(records)}개")
