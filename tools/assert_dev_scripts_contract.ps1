@@ -363,6 +363,12 @@ $contracts = @(
     Snippets = @(
       'EXPECTED_MODULES',
       'EXPECTED_MAIN_IMPORTS',
+      'research_os.brokerage',
+      'research_os.data_providers',
+      'research_os.file_extraction',
+      'research_os.market_journal',
+      'research_os.rag_memory',
+      'research_os.research_memory',
       'BANNED_TERMS',
       'DEFAULT_MAIN_MAX_LINES',
       'DEFAULT_MIN_MODULE_COUNT',

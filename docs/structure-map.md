@@ -32,19 +32,37 @@
 3. 외부 API 호출과 파일 저장은 서비스 함수로 분리하고, 라우터는 요청/응답 조립만 담당하게 합니다.
 4. 각 분리 단계마다 기존 Classic Research Console의 API 호출이 깨지지 않는지 확인합니다.
 
-운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-05-30 기준 `research_os_main.py`는 24,016줄이고, 스크립트는 도메인 모듈 최소 24개와 main 파일 26,000줄 상한을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
+운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-05-30 기준 `research_os_main.py`는 24,016줄이고, 스크립트는 도메인 모듈 최소 24개, 메인 파일 26,000줄 상한, 핵심 분리 모듈 25개의 파일 존재와 `research_os_main.py` import 연결을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
 
 현재 분리된 도메인 모듈은 아래와 같습니다.
 
 | 모듈 | 역할 | 대표 회귀 테스트 |
 |---|---|---|
-| `backend\research_os\source_url_preview.py` | 웹 본문 미리보기 응답 조립 | `WebCaptureRenderingTests` |
-| `backend\research_os\portfolio_import.py` | CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론 | `BackendModuleBoundaryTests`, `PortfolioPerformanceTests` |
-| `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 상태 요약 | `BackendModuleBoundaryTests`, `PortfolioPerformanceTests` |
-| `backend\research_os\storage_quality.py` | 소프트 보관 정책, 저장 데이터 품질/OCR/본문 보강 판정 | `BackendModuleBoundaryTests`, `ResearchMemoryPolicyTests` |
-| `backend\research_os\system_health.py` | 연구 콘솔/데이터 프로바이더 상태 점검 payload 조립, OneDrive/OCR/라우트 안전 확인 | `BackendModuleBoundaryTests` |
+| `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
 | `backend\research_os\customs_trade.py` | 관세청 수출입 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
+| `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표 | `check_daily_recommendations_store.py` |
+| `backend\research_os\data_providers.py` | KIS/OpenDART/가격/외부 데이터 프로바이더 호출 | `check_backend_runtime_env.py` |
+| `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
+| `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
+| `backend\research_os\kcif_reports.py` | KCIF 보고서 메타데이터 수집/시장일지 연결 | `check_research_source_store.py` |
+| `backend\research_os\kiwoom_auth.py` | 키움 인증/토큰 상태 확인 | `smoke_kiwoom_history_live.ps1` |
+| `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
+| `backend\research_os\models.py` | FastAPI 요청/응답 모델 | `python -m py_compile backend\research_os_main.py` |
+| `backend\research_os\portfolio_import.py` | CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론 | `check_portfolio_store.py` |
+| `backend\research_os\portfolio_performance.py` | 기간 수익 비교와 가격 갱신 요약 | `check_portfolio_store.py` |
+| `backend\research_os\portfolio_store.py` | 포트폴리오 저장 키/정렬 정책 | `check_portfolio_store.py` |
+| `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 상태 요약 | `check_portfolio_store.py` |
+| `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
+| `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py` |
+| `backend\research_os\research_memory.py` | 저장 데이터 마크다운/JSON 기록과 manifest 관리 | `check_storage_quality_store.py` |
+| `backend\research_os\security.py` | 개발 토큰/사용자 토큰 검증 | `status_research_console.ps1` |
+| `backend\research_os\settings.py` | 환경변수 기반 운영 설정 | `check_backend_runtime_env.py` |
+| `backend\research_os\source_url_preview.py` | 웹 본문 미리보기 응답 조립 | `WebCaptureRenderingTests` |
+| `backend\research_os\storage_quality.py` | 소프트 보관 정책, 저장 데이터 품질/OCR/본문 보강 판정 | `check_storage_quality_store.py` |
+| `backend\research_os\system_health.py` | 연구 콘솔/데이터 프로바이더 상태 점검 payload 조립, OneDrive/OCR/라우트 안전 확인 | `status_research_console.ps1` |
+| `backend\research_os\ticker_registry.py` | 한국/미국 티커 레지스트리 캐시와 회사명 매칭 | `check_research_source_store.py` |
+| `backend\research_os\web_capture.py` | 웹 본문 추출, URL-only 예외 처리, 표시용 컨텍스트 | `WebCaptureRenderingTests` |
 
 ## 실행 가드
 
