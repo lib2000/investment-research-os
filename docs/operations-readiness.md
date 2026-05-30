@@ -39,6 +39,7 @@ cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
+python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
 ```
 

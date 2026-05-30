@@ -301,6 +301,7 @@ $contracts = @(
       'check_research_source_store.py',
       'check_backend_module_health.py',
       'check_console_static_contract.py',
+      'check_console_asset_and_js.py',
       'check_storage_quality_store.py',
       'check_daily_recommendations_store.py',
       '오프라인 운영 점검 통과'
@@ -309,6 +310,16 @@ $contracts = @(
 
 
 
+
+  @{
+    Path = "tools\check_console_asset_and_js.py"
+    Snippets = @(
+      'update_console_asset_hashes',
+      'node',
+      '--check',
+      '클래식 콘솔 자산/JS 상태 정상'
+    )
+  },
   @{
     Path = "tools\check_console_static_contract.py"
     Snippets = @(
