@@ -97,6 +97,7 @@ python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/consol
 ```powershell
 python tools\check_offline_readiness.py
 python tools\check_backend_module_health.py --strict
+python tools\check_console_static_contract.py --strict
 ```
 
 개별 점검은 아래 명령을 사용합니다.

@@ -300,6 +300,7 @@ $contracts = @(
       'check_portfolio_store.py',
       'check_research_source_store.py',
       'check_backend_module_health.py',
+      'check_console_static_contract.py',
       'check_storage_quality_store.py',
       'check_daily_recommendations_store.py',
       '오프라인 운영 점검 통과'
@@ -307,6 +308,16 @@ $contracts = @(
   },
 
 
+
+  @{
+    Path = "tools\check_console_static_contract.py"
+    Snippets = @(
+      'REQUIRED_IDS',
+      'REQUIRED_TABS',
+      'selector_ids',
+      '클래식 콘솔 정적 계약 정상'
+    )
+  },
   @{
     Path = "tools\check_backend_module_health.py"
     Snippets = @(
