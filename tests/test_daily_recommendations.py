@@ -139,6 +139,27 @@ class DailyRecommendationsTests(unittest.TestCase):
         )
 
 
+    def test_daily_recommendation_storage_quality_records_missing_dashboard_evidence(self):
+        import research_os_main as main
+
+        candidate = {
+            "ticker": "033500",
+            "company_name": "동성화인텍",
+            "score": 10,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": [],
+        }
+
+        main._apply_daily_recommendation_storage_quality(candidate, None)
+
+        self.assertIn("저장 품질 대시보드 연결 없음", candidate["quality_flags"])
+        self.assertTrue(candidate["evidence_sources"][0].startswith("저장 품질:"))
+        self.assertIn("활용 가능 0건", candidate["evidence_sources"][0])
+        self.assertIn("검증된 활성 저장자료 부족", candidate["quality_flags"])
+
+
     def test_daily_recommendation_storage_quality_penalizes_weak_evidence(self):
         import research_os_main as main
 

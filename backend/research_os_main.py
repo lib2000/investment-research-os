@@ -21785,7 +21785,7 @@ def _daily_recommendation_manifest_quality_by_ticker(manifest_entries: list[dict
 def _apply_daily_recommendation_storage_quality(candidate: dict, quality: dict | None) -> None:
     if not quality:
         candidate.setdefault("quality_flags", []).append("저장 품질 대시보드 연결 없음")
-        return
+        quality = {}
     high_quality_count = int(quality.get("high_quality_count") or 0)
     duplicate_count = int(quality.get("duplicate_suspected_count") or 0)
     body_missing_count = int(quality.get("body_missing_count") or 0)
