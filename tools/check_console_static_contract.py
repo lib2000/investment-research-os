@@ -105,6 +105,17 @@ REQUIRED_CSS_SNIPPETS = {
     "dashboard_command_width": "grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));",
     "dashboard_button_width": ".dashboard-command-bar button",
     "dashboard_button_min_width": "min-width: 150px;",
+    "daily_recommendation_date_groups": ".daily-recommendation-date-groups",
+    "daily_recommendation_progress_grid": ".daily-recommendation-progress-grid",
+    "daily_recommendation_timeline_steps": ".daily-recommendation-timeline-steps",
+}
+
+REQUIRED_JS_SNIPPETS = {
+    "daily_recommendation_result_title": "오늘의 추천 결과",
+    "daily_recommendation_daily_list": "일자별 추천 목록",
+    "daily_recommendation_progress_graph": "경과 그래프",
+    "daily_recommendation_short_label_helper": "dailyRecommendationMilestoneShortLabel",
+    "daily_recommendation_tone_helper": "dailyRecommendationMilestoneTone",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
@@ -261,6 +272,9 @@ def main() -> int:
     missing_css_snippets = sorted(
         name for name, snippet in REQUIRED_CSS_SNIPPETS.items() if snippet not in css
     )
+    missing_js_snippets = sorted(
+        name for name, snippet in REQUIRED_JS_SNIPPETS.items() if snippet not in js
+    )
     missing_live_regions = sorted(
         f"{element_id} aria-live={expected}"
         for element_id, expected in REQUIRED_LIVE_REGIONS.items()
@@ -290,6 +304,8 @@ def main() -> int:
         errors.append("섹션 탭 누락: " + ", ".join(section_without_tab))
     if missing_css_snippets:
         errors.append("메뉴/버튼 레이아웃 CSS 계약 누락: " + ", ".join(missing_css_snippets))
+    if missing_js_snippets:
+        errors.append("추천 결과 UI JS 계약 누락: " + ", ".join(missing_js_snippets))
     if missing_live_regions:
         errors.append("실시간 피드백 aria-live 계약 누락: " + ", ".join(missing_live_regions))
 
@@ -300,6 +316,7 @@ def main() -> int:
     print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
     print(f"워크플로우 버튼: {len(workflow_actions - set(workflow_actions_without_handler))}/{len(workflow_actions)}개")
     print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
+    print(f"추천 결과 UI JS: {len(REQUIRED_JS_SNIPPETS) - len(missing_js_snippets)}/{len(REQUIRED_JS_SNIPPETS)}개")
     print(f"실시간 피드백 영역: {len(REQUIRED_LIVE_REGIONS) - len(missing_live_regions)}/{len(REQUIRED_LIVE_REGIONS)}개")
     if errors:
         for error in errors:

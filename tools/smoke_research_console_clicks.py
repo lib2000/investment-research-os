@@ -950,11 +950,14 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     naverMarketJournalShowsDigest: naverMarketJournalText.includes("시장일지 화면 연결"),
                     naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
                     dailyRecommendationsShowsTopThree:
-                      dailyRecommendationsText.includes("매일 추천 후보 1~3위") &&
+                      (dailyRecommendationsText.includes("오늘의 추천 결과") ||
+                        dailyRecommendationsText.includes("매일 추천 후보 1~3위")) &&
                       dailyRecommendationsText.includes("추천 후보"),
                     dailyRecommendationsShowsTracking:
-                      dailyRecommendationsStatusText.includes("사후 추적") &&
-                      dailyRecommendationsStatusText.includes("추천 후 1주일"),
+                      (dailyRecommendationsStatusText.includes("경과 그래프") ||
+                        dailyRecommendationsStatusText.includes("사후 추적")) &&
+                      (dailyRecommendationsStatusText.includes("1주") ||
+                        dailyRecommendationsStatusText.includes("추천 후 1주일")),
                     llmTargetBlank: llmPromptForm.elements.target.value === "",
                     llmPromptGenerated: (document.querySelector("#llmPromptOutput")?.value || "").length > 50,
                     llmCopyShowsFeedback: /프롬프트를 복사|직접 복사 필요|Ctrl\\+C/.test(llmCopyFeedbackText),
