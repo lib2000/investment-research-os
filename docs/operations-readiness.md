@@ -1,16 +1,19 @@
 ﻿# 투자 리서치 OS 운영 점검 노트
 
-최종 갱신: 2026-05-29
+최종 갱신: 2026-05-30
 
 ## 매일 추천 1~3위
 
 - 확인 위치: 콘솔 대시보드의 `오늘 추천 1~3위`, 또는 저장 데이터 탭의 `오늘 추천 1~3위` / `추천 추적 상태`
+- API 확인: `GET /api/v1/daily-recommendations/status`
 - 실행 시각: `DAILY_RECOMMENDATIONS_TIME` 기본값 `09:00`
 - 저장 위치: `research_vault/_system/daily_recommendations.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
 - 추적 주기: 추천 후 1주일, 15일, 1달, 3달, 6달
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
+
+2026-05-30 기준 최신 저장 상태는 `records` 배열에 일자별 3개 후보가 쌓이는 구조다. 브라우저 화면에서 한글이 정상인데 터미널 JSON만 깨져 보이면 PowerShell/WSL 출력 인코딩 문제일 수 있으므로, 콘솔 화면이나 Python 직접 파일 읽기로 UTF-8 원본을 확인한다.
 
 ## 소스 자동 수집 품질
 
@@ -32,6 +35,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckDailyRecommendations -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 ```
+
+전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.
 
 ## 운영 주의
 

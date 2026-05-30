@@ -81,7 +81,13 @@ node --check mobile_app\research_console\console.js
 
 통합 검증의 관세청 요약은 `DirCreated=False`, `FilesChanged=False`, `LatestStorageSkipped=True`, `TotalTrendHasStorage=False`를 한 줄로 보여줍니다.
 
-라이브 스모크는 메뉴 17개, 대시보드 바로가기, 매크로/복리성장주, 포트폴리오 기간수익/PL 수량 보존, 네이버 리서치 상태, 저장/삭제 액션을 확인합니다. `-CheckFeedbackSmoke`는 빠른 검증에서도 메뉴/대시보드 클릭 후 `요청 접수`, `처리 중`, `완료` 같은 사용자 피드백이 실제로 표시되는지 확인합니다. 저장 액션 검증은 `QA-TEST-*` 데이터만 만들고 종료 시 정리합니다.
+라이브 스모크는 메뉴 17개, 대시보드 바로가기, 매크로/복리성장주, 포트폴리오 기간수익/PL 수량 보존, 네이버 리서치 상태, 저장/삭제 액션, `오늘 추천 1~3위`, `추천 추적 상태`, LLM/RAG 저장 상태를 확인합니다. `-CheckFeedbackSmoke`는 빠른 검증에서도 메뉴/대시보드 클릭 후 `요청 접수`, `처리 중`, `완료` 같은 사용자 피드백이 실제로 표시되는지 확인합니다. 저장 액션 검증은 `QA-TEST-*` 데이터만 만들고 종료 시 정리합니다.
+
+전체 클릭 스모크는 실제 브라우저 DevTools 명령을 오래 유지하므로 300초 이상 걸릴 수 있습니다. 수동 실행은 아래처럼 하고, 외부 실행 래퍼나 CI 타임아웃은 600초 이상으로 둡니다.
+
+```powershell
+python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
+```
 
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.
 
