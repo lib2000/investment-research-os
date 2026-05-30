@@ -127,7 +127,7 @@ def main() -> int:
     parser.add_argument("--min-naver-reports", type=int, default=20, help="네이버 리서치 캐시 최소 건수")
     parser.add_argument("--min-shinhan-reports", type=int, default=20, help="신한 리서치 캐시 최소 건수")
     parser.add_argument("--min-market-journal-entries", type=int, default=1, help="시장일지 최소 저장 건수")
-    parser.add_argument("--max-naver-missing-storage", type=int, default=5, help="과거 네이버 리서치 캐시의 저장 경로 누락 허용 건수")
+    parser.add_argument("--max-naver-missing-storage", type=int, default=0, help="네이버 리서치 캐시의 저장 경로 누락 허용 건수")
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
     parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
