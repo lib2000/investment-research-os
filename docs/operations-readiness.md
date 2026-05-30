@@ -37,6 +37,7 @@
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
+python tools\check_backend_module_health.py --strict
 python tools\check_storage_quality_store.py --strict
 ```
 

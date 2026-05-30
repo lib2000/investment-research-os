@@ -299,12 +299,23 @@ $contracts = @(
       'CHECKS',
       'check_portfolio_store.py',
       'check_research_source_store.py',
+      'check_backend_module_health.py',
       'check_storage_quality_store.py',
       'check_daily_recommendations_store.py',
       '오프라인 운영 점검 통과'
     )
   },
 
+
+  @{
+    Path = "tools\check_backend_module_health.py"
+    Snippets = @(
+      'EXPECTED_MODULES',
+      'EXPECTED_MAIN_IMPORTS',
+      'BANNED_TERMS',
+      '백엔드 모듈 상태 정상'
+    )
+  },
   @{
     Path = "tools\check_storage_quality_store.py"
     Snippets = @(

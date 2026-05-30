@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 CHECKS = [
+    ("백엔드 모듈 상태", ["tools/check_backend_module_health.py", "--strict"]),
     (
         "포트폴리오 저장 수량",
         [
