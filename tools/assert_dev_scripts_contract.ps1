@@ -232,6 +232,10 @@ $contracts = @(
       '[switch]$CheckCustomsTradeQuality',
       '[switch]$CheckPortfolioQuantityProtection',
       '[switch]$CheckStorageQualitySafeguards',
+      '[switch]$CheckSourceAutomationStatus',
+      '[switch]$CheckSourceAutomationStore',
+      'check_research_source_store.py',
+      '리서치 소스 저장 파일 오프라인 확인',
       '[switch]$CheckDailyRecommendations',
       '[switch]$CheckDailyRecommendationStore',
       'check_daily_recommendations_store.py',
@@ -283,6 +287,16 @@ $contracts = @(
     )
   },
 
+
+  @{
+    Path = "tools\check_research_source_store.py"
+    Snippets = @(
+      'SYSTEM_DIR',
+      'ticker_registry_source_status.json',
+      '--strict',
+      '리서치 소스 저장 상태 정상'
+    )
+  },
   @{
     Path = "tools\check_daily_recommendations_store.py"
     Snippets = @(

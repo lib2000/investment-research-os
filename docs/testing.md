@@ -72,6 +72,7 @@ node --check mobile_app\research_console\console.js
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCoreSafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioQuantityProtection
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckStorageQualitySafeguards
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckSourceAutomationStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckDailyRecommendationStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality -CustomsStartYymm 202605 -CustomsEndYymm 202605
@@ -90,7 +91,13 @@ node --check mobile_app\research_console\console.js
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 ```
 
-백엔드가 꺼져 있어도 매일 추천 저장 원본과 사후 추적표만 확인하려면 파일 기반 점검을 사용합니다.
+백엔드가 꺼져 있어도 소스 캐시와 매일 추천 저장 원본은 파일 기반 점검으로 확인할 수 있습니다.
+
+```powershell
+python tools\check_research_source_store.py --strict
+```
+
+매일 추천 저장 원본과 사후 추적표만 확인하려면 아래 점검을 사용합니다.
 
 ```powershell
 python tools\check_daily_recommendations_store.py --require-milestones

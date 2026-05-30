@@ -21,6 +21,7 @@
 - 네이버 리서치/시장일지: 저작권 안전 정책에 맞춰 요약/메타데이터 중심으로 저장하고, URL·본문 해시·제목 유사도로 중복을 제외한다.
 - KIEP/KCIF: 매크로 보고서 제목, 발행일, 링크, 요약 메타데이터를 시장일지와 리스크 메모에 연결한다.
 - EMERiCs/CSF: 지역·중국·신흥국 자료를 제목/링크/발행기관/요약 기준으로 활용한다.
+- 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다.
 
 ## 포트폴리오 연결
 
@@ -32,7 +33,7 @@
 
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
-.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 python tools\check_daily_recommendations_store.py --require-milestones
 ```
