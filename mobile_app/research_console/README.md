@@ -14,13 +14,10 @@
 
 ## 실행
 
-```powershell
-cd C:\Users\lib20\InvestmentJournalApp
-.\scripts\open-research-console.ps1
-```
-
-브라우저 주소:
+백엔드 실행 후 아래 주소를 엽니다.
 
 ```text
-http://127.0.0.1:5500/index.html
+http://127.0.0.1:8001/console/index.html
 ```
+
+`scripts\open-research-console.ps1`는 보조 실행 스크립트로만 사용합니다. 실제 운영/회귀 검증 기준은 8001 콘솔 주소입니다.
