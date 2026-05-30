@@ -383,7 +383,11 @@ $contracts = @(
     Snippets = @(
       'SYSTEM_DIR',
       'ticker_registry_source_status.json',
-      '--strict',
+      '--min-kcif-reports',
+      '--min-regional-provider-count',
+      'metadata_policy_ok',
+      '지역/중국/대외 소스 제공자 누락',
+      'CSF=',
       '리서치 소스 저장 상태 정상'
     )
   },
