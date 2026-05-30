@@ -386,9 +386,18 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
                     await waitFor(() => document.querySelector(`#${{tab}}`)?.classList.contains("active"), 5000, `${{tab}} active`);
-                    setup(document.querySelector(formSelector));
+                    const form = document.querySelector(formSelector);
+                    setup(form);
                     const button = document.querySelector(`${{formSelector}} button[type="submit"]`);
-                    button.click();
+                    const output = document.querySelector("#output");
+                    if (output) {{
+                      output.textContent = "";
+                    }}
+                    if (typeof form.requestSubmit === "function") {{
+                      form.requestSubmit(button);
+                    }} else {{
+                      button.click();
+                    }}
                     const started = Date.now();
                     while (Date.now() - started < timeout) {{
                       const text = document.querySelector("#output")?.innerText || "";
