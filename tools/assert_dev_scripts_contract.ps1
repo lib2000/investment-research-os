@@ -329,6 +329,9 @@ $contracts = @(
     Snippets = @(
       'origin',
       'rev-list',
+      '--strict',
+      '작업트리 변경',
+      'Git 동기화 엄격 점검 실패',
       '푸시 대기 커밋',
       'Git 동기화 상태 확인 완료'
     )

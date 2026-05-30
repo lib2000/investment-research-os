@@ -31,6 +31,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="로컬 Git 동기화 상태를 확인합니다.")
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--branch", default=None)
+    parser.add_argument("--strict", action="store_true", help="작업트리 변경 또는 원격 ahead가 있으면 실패합니다")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -45,13 +46,20 @@ def main() -> int:
     print(f"브랜치: {branch}")
     print(f"업스트림: {upstream}")
     print(f"최신 커밋: {latest}")
+    dirty_lines = [line for line in status.splitlines()[1:] if line.strip()]
     print(f"동기화: ahead={ahead}, behind={behind}")
+    print(f"작업트리 변경: {len(dirty_lines)}개")
     print("상태:")
     print(status)
     if ahead > 0:
         print(f"푸시 대기 커밋 {ahead}개가 있습니다. Windows Git 인증이 가능한 터미널에서 `git push {args.remote} {branch}`를 실행하세요.")
     if behind > 0:
         print(f"주의: 원격이 {behind}커밋 앞서 있습니다. pull/rebase 전에는 충돌 가능성을 확인하세요.")
+    if dirty_lines:
+        print("주의: 커밋되지 않은 변경이 있습니다. 검증/푸시 전에 의도한 변경인지 확인하세요.")
+    if args.strict and (behind > 0 or dirty_lines):
+        print("Git 동기화 엄격 점검 실패")
+        return 1
     print("Git 동기화 상태 확인 완료")
     return 0
 

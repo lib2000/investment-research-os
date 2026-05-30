@@ -43,6 +43,7 @@
 cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
 python tools\check_git_sync_status.py
+python tools\check_git_sync_status.py --strict
 python tools\check_backend_runtime_env.py
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
@@ -69,3 +70,4 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 - 저작권 제한 소스는 원문 전문을 저장하지 않고 메타데이터와 요약 중심으로 연결한다.
 - 민감정보와 `.env`는 커밋하지 않는다.
 - OneDrive는 작업 루트로 사용하지 않는다.
+- `python tools\check_git_sync_status.py --strict`는 작업트리 변경이나 원격 ahead가 있을 때 운영 전 점검 실패로 처리한다. 로컬 ahead 커밋은 Windows Git 인증 가능한 터미널에서 `git push origin main`으로 올린다.
