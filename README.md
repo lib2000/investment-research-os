@@ -106,20 +106,13 @@ http://127.0.0.1:8001/docs
 
 ## 리서치 콘솔 실행
 
-백엔드와 별도 터미널에서 실행합니다.
-
-```powershell
-cd C:\Users\lib20\InvestmentJournalApp
-.\scripts\open-research-console.ps1
-```
-
-브라우저:
+백엔드 실행 후 브라우저에서 아래 주소를 엽니다.
 
 ```text
-http://127.0.0.1:5500/index.html
+http://127.0.0.1:8001/console/index.html
 ```
 
-이 주소는 Classic Research Console입니다. React Research Console 개발 서버는 `apps\research-console`에서 별도로 실행합니다.
+이 주소가 현재 Classic Research Console 운영/검증 기준입니다. `scripts\open-research-console.ps1`는 보조 실행 스크립트로만 사용하고, 실제 버튼 회귀 검증은 8001 콘솔 주소를 대상으로 합니다. React Research Console 개발 서버는 `apps\research-console`에서 별도로 실행합니다.
 
 Classic Research Console과 8001 백엔드 상태를 빠르게 확인하려면 아래 읽기 전용 점검을 사용합니다.
 
