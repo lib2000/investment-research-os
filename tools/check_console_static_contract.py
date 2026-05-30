@@ -24,6 +24,8 @@ REQUIRED_IDS = {
     "llmResultForm",
     "llmStorageStatusButton",
     "researchAutomationStatusButton",
+    "output",
+    "outputStatus",
 }
 
 REQUIRED_FEEDBACK_BUTTON_IDS = {
@@ -126,6 +128,12 @@ REQUIRED_WORKFLOW_ACTIONS = {
     "today-research-update",
 }
 
+
+REQUIRED_LIVE_REGIONS = {
+    "actionFeedback": "assertive",
+    "dailyRecommendationCards": "polite",
+}
+
 REQUIRED_TABS = {
     "dashboard",
     "team",
@@ -155,12 +163,14 @@ class ConsoleHtmlParser(HTMLParser):
         self.tab_targets: set[str] = set()
         self.buttons: list[tuple[str | None, str | None, str | None]] = []
         self.workflow_actions: set[str] = set()
+        self.attrs_by_id: dict[str, dict[str, str | None]] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = dict(attrs)
         element_id = attr.get("id")
         if element_id:
             self.ids.append(element_id)
+            self.attrs_by_id[element_id] = attr
         if tag == "section" and element_id:
             self.sections.add(element_id)
         if tag == "button":
@@ -251,6 +261,11 @@ def main() -> int:
     missing_css_snippets = sorted(
         name for name, snippet in REQUIRED_CSS_SNIPPETS.items() if snippet not in css
     )
+    missing_live_regions = sorted(
+        f"{element_id} aria-live={expected}"
+        for element_id, expected in REQUIRED_LIVE_REGIONS.items()
+        if parser_obj.attrs_by_id.get(element_id, {}).get("aria-live") != expected
+    )
 
     errors: list[str] = []
     if duplicate_ids:
@@ -275,6 +290,8 @@ def main() -> int:
         errors.append("섹션 탭 누락: " + ", ".join(section_without_tab))
     if missing_css_snippets:
         errors.append("메뉴/버튼 레이아웃 CSS 계약 누락: " + ", ".join(missing_css_snippets))
+    if missing_live_regions:
+        errors.append("실시간 피드백 aria-live 계약 누락: " + ", ".join(missing_live_regions))
 
     print(f"HTML id 수: {len(ids)}개")
     print(f"JS 참조 id 수: {len(referenced_ids)}개")
@@ -283,6 +300,7 @@ def main() -> int:
     print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
     print(f"워크플로우 버튼: {len(workflow_actions - set(workflow_actions_without_handler))}/{len(workflow_actions)}개")
     print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
+    print(f"실시간 피드백 영역: {len(REQUIRED_LIVE_REGIONS) - len(missing_live_regions)}/{len(REQUIRED_LIVE_REGIONS)}개")
     if errors:
         for error in errors:
             print(f"오류: {error}")

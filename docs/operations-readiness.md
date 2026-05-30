@@ -68,6 +68,7 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 ```
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.
+정적 콘솔 계약은 상단 액션 피드백과 추천 카드의 `aria-live` 영역도 확인해, 버튼 클릭 후 메시지가 보이지 않는 회귀를 백엔드 없이 잡는다.
 
 ## 운영 주의
 
