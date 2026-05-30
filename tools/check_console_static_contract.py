@@ -105,6 +105,17 @@ REQUIRED_CSS_SNIPPETS = {
     "dashboard_button_min_width": "min-width: 150px;",
 }
 
+REQUIRED_WORKFLOW_ACTIONS = {
+    "capture",
+    "chart",
+    "diagnose-ticker",
+    "memory",
+    "refresh-data",
+    "run-team",
+    "storage-quality",
+    "system-check",
+}
+
 REQUIRED_TABS = {
     "dashboard",
     "team",
@@ -133,6 +144,7 @@ class ConsoleHtmlParser(HTMLParser):
         self.sections: set[str] = set()
         self.tab_targets: set[str] = set()
         self.buttons: list[tuple[str | None, str | None, str | None]] = []
+        self.workflow_actions: set[str] = set()
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = dict(attrs)
@@ -142,9 +154,12 @@ class ConsoleHtmlParser(HTMLParser):
         if tag == "section" and element_id:
             self.sections.add(element_id)
         if tag == "button":
-            self.buttons.append((element_id, attr.get("data-tab"), attr.get("data-workflow-action")))
+            workflow_action = attr.get("data-workflow-action")
+            self.buttons.append((element_id, attr.get("data-tab"), workflow_action))
             if attr.get("data-tab"):
                 self.tab_targets.add(attr["data-tab"] or "")
+            if workflow_action:
+                self.workflow_actions.add(workflow_action)
 
 
 def project_root(start: Path) -> Path:
@@ -165,6 +180,16 @@ def selector_ids(js_text: str) -> set[str]:
     for pattern in patterns:
         ids.update(re.findall(pattern, js_text))
     return ids
+
+
+def handled_workflow_actions(js_text: str) -> set[str]:
+    actions = set(re.findall(r"action\s*===\s*['\"]([^'\"]+)['\"]", js_text))
+    match = re.search(r"const\s+actionToTab\s*=\s*\{(?P<body>.*?)\n\s*\};", js_text, re.S)
+    if match:
+        actions.update(
+            re.findall(r"^\s*['\"]?([A-Za-z0-9_-]+)['\"]?\s*:", match.group("body"), re.M)
+        )
+    return actions
 
 
 def button_has_feedback(js_text: str, button_id: str) -> bool:
@@ -202,6 +227,9 @@ def main() -> int:
         for button_id in REQUIRED_FEEDBACK_BUTTON_IDS & ids
         if not button_has_feedback(js, button_id)
     )
+    handled_actions = handled_workflow_actions(js)
+    missing_required_workflow_actions = sorted(REQUIRED_WORKFLOW_ACTIONS - parser_obj.workflow_actions)
+    workflow_actions_without_handler = sorted(parser_obj.workflow_actions - handled_actions)
     missing_tabs = sorted(REQUIRED_TABS - parser_obj.sections)
     tab_without_section = sorted(parser_obj.tab_targets - parser_obj.sections)
     section_without_tab = sorted((REQUIRED_TABS & parser_obj.sections) - parser_obj.tab_targets)
@@ -220,6 +248,10 @@ def main() -> int:
         errors.append("피드백 필수 버튼 id 누락: " + ", ".join(missing_feedback_buttons))
     if feedback_without_handler:
         errors.append("즉시 피드백/로딩 연결 누락 버튼: " + ", ".join(feedback_without_handler))
+    if missing_required_workflow_actions:
+        errors.append("필수 워크플로우 버튼 누락: " + ", ".join(missing_required_workflow_actions))
+    if workflow_actions_without_handler:
+        errors.append("워크플로우 핸들러 누락: " + ", ".join(workflow_actions_without_handler))
     if missing_tabs:
         errors.append("필수 섹션 누락: " + ", ".join(missing_tabs))
     if tab_without_section:
@@ -234,6 +266,7 @@ def main() -> int:
     print(f"탭 섹션: {len(parser_obj.sections & REQUIRED_TABS)}/{len(REQUIRED_TABS)}개")
     print(f"버튼 수: {len(parser_obj.buttons)}개")
     print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
+    print(f"워크플로우 버튼: {len(parser_obj.workflow_actions - set(workflow_actions_without_handler))}/{len(parser_obj.workflow_actions)}개")
     print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
     if errors:
         for error in errors:
