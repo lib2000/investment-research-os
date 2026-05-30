@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -111,6 +111,26 @@ def parse_iso_date(value: Any) -> date | None:
         return None
 
 
+def parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=LOCAL_TIMEZONE)
+    return parsed
+
+
+def age_hours(value: Any) -> float | None:
+    parsed = parse_iso_datetime(value)
+    if not parsed:
+        return None
+    return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600
+
+
 def local_today() -> date:
     return datetime.now(LOCAL_TIMEZONE).date()
 
@@ -177,6 +197,7 @@ def main() -> int:
     parser.add_argument("--max-latest-age-days", type=int, default=1, help="최신 추천일이 오늘 기준 며칠 전까지 허용되는지")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
+    parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -279,6 +300,11 @@ def main() -> int:
                 errors.append(f"{label} 생성일 불일치: {generated_at} / 추천일 {latest_date}")
             if checked_at[:10] != latest_date:
                 errors.append(f"{label} 기준가 조회일 불일치 또는 누락: {checked_at}")
+            baseline_age = age_hours(checked_at)
+            if baseline_age is None or baseline_age > args.max_baseline_age_hours:
+                errors.append(
+                    f"{label} 기준가 조회 시각 오래됨/누락: {checked_at or '미확인'} / 허용 {args.max_baseline_age_hours:g}시간"
+                )
             if record.get("baseline_price") in (None, ""):
                 errors.append(f"{label} 기준가 누락")
             if not record.get("baseline_price_source"):
