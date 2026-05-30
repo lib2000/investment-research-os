@@ -6,11 +6,13 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
+LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 DEFAULT_STORE = Path("research_vault/_system/daily_recommendations.json")
 DEFAULT_STATE = Path("research_vault/_system/daily_recommendations_state.json")
 EXPECTED_MILESTONE_DAYS = {"7d": 7, "15d": 15, "1m": 30, "3m": 90, "6m": 180}
@@ -109,6 +111,10 @@ def parse_iso_date(value: Any) -> date | None:
         return None
 
 
+def local_today() -> date:
+    return datetime.now(LOCAL_TIMEZONE).date()
+
+
 def validate_tracking_milestones(record: dict[str, Any], errors: list[str]) -> None:
     label = record.get("company_name") or record.get("ticker") or record.get("record_id")
     recommendation_date = parse_iso_date(record.get("recommendation_date"))
@@ -194,7 +200,7 @@ def main() -> int:
 
     errors: list[str] = []
     latest_parsed = parse_iso_date(latest_date)
-    today = date.today()
+    today = local_today()
     latest_age_days: int | None = None
     if not latest_parsed:
         errors.append(f"최신 추천일 파싱 실패: {latest_date}")
