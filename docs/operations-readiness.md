@@ -8,6 +8,7 @@
 - API 확인: `GET /api/v1/daily-recommendations/status`
 - 실행 시각: `DAILY_RECOMMENDATIONS_TIME` 기본값 `09:00`
 - 저장 위치: `research_vault/_system/daily_recommendations.json`
+- 스케줄 상태 위치: `research_vault/_system/daily_recommendations_state.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
 - 추적 주기: 추천 후 1주일, 15일, 1달, 3달, 6달

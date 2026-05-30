@@ -11,7 +11,9 @@ from typing import Any
 
 
 DEFAULT_STORE = Path("research_vault/_system/daily_recommendations.json")
+DEFAULT_STATE = Path("research_vault/_system/daily_recommendations_state.json")
 EXPECTED_MILESTONES = {"7d", "15d", "1m", "3m", "6m"}
+EXPECTED_STATE_STATUSES = {"success", "skipped_existing", "tracked", "no_candidates"}
 
 
 def project_root(start: Path) -> Path:
@@ -35,6 +37,18 @@ def load_store(path: Path) -> dict[str, Any]:
     records = data.get("records")
     if not isinstance(records, list):
         raise SystemExit("매일 추천 저장 파일에 records 배열이 없습니다.")
+    return data
+
+
+def load_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise SystemExit(f"매일 추천 상태 파일을 찾지 못했습니다: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"매일 추천 상태 파일 JSON 파싱 실패: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit("매일 추천 상태 파일 최상위 구조가 객체가 아닙니다.")
     return data
 
 
@@ -71,6 +85,7 @@ def non_empty_strings(value: Any) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="매일 추천 저장 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="daily_recommendations.json 경로")
+    parser.add_argument("--state", type=Path, default=None, help="daily_recommendations_state.json 경로")
     parser.add_argument("--date", default=None, help="확인할 추천일. 생략하면 latest_recommendation_date 사용")
     parser.add_argument("--min-latest", type=int, default=3, help="해당 일자에 필요한 최소 추천 수")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
@@ -81,7 +96,11 @@ def main() -> int:
     store = args.store if args.store else root / DEFAULT_STORE
     if not store.is_absolute():
         store = root / store
+    state_path = args.state if args.state else root / DEFAULT_STATE
+    if not state_path.is_absolute():
+        state_path = root / state_path
     data = load_store(store)
+    state = load_state(state_path)
     raw_records = data.get("records") or []
     records = [record for record in raw_records if isinstance(record, dict)]
     if not records:
@@ -101,6 +120,23 @@ def main() -> int:
             if missing:
                 label = record.get("company_name") or record.get("ticker") or record.get("record_id")
                 errors.append(f"{label} 추적 마일스톤 누락: {', '.join(sorted(missing))}")
+
+    status = str(state.get("status") or "").strip()
+    last_run_date = str(state.get("last_run_date") or "").strip()
+    last_tracking_date = str(state.get("last_tracking_date") or "").strip()
+    selected_count = state.get("selected_count")
+    if status not in EXPECTED_STATE_STATUSES:
+        errors.append(f"매일 추천 스케줄 상태 확인 필요: {status or '미확인'}")
+    if last_run_date != latest_date:
+        errors.append(f"매일 추천 마지막 실행일 불일치: {last_run_date or '미확인'} / 최신 추천일 {latest_date}")
+    if last_tracking_date and last_tracking_date < latest_date:
+        errors.append(f"매일 추천 추적일이 최신 추천일보다 이전: {last_tracking_date} / {latest_date}")
+    if not isinstance(selected_count, int) or selected_count < args.min_latest:
+        errors.append(f"매일 추천 선택 수 확인 필요: {selected_count} / 필요 {args.min_latest}")
+    if not str(state.get("last_run_at") or "").strip():
+        errors.append("매일 추천 마지막 실행 시각 누락")
+    if not str(state.get("last_tracking_at") or "").strip():
+        errors.append("매일 추천 마지막 추적 시각 누락")
 
     if args.require_quality:
         expected_ranks = set(range(1, args.min_latest + 1))
@@ -175,6 +211,8 @@ def main() -> int:
             errors.append(f"최신 추천 회사명 중복: {', '.join(sorted(duplicate_companies))}")
 
     print(f"저장 파일: {store}")
+    print(f"상태 파일: {state_path}")
+    print(f"스케줄 상태: {state.get('status') or '미확인'} | 마지막 실행 {state.get('last_run_date') or '미확인'} | 마지막 추적 {state.get('last_tracking_date') or '미확인'} | 선택 {state.get('selected_count') or 0}개")
     print(f"전체 추천 기록: {len(records)}개")
     print("일자별 추천 수: " + ", ".join(f"{date}={count}" for date, count in sorted(counts.items())))
     print(f"최신 추천일: {latest_date}")

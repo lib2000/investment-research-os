@@ -419,7 +419,12 @@ $contracts = @(
     Path = "tools\check_daily_recommendations_store.py"
     Snippets = @(
       'DEFAULT_STORE',
+      'DEFAULT_STATE',
       'EXPECTED_MILESTONES',
+      'EXPECTED_STATE_STATUSES',
+      '--state',
+      '스케줄 상태',
+      '마지막 실행일 불일치',
       '--require-milestones',
       '--require-quality',
       '점수 설명 누락',
