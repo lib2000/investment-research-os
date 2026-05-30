@@ -382,6 +382,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     120000,
                     "dashboard DART strip"
                   );
+                  await waitFor(
+                    () => (document.querySelector("#output")?.innerText || "").includes("대시보드 조회 실행이 완료되었습니다."),
+                    120000,
+                    "dashboard output completion"
+                  );
 
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
