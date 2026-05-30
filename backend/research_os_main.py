@@ -3932,10 +3932,15 @@ def refresh_naver_market_close_journal(settings: Settings, force: bool = False) 
         save_result=True,
     )
     response = save_market_close_review(request, settings)
+    run_at = current_storage_timestamp()
+    run_date = current_storage_date().isoformat()
     state = {
         "status": "success",
-        "last_run_at": current_storage_timestamp(),
-        "last_run_date": current_storage_date().isoformat(),
+        "last_run_at": run_at,
+        "last_run_date": run_date,
+        "last_attempt_at": run_at,
+        "last_attempt_date": run_date,
+        "last_attempt_message": "네이버 국내 마감 시황 리포트를 시장일지에 반영했습니다.",
         "source_item_id": item.get("item_id"),
         "source_title": item.get("title"),
         "source_origin": source_metadata["source_origin"],

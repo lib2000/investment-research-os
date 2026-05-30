@@ -1027,7 +1027,7 @@ class NaverResearchIngestTests(unittest.TestCase):
 
         with patch.object(main, "latest_naver_domestic_market_close_report", return_value=item), \
             patch.object(main, "read_json_store", return_value={}), \
-            patch.object(main, "write_json_store"), \
+            patch.object(main, "write_json_store") as write_store, \
             patch.object(main, "save_market_close_review", return_value=response) as save_review:
             result = main.refresh_naver_market_close_journal(settings, force=False)
 
@@ -1036,6 +1036,11 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(request.source_provider, "naver_finance_research")
         self.assertEqual(request.source_title, "국내 주식 마감 시황")
         self.assertEqual(result["entry"]["source_origin"], "naver_research_auto")
+        written_state = write_store.call_args.args[1]
+        self.assertEqual(written_state["status"], "success")
+        self.assertTrue(written_state["last_attempt_at"])
+        self.assertTrue(written_state["last_attempt_date"])
+        self.assertIn("시장일지", written_state["last_attempt_message"])
 
     def test_portfolio_risk_warning_uses_company_name(self):
         import research_os_main as main
