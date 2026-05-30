@@ -69,12 +69,14 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 python tools\smoke_research_console_menus.py
+python tools\smoke_research_console_external_sources.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 ```
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.
 정적 콘솔 계약은 상단 액션 피드백과 추천 카드의 `aria-live` 영역도 확인해, 버튼 클릭 후 메시지가 보이지 않는 회귀를 백엔드 없이 잡는다.
 메뉴 스모크는 17개 상단 메뉴가 모두 열리는지, 대시보드 주요 버튼에 즉시 피드백이 뜨는지, 버튼 텍스트가 잘리지 않는지 확인한다.
+외부 소스 스모크는 KCIF, EMERiCs/CSF/KIEP, 자동화 상태 버튼이 화면에서 실제 결과를 반환하는지 확인한다.
 
 
 ## 빠른 복구/확인 위치
