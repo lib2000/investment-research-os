@@ -305,7 +305,9 @@ $contracts = @(
       'check_console_static_contract.py',
       'check_console_asset_and_js.py',
       'check_storage_quality_store.py',
+      'check_llm_bridge_store.py',
       'check_daily_recommendations_store.py',
+      'LLM/RAG 저장 상태',
       '오프라인 운영 점검 통과'
     )
   },
@@ -387,6 +389,20 @@ $contracts = @(
       '큰 도메인 모듈',
       '줄 수 상한 초과',
       '백엔드 모듈 상태 정상'
+    )
+  },
+  @{
+    Path = "tools\check_llm_bridge_store.py"
+    Snippets = @(
+      'DEFAULT_MANIFEST',
+      'DEFAULT_RAG_DB',
+      'PROMPT_MARKER',
+      'RESPONSE_MARKER',
+      '--require-active-rag',
+      'LLM/RAG 저장 상태 정상',
+      'RAG 연결 누락',
+      '원 프롬프트 누락',
+      'LLM 응답 누락'
     )
   },
   @{

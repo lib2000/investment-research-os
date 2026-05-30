@@ -16,6 +16,8 @@
 - 추적 점검: 오프라인 가드는 각 마일스톤의 목표일이 추천일 기준 7/15/30/90/180일 뒤인지, 추적 완료 항목에 가격·확인시각·수익률이 있는지 확인한다.
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
 
+- LLM/RAG 저장 상태: `python tools\check_llm_bridge_store.py --require-active-rag`로 LLM 연동 응답의 원 프롬프트, 응답 본문, Markdown/JSON 저장 파일, RAG 색인 연결을 백엔드 없이 확인한다.
+
 2026-05-30 기준 최신 저장 상태는 `records` 배열에 일자별 3개 후보가 쌓이는 구조다. 브라우저 화면에서 한글이 정상인데 터미널 JSON만 깨져 보이면 PowerShell/WSL 출력 인코딩 문제일 수 있으므로, 콘솔 화면이나 Python 직접 파일 읽기로 UTF-8 원본을 확인한다.
 
 ## 소스 자동 수집 품질
@@ -49,6 +51,7 @@ python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
+python tools\check_llm_bridge_store.py --require-active-rag
 ```
 
 백엔드가 실행 중이면 통합 검증을 사용한다.
