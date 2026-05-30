@@ -31,6 +31,7 @@ from research_os.data_providers import (
 )
 from research_os.daily_recommendations import (
     daily_recommendation_state_path,
+    should_run_daily_recommendations,
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
     upsert_daily_recommendations,
@@ -22202,26 +22203,6 @@ def run_daily_stock_recommendations(
             },
         )
     return result
-
-
-def parse_daily_recommendations_time(settings: Settings) -> tuple[int, int]:
-    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.daily_recommendations_time or "09:00").strip())
-    if not match:
-        return 9, 0
-    hour = min(max(int(match.group(1)), 0), 23)
-    minute = min(max(int(match.group(2)), 0), 59)
-    return hour, minute
-
-
-def should_run_daily_recommendations(settings: Settings, now: datetime | None = None) -> bool:
-    if not settings.daily_recommendations_enabled:
-        return False
-    now = now or current_storage_datetime()
-    hour, minute = parse_daily_recommendations_time(settings)
-    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
-        return False
-    state = read_json_store(daily_recommendation_state_path(settings), {})
-    return state.get("last_run_date") != now.date().isoformat()
 
 
 _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED = False

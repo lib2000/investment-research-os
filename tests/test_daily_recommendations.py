@@ -1,6 +1,6 @@
 import unittest
 import sys
-from datetime import date
+from datetime import date, datetime
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
@@ -10,15 +10,54 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.daily_recommendations import (
+    daily_recommendation_state_path,
+    parse_daily_recommendations_time,
     summarize_daily_recommendation_store,
+    should_run_daily_recommendations,
     update_recommendation_tracking,
     upsert_daily_recommendations,
+    write_json_payload,
 )
 from research_os.settings import Settings
 from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_daily_recommendation_schedule_uses_state_file(self):
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(
+                research_vault_dir=str(Path(temp_dir) / "research_vault"),
+                daily_recommendations_time="09:30",
+            )
+
+            self.assertEqual(parse_daily_recommendations_time(settings), (9, 30))
+            self.assertFalse(
+                should_run_daily_recommendations(
+                    settings,
+                    now=datetime(2026, 5, 31, 9, 29),
+                )
+            )
+            self.assertTrue(
+                should_run_daily_recommendations(
+                    settings,
+                    now=datetime(2026, 5, 31, 9, 30),
+                )
+            )
+            write_json_payload(
+                daily_recommendation_state_path(settings),
+                {"last_run_date": "2026-05-31"},
+            )
+            self.assertFalse(
+                should_run_daily_recommendations(
+                    settings,
+                    now=datetime(2026, 5, 31, 10, 0),
+                )
+            )
+
+    def test_daily_recommendation_schedule_defaults_invalid_time(self):
+        settings = Settings(daily_recommendations_time="bad-value")
+        self.assertEqual(parse_daily_recommendations_time(settings), (9, 0))
+
     def test_daily_recommendations_save_top_three_and_track_milestones(self):
         with TemporaryDirectory() as temp_dir:
             settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))

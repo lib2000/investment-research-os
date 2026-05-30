@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from re import search
 from typing import Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
@@ -31,6 +33,34 @@ def daily_recommendation_store_path(settings: Settings) -> Path:
 
 def daily_recommendation_state_path(settings: Settings) -> Path:
     return resolve_vault_dir(settings.research_vault_dir) / "_system" / "daily_recommendations_state.json"
+
+
+def current_recommendation_datetime() -> datetime:
+    try:
+        korea_timezone = ZoneInfo("Asia/Seoul")
+    except ZoneInfoNotFoundError:
+        return datetime.now().replace(microsecond=0)
+    return datetime.now(korea_timezone).replace(microsecond=0)
+
+
+def parse_daily_recommendations_time(settings: Settings) -> tuple[int, int]:
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.daily_recommendations_time or "09:00").strip())
+    if not match:
+        return 9, 0
+    hour = min(max(int(match.group(1)), 0), 23)
+    minute = min(max(int(match.group(2)), 0), 59)
+    return hour, minute
+
+
+def should_run_daily_recommendations(settings: Settings, now: datetime | None = None) -> bool:
+    if not settings.daily_recommendations_enabled:
+        return False
+    now = now or current_recommendation_datetime()
+    hour, minute = parse_daily_recommendations_time(settings)
+    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
+        return False
+    state = read_json_payload(daily_recommendation_state_path(settings), {})
+    return state.get("last_run_date") != now.date().isoformat()
 
 
 def read_json_payload(path: Path, default: dict) -> dict:
