@@ -401,7 +401,16 @@ $contracts = @(
       '--min-kcif-reports',
       '--min-regional-provider-count',
       'metadata_policy_ok',
+      'rows_from_mapping_or_list',
+      '--min-naver-reports',
+      '--min-shinhan-reports',
+      '--min-market-journal-entries',
+      '--max-naver-missing-storage',
+      '자동 마감 시황 시장일지 출처 메타데이터 누락',
       '지역/중국/대외 소스 제공자 누락',
+      '네이버 리서치',
+      '신한 리서치',
+      '마감 시황 시장일지',
       'CSF=',
       '리서치 소스 저장 상태 정상'
     )
