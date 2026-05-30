@@ -88,6 +88,22 @@ def holding_ticker(item: dict[str, Any]) -> str:
     return str(item.get("ticker") or "").strip().upper()
 
 
+def is_close(actual: float | None, expected: float | None, *, abs_tolerance: float, rel_tolerance: float) -> bool:
+    if actual is None or expected is None:
+        return False
+    delta = abs(actual - expected)
+    if delta <= abs_tolerance:
+        return True
+    basis = max(abs(expected), 1.0)
+    return delta / basis <= rel_tolerance
+
+
+def implied_fx(value_krw: float | None, value_foreign: float | None) -> float | None:
+    if value_krw is None or value_foreign is None or value_foreign <= 0:
+        return None
+    return value_krw / value_foreign
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="포트폴리오 저장 파일의 수량 보호 상태를 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="user_portfolios.json 경로")
@@ -102,6 +118,7 @@ def main() -> int:
     parser.add_argument("--max-sync-age-hours", type=float, default=168.0, help="해외/수동 수량 sync_checked_at 최신성 기준")
     parser.add_argument("--value-tolerance", type=float, default=1.0, help="저장 총액과 종목 평가금액 합계 허용 오차")
     parser.add_argument("--weight-tolerance", type=float, default=0.02, help="보유 종목 weight 합계 허용 오차")
+    parser.add_argument("--calculation-relative-tolerance", type=float, default=0.03, help="평가금액/투자금/수익 계산 상대 허용 오차")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -173,6 +190,39 @@ def main() -> int:
                 sync_age = age_hours(item.get("sync_checked_at"))
                 if sync_age is None or sync_age > args.max_sync_age_hours:
                     errors.append(f"{ticker} 수량 동기화 확인 시각 오래됨/누락: {item.get('sync_checked_at')}")
+
+            quantity = number(item.get("quantity"))
+            average_cost = number(item.get("average_cost"))
+            current_price = number(item.get("current_price"))
+            market_value = number(item.get("market_value"))
+            cost_basis = number(item.get("cost_basis"))
+            unrealized_gain = number(item.get("unrealized_gain"))
+            unrealized_return = number(item.get("unrealized_return"))
+            if quantity is None or average_cost is None or current_price is None:
+                continue
+            if market_value is None or cost_basis is None:
+                continue
+            if currency == "KRW":
+                expected_market_value = quantity * current_price
+                expected_cost_basis = quantity * average_cost
+                if not is_close(market_value, expected_market_value, abs_tolerance=args.value_tolerance, rel_tolerance=args.calculation_relative_tolerance):
+                    errors.append(f"{ticker} 평가금액 계산 불일치: {market_value:,.2f} / 기대 {expected_market_value:,.2f}")
+                if not is_close(cost_basis, expected_cost_basis, abs_tolerance=args.value_tolerance, rel_tolerance=args.calculation_relative_tolerance):
+                    errors.append(f"{ticker} 투자금 계산 불일치: {cost_basis:,.2f} / 기대 {expected_cost_basis:,.2f}")
+            else:
+                market_fx = implied_fx(market_value, quantity * current_price)
+                cost_fx = implied_fx(cost_basis, quantity * average_cost)
+                if market_fx is None or cost_fx is None:
+                    errors.append(f"{ticker} 해외 평가/투자금 환율 역산 실패")
+                elif not is_close(market_fx, cost_fx, abs_tolerance=1.0, rel_tolerance=args.calculation_relative_tolerance):
+                    errors.append(f"{ticker} 해외 평가/투자금 환율 불일치: 평가 {market_fx:.2f} / 투자 {cost_fx:.2f}")
+            expected_gain = market_value - cost_basis
+            if unrealized_gain is None or not is_close(unrealized_gain, expected_gain, abs_tolerance=args.value_tolerance, rel_tolerance=args.calculation_relative_tolerance):
+                errors.append(f"{ticker} 수익 계산 불일치: {unrealized_gain} / 기대 {expected_gain:,.2f}")
+            if cost_basis > 0:
+                expected_return = expected_gain / cost_basis
+                if unrealized_return is None or not is_close(unrealized_return, expected_return, abs_tolerance=0.0005, rel_tolerance=args.calculation_relative_tolerance):
+                    errors.append(f"{ticker} 수익률 계산 불일치: {unrealized_return} / 기대 {expected_return:.4f}")
 
     market_sum = sum(number(item.get("market_value")) or 0 for item in holding_rows)
     stored_value = number(selected.get("portfolio_value"))
