@@ -25,11 +25,14 @@ python -m unittest discover -s tests -p "test_*.py"
 python -m unittest tests.test_backend_regressions.BackendModuleBoundaryTests
 ```
 
-## 백엔드 문법 검사
+## 백엔드 문법/모듈 경계 검사
 
 ```powershell
-python -m py_compile backend\research_os_main.py backend\research_os\web_capture.py backend\research_os\file_extraction.py backend\research_os\customs_trade.py backend\research_os\kcif_reports.py backend\research_os\regional_sources.py backend\research_os\market_journal.py backend\research_os\portfolio_import.py backend\research_os\portfolio_performance.py backend\research_os\portfolio_store.py backend\research_os\portfolio_sync.py backend\research_os\source_url_preview.py backend\research_os\storage_quality.py backend\research_os\system_health.py
+python tools\check_backend_module_health.py --strict
+python -m py_compile backend\research_os_main.py backend\research_os\*.py
 ```
+
+`check_backend_module_health.py --strict`는 `research_os_main.py`와 분리된 `backend\research_os` 모듈 전체의 Python 파싱, 메인 파일 줄 수 상한, 핵심 분리 모듈 파일 존재, `research_os_main.py` import 연결을 함께 확인합니다. 모듈이 늘어날 때는 긴 `py_compile` 파일 목록을 손으로 갱신하기보다 이 가드의 `EXPECTED_MODULES`와 `EXPECTED_MAIN_IMPORTS`를 먼저 갱신합니다.
 
 관세청 수출입 데이터 품질만 빠르게 확인하려면 아래 전용 테스트를 사용합니다.
 
