@@ -266,7 +266,13 @@ def main() -> int:
 
     print(f"소스 상태 폴더: {system_dir}")
     print(f"KCIF 관련 보고서: {kcif_related}개 | 상태 {kcif.get('source_status')} | 갱신 {kcif.get('updated_at')}")
-    provider_summary = ", ".join(f"{provider}={provider_counts.get(provider, 0)}" for provider in sorted({"EMERiCs", "CSF", "KIEP"}))
+    provider_summary = ", ".join(
+        [
+            f"CSF={provider_counts.get('CSF', 0)}",
+            f"EMERiCs={provider_counts.get('EMERiCs', 0)}",
+            f"KIEP={provider_counts.get('KIEP', 0)}",
+        ]
+    )
     print(f"EMERiCs/CSF/KIEP 관련 자료: {regional_related}개 | {provider_summary} | 실패 소스 {len(failed_sources)}개 | 갱신 {regional.get('updated_at')}")
     print(f"티커 레지스트리: {registry.get('entry_count')}개 | 성공 {registry.get('success_count')}/{registry.get('source_count')} | 갱신 {registry.get('updated_at')}")
     print(f"중복 Dossier 큐: 후보 {dossier.get('candidate_count')}개 | 갱신 {dossier.get('refreshed_count')}개 | 실패 {dossier.get('failed_count')}개 | 갱신 {dossier_timestamp}")

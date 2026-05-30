@@ -322,7 +322,7 @@ $contracts = @(
     Snippets = @(
       'REQUIRED_DISTRIBUTIONS',
       'python-dotenv',
-      '/api/v1/health',
+      '/api/v1/system/health',
       '--strict',
       '백엔드 런타임 준비 상태 확인 완료'
     )

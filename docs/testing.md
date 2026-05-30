@@ -114,7 +114,7 @@ python tools\check_storage_quality_store.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 ```
 
-`python tools\check_backend_runtime_env.py --strict`는 백엔드 의존성 버전과 `http://127.0.0.1:8001/api/v1/health` 응답을 강제 검증합니다. 일반 오프라인 묶음에서는 백엔드 미가동을 권고로만 보여 주고, 실제 운영 전에는 `--strict`로 확인합니다.
+`python tools\check_backend_runtime_env.py --strict`는 백엔드 의존성 버전과 `http://127.0.0.1:8001/api/v1/system/health` 응답을 강제 검증합니다. 일반 오프라인 묶음에서는 백엔드 미가동을 권고로만 보여 주고, 실제 운영 전에는 `--strict`로 확인합니다.
 
 ```powershell
 python tools\check_research_source_store.py --strict

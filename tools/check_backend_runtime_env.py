@@ -79,7 +79,7 @@ def main() -> int:
         else:
             print(f"{distribution}: {actual} | 정상")
 
-    health_url = args.base_url.rstrip("/") + "/api/v1/health"
+    health_url = args.base_url.rstrip("/") + "/api/v1/system/health"
     health_ok, health_message = check_http_health(health_url, args.timeout)
     print(f"백엔드 health: {health_url} | {health_message}")
 
