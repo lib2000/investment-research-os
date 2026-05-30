@@ -98,7 +98,10 @@ def main() -> int:
     parser.add_argument("--allow-cash", action="store_true", help="CASH/예수금 항목을 허용합니다")
     parser.add_argument("--require-price-fields", action="store_true", default=True, help="평단/현재가/평가금액/가격 출처를 강제합니다")
     parser.add_argument("--max-price-age-hours", type=float, default=96.0, help="가격 확인 시각 최신성 기준")
+    parser.add_argument("--max-portfolio-age-hours", type=float, default=96.0, help="포트폴리오 자체 updated_at 최신성 기준")
+    parser.add_argument("--max-sync-age-hours", type=float, default=168.0, help="해외/수동 수량 sync_checked_at 최신성 기준")
     parser.add_argument("--value-tolerance", type=float, default=1.0, help="저장 총액과 종목 평가금액 합계 허용 오차")
+    parser.add_argument("--weight-tolerance", type=float, default=0.02, help="보유 종목 weight 합계 허용 오차")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -131,6 +134,10 @@ def main() -> int:
     if selected.get("holding_count") not in (None, len(holding_rows)):
         errors.append(f"holding_count 불일치: {selected.get('holding_count')} / 실제 {len(holding_rows)}")
 
+    portfolio_updated_age = age_hours(selected.get("updated_at"))
+    if portfolio_updated_age is None or portfolio_updated_age > args.max_portfolio_age_hours:
+        errors.append(f"포트폴리오 updated_at 오래됨/누락: {selected.get('updated_at')}")
+
     tickers = [holding_ticker(item) for item in holding_rows]
     duplicate_tickers = sorted({ticker for ticker in tickers if ticker and tickers.count(ticker) > 1})
     if duplicate_tickers:
@@ -162,11 +169,24 @@ def main() -> int:
             sync_status = str(item.get("sync_status") or "")
             if currency != "KRW" and sync_status != "manual_or_overseas_protected":
                 errors.append(f"{ticker} 해외/수동 수량 보호 상태 누락: {sync_status or '없음'}")
+            if sync_status in {"manual", "manual_or_overseas_protected"}:
+                sync_age = age_hours(item.get("sync_checked_at"))
+                if sync_age is None or sync_age > args.max_sync_age_hours:
+                    errors.append(f"{ticker} 수량 동기화 확인 시각 오래됨/누락: {item.get('sync_checked_at')}")
 
     market_sum = sum(number(item.get("market_value")) or 0 for item in holding_rows)
     stored_value = number(selected.get("portfolio_value"))
     if stored_value is not None and abs(stored_value - market_sum) > args.value_tolerance:
         errors.append(f"포트폴리오 총액 불일치: 저장 {stored_value:,.2f} / 합계 {market_sum:,.2f}")
+
+    weight_sum = sum(number(item.get("weight")) or 0 for item in holding_rows)
+    if holding_rows and abs(weight_sum - 1.0) > args.weight_tolerance:
+        errors.append(f"포트폴리오 비중 합계 불일치: {weight_sum:.4f} / 기대 1.0")
+
+    price_ages = [age_hours(item.get("price_checked_at")) for item in holding_rows]
+    valid_price_ages = [value for value in price_ages if value is not None]
+    newest_price = min(valid_price_ages) if valid_price_ages else None
+    oldest_price = max(valid_price_ages) if valid_price_ages else None
 
     for ticker, (expected_qty, expected_currency) in parse_expected(args.expected).items():
         item = by_ticker.get(ticker)
@@ -180,8 +200,11 @@ def main() -> int:
         if expected_currency and actual_currency != expected_currency:
             errors.append(f"{ticker} 통화 불일치: {actual_currency} / 기대 {expected_currency}")
 
+    newest_price_label = f"{newest_price:.1f}" if newest_price is not None else "-"
+    oldest_price_label = f"{oldest_price:.1f}" if oldest_price is not None else "-"
     print(f"저장 파일: {store}")
     print(f"포트폴리오: {selected.get('portfolio_name') or selected_key} | 보유 {len(holding_rows)}개 | 총액 {stored_value if stored_value is not None else '-'}")
+    print(f"포트폴리오 갱신: {selected.get('updated_at') or '미확인'} | 비중 합계 {weight_sum:.4f} | 가격 확인 범위 {newest_price_label}~{oldest_price_label}시간")
     for ticker in parse_expected(args.expected):
         item = by_ticker.get(ticker)
         if item:
