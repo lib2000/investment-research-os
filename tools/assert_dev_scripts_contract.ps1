@@ -338,6 +338,8 @@ $contracts = @(
       'DEFAULT_STORE',
       'EXPECTED_MILESTONES',
       '--require-milestones',
+      '--require-quality',
+      '점수 설명 누락',
       '매일 추천 저장 상태 정상'
     )
   },

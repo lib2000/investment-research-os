@@ -21,7 +21,7 @@ CHECKS = [
     ),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
-    ("매일 추천 저장/추적", ["tools/check_daily_recommendations_store.py", "--require-milestones"]),
+    ("매일 추천 저장/추적", ["tools/check_daily_recommendations_store.py", "--require-milestones", "--require-quality"]),
 ]
 
 

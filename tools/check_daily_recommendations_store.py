@@ -68,6 +68,7 @@ def main() -> int:
     parser.add_argument("--date", default=None, help="확인할 추천일. 생략하면 latest_recommendation_date 사용")
     parser.add_argument("--min-latest", type=int, default=3, help="해당 일자에 필요한 최소 추천 수")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
+    parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -95,6 +96,35 @@ def main() -> int:
                 label = record.get("company_name") or record.get("ticker") or record.get("record_id")
                 errors.append(f"{label} 추적 마일스톤 누락: {', '.join(sorted(missing))}")
 
+    if args.require_quality:
+        expected_ranks = set(range(1, args.min_latest + 1))
+        actual_ranks = {record_rank(record) for record in latest[: args.min_latest]}
+        if actual_ranks != expected_ranks:
+            errors.append(f"최신 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}")
+        quality_fields = (
+            ("score_components", list),
+            ("reasons", list),
+            ("evidence_sources", list),
+            ("risk_notes", list),
+            ("tracking_milestones", list),
+        )
+        for record in latest[: args.min_latest]:
+            label = record.get("company_name") or record.get("ticker") or record.get("record_id")
+            score = record.get("score")
+            if not isinstance(score, (int, float)) or score <= 0:
+                errors.append(f"{label} 추천 점수 확인 필요: {score}")
+            for field, expected_type in quality_fields:
+                value = record.get(field)
+                if not isinstance(value, expected_type) or len(value) == 0:
+                    errors.append(f"{label} {field} 누락")
+            if record.get("baseline_price") in (None, ""):
+                errors.append(f"{label} 기준가 누락")
+            if not record.get("baseline_price_source"):
+                errors.append(f"{label} 기준가 출처 누락")
+            explanation = record.get("score_explanation")
+            if not isinstance(explanation, dict) or explanation.get("final_score") in (None, ""):
+                errors.append(f"{label} 점수 설명 누락")
+
     print(f"저장 파일: {store}")
     print(f"전체 추천 기록: {len(records)}개")
     print("일자별 추천 수: " + ", ".join(f"{date}={count}" for date, count in sorted(counts.items())))
@@ -103,7 +133,8 @@ def main() -> int:
         company = record.get("company_name") or "회사명 확인 필요"
         score = record.get("score", "-")
         milestones = len(record.get("tracking_milestones") or [])
-        print(f"{record_rank(record)}위 {company} | 점수 {score} | 추적 {milestones}개")
+        evidence_count = len(record.get("evidence_sources") or [])
+        print(f"{record_rank(record)}위 {company} | 점수 {score} | 근거 {evidence_count}개 | 추적 {milestones}개")
 
     if errors:
         for error in errors:
