@@ -38,6 +38,7 @@
 cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
 python tools\check_git_sync_status.py
+python tools\check_backend_runtime_env.py
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
@@ -45,6 +46,8 @@ python tools\check_storage_quality_store.py --strict
 ```
 
 백엔드가 실행 중이면 통합 검증을 사용한다.
+
+`check_backend_runtime_env.py`는 현재 Python 의존성과 `8001` health 응답을 함께 보여준다. 백엔드가 꺼져 있거나 WSL에서 Windows 백엔드에 접근하지 못하는 상태는 기본 점검에서는 권고로 표시하고, 운영 배포 직전처럼 반드시 실행 상태를 강제해야 할 때만 `--strict`를 붙인다.
 
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp

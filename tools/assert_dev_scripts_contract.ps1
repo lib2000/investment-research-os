@@ -298,6 +298,7 @@ $contracts = @(
     Snippets = @(
       'CHECKS',
       'check_git_sync_status.py',
+      'check_backend_runtime_env.py',
       'check_portfolio_store.py',
       'check_research_source_store.py',
       'check_backend_module_health.py',
@@ -313,6 +314,16 @@ $contracts = @(
 
 
 
+  @{
+    Path = "tools\check_backend_runtime_env.py"
+    Snippets = @(
+      'REQUIRED_DISTRIBUTIONS',
+      'python-dotenv',
+      '/api/v1/health',
+      '--strict',
+      '백엔드 런타임 준비 상태 확인 완료'
+    )
+  },
   @{
     Path = "tools\check_git_sync_status.py"
     Snippets = @(
