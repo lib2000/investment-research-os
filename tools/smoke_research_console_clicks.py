@@ -1,4 +1,4 @@
-﻿"""Headless Chrome click smoke tests for the research console.
+"""Headless Chrome click smoke tests for the research console.
 
 This script intentionally uses only the Python standard library. It talks to
 Chrome DevTools Protocol directly so the check can run on this PC without
@@ -113,14 +113,19 @@ class CdpClient:
         command_id = self.next_id
         self.next_id += 1
         self._send_frame(json.dumps({"id": command_id, "method": method, "params": params or {}}).encode("utf-8"))
+        previous_timeout = self.sock.gettimeout()
+        self.sock.settimeout(max(timeout + 15, previous_timeout or 0))
         deadline = time.time() + timeout
-        while time.time() < deadline:
-            message = self._read_frame()
-            if message.get("id") != command_id:
-                continue
-            if "error" in message:
-                raise RuntimeError(f"CDP {method} failed: {message['error']}")
-            return message.get("result") or {}
+        try:
+            while time.time() < deadline:
+                message = self._read_frame()
+                if message.get("id") != command_id:
+                    continue
+                if "error" in message:
+                    raise RuntimeError(f"CDP {method} failed: {message['error']}")
+                return message.get("result") or {}
+        finally:
+            self.sock.settimeout(previous_timeout)
         raise TimeoutError(f"CDP command timed out: {method}")
 
     def evaluate(self, expression: str, timeout: float = 30) -> object:
