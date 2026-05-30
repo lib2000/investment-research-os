@@ -288,7 +288,7 @@ label {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 9px;
   margin-bottom: 12px;
 }
@@ -299,7 +299,9 @@ label {
   border: 1px solid var(--border);
   min-height: 50px;
   padding: 9px 12px;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   line-height: 1.15;
   font-size: 18px;
   font-weight: 850;
@@ -347,7 +349,7 @@ label {
 
 .dashboard-command-bar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   align-items: stretch;
 }
@@ -379,7 +381,7 @@ label {
 }
 
 .dashboard-command-bar button {
-  min-width: 136px;
+  min-width: 150px;
 }
 
 .dashboard-ticker-quick-list {

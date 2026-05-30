@@ -348,8 +348,11 @@ $contracts = @(
       'REQUIRED_IDS',
       'REQUIRED_TABS',
       'REQUIRED_FEEDBACK_BUTTON_IDS',
+      'REQUIRED_CSS_SNIPPETS',
       'FEEDBACK_TOKENS',
       'button_has_feedback',
+      '메뉴/버튼 레이아웃 CSS 계약 누락',
+      '메뉴/버튼 레이아웃 CSS',
       '즉시 피드백/로딩 연결 누락 버튼',
       'selector_ids',
       '클래식 콘솔 정적 계약 정상'

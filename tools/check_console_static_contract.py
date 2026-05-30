@@ -94,6 +94,17 @@ FEEDBACK_TOKENS = (
     "attachButtonActionFeedback",
 )
 
+REQUIRED_CSS_SNIPPETS = {
+    "responsive_tabs": "grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));",
+    "tab_wrapping": ".tab {",
+    "tab_white_space": "white-space: normal;",
+    "tab_word_break": "word-break: keep-all;",
+    "tab_overflow_wrap": "overflow-wrap: anywhere;",
+    "dashboard_command_width": "grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));",
+    "dashboard_button_width": ".dashboard-command-bar button",
+    "dashboard_button_min_width": "min-width: 150px;",
+}
+
 REQUIRED_TABS = {
     "dashboard",
     "team",
@@ -173,9 +184,11 @@ def main() -> int:
     root = project_root(Path.cwd())
     html_path = root / "mobile_app" / "research_console" / "index.html"
     js_path = root / "mobile_app" / "research_console" / "console.js"
+    css_path = root / "mobile_app" / "research_console" / "styles.css"
     parser_obj = ConsoleHtmlParser()
     html = html_path.read_text(encoding="utf-8")
     js = js_path.read_text(encoding="utf-8")
+    css = css_path.read_text(encoding="utf-8")
     parser_obj.feed(html)
 
     ids = set(parser_obj.ids)
@@ -192,6 +205,9 @@ def main() -> int:
     missing_tabs = sorted(REQUIRED_TABS - parser_obj.sections)
     tab_without_section = sorted(parser_obj.tab_targets - parser_obj.sections)
     section_without_tab = sorted((REQUIRED_TABS & parser_obj.sections) - parser_obj.tab_targets)
+    missing_css_snippets = sorted(
+        name for name, snippet in REQUIRED_CSS_SNIPPETS.items() if snippet not in css
+    )
 
     errors: list[str] = []
     if duplicate_ids:
@@ -210,12 +226,15 @@ def main() -> int:
         errors.append("탭 대상 섹션 누락: " + ", ".join(tab_without_section))
     if section_without_tab:
         errors.append("섹션 탭 누락: " + ", ".join(section_without_tab))
+    if missing_css_snippets:
+        errors.append("메뉴/버튼 레이아웃 CSS 계약 누락: " + ", ".join(missing_css_snippets))
 
     print(f"HTML id 수: {len(ids)}개")
     print(f"JS 참조 id 수: {len(referenced_ids)}개")
     print(f"탭 섹션: {len(parser_obj.sections & REQUIRED_TABS)}/{len(REQUIRED_TABS)}개")
     print(f"버튼 수: {len(parser_obj.buttons)}개")
     print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
+    print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
     if errors:
         for error in errors:
             print(f"오류: {error}")
