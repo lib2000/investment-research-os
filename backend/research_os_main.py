@@ -3584,6 +3584,7 @@ def repair_naver_research_cache(
     entries = dict(entries)
     metadata_updated: list[dict] = []
     backfilled: list[dict] = []
+    missing_storage_saved: list[dict] = []
     failed: list[dict] = []
     warnings: list[str] = []
     if refresh_metadata:
@@ -3665,6 +3666,27 @@ def repair_naver_research_cache(
         except Exception as exc:
             failed.append({"item_id": key, "title": entry.get("title"), "error": str(exc)})
 
+    if save_result:
+        missing_storage_candidates = [
+            (key, entry)
+            for key, entry in entries.items()
+            if isinstance(entry, dict) and not naver_research_storage_relative_path(entry)
+        ]
+        for key, entry in missing_storage_candidates:
+            try:
+                response = save_naver_research_item(entry, settings, save_result=True)
+                entries[key]["storage"] = response.storage.model_dump(mode="json") if response.storage else None
+                entries[key]["linked_impact"] = compact_naver_linked_impact(response)
+                missing_storage_saved.append(
+                    {
+                        "item_id": key,
+                        "title": entry.get("title"),
+                        "published_at": entry.get("published_at"),
+                    }
+                )
+            except Exception as exc:
+                failed.append({"item_id": key, "title": entry.get("title"), "error": str(exc)})
+
     repaired_cache = {
         **cache,
         "updated_at": current_storage_timestamp(),
@@ -3683,10 +3705,12 @@ def repair_naver_research_cache(
         "module": "naver_research_cache_repair",
         "metadata_updated_count": len(metadata_updated),
         "pdf_backfilled_count": len(backfilled),
+        "missing_storage_saved_count": len(missing_storage_saved),
         "failed_count": len(failed),
         "duplicate_archive": duplicate_archive,
         "metadata_updated": metadata_updated[:30],
         "pdf_backfilled": backfilled,
+        "missing_storage_saved": missing_storage_saved[:30],
         "failed": failed,
         "warnings": warnings,
         "cache_status": status,

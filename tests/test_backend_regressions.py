@@ -6,6 +6,7 @@ from datetime import date
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -1201,6 +1202,55 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(written["entries"]["old-key"]["title"], "삼양식품 목표가 상향")
         self.assertEqual(written["entries"]["old-key"]["pdf_analysis"]["status"], "success")
         self.assertFalse(written["entries"]["old-key"]["pdf_analysis"]["full_text_stored"])
+
+    def test_naver_research_repair_saves_cache_entries_missing_storage(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(vault_dir=PROJECT_ROOT / ".test-tmp" / "naver-repair-storage")
+        cache = {
+            "entries": {
+                "missing-storage": {
+                    "title": "저장 경로 누락 리포트",
+                    "category": "종목분석",
+                    "published_at": "2026-05-08",
+                    "url": "https://finance.naver.com/research/company_read.naver?nid=2",
+                    "pdf_url": "https://example.com/report2.pdf",
+                    "ticker": "007070",
+                    "company_name": "GS리테일",
+                    "nid": "2",
+                    "pdf_analysis": {"status": "success"},
+                }
+            }
+        }
+        storage = SimpleNamespace(
+            model_dump=lambda mode="json": {
+                "relative_path": "research_vault/007070/007070-research-capture.md",
+                "json_relative_path": "research_vault/007070/007070-research-capture.json",
+            }
+        )
+        response = SimpleNamespace(storage=storage, linked_impact=None)
+        written = {}
+
+        with (
+            patch.object(main, "read_naver_research_cache", return_value=cache),
+            patch.object(main, "write_naver_research_cache", side_effect=lambda _settings, payload: written.update(payload)),
+            patch.object(main, "build_naver_research_cache_status", return_value={"missing_storage_count": 0}),
+            patch.object(main, "save_naver_research_item", return_value=response) as save_item,
+        ):
+            result = main.repair_naver_research_cache(
+                settings,
+                pdf_backfill_limit=0,
+                refresh_metadata=False,
+                save_result=True,
+            )
+
+        self.assertEqual(result["missing_storage_saved_count"], 1)
+        self.assertEqual(save_item.call_count, 1)
+        self.assertEqual(
+            written["entries"]["missing-storage"]["storage"]["relative_path"],
+            "research_vault/007070/007070-research-capture.md",
+        )
 
     def test_naver_duplicate_market_close_reports_are_soft_archived(self):
         import research_os_main as main
