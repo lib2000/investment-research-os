@@ -375,6 +375,11 @@ $contracts = @(
       'DEFAULT_STORE',
       'DEFAULT_EXPECTED',
       '--forbid-zero',
+      '--allow-cash',
+      '--max-price-age-hours',
+      '예수금/CASH 항목 혼입',
+      '해외/수동 수량 보호 상태 누락',
+      '포트폴리오 총액 불일치',
       '포트폴리오 저장 수량 상태 정상'
     )
   },
