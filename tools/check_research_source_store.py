@@ -185,12 +185,21 @@ def main() -> int:
     add_issue(issues, dossier_age is None or dossier_age > args.max_dossier_queue_age_hours, "중복 Dossier 큐 최신성 확인 필요")
 
     automation = load_json(system_dir, "research_automation_status.json")
+    automation_timestamp = automation.get("updated_at")
+    automation_age = age_hours(automation_timestamp)
     deduped_refresh = automation.get("last_deduped_dossier_refresh")
     deduped_refresh_age = age_hours(deduped_refresh.get("updated_at") if isinstance(deduped_refresh, dict) else None)
     add_issue(issues, not isinstance(deduped_refresh, dict), "리서치 자동화 Dossier 갱신 상태 누락")
+    add_issue(issues, automation_age is None or automation_age > args.max_dossier_queue_age_hours, "리서치 자동화 상태 상위 updated_at 최신성 확인 필요")
     if isinstance(deduped_refresh, dict):
+        deduped_refresh_timestamp = deduped_refresh.get("updated_at")
         add_issue(issues, int(deduped_refresh.get("failed_count") or 0) > 0, "리서치 자동화 Dossier 갱신 실패 건 존재")
         add_issue(issues, deduped_refresh_age is None or deduped_refresh_age > args.max_dossier_queue_age_hours, "리서치 자동화 Dossier 갱신 최신성 확인 필요")
+        add_issue(
+            issues,
+            bool(automation_timestamp and deduped_refresh_timestamp and automation_timestamp != deduped_refresh_timestamp),
+            "리서치 자동화 상위 updated_at과 Dossier 갱신 updated_at 불일치",
+        )
 
     naver = load_json(system_dir, "naver_research_cache.json")
     naver_rows = rows_from_mapping_or_list(naver.get("entries"))
