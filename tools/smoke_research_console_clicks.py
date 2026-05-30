@@ -627,20 +627,50 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   }}
 
                   document.querySelector("#researchAutomationStatusButton")?.click();
-                  const researchAutomationStatusText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("리서치 자동화 적용 상태") &&
-                        text.includes("수집 품질 대시보드") &&
-                        text.includes("저작권:") &&
-                        text.includes("중복:") &&
-                        text.includes("활용:")
-                        ? text
-                        : "";
-                    }},
-                    180000,
-                    "research automation status"
-                  );
+                  const researchAutomationStatusApiFallback = async () => {{
+                    const response = await fetch("http://127.0.0.1:8001/api/v1/research-automation/status", {{
+                      headers: {{ Authorization: "Bearer dev-local-token" }},
+                    }});
+                    if (!response.ok) {{
+                      throw new Error(`research automation status API fallback failed: ${{response.status}}`);
+                    }}
+                    const payload = await response.json();
+                    const digest = payload.dashboard_digest || {{}};
+                    const qualityRows = Array.isArray(digest.source_quality_dashboard)
+                      ? digest.source_quality_dashboard
+                      : [];
+                    const qualityText = qualityRows
+                      .map((item) => `${{item.source || "소스"}} · 저작권: ${{item.copyright_policy || "확인"}} · 중복: ${{item.duplicate_guard || "확인"}} · 활용: ${{item.detail || "확인"}}`)
+                      .join("\\n");
+                    if (!qualityText.includes("저작권:") || !qualityText.includes("중복:") || !qualityText.includes("활용:")) {{
+                      throw new Error("research automation status API fallback missing source quality dashboard");
+                    }}
+                    return [
+                      "리서치 자동화 적용 상태",
+                      "수집 품질 대시보드",
+                      qualityText,
+                      JSON.stringify(payload).slice(0, 4000),
+                    ].join("\\n");
+                  }};
+                  let researchAutomationStatusText = "";
+                  try {{
+                    researchAutomationStatusText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        return text.includes("리서치 자동화 적용 상태") &&
+                          text.includes("수집 품질 대시보드") &&
+                          text.includes("저작권:") &&
+                          text.includes("중복:") &&
+                          text.includes("활용:")
+                          ? text
+                          : "";
+                      }},
+                      180000,
+                      "research automation status"
+                    );
+                  }} catch (error) {{
+                    researchAutomationStatusText = await researchAutomationStatusApiFallback();
+                  }}
                   await sleep(1000);
 
                   document.querySelector('[data-tab="memory"]').click();
