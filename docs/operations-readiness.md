@@ -71,6 +71,14 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.
 정적 콘솔 계약은 상단 액션 피드백과 추천 카드의 `aria-live` 영역도 확인해, 버튼 클릭 후 메시지가 보이지 않는 회귀를 백엔드 없이 잡는다.
 
+
+## 빠른 복구/확인 위치
+
+- `현재 작업 디렉토리가 없습니다` 또는 OneDrive 경로가 보이면 PowerShell에서 `. C:\Users\lib20\InvestmentJournalApp\scripts\enter-investment-research-os.ps1`를 실행해 현재 창의 작업 루트를 바로잡는다.
+- 콘솔 주소는 `http://127.0.0.1:8001/console/index.html`이고, 백엔드는 `C:\Users\lib20\InvestmentJournalApp`에서 `.\scripts\start-research-backend.ps1 -Port 8001`로 실행한다.
+- 매일 추천은 첫 화면의 `오늘 추천 1~3위`, 저장 데이터 탭의 `오늘 추천 1~3위`, `추천 추적 상태`에서 본다. 백엔드가 꺼져 있으면 `python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1`로 저장 원본을 확인한다.
+- 푸시 대기 커밋이 있으면 Windows Git 인증이 가능한 터미널에서 `git push origin main`을 실행한다. OneDrive 경로에서는 푸시 전 검증이나 서버 실행을 하지 않는다.
+
 ## 운영 주의
 
 - 자동 추천은 매수 지시가 아니라 보유/관심 데이터 기반 일일 검토 후보이다.
