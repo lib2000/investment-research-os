@@ -72,6 +72,7 @@ node --check mobile_app\research_console\console.js
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCoreSafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioQuantityProtection
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckStorageQualitySafeguards
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckDailyRecommendationStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality -CustomsStartYymm 202605 -CustomsEndYymm 202605
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality -CustomsBaseUrl http://127.0.0.1:8001 -CustomsStartYymm 202605 -CustomsEndYymm 202605

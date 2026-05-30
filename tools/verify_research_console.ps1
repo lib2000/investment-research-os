@@ -9,6 +9,7 @@
   [switch]$CheckExternalSourceButtons,
   [switch]$CheckSourceAutomationStatus,
   [switch]$CheckDailyRecommendations,
+  [switch]$CheckDailyRecommendationStore,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckStorageQualitySafeguards,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
@@ -81,6 +82,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os\storage_quality.py `
     backend\research_os\system_health.py `
     tools\smoke_research_console_clicks.py `
+    tools\check_daily_recommendations_store.py `
     tools\smoke_research_console_external_sources.py `
     tools\smoke_research_console_menus.py `
     tools\smoke_research_console_write_actions.py
@@ -244,6 +246,12 @@ if ($CheckDailyRecommendations) {
       $dailyRecommendations.MilestoneCount,
       $dailyRecommendations.StoragePath
     )
+  }
+}
+
+if ($CheckDailyRecommendationStore) {
+  Invoke-VerifyStep "일일 추천 저장 파일 오프라인 확인" {
+    python tools\check_daily_recommendations_store.py --require-milestones
   }
 }
 

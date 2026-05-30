@@ -232,6 +232,10 @@ $contracts = @(
       '[switch]$CheckCustomsTradeQuality',
       '[switch]$CheckPortfolioQuantityProtection',
       '[switch]$CheckStorageQualitySafeguards',
+      '[switch]$CheckDailyRecommendations',
+      '[switch]$CheckDailyRecommendationStore',
+      'check_daily_recommendations_store.py',
+      '일일 추천 저장 파일 오프라인 확인',
       '$CustomsBaseUrl',
       '$CustomsDevUserToken',
       '$CustomsStartYymm',
@@ -276,6 +280,16 @@ $contracts = @(
       'system check completion',
       '전체 시스템 점검 완료',
       '네이버 리서치/시장일지 상태'
+    )
+  },
+
+  @{
+    Path = "tools\check_daily_recommendations_store.py"
+    Snippets = @(
+      'DEFAULT_STORE',
+      'EXPECTED_MILESTONES',
+      '--require-milestones',
+      '매일 추천 저장 상태 정상'
     )
   },
   @{

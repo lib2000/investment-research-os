@@ -32,7 +32,7 @@
 
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
-.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckDailyRecommendations -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
 python tools\check_daily_recommendations_store.py --require-milestones
 ```
