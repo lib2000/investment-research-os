@@ -345,12 +345,12 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       throw new Error(`${{label}} API fallback did not include recommendation records and tracking milestones`);
                     }}
                     return [
-                      "매일 추천 후보 1~3위",
+                      "오늘의 추천 결과",
                       `추천일: ${{payload.latest_recommendation_date || payload.recommendation_date || "확인"}}`,
                       `추천 후보: ${{recordCount || "확인"}}`,
                       "사후 추적",
                       "추천 후 1주일",
-                      "추천 성과 추적표",
+                      "경과 그래프",
                       jsonText.slice(0, 4000),
                     ].join("\\n");
                   }};
@@ -792,9 +792,9 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         const feedback = document.querySelector("#actionFeedback")?.textContent || "";
                         const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
                         const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                        return combined.includes("매일 추천 후보 1~3위") &&
+                        return (combined.includes("오늘의 추천 결과") || combined.includes("매일 추천 후보 1~3위")) &&
                           combined.includes("추천 후보") &&
-                          (combined.includes("사후 추적") || cards.includes("추천 성과 추적표"))
+                          (combined.includes("사후 추적") || cards.includes("경과 그래프"))
                           ? combined
                           : "";
                       }},
@@ -814,10 +814,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         const feedback = document.querySelector("#actionFeedback")?.textContent || "";
                         const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
                         const combined = `${{text}}\n${{feedback}}\n${{cards}}`;
-                        return combined.includes("매일 추천 후보 1~3위") &&
+                        return (combined.includes("오늘의 추천 결과") || combined.includes("매일 추천 후보 1~3위")) &&
                           combined.includes("추천일") &&
                           combined.includes("추천 후 1주일") &&
-                          cards.includes("추천 성과 추적표")
+                          cards.includes("경과 그래프")
                           ? combined
                           : "";
                       }},

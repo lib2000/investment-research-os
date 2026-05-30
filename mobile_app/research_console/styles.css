@@ -3184,8 +3184,220 @@ label {
   font-size: 11px;
 }
 
+.daily-recommendation-milestones .milestone-up,
+.daily-recommendation-timeline-step.milestone-up {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.daily-recommendation-milestones .milestone-down,
+.daily-recommendation-timeline-step.milestone-down {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.daily-recommendation-milestones .milestone-warning,
+.daily-recommendation-timeline-step.milestone-warning {
+  color: #92400e;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.daily-recommendation-milestones .milestone-pending,
+.daily-recommendation-timeline-step.milestone-pending,
+.daily-recommendation-timeline-step.milestone-missing {
+  color: #475569;
+  background: #f8fafc;
+  border-color: #dbe4ef;
+}
+
 .daily-recommendation-tracking {
   grid-column: 1 / -1;
+}
+
+.daily-recommendation-daily-list,
+.daily-recommendation-progress {
+  grid-column: 1 / -1;
+  min-height: auto;
+}
+
+.daily-recommendation-date-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.daily-recommendation-date-group {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.daily-recommendation-date-group header,
+.daily-recommendation-progress-card header,
+.daily-recommendation-timeline-row header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.daily-recommendation-date-group header b,
+.daily-recommendation-progress-card header b,
+.daily-recommendation-timeline-row header b {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-date-group header em,
+.daily-recommendation-progress-card header em,
+.daily-recommendation-timeline-row header em {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.daily-recommendation-date-row {
+  display: grid;
+  grid-template-columns: 42px minmax(120px, 1fr) minmax(130px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.daily-recommendation-date-row:first-child {
+  border-top: 0;
+}
+
+.daily-recommendation-date-row span {
+  justify-self: start;
+  padding: 2px 7px;
+  color: #075985;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+}
+
+.daily-recommendation-date-row strong,
+.daily-recommendation-date-row em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-date-row strong {
+  font-size: 13px;
+}
+
+.daily-recommendation-date-row em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.daily-recommendation-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.daily-recommendation-progress-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.daily-recommendation-progress-bar {
+  overflow: hidden;
+  height: 10px;
+  background: #e8eef5;
+  border-radius: 999px;
+}
+
+.daily-recommendation-progress-bar i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  background: #64748b;
+  border-radius: inherit;
+}
+
+.daily-recommendation-progress-card.milestone-up .daily-recommendation-progress-bar i {
+  background: #10b981;
+}
+
+.daily-recommendation-progress-card.milestone-down .daily-recommendation-progress-bar i {
+  background: #ef4444;
+}
+
+.daily-recommendation-progress-card.milestone-flat .daily-recommendation-progress-bar i,
+.daily-recommendation-progress-card.milestone-complete .daily-recommendation-progress-bar i {
+  background: #0ea5e9;
+}
+
+.daily-recommendation-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-recommendation-timeline-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.daily-recommendation-timeline-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.daily-recommendation-timeline-step {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+}
+
+.daily-recommendation-timeline-step b,
+.daily-recommendation-timeline-step small,
+.daily-recommendation-timeline-step em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-timeline-step b {
+  color: inherit;
+  font-size: 12px;
+}
+
+.daily-recommendation-timeline-step small,
+.daily-recommendation-timeline-step em {
+  color: inherit;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
 }
 
 .daily-recommendation-tracking-table {
@@ -3956,6 +4168,9 @@ pre {
   .dashboard-link-list,
   .ticker-cache-list,
   .daily-recommendation-cards,
+  .daily-recommendation-date-groups,
+  .daily-recommendation-progress-grid,
+  .daily-recommendation-timeline-steps,
   .daily-recommendation-tracking-table,
   .checklist-grid,
   .editor-row,

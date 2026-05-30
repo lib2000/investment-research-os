@@ -7733,6 +7733,112 @@ function dailyRecommendationChangeText(milestone, currency = "KRW") {
   return `${formatSmartPrice(milestone.price, currency, "가격 미확인")}${change}${changePct}`;
 }
 
+function dailyRecommendationMilestoneShortLabel(milestone) {
+  const rawLabel = String(milestone?.label || milestone?.key || "").trim();
+  const normalized = rawLabel.toLowerCase();
+  if (rawLabel.includes("15") || normalized.includes("15d")) {
+    return "15일";
+  }
+  if (rawLabel.includes("6달") || normalized.includes("month_6") || normalized.includes("6m")) {
+    return "6달";
+  }
+  if (rawLabel.includes("3달") || normalized.includes("month_3") || normalized.includes("3m")) {
+    return "3달";
+  }
+  if (rawLabel.includes("1달") || normalized.includes("month_1") || normalized.includes("1m") || normalized.includes("30d")) {
+    return "1달";
+  }
+  if (rawLabel.includes("1주") || rawLabel.includes("7") || normalized.includes("week_1") || normalized.includes("7d")) {
+    return "1주";
+  }
+  return rawLabel || "추적";
+}
+
+function dailyRecommendationMilestoneTone(milestone) {
+  const status = milestone?.status || "pending";
+  const pct = Number(milestone?.price_change_pct);
+  if (Number.isFinite(pct)) {
+    if (pct > 0) {
+      return "up";
+    }
+    if (pct < 0) {
+      return "down";
+    }
+    return "flat";
+  }
+  if (status === "complete" || status === "success" || status === "skipped_existing") {
+    return "complete";
+  }
+  if (status === "warning" || status === "price_unavailable") {
+    return "warning";
+  }
+  if (status === "not_found") {
+    return "missing";
+  }
+  return "pending";
+}
+
+function dailyRecommendationGroupRecords(records) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const date = record.recommendation_date || "추천일 미확인";
+    if (!groups.has(date)) {
+      groups.set(date, []);
+    }
+    groups.get(date).push(record);
+  });
+  return Array.from(groups.entries())
+    .sort(([left], [right]) => String(right).localeCompare(String(left)))
+    .map(([date, items]) => ({
+      date,
+      records: items.slice().sort((left, right) => Number(left.rank || 99) - Number(right.rank || 99)),
+    }));
+}
+
+function dailyRecommendationMilestoneSummary(records) {
+  const order = ["1주", "15일", "1달", "3달", "6달"];
+  const summary = order.reduce((acc, label) => {
+    acc[label] = {
+      label,
+      total: 0,
+      complete: 0,
+      up: 0,
+      down: 0,
+      flat: 0,
+      pending: 0,
+      warning: 0,
+    };
+    return acc;
+  }, {});
+  records.forEach((record) => {
+    (record.tracking_milestones || []).forEach((milestone) => {
+      const label = dailyRecommendationMilestoneShortLabel(milestone);
+      if (!summary[label]) {
+        summary[label] = {
+          label,
+          total: 0,
+          complete: 0,
+          up: 0,
+          down: 0,
+          flat: 0,
+          pending: 0,
+          warning: 0,
+        };
+      }
+      const tone = dailyRecommendationMilestoneTone(milestone);
+      summary[label].total += 1;
+      summary[label][tone] = (summary[label][tone] || 0) + 1;
+      if (tone === "up" || tone === "down" || tone === "flat" || tone === "complete") {
+        summary[label].complete += 1;
+      }
+      if (tone === "pending" || tone === "warning" || tone === "missing") {
+        summary[label].pending += 1;
+      }
+    });
+  });
+  return order.map((label) => summary[label]).filter((item) => item.total > 0);
+}
+
 function renderDailyRecommendationCards(payload) {
   if (!elements.dailyRecommendationCards || !payload || typeof payload !== "object") {
     return;
@@ -7763,14 +7869,8 @@ function renderDailyRecommendationCards(payload) {
   const recommendationDates = Array.isArray(payload.recommendation_dates)
     ? payload.recommendation_dates.slice(0, 6)
     : [];
-  const trackingRows = allRecords
-    .flatMap((record) =>
-      (record.tracking_milestones || []).map((milestone) => ({
-        record,
-        milestone,
-      }))
-    )
-    .slice(0, 15);
+  const dailyGroups = dailyRecommendationGroupRecords(allRecords).slice(0, 8);
+  const milestoneSummary = dailyRecommendationMilestoneSummary(allRecords);
   const qualitySummary = records.reduce(
     (acc, record) => {
       acc.penaltyCount += (record.score_penalties || []).length;
@@ -7845,8 +7945,8 @@ function renderDailyRecommendationCards(payload) {
             ${milestones
               .map(
                 (milestone) => `
-                  <b title="${escapeHtml(milestone.target_date || "")}">
-                    ${escapeHtml(milestone.label || milestone.key || "추적")} · ${escapeHtml(dailyRecommendationStatusLabel(milestone.status))}
+                  <b class="milestone-${escapeHtml(dailyRecommendationMilestoneTone(milestone))}" title="${escapeHtml(milestone.target_date || "")}">
+                    ${escapeHtml(dailyRecommendationMilestoneShortLabel(milestone))} · ${escapeHtml(dailyRecommendationStatusLabel(milestone.status))}
                   </b>
                 `
               )
@@ -7858,7 +7958,7 @@ function renderDailyRecommendationCards(payload) {
     .join("");
   elements.dailyRecommendationCards.innerHTML = `
     <article class="daily-recommendation-card daily-recommendation-summary ok">
-      <span>매일 추천 후보 1~3위</span>
+      <span>오늘의 추천 결과</span>
       <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
       <p>저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
       <small>${escapeHtml(
@@ -7867,23 +7967,88 @@ function renderDailyRecommendationCards(payload) {
       <small>${escapeHtml(recommendationDates.length ? `추천 이력: ${recommendationDates.join(" · ")}` : "추천 이력은 저장 후 누적됩니다.")}</small>
     </article>
     ${cards}
-    <article class="daily-recommendation-card daily-recommendation-tracking">
-      <span>추천 성과 추적표</span>
+    <article class="daily-recommendation-card daily-recommendation-daily-list">
+      <span>일자별 추천 목록</span>
+      <strong>매일 1위부터 3위</strong>
+      <div class="daily-recommendation-date-groups">
+        ${dailyGroups
+          .map(
+            (group) => `
+              <section class="daily-recommendation-date-group">
+                <header>
+                  <b>${escapeHtml(group.date)}</b>
+                  <em>${escapeHtml(formatNumber(group.records.length))}개</em>
+                </header>
+                <div>
+                  ${group.records
+                    .map(
+                      (record) => `
+                        <p class="daily-recommendation-date-row">
+                          <span>${escapeHtml(record.rank || "-")}위</span>
+                          <strong>${escapeHtml(displayCompanyName(record))}</strong>
+                          <em>${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</em>
+                        </p>
+                      `
+                    )
+                    .join("")}
+                </div>
+              </section>
+            `
+          )
+          .join("") || "<p>저장된 일자별 추천 목록이 없습니다.</p>"}
+      </div>
+    </article>
+    <article class="daily-recommendation-card daily-recommendation-progress">
+      <span>경과 그래프</span>
       <strong>1주 · 15일 · 1달 · 3달 · 6달</strong>
       <p>완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 상승 ${escapeHtml(formatNumber(performance.positive_count || 0))}개 · 하락 ${escapeHtml(formatNumber(performance.negative_count || 0))}개 · 대기 ${escapeHtml(formatNumber(performance.pending_count || 0))}개</p>
-      <div class="daily-recommendation-tracking-table">
-        ${trackingRows
-          .map(({ record, milestone }) => {
-            const status = dailyRecommendationStatusLabel(milestone.status);
-            const result = dailyRecommendationChangeText(milestone, record.currency || "KRW");
+      <div class="daily-recommendation-progress-grid">
+        ${milestoneSummary
+          .map((item) => {
+            const progress = item.total ? Math.round((item.complete / item.total) * 100) : 0;
+            const tone = item.up > item.down ? "up" : item.down > item.up ? "down" : item.complete ? "flat" : "pending";
             return `
-              <div>
-                <b>${escapeHtml(displayCompanyName(record))}</b>
-                <span>${escapeHtml(milestone.label || milestone.key || "추적")} · ${escapeHtml(milestone.target_date || "일자 미확인")}</span>
-                <em>${escapeHtml(status)} · ${escapeHtml(result)}</em>
-              </div>
+              <section class="daily-recommendation-progress-card milestone-${escapeHtml(tone)}">
+                <header>
+                  <b>${escapeHtml(item.label)}</b>
+                  <em>${escapeHtml(formatNumber(item.complete))}/${escapeHtml(formatNumber(item.total))}</em>
+                </header>
+                <div class="daily-recommendation-progress-bar" aria-label="${escapeHtml(item.label)} 완료율 ${escapeHtml(formatNumber(progress))}%">
+                  <i style="width: ${escapeHtml(String(progress))}%"></i>
+                </div>
+                <small>상승 ${escapeHtml(formatNumber(item.up))} · 하락 ${escapeHtml(formatNumber(item.down))} · 대기 ${escapeHtml(formatNumber(item.pending))}</small>
+              </section>
             `;
           })
+          .join("") || "<p>경과 그래프를 만들 추적 데이터가 없습니다.</p>"}
+      </div>
+      <div class="daily-recommendation-timeline">
+        ${records
+          .map(
+            (record) => `
+              <section class="daily-recommendation-timeline-row">
+                <header>
+                  <b>${escapeHtml(record.rank || "-")}위 ${escapeHtml(displayCompanyName(record))}</b>
+                  <em>기준 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</em>
+                </header>
+                <div class="daily-recommendation-timeline-steps">
+                  ${(record.tracking_milestones || [])
+                    .slice(0, 5)
+                    .map((milestone) => {
+                      const tone = dailyRecommendationMilestoneTone(milestone);
+                      return `
+                        <span class="daily-recommendation-timeline-step milestone-${escapeHtml(tone)}" title="${escapeHtml(milestone.target_date || "")}">
+                          <b>${escapeHtml(dailyRecommendationMilestoneShortLabel(milestone))}</b>
+                          <small>${escapeHtml(milestone.target_date || "일자 미확인")}</small>
+                          <em>${escapeHtml(dailyRecommendationChangeText(milestone, record.currency || "KRW"))}</em>
+                        </span>
+                      `;
+                    })
+                    .join("")}
+                </div>
+              </section>
+            `
+          )
           .join("")}
       </div>
     </article>
