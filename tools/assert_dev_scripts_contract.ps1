@@ -347,6 +347,10 @@ $contracts = @(
     Snippets = @(
       'REQUIRED_IDS',
       'REQUIRED_TABS',
+      'REQUIRED_FEEDBACK_BUTTON_IDS',
+      'FEEDBACK_TOKENS',
+      'button_has_feedback',
+      '즉시 피드백/로딩 연결 누락 버튼',
       'selector_ids',
       '클래식 콘솔 정적 계약 정상'
     )

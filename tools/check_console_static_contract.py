@@ -25,6 +25,75 @@ REQUIRED_IDS = {
     "llmStorageStatusButton",
     "researchAutomationStatusButton",
 }
+
+REQUIRED_FEEDBACK_BUTTON_IDS = {
+    "statusButton",
+    "dailyRecommendationsQuickButton",
+    "dailyRecommendationsStatusQuickButton",
+    "dailyRecommendationsButton",
+    "dailyRecommendationsStatusButton",
+    "copyLlmPromptButton",
+    "llmStorageStatusButton",
+    "kcifReportsWatchButton",
+    "kcifReportsRefreshButton",
+    "regionalBusinessSourcesWatchButton",
+    "regionalBusinessSourcesRefreshButton",
+    "newsInboxButton",
+    "newsPromoteLatestButton",
+    "customsTradeSnapshotButton",
+    "marketCloseHistoryButton",
+    "portfolioLoadButton",
+    "portfolioKiwoomSyncButton",
+    "portfolioKiwoomApplyButton",
+    "portfolioKiwoomCancelButton",
+    "portfolioSyncHistoryButton",
+    "portfolioConnectivityButton",
+    "portfolioNpsFlowButton",
+    "portfolioAnalysisStatusButton",
+    "portfolioTeamQueueButton",
+    "portfolioRunTopTeamButton",
+    "portfolioPerformanceButton",
+    "portfolioQuickRiskButton",
+    "portfolioSaveButton",
+    "portfolioDeleteButton",
+    "portfolioOptimizeButton",
+    "portfolioImportPickButton",
+    "portfolioImportButton",
+    "recalculatePortfolioButton",
+    "addCashButton",
+    "addHoldingButton",
+    "portfolioApplyExecutionButton",
+    "portfolioSmartRefreshButton",
+    "portfolioConsensusScanButton",
+    "interestsLoadButton",
+    "interestAutomationButton",
+    "addInterestTickerButton",
+    "addInterestSectorButton",
+    "ragNaturalSearchButton",
+    "ragSynthesisButton",
+    "ragSearchButton",
+    "dossierButton",
+    "todayResearchUpdateButton",
+    "dailyBriefButton",
+    "researchAutomationButton",
+    "researchAutomationStatusButton",
+    "ragBackfillButton",
+    "ocrReprocessButton",
+    "storageCleanupButton",
+    "dedupedDossierRefreshButton",
+    "manifestButton",
+    "tickerCacheButton",
+}
+
+FEEDBACK_TOKENS = (
+    "registerActionClick",
+    "startOutputLoading",
+    "showActionFeedback",
+    "showActionAccepted",
+    "setOutput",
+    "attachButtonActionFeedback",
+)
+
 REQUIRED_TABS = {
     "dashboard",
     "team",
@@ -87,6 +156,15 @@ def selector_ids(js_text: str) -> set[str]:
     return ids
 
 
+def button_has_feedback(js_text: str, button_id: str) -> bool:
+    positions = [match.start() for match in re.finditer(re.escape(button_id), js_text)]
+    for position in positions:
+        context = js_text[max(0, position - 900): position + 1400]
+        if any(token in context for token in FEEDBACK_TOKENS):
+            return True
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="클래식 콘솔 HTML/JS 정적 계약을 점검합니다.")
     parser.add_argument("--strict", action="store_true")
@@ -105,6 +183,12 @@ def main() -> int:
     referenced_ids = selector_ids(js)
     missing_referenced = sorted(referenced_ids - ids)
     missing_required = sorted(REQUIRED_IDS - ids)
+    missing_feedback_buttons = sorted(REQUIRED_FEEDBACK_BUTTON_IDS - ids)
+    feedback_without_handler = sorted(
+        button_id
+        for button_id in REQUIRED_FEEDBACK_BUTTON_IDS & ids
+        if not button_has_feedback(js, button_id)
+    )
     missing_tabs = sorted(REQUIRED_TABS - parser_obj.sections)
     tab_without_section = sorted(parser_obj.tab_targets - parser_obj.sections)
     section_without_tab = sorted((REQUIRED_TABS & parser_obj.sections) - parser_obj.tab_targets)
@@ -116,6 +200,10 @@ def main() -> int:
         errors.append("JS selector 대상 누락: " + ", ".join(missing_referenced[:20]))
     if missing_required:
         errors.append("필수 UI id 누락: " + ", ".join(missing_required))
+    if missing_feedback_buttons:
+        errors.append("피드백 필수 버튼 id 누락: " + ", ".join(missing_feedback_buttons))
+    if feedback_without_handler:
+        errors.append("즉시 피드백/로딩 연결 누락 버튼: " + ", ".join(feedback_without_handler))
     if missing_tabs:
         errors.append("필수 섹션 누락: " + ", ".join(missing_tabs))
     if tab_without_section:
@@ -127,6 +215,7 @@ def main() -> int:
     print(f"JS 참조 id 수: {len(referenced_ids)}개")
     print(f"탭 섹션: {len(parser_obj.sections & REQUIRED_TABS)}/{len(REQUIRED_TABS)}개")
     print(f"버튼 수: {len(parser_obj.buttons)}개")
+    print(f"피드백 필수 버튼: {len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler))}/{len(REQUIRED_FEEDBACK_BUTTON_IDS)}개")
     if errors:
         for error in errors:
             print(f"오류: {error}")
