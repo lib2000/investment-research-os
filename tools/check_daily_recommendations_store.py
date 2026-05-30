@@ -6,14 +6,17 @@ import argparse
 import json
 import sys
 from collections import Counter
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 
 DEFAULT_STORE = Path("research_vault/_system/daily_recommendations.json")
 DEFAULT_STATE = Path("research_vault/_system/daily_recommendations_state.json")
-EXPECTED_MILESTONES = {"7d", "15d", "1m", "3m", "6m"}
+EXPECTED_MILESTONE_DAYS = {"7d": 7, "15d": 15, "1m": 30, "3m": 90, "6m": 180}
+EXPECTED_MILESTONES = set(EXPECTED_MILESTONE_DAYS)
 EXPECTED_STATE_STATUSES = {"success", "skipped_existing", "tracked", "no_candidates"}
+EXPECTED_PENDING_SITUATION = "아직 추적 예정일 전입니다."
 
 
 def project_root(start: Path) -> Path:
@@ -80,6 +83,67 @@ def non_empty_strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item or "").strip()]
+
+
+def parse_iso_date(value: Any) -> date | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return date.fromisoformat(value.strip()[:10])
+    except ValueError:
+        return None
+
+
+def validate_tracking_milestones(record: dict[str, Any], errors: list[str]) -> None:
+    label = record.get("company_name") or record.get("ticker") or record.get("record_id")
+    recommendation_date = parse_iso_date(record.get("recommendation_date"))
+    if not recommendation_date:
+        errors.append(f"{label} 추천일 파싱 실패: {record.get('recommendation_date')}")
+        return
+
+    milestones = record.get("tracking_milestones")
+    if not isinstance(milestones, list):
+        errors.append(f"{label} 추적 마일스톤 구조 확인 필요")
+        return
+
+    milestone_by_key = {str(item.get("key") or ""): item for item in milestones if isinstance(item, dict)}
+    for key, expected_days in EXPECTED_MILESTONE_DAYS.items():
+        milestone = milestone_by_key.get(key)
+        if not isinstance(milestone, dict):
+            continue
+        target_date = parse_iso_date(milestone.get("target_date"))
+        expected_target = recommendation_date + timedelta(days=expected_days)
+        if target_date != expected_target:
+            errors.append(f"{label} {key} 목표일 불일치: {milestone.get('target_date')} / 기대 {expected_target.isoformat()}")
+        if milestone.get("days") != expected_days:
+            errors.append(f"{label} {key} 추적 일수 불일치: {milestone.get('days')} / 기대 {expected_days}")
+        status = str(milestone.get("status") or "").strip()
+        if status not in {"pending", "tracked", "missing_price", "error"}:
+            errors.append(f"{label} {key} 추적 상태 확인 필요: {status or '미확인'}")
+        if status == "pending" and not str(milestone.get("investment_situation") or "").strip():
+            errors.append(f"{label} {key} 예정 상태 설명 누락")
+        if status == "tracked":
+            if milestone.get("price") in (None, ""):
+                errors.append(f"{label} {key} 추적 가격 누락")
+            if milestone.get("price_checked_at") in (None, ""):
+                errors.append(f"{label} {key} 추적 확인 시각 누락")
+            if milestone.get("price_change_pct") in (None, ""):
+                errors.append(f"{label} {key} 추적 수익률 누락")
+
+
+def nearest_milestone_label(record: dict[str, Any]) -> str:
+    milestones = record.get("tracking_milestones") or []
+    pending = []
+    for milestone in milestones:
+        if not isinstance(milestone, dict) or milestone.get("status") != "pending":
+            continue
+        target_date = parse_iso_date(milestone.get("target_date"))
+        if target_date:
+            pending.append((target_date, str(milestone.get("label") or milestone.get("key") or "추적")))
+    if not pending:
+        return "추적 완료 또는 확인 필요"
+    target_date, label = sorted(pending)[0]
+    return f"{label} {target_date.isoformat()}"
 
 
 def main() -> int:
@@ -199,6 +263,7 @@ def main() -> int:
                     errors.append(f"{label} 해외 종목 환율/원화 확인 문구 누락")
             if isinstance(portfolio_risk, dict) and portfolio_risk.get("linked") is True and not portfolio_risk.get("message"):
                 errors.append(f"{label} 포트폴리오 연결 설명 누락")
+            validate_tracking_milestones(record, errors)
 
         latest_sample = latest[: args.min_latest]
         latest_tickers = [str(record.get("ticker") or "").strip().upper() for record in latest_sample]
@@ -221,7 +286,8 @@ def main() -> int:
         score = record.get("score", "-")
         milestones = len(record.get("tracking_milestones") or [])
         evidence_count = len(record.get("evidence_sources") or [])
-        print(f"{record_rank(record)}위 {company} | 점수 {score} | 근거 {evidence_count}개 | 추적 {milestones}개")
+        nearest = nearest_milestone_label(record)
+        print(f"{record_rank(record)}위 {company} | 점수 {score} | 근거 {evidence_count}개 | 추적 {milestones}개 | 다음 추적 {nearest}")
 
     if errors:
         for error in errors:

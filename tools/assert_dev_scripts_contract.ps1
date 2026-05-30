@@ -420,8 +420,13 @@ $contracts = @(
     Snippets = @(
       'DEFAULT_STORE',
       'DEFAULT_STATE',
+      'EXPECTED_MILESTONE_DAYS',
       'EXPECTED_MILESTONES',
       'EXPECTED_STATE_STATUSES',
+      'validate_tracking_milestones',
+      'nearest_milestone_label',
+      '목표일 불일치',
+      '다음 추적',
       '--state',
       '스케줄 상태',
       '마지막 실행일 불일치',
