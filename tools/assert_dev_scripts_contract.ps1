@@ -297,6 +297,7 @@ $contracts = @(
     Path = "tools\check_offline_readiness.py"
     Snippets = @(
       'CHECKS',
+      'check_git_sync_status.py',
       'check_portfolio_store.py',
       'check_research_source_store.py',
       'check_backend_module_health.py',
@@ -311,6 +312,16 @@ $contracts = @(
 
 
 
+
+  @{
+    Path = "tools\check_git_sync_status.py"
+    Snippets = @(
+      'origin',
+      'rev-list',
+      '푸시 대기 커밋',
+      'Git 동기화 상태 확인 완료'
+    )
+  },
   @{
     Path = "tools\check_console_asset_and_js.py"
     Snippets = @(

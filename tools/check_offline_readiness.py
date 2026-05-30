@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 CHECKS = [
+    ("Git 동기화 상태", ["tools/check_git_sync_status.py"]),
     ("백엔드 모듈 상태", ["tools/check_backend_module_health.py", "--strict"]),
     ("클래식 콘솔 정적 계약", ["tools/check_console_static_contract.py", "--strict"]),
     ("클래식 콘솔 자산/JS", ["tools/check_console_asset_and_js.py"]),

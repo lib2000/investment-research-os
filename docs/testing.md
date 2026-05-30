@@ -96,6 +96,7 @@ python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/consol
 
 ```powershell
 python tools\check_offline_readiness.py
+python tools\check_git_sync_status.py
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
