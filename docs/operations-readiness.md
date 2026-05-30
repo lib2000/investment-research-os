@@ -1,6 +1,6 @@
 ﻿# 투자 리서치 OS 운영 점검 노트
 
-최종 갱신: 2026-05-30
+최종 갱신: 2026-05-31
 
 ## 매일 추천 1~3위
 
@@ -10,6 +10,7 @@
 - 저장 위치: `research_vault/_system/daily_recommendations.json`
 - 스케줄 상태 위치: `research_vault/_system/daily_recommendations_state.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표
+- 화면 표시: 콘솔은 `오늘의 추천 결과`를 제목으로 보여주고, 추천 기록은 일자별 1~3위 목록으로 묶는다. 1주/15일/1달/3달/6달 경과는 요약 막대 그래프와 종목별 타임라인으로 같이 표시한다.
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
 - 최신성 가드: 추천 저장 점검은 `Asia/Seoul` 날짜 기준으로 최신 추천일이 허용 범위 안에 있고, 해당 일자 추천이 정확히 3개인지 확인한다. 또한 각 후보의 기준가 조회 시각이 24시간을 넘으면 추천 품질 점검에서 실패한다.
 - 근거 분산 가드: 추천 후보별 근거가 `저장 품질`, `목표가/리포트`, `최근 저장/RAG`, `보유/관심 범위` 범주를 모두 포함하는지 오프라인 점검에서 확인한다. 저장 품질 대시보드 연결이 없는 후보도 `저장 품질:` 근거와 확인 플래그를 남겨 품질 공백을 숨기지 않는다. 한 범주에만 기대는 추천은 실패로 처리한다.
@@ -18,6 +19,8 @@
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
 
 - LLM/RAG 저장 상태: `python tools\check_llm_bridge_store.py --require-active-rag`로 LLM 연동 응답의 원 프롬프트, 응답 본문, Markdown/JSON 저장 파일, RAG 색인 연결을 백엔드 없이 확인한다.
+
+- UI 회귀 가드: `python tools\check_console_static_contract.py --strict`는 추천 결과 화면의 `오늘의 추천 결과`, `일자별 추천 목록`, `경과 그래프` 렌더링 계약과 관련 CSS 클래스를 확인한다.
 
 2026-05-30 기준 최신 저장 상태는 `records` 배열에 일자별 3개 후보가 쌓이는 구조다. 브라우저 화면에서 한글이 정상인데 터미널 JSON만 깨져 보이면 PowerShell/WSL 출력 인코딩 문제일 수 있으므로, 콘솔 화면이나 Python 직접 파일 읽기로 UTF-8 원본을 확인한다.
 
@@ -65,11 +68,13 @@ python tools\check_llm_bridge_store.py --require-active-rag
 cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
+python tools\smoke_research_console_menus.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 ```
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.
 정적 콘솔 계약은 상단 액션 피드백과 추천 카드의 `aria-live` 영역도 확인해, 버튼 클릭 후 메시지가 보이지 않는 회귀를 백엔드 없이 잡는다.
+메뉴 스모크는 17개 상단 메뉴가 모두 열리는지, 대시보드 주요 버튼에 즉시 피드백이 뜨는지, 버튼 텍스트가 잘리지 않는지 확인한다.
 
 
 ## 빠른 복구/확인 위치
