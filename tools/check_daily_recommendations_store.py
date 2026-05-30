@@ -17,6 +17,12 @@ EXPECTED_MILESTONE_DAYS = {"7d": 7, "15d": 15, "1m": 30, "3m": 90, "6m": 180}
 EXPECTED_MILESTONES = set(EXPECTED_MILESTONE_DAYS)
 EXPECTED_STATE_STATUSES = {"success", "skipped_existing", "tracked", "no_candidates"}
 EXPECTED_PENDING_SITUATION = "아직 추적 예정일 전입니다."
+REQUIRED_EVIDENCE_CATEGORIES = {
+    "저장 품질": ("저장 품질", "활용 가능", "보강 필요"),
+    "목표가/리포트": ("목표가/리포트", "리포트 근거", "목표가"),
+    "최근 저장/RAG": ("최근 근거 파일", "최근 저장 자료", "RAG 연결"),
+    "보유/관심 범위": ("대상 범위", "보유:", "관심:"),
+}
 
 
 def project_root(start: Path) -> Path:
@@ -83,6 +89,15 @@ def non_empty_strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item or "").strip()]
+
+
+def evidence_category_names(evidence: list[str]) -> set[str]:
+    combined = "\n".join(evidence)
+    names: set[str] = set()
+    for category, tokens in REQUIRED_EVIDENCE_CATEGORIES.items():
+        if any(token in combined for token in tokens):
+            names.add(category)
+    return names
 
 
 def parse_iso_date(value: Any) -> date | None:
@@ -251,6 +266,10 @@ def main() -> int:
                 errors.append(f"{label} 추천 사유 부족: {len(reasons)}개")
             if len(evidence) < 2:
                 errors.append(f"{label} 근거 출처 부족: {len(evidence)}개")
+            evidence_categories = evidence_category_names(evidence)
+            missing_evidence_categories = set(REQUIRED_EVIDENCE_CATEGORIES) - evidence_categories
+            if missing_evidence_categories:
+                errors.append(f"{label} 근거 분산 부족: {', '.join(sorted(missing_evidence_categories))}")
             if len(risk_notes) < 1:
                 errors.append(f"{label} 리스크 노트 누락")
             explanation = record.get("score_explanation")
@@ -285,9 +304,14 @@ def main() -> int:
         company = record.get("company_name") or "회사명 확인 필요"
         score = record.get("score", "-")
         milestones = len(record.get("tracking_milestones") or [])
-        evidence_count = len(record.get("evidence_sources") or [])
+        evidence = non_empty_strings(record.get("evidence_sources"))
+        evidence_count = len(evidence)
+        evidence_categories = len(evidence_category_names(evidence))
         nearest = nearest_milestone_label(record)
-        print(f"{record_rank(record)}위 {company} | 점수 {score} | 근거 {evidence_count}개 | 추적 {milestones}개 | 다음 추적 {nearest}")
+        print(
+            f"{record_rank(record)}위 {company} | 점수 {score} | "
+            f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}"
+        )
 
     if errors:
         for error in errors:
