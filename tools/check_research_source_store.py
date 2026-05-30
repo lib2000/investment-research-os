@@ -112,6 +112,8 @@ def main() -> int:
     parser.add_argument("--min-market-journal-entries", type=int, default=1, help="시장일지 최소 저장 건수")
     parser.add_argument("--max-naver-missing-storage", type=int, default=5, help="과거 네이버 리서치 캐시의 저장 경로 누락 허용 건수")
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
+    parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
+    parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -159,8 +161,19 @@ def main() -> int:
     add_issue(issues, registry_age is None or registry_age > args.max_registry_age_hours, "티커 레지스트리 최신성 확인 필요")
 
     dossier = load_json(system_dir, "dossier_refresh_queue_status.json")
+    dossier_timestamp = dossier.get("updated_at") or dossier.get("as_of")
+    dossier_age = age_hours(dossier_timestamp)
     add_issue(issues, dossier.get("status") != "success", "중복 Dossier 큐 status가 success가 아님")
     add_issue(issues, int(dossier.get("failed_count") or 0) > 0, "중복 Dossier 큐 실패 건 존재")
+    add_issue(issues, dossier_age is None or dossier_age > args.max_dossier_queue_age_hours, "중복 Dossier 큐 최신성 확인 필요")
+
+    automation = load_json(system_dir, "research_automation_status.json")
+    deduped_refresh = automation.get("last_deduped_dossier_refresh")
+    deduped_refresh_age = age_hours(deduped_refresh.get("updated_at") if isinstance(deduped_refresh, dict) else None)
+    add_issue(issues, not isinstance(deduped_refresh, dict), "리서치 자동화 Dossier 갱신 상태 누락")
+    if isinstance(deduped_refresh, dict):
+        add_issue(issues, int(deduped_refresh.get("failed_count") or 0) > 0, "리서치 자동화 Dossier 갱신 실패 건 존재")
+        add_issue(issues, deduped_refresh_age is None or deduped_refresh_age > args.max_dossier_queue_age_hours, "리서치 자동화 Dossier 갱신 최신성 확인 필요")
 
     naver = load_json(system_dir, "naver_research_cache.json")
     naver_rows = rows_from_mapping_or_list(naver.get("entries"))
@@ -189,6 +202,16 @@ def main() -> int:
     add_issue(issues, len(shinhan_storage_rows) != len(shinhan_rows), "신한 리서치 저장 경로 누락")
     add_issue(issues, shinhan_age is None or shinhan_age > args.max_source_age_hours, "신한 리서치 캐시 최신성 확인 필요")
 
+    market_close_state = load_json(system_dir, "naver_market_close_journal_state.json")
+    market_close_attempt_age = age_hours(market_close_state.get("last_attempt_at"))
+    market_close_status = str(market_close_state.get("status") or "").strip()
+    add_issue(issues, market_close_status not in {"success", "stored", "skipped_duplicate", "no_source"}, f"마감 시황 자동 수집 상태 확인 필요: {market_close_status or '미확인'}")
+    add_issue(issues, not str(market_close_state.get("last_attempt_date") or "").strip(), "마감 시황 자동 수집 시도일 누락")
+    add_issue(issues, market_close_attempt_age is None or market_close_attempt_age > args.max_market_journal_attempt_age_hours, "마감 시황 자동 수집 시도 최신성 확인 필요")
+    if market_close_status == "skipped_duplicate":
+        add_issue(issues, not str(market_close_state.get("source_item_id") or "").strip(), "마감 시황 중복 판정 source_item_id 누락")
+        add_issue(issues, not str(market_close_state.get("last_attempt_message") or "").strip(), "마감 시황 중복 판정 설명 누락")
+
     market_journal = load_json(system_dir, "market_close_journal.json")
     market_journal_rows = rows_from_mapping_or_list(market_journal.get("entries"))
     market_journal_complete_rows = []
@@ -216,10 +239,13 @@ def main() -> int:
     provider_summary = ", ".join(f"{provider}={provider_counts.get(provider, 0)}" for provider in sorted({"EMERiCs", "CSF", "KIEP"}))
     print(f"EMERiCs/CSF/KIEP 관련 자료: {regional_related}개 | {provider_summary} | 실패 소스 {len(failed_sources)}개 | 갱신 {regional.get('updated_at')}")
     print(f"티커 레지스트리: {registry.get('entry_count')}개 | 성공 {registry.get('success_count')}/{registry.get('source_count')} | 갱신 {registry.get('updated_at')}")
-    print(f"중복 Dossier 큐: 후보 {dossier.get('candidate_count')}개 | 갱신 {dossier.get('refreshed_count')}개 | 실패 {dossier.get('failed_count')}개")
+    print(f"중복 Dossier 큐: 후보 {dossier.get('candidate_count')}개 | 갱신 {dossier.get('refreshed_count')}개 | 실패 {dossier.get('failed_count')}개 | 갱신 {dossier_timestamp}")
+    if isinstance(deduped_refresh, dict):
+        print(f"리서치 자동화 Dossier 갱신: 후보 {deduped_refresh.get('candidate_count')}개 | 갱신 {deduped_refresh.get('refreshed_count')}개 | 실패 {deduped_refresh.get('failed_count')}개 | 갱신 {deduped_refresh.get('updated_at')}")
     naver_category_summary = ", ".join(f"{name}={count}" for name, count in naver_category_counts.most_common(4))
     print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
     print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 갱신 {shinhan.get('updated_at')}")
+    print(f"마감 시황 자동 시도: 상태 {market_close_status or '미확인'} | 시도일 {market_close_state.get('last_attempt_date') or '미확인'} | 시각 {market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
 
     if issues:
