@@ -13692,6 +13692,7 @@ def run_deduped_dossier_refresh_queue(
         write_json_store(dossier_refresh_queue_status_path(settings), payload)
         status = read_json_store(research_automation_status_path(settings), {})
         if isinstance(status, dict):
+            status["updated_at"] = payload["as_of"]
             status["last_deduped_dossier_refresh"] = {
                 "updated_at": payload["as_of"],
                 "candidate_count": payload["candidate_count"],

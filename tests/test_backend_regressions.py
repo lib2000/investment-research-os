@@ -1945,6 +1945,54 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
 
         self.assertEqual([item["ticker"] for item in candidates], ["018260"])
 
+    def test_deduped_dossier_refresh_updates_parent_status_timestamp(self):
+        import json
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            system_dir = vault_dir / "_system"
+            system_dir.mkdir(parents=True)
+            (system_dir / "storage_duplicate_review.json").write_text(
+                json.dumps(
+                    {
+                        "ticker_breakdown": [
+                            {"ticker": "018260", "company_name": "삼성에스디에스", "duplicate_group_count": 1, "duplicate_entry_count": 2}
+                        ]
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "research_automation_status.json").write_text(
+                json.dumps({"updated_at": "2026-05-17T22:54:52+09:00", "dossier_count": 30}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            settings = Settings(research_vault_dir=str(vault_dir))
+            dossier_payload = {
+                "company_name": "삼성에스디에스",
+                "source_count": 2,
+                "duplicate_count": 1,
+                "confidence": 0.9,
+                "storage": {"relative_path": "research_vault/018260/dossier.md"},
+            }
+
+            with patch.object(main, "current_storage_timestamp", return_value="2026-05-30T18:00:00+09:00"), patch.object(
+                main, "synthesize_and_save_dossier", return_value=dossier_payload
+            ):
+                result = main.run_deduped_dossier_refresh_queue(settings, limit=1, save_result=True)
+
+            status = json.loads((system_dir / "research_automation_status.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(result["as_of"], "2026-05-30T18:00:00+09:00")
+        self.assertEqual(status["updated_at"], result["as_of"])
+        self.assertEqual(status["last_deduped_dossier_refresh"]["updated_at"], result["as_of"])
+        self.assertEqual(status["last_deduped_dossier_refresh"]["refreshed_count"], 1)
+
     def test_legacy_policy_defaults_to_soft_archive(self):
         import research_os_main as main
 
