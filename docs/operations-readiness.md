@@ -37,6 +37,7 @@
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
+python tools\check_storage_quality_store.py --strict
 ```
 
 백엔드가 실행 중이면 통합 검증을 사용한다.

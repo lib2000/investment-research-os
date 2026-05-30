@@ -102,6 +102,7 @@ python tools\check_offline_readiness.py
 
 ```powershell
 python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --forbid-zero
+python tools\check_storage_quality_store.py --strict
 ```
 
 ```powershell

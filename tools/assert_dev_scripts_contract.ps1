@@ -299,8 +299,19 @@ $contracts = @(
       'CHECKS',
       'check_portfolio_store.py',
       'check_research_source_store.py',
+      'check_storage_quality_store.py',
       'check_daily_recommendations_store.py',
       '오프라인 운영 점검 통과'
+    )
+  },
+
+  @{
+    Path = "tools\check_storage_quality_store.py"
+    Snippets = @(
+      'BODY_TAGS',
+      'OCR_MARKERS',
+      '--strict',
+      '오프라인 저장 품질 상태 정상'
     )
   },
   @{
