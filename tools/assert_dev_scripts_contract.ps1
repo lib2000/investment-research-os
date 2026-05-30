@@ -292,6 +292,17 @@ $contracts = @(
 
 
 
+
+  @{
+    Path = "tools\check_offline_readiness.py"
+    Snippets = @(
+      'CHECKS',
+      'check_portfolio_store.py',
+      'check_research_source_store.py',
+      'check_daily_recommendations_store.py',
+      '오프라인 운영 점검 통과'
+    )
+  },
   @{
     Path = "tools\check_portfolio_store.py"
     Snippets = @(

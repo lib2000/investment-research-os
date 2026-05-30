@@ -32,6 +32,15 @@
 
 ## 검증 명령
 
+백엔드가 꺼져 있거나 Windows 실행 브리지가 불안정하면 먼저 아래 파일 기반 점검으로 핵심 저장 상태를 확인한다.
+
+```powershell
+cd C:\Users\lib20\InvestmentJournalApp
+python tools\check_offline_readiness.py
+```
+
+백엔드가 실행 중이면 통합 검증을 사용한다.
+
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
