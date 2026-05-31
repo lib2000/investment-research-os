@@ -41,7 +41,7 @@
 - 해외주식과 수동 관리 수량은 키움 국내 잔고 동기화가 덮어쓰지 않아야 한다.
 - 이형주 포트폴리오의 `PL` 100주 보존은 회귀 검증의 기준 사례다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --expected-holdings-count 17 --forbid-zero`로 저장 원본 수량을 먼저 확인한다.
-- 전체 포트폴리오 공통 구조는 `python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero`로 함께 확인한다. 이 점검은 모든 저장 포트폴리오에서 수량 0 종목, 예수금 혼입, 중복 티커, 보유 종목 수 불일치, 총액 불일치를 잡는다.
+- 전체 포트폴리오 공통 구조는 `python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero`로 함께 확인한다. 이 점검은 모든 저장 포트폴리오에서 수량 0 종목, 예수금 혼입, 중복 티커, 보유 종목 수 불일치, 총액 불일치, 해외 통화 보유 종목의 `manual_or_overseas_protected` 수량 보호 누락을 잡는다.
 - 오프라인 포트폴리오 가드는 `updated_at`, 가격 확인 시각, 해외/수동 수량 `sync_checked_at`, 비중 합계, 저장 총액과 종목 평가금액 합계까지 함께 확인한다. 묶음 점검은 가격 확인과 포트폴리오 갱신 시각이 24시간을 넘으면 실패시켜 실시간 연동 지연을 조기에 잡는다. 종목별로 평가금액, 투자금, 수익, 수익률 계산도 재검산하며 해외 종목은 평가/투자금에 적용된 환율이 서로 크게 어긋나지 않는지 확인한다.
 - 보유 종목 수 가드: 이형주 포트폴리오는 정상 기준 17개를 정확히 확인해 다른 포트폴리오 종목이 섞여 화면이 넘치는 회귀를 잡는다.
 

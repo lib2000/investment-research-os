@@ -80,6 +80,7 @@ def validate_portfolio(
     forbid_zero: bool,
     allow_cash: bool,
     require_price_fields: bool,
+    require_overseas_protection: bool,
     max_portfolio_age_hours: float,
 ) -> tuple[list[str], dict[str, Any]]:
     label = portfolio_name(key, portfolio)
@@ -107,6 +108,8 @@ def validate_portfolio(
     if duplicate_tickers:
         errors.append(f"{label}: 중복 보유 종목 {', '.join(duplicate_tickers)}")
 
+    protected_count = 0
+    overseas_count = 0
     for item in rows:
         ticker = holding_ticker(item)
         name = str(item.get("name") or "").strip()
@@ -125,6 +128,15 @@ def validate_portfolio(
         upper_name = name.upper()
         if not allow_cash and (ticker in CASH_TICKERS or upper_name in CASH_TICKERS):
             errors.append(f"{label}: {ticker_or_name} 예수금/CASH 항목 혼입")
+
+        currency = str(item.get("currency") or "").strip().upper()
+        sync_status = str(item.get("sync_status") or item.get("sync_state") or "").strip()
+        if currency and currency != "KRW":
+            overseas_count += 1
+            if sync_status == "manual_or_overseas_protected":
+                protected_count += 1
+            elif require_overseas_protection:
+                errors.append(f"{label}: {ticker_or_name} 해외/수동 수량 보호 상태 누락: {sync_status or '없음'}")
 
         if require_price_fields:
             for field in ("average_cost", "current_price", "market_value", "cost_basis", "currency"):
@@ -145,6 +157,8 @@ def validate_portfolio(
         "holdings": len(rows),
         "updated_age": updated_age,
         "value": stored_value,
+        "overseas": overseas_count,
+        "protected": protected_count,
     }
 
 
@@ -155,6 +169,7 @@ def main() -> int:
     parser.add_argument("--forbid-zero", action="store_true", help="수량 0 종목이 있으면 실패")
     parser.add_argument("--allow-cash", action="store_true", help="CASH/예수금 항목을 허용합니다")
     parser.add_argument("--require-price-fields", action="store_true", default=True, help="가격/평가 필드를 강제합니다")
+    parser.add_argument("--require-overseas-protection", action="store_true", default=True, help="해외 통화 보유 종목의 manual_or_overseas_protected 상태를 강제합니다")
     parser.add_argument("--max-portfolio-age-hours", type=float, default=240.0, help="포트폴리오 updated_at 최신성 기준")
     args = parser.parse_args()
 
@@ -177,6 +192,7 @@ def main() -> int:
             forbid_zero=args.forbid_zero,
             allow_cash=args.allow_cash,
             require_price_fields=args.require_price_fields,
+            require_overseas_protection=args.require_overseas_protection,
             max_portfolio_age_hours=args.max_portfolio_age_hours,
         )
         errors.extend(portfolio_errors)
@@ -189,7 +205,7 @@ def main() -> int:
         age_label = f"{age:.1f}시간" if age is not None else "미확인"
         value = summary.get("value")
         value_label = f"{value:,.0f}" if isinstance(value, (int, float)) else "-"
-        print(f"- {summary['name']} | 보유 {summary['holdings']}개 | 총액 {value_label} | 갱신 {age_label}")
+        print(f"- {summary['name']} | 보유 {summary['holdings']}개 | 해외 보호 {summary.get('protected', 0)}/{summary.get('overseas', 0)}개 | 총액 {value_label} | 갱신 {age_label}")
 
     if errors:
         for error in errors:
