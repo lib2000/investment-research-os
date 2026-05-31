@@ -82,6 +82,7 @@ def validate_portfolio(
     require_price_fields: bool,
     require_overseas_protection: bool,
     max_portfolio_age_hours: float,
+    stale_warning_age_hours: float,
 ) -> tuple[list[str], dict[str, Any]]:
     label = portfolio_name(key, portfolio)
     errors: list[str] = []
@@ -98,10 +99,13 @@ def validate_portfolio(
         errors.append(f"{label}: holding_count 불일치 {portfolio.get('holding_count')} / 실제 {len(rows)}")
 
     updated_age = age_hours(portfolio.get("updated_at"))
+    freshness_warning = False
     if updated_age is None:
         errors.append(f"{label}: updated_at 누락/파싱 실패")
-    elif updated_age > max_portfolio_age_hours:
-        errors.append(f"{label}: updated_at 오래됨 {updated_age:.1f}시간 / 기준 {max_portfolio_age_hours:.1f}시간")
+    else:
+        freshness_warning = updated_age > stale_warning_age_hours
+        if updated_age > max_portfolio_age_hours:
+            errors.append(f"{label}: updated_at 오래됨 {updated_age:.1f}시간 / 기준 {max_portfolio_age_hours:.1f}시간")
 
     tickers = [holding_ticker(item) for item in rows]
     duplicate_tickers = sorted({ticker for ticker in tickers if ticker and tickers.count(ticker) > 1})
@@ -159,6 +163,7 @@ def validate_portfolio(
         "value": stored_value,
         "overseas": overseas_count,
         "protected": protected_count,
+        "freshness_warning": freshness_warning,
     }
 
 
@@ -170,7 +175,8 @@ def main() -> int:
     parser.add_argument("--allow-cash", action="store_true", help="CASH/예수금 항목을 허용합니다")
     parser.add_argument("--require-price-fields", action="store_true", default=True, help="가격/평가 필드를 강제합니다")
     parser.add_argument("--require-overseas-protection", action="store_true", default=True, help="해외 통화 보유 종목의 manual_or_overseas_protected 상태를 강제합니다")
-    parser.add_argument("--max-portfolio-age-hours", type=float, default=240.0, help="포트폴리오 updated_at 최신성 기준")
+    parser.add_argument("--max-portfolio-age-hours", type=float, default=240.0, help="포트폴리오 updated_at 실패 기준")
+    parser.add_argument("--stale-warning-age-hours", type=float, default=24.0, help="포트폴리오 갱신 권고를 표시할 기준")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -194,6 +200,7 @@ def main() -> int:
             require_price_fields=args.require_price_fields,
             require_overseas_protection=args.require_overseas_protection,
             max_portfolio_age_hours=args.max_portfolio_age_hours,
+            stale_warning_age_hours=args.stale_warning_age_hours,
         )
         errors.extend(portfolio_errors)
         summaries.append(summary)
@@ -205,7 +212,8 @@ def main() -> int:
         age_label = f"{age:.1f}시간" if age is not None else "미확인"
         value = summary.get("value")
         value_label = f"{value:,.0f}" if isinstance(value, (int, float)) else "-"
-        print(f"- {summary['name']} | 보유 {summary['holdings']}개 | 해외 보호 {summary.get('protected', 0)}/{summary.get('overseas', 0)}개 | 총액 {value_label} | 갱신 {age_label}")
+        freshness = " · 갱신 권고" if summary.get("freshness_warning") else ""
+        print(f"- {summary['name']} | 보유 {summary['holdings']}개 | 해외 보호 {summary.get('protected', 0)}/{summary.get('overseas', 0)}개 | 총액 {value_label} | 갱신 {age_label}{freshness}")
 
     if errors:
         for error in errors:

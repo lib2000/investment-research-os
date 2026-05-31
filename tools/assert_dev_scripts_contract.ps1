@@ -603,6 +603,15 @@ $contracts = @(
     )
   },
   @{
+    Path = "backend\research_os\portfolio_performance.py"
+    Snippets = @(
+      'build_price_refresh_summary',
+      'target_price_currency',
+      'is_plausible_target_price',
+      'filter_target_price_outliers'
+    )
+  },
+  @{
     Path = "tools\check_storage_quality_store.py"
     Snippets = @(
       'BODY_TAGS',
@@ -648,6 +657,8 @@ $contracts = @(
       '--allow-cash',
       '--require-overseas-protection',
       '--max-portfolio-age-hours',
+      '--stale-warning-age-hours',
+      '갱신 권고',
       '해외/수동 수량 보호 상태 누락',
       '해외 보호',
       'holding_count 불일치',

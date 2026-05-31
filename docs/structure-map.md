@@ -52,7 +52,7 @@
 | `backend\research_os\models.py` | FastAPI 요청/응답 모델 | `python -m py_compile backend\research_os_main.py` |
 | `backend\research_os\portfolio_analysis_coverage.py` | 포트폴리오별 보유 종목 분석 커버리지와 보강 큐 생성 | `check_portfolio_analysis_coverage.py` |
 | `backend\research_os\portfolio_import.py` | CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
-| `backend\research_os\portfolio_performance.py` | 기간 수익 비교와 가격 갱신 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
+| `backend\research_os\portfolio_performance.py` | 기간 수익 비교, 가격 갱신 요약, 목표가 통화/이상치 판정 헬퍼 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_store.py` | 포트폴리오 저장 키/정렬 정책 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
