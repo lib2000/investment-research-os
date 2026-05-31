@@ -162,6 +162,13 @@ export async function fetchDataProviderStatus() {
   }
 }
 
+export async function fetchCodeKnowledgeGraph(accessToken) {
+  return request("/api/v1/system/code-knowledge-graph", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 /**
  * 이미지/PDF OCR 런타임 연결 상태를 확인합니다.
  *

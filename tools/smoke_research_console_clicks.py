@@ -795,6 +795,20 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   const memoryQualityFilterText = memoryFilterResults
                     .map((item) => `${{item.filter}}: ${{item.preview}}`)
                     .join("\\n---\\n");
+                  document.querySelector("#codeKnowledgeGraphButton")?.click();
+                  const codeKnowledgeGraphText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      return text.includes("시스템 구조 맵") &&
+                        text.includes("운영 흐름") &&
+                        text.includes("노드/엣지") &&
+                        text.includes("백엔드 모듈 헬스")
+                        ? text
+                        : "";
+                    }},
+                    30000,
+                    "code knowledge graph button"
+                  );
                   document.querySelector("#naverResearchStatusButton")?.click();
                   let naverStatusText = "";
                   try {{
@@ -1010,6 +1024,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       researchAutomationStatusText.includes("활용:"),
                     memoryQualityFilterWorks: memoryFilterResults.every((item) => item.ok && item.sawExpectedText),
                     memoryQualityFilterFeedbackWorks: memoryFilterResults.every((item) => item.sawFeedback),
+                    codeKnowledgeGraphShowsFlows:
+                      codeKnowledgeGraphText.includes("시스템 구조 맵") &&
+                      codeKnowledgeGraphText.includes("운영 흐름") &&
+                      codeKnowledgeGraphText.includes("백엔드 모듈 헬스"),
                     memoryFilterResults,
                     naverRepairShowsSoftArchive:
                       naverRepairText.includes("soft_archive") ||
@@ -1060,6 +1078,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
+                    codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
                     llmCopyFeedbackPreview: llmCopyFeedbackText.split("\\n").slice(0, 8).join("\\n"),
                     llmStorageStatusPreview: llmStorageStatusText.split("\\n").slice(0, 12).join("\\n"),
                   }};
@@ -1131,6 +1150,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("저장 데이터 품질 필터가 화면에서 적용되지 않았습니다.")
             if not result["memoryQualityFilterFeedbackWorks"]:
                 raise AssertionError("저장 데이터 품질 필터 변경 시 사용자 피드백이 표시되지 않았습니다.")
+            if not result["codeKnowledgeGraphShowsFlows"]:
+                raise AssertionError("시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다.")
             if not (result["naverRepairShowsSoftArchive"] or result["naverRepairShowsProgress"]):
                 raise AssertionError("네이버 리서치 정리 화면에 소프트 보관 정책 또는 처리 진행 피드백이 표시되지 않았습니다.")
             if not result["naverMarketJournalShowsDigest"]:

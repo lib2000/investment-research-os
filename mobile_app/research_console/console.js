@@ -1,6 +1,7 @@
 ﻿import {
   setApiBaseUrl,
   fetchDataProviderStatus,
+  fetchCodeKnowledgeGraph,
   fetchOcrStatus,
   fetchDartFilingWatchStatus,
   refreshDartFilingWatch,
@@ -84,7 +85,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=44284a8c72b0";
+} from "./api.js?v=557444265726";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -219,6 +220,7 @@ const elements = {
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
+  codeKnowledgeGraphButton: document.querySelector("#codeKnowledgeGraphButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
   ocrReprocessButton: document.querySelector("#ocrReprocessButton"),
   storageCleanupButton: document.querySelector("#storageCleanupButton"),
@@ -11239,6 +11241,7 @@ const MEMORY_ACTION_MESSAGES = {
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
+  codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
   ragBackfillButton: "RAG 색인 갱신을 시작했습니다.",
   ocrReprocessButton: "저장 데이터 OCR 재처리를 시작했습니다.",
   storageCleanupButton: "저장 데이터 정리를 시작했습니다.",
@@ -11927,6 +11930,57 @@ elements.researchAutomationStatusButton.addEventListener("click", async () => {
   try {
     const result = await fetchResearchAutomationStatus(token());
     setOutput(result || "리서치 자동화 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
+function codeKnowledgeGraphOutput(result = {}) {
+  const summary = result.summary || {};
+  const flows = Array.isArray(result.flows) ? result.flows : [];
+  const layerLines = Object.entries(summary.files_by_layer || {})
+    .map(([label, count]) => `- ${label}: ${count}개`)
+    .join("\n");
+  const typeLines = Object.entries(summary.nodes_by_type || {})
+    .map(([label, count]) => `- ${label}: ${count}개`)
+    .join("\n");
+  const flowLines = flows.map((flow) => {
+    const status = flow.status === "ok" ? "정상" : "확인 필요";
+    const files = (flow.sample_files || []).slice(0, 4).join(", ");
+    return `- ${flow.label || flow.id}: ${status} · 연결 파일 ${flow.matched_file_count || 0}개${files ? ` · 예: ${files}` : ""}`;
+  });
+  return [
+    "# 시스템 구조 맵",
+    "",
+    result.message || "코드 지식 그래프 상태를 확인했습니다.",
+    "",
+    `- 생성 시각: ${result.generated_at || "미생성"}`,
+    `- 노드/엣지: ${formatNumber(result.node_count || 0)}개 / ${formatNumber(result.edge_count || 0)}개`,
+    `- 저장 위치: ${result.storage_path || "확인 안 됨"}`,
+    "",
+    "## 운영 흐름 연결",
+    ...(flowLines.length ? flowLines : ["- 표시할 운영 흐름이 없습니다."]),
+    "",
+    "## 파일 계층",
+    layerLines || "- 계층 요약 없음",
+    "",
+    "## 노드 유형",
+    typeLines || "- 노드 유형 요약 없음",
+    "",
+    "다음 구조 변경 전에는 `python tools\\check_code_knowledge_graph.py --strict`로 영향 범위를 먼저 확인하세요.",
+  ].join("\n");
+}
+
+elements.codeKnowledgeGraphButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("시스템 구조 맵 조회 중", [
+    "코드 지식 그래프 읽기",
+    "운영 흐름 연결 상태 확인",
+    "파일 계층과 API/버튼 관계 요약",
+  ]);
+  try {
+    const result = await fetchCodeKnowledgeGraph(token());
+    setOutput(codeKnowledgeGraphOutput(result));
   } catch (error) {
     setError(error);
   }

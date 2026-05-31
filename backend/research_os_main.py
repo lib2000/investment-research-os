@@ -17125,6 +17125,35 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
 
 
+@app.get(
+    "/api/v1/system/code-knowledge-graph",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_code_knowledge_graph(settings: Settings = Depends(get_settings)) -> dict:
+    graph_path = resolve_vault_dir(settings.research_vault_dir) / "_system" / "code_knowledge_graph.json"
+    if not graph_path.exists():
+        return {
+            "status": "warning",
+            "module": "code_knowledge_graph",
+            "message": "코드 지식 그래프가 아직 생성되지 않았습니다.",
+            "storage_path": str(graph_path),
+            "next_action": "python tools\\build_code_knowledge_graph.py",
+        }
+    graph = read_json_store(graph_path, {})
+    flows = graph.get("flows") or []
+    return {
+        "status": "success",
+        "module": "code_knowledge_graph",
+        "generated_at": graph.get("generated_at"),
+        "node_count": graph.get("node_count", 0),
+        "edge_count": graph.get("edge_count", 0),
+        "summary": graph.get("summary") or {},
+        "flows": flows,
+        "storage_path": str(graph_path),
+        "message": f"운영 흐름 {sum(1 for item in flows if item.get('status') == 'ok')}/{len(flows)}개가 코드 그래프에 연결되어 있습니다.",
+    }
+
+
 @app.get("/api/v1/ocr/status")
 def read_ocr_runtime_status() -> dict:
     return ocr_runtime_status()

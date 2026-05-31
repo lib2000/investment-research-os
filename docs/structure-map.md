@@ -65,6 +65,30 @@
 | `backend\research_os\ticker_registry.py` | 한국/미국 티커 레지스트리 캐시와 회사명 매칭 | `check_research_source_store.py` |
 | `backend\research_os\web_capture.py` | 웹 본문 추출, URL-only 예외 처리, 표시용 컨텍스트 | `WebCaptureRenderingTests` |
 
+## 코드 지식 그래프
+
+Understand-Anything류의 코드 이해 방식을 로컬 운영에 맞춰 가볍게 접목했습니다. 외부 서비스로 코드를 보내지 않고, 저장소 내부의 백엔드/콘솔/도구/운영 문서를 스캔해 `research_vault\_system\code_knowledge_graph.json`에 구조 그래프를 생성합니다.
+
+```powershell
+python tools\build_code_knowledge_graph.py --print-summary
+python tools\check_code_knowledge_graph.py --strict
+python tools\analyze_code_diff_impact.py --refresh
+```
+
+그래프는 아래 운영 흐름을 코드 파일, API route, 콘솔 API 호출, DOM 버튼과 연결합니다.
+
+| 흐름 | 확인 목적 |
+|---|---|
+| 매일 추천 1~3위 | 추천 생성, 저장, 추적표 회귀 범위 확인 |
+| 저장 데이터/RAG | LLM 저장, RAG 색인, 저장/RAG 상태 연결 확인 |
+| 포트폴리오 실시간/수량 보호 | 수량 덮어쓰기, 가격 갱신, 수익률 계산 영향 확인 |
+| 외부 리포트/소스 자동화 | KCIF/KIEP/네이버/신한/지역 소스 수집 영향 확인 |
+| 자동 분류 태그/RAG 품질 | 범위/출처/시스템 태그 근거와 품질 점검 연결 확인 |
+| 콘솔 클릭/쓰기 회귀 | 버튼 피드백, 쓰기 액션, 메뉴 스모크 영향 확인 |
+| 백엔드 모듈 헬스/구조 안정화 | main 파일 비대화, 모듈 경계, 운영 가드 영향 확인 |
+
+Classic Research Console의 저장 데이터 탭에는 `시스템 구조 맵` 버튼이 있으며, 생성된 그래프의 노드/엣지 수와 운영 흐름 연결 상태를 한국어로 보여줍니다. 구조 변경 전에는 `python tools\analyze_code_diff_impact.py --refresh`로 어떤 운영 흐름을 다시 검증해야 하는지 먼저 확인합니다.
+
 ## 실행 가드
 
 로컬 실행 전에는 아래 명령을 통과해야 합니다.

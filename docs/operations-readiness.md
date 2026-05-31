@@ -1,4 +1,4 @@
-﻿# 투자 리서치 OS 운영 점검 노트
+# 투자 리서치 OS 운영 점검 노트
 
 최종 갱신: 2026-05-31
 
@@ -59,6 +59,9 @@ python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
+python tools\build_code_knowledge_graph.py --print-summary
+python tools\check_code_knowledge_graph.py --strict
+python tools\analyze_code_diff_impact.py --refresh
 ```
 
 백엔드가 실행 중이면 통합 검증을 사용한다.
@@ -79,6 +82,13 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 메뉴 스모크는 17개 상단 메뉴가 모두 열리는지, 대시보드 주요 버튼에 즉시 피드백이 뜨는지, 버튼 텍스트가 잘리지 않는지 확인한다.
 외부 소스 스모크는 KCIF, EMERiCs/CSF/KIEP, 자동화 상태 버튼이 화면에서 실제 결과를 반환하는지 확인한다.
 
+
+## 코드 정리와 운영 안정화
+
+- 코드 지식 그래프는 백엔드 없이 `research_vault\_system\code_knowledge_graph.json`에 생성되며, 소스코드 원문을 외부로 전송하지 않는다.
+- `시스템 구조 맵` 버튼은 운영 콘솔에서 코드/운영 흐름 연결 상태를 보여주는 확인 전용 액션이다.
+- 변경 전후에는 `python tools\analyze_code_diff_impact.py --refresh`로 매일 추천, RAG, 포트폴리오, 소스 자동화, 자동 분류, 콘솔 클릭 회귀, 백엔드 모듈 헬스 중 어느 검증을 다시 돌려야 하는지 확인한다.
+- 오프라인 준비 점검에는 코드 지식 그래프 엄격 검증이 포함되어, 필수 흐름이나 핵심 모듈이 빠지면 운영 전 점검에서 실패한다.
 
 ## 빠른 복구/확인 위치
 
