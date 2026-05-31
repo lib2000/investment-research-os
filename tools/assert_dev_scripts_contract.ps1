@@ -311,6 +311,8 @@ $contracts = @(
       'check_git_sync_status.py',
       'check_public_repo_safety.py',
       'check_backend_runtime_env.py',
+      'check_portfolio_analysis_coverage.py',
+      '포트폴리오 분석 커버리지',
       'check_portfolio_store.py',
       '--expected-holdings-count',
       'check_research_source_store.py',
@@ -341,6 +343,22 @@ $contracts = @(
       'user_portfolios.json',
       'research_automation_status.json',
       '운영 완성도 점검 정상'
+    )
+  },
+
+
+
+
+
+  @{
+    Path = "tools\check_portfolio_analysis_coverage.py"
+    Snippets = @(
+      '포트폴리오 분석 모듈 커버리지',
+      '--write-backlog',
+      'portfolio_analysis_backlog.json',
+      'team_report',
+      'smart-trade-setup',
+      '포트폴리오 분석 커버리지 점검 정상'
     )
   },
 

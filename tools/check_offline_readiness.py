@@ -18,6 +18,15 @@ CHECKS = [
     ("클래식 콘솔 정적 계약", ["tools/check_console_static_contract.py", "--strict"]),
     ("클래식 콘솔 자산/JS", ["tools/check_console_asset_and_js.py"]),
     (
+        "포트폴리오 분석 커버리지",
+        [
+            "tools/check_portfolio_analysis_coverage.py",
+            "--portfolio",
+            "이형주",
+            "--write-backlog",
+        ],
+    ),
+    (
         "포트폴리오 저장 수량",
         [
             "tools/check_portfolio_store.py",
