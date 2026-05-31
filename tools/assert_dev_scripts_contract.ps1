@@ -541,6 +541,8 @@ $contracts = @(
       'research_os.data_providers',
       'research_os.file_extraction',
       'research_os.market_journal',
+      'research_os.portfolio_analysis_coverage',
+      'portfolio_analysis_coverage.py',
       'research_os.rag_memory',
       'research_os.research_memory',
       'BANNED_TERMS',
