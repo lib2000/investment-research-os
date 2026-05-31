@@ -664,6 +664,15 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\show_dev_server_ports.ps1"
+    Snippets = @(
+      'Get-Command netstat',
+      '$netstatCommand',
+      'return @($listeners | Sort-Object Address, Port -Unique)',
+      'Port conflicts detected'
+    )
+  },
+  @{
     Path = "tools\verify_mobile_stack.ps1"
     Snippets = @(
       '$SkipPortRegistryCheck',

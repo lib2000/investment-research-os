@@ -50,7 +50,12 @@ function Get-PortListeners {
     return @($listeners | Sort-Object Address, Pid -Unique)
   }
 
-  $netstatLines = netstat -ano 2>$null | Select-String -Pattern "[:.]$Port\s" | Select-String -Pattern "LISTENING"
+  $netstatCommand = Get-Command netstat -ErrorAction SilentlyContinue
+  if ($null -eq $netstatCommand) {
+    return @($listeners | Sort-Object Address, Port -Unique)
+  }
+
+  $netstatLines = & $netstatCommand.Source -ano 2>$null | Select-String -Pattern "[:.]$Port\s" | Select-String -Pattern "LISTENING"
   foreach ($line in $netstatLines) {
     $parts = ($line.Line.Trim() -split "\s+") | Where-Object { $_ }
     if ($parts.Count -lt 5) {
