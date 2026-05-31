@@ -377,6 +377,45 @@ $contracts = @(
   },
 
 
+  @{
+    Path = "backend\research_os\rag_memory.py"
+    Snippets = @(
+      'refresh_index: bool = True',
+      'if refresh_index:',
+      'backfill_research_memory_documents_from_manifest(vault_dir)'
+    )
+  },
+
+
+  @{
+    Path = "backend\research_os_main.py"
+    Snippets = @(
+      'refresh_index=False',
+      'request.refresh_dossier',
+      'dossier_refresh_status',
+      'upsert_research_memory_document(vault_dir=vault_dir, entry=saved_entry)'
+    )
+  },
+
+
+  @{
+    Path = "mobile_app\research_console\api.js"
+    Snippets = @(
+      'refreshDossier = false',
+      'refresh_dossier: refreshDossier'
+    )
+  },
+
+
+  @{
+    Path = "mobile_app\research_console\console.js"
+    Snippets = @(
+      'translateDossierRefreshStatus',
+      'Dossier 갱신:'
+    )
+  },
+
+
 
 
 
