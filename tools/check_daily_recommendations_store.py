@@ -154,6 +154,53 @@ def baseline_age_limit_hours(args: argparse.Namespace, latest_age_days: int | No
         return max(float(args.max_baseline_age_hours), 36.0)
     return float(args.max_baseline_age_hours)
 
+def duplicate_values(values: list[str]) -> set[str]:
+    return {value for value, count in Counter(value for value in values if value).items() if count > 1}
+
+
+def validate_all_date_rank_integrity(
+    records: list[dict[str, Any]],
+    expected_count: int,
+    errors: list[str],
+) -> None:
+    by_date: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        date_key = record_date(record)
+        if not date_key:
+            label = record.get("record_id") or record.get("ticker") or "미확인"
+            errors.append(f"추천 기록 추천일 누락: {label}")
+            continue
+        by_date.setdefault(date_key, []).append(record)
+
+    for date_key, group in sorted(by_date.items()):
+        if expected_count > 0 and len(group) != expected_count:
+            errors.append(f"{date_key} 일자별 추천 수 불일치: {len(group)}개 / 기대 {expected_count}개")
+        ranks = [record_rank(record) for record in group]
+        expected_ranks = set(range(1, (expected_count or len(group)) + 1))
+        actual_ranks = set(ranks)
+        if actual_ranks != expected_ranks:
+            errors.append(f"{date_key} 일자별 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}")
+        duplicate_ranks = duplicate_values([str(rank) for rank in ranks if rank != 999])
+        if duplicate_ranks:
+            errors.append(f"{date_key} 일자별 추천 순위 중복: {', '.join(sorted(duplicate_ranks))}")
+
+        tickers = [str(record.get("ticker") or "").strip().upper() for record in group]
+        companies = [str(record.get("company_name") or "").strip() for record in group]
+        missing_identity = [
+            str(record.get("record_id") or record.get("ticker") or record.get("company_name") or "미확인")
+            for record in group
+            if not str(record.get("ticker") or "").strip() or not str(record.get("company_name") or "").strip()
+        ]
+        if missing_identity:
+            errors.append(f"{date_key} 일자별 추천 식별 정보 누락: {', '.join(missing_identity)}")
+        duplicate_tickers = duplicate_values(tickers)
+        duplicate_companies = duplicate_values(companies)
+        if duplicate_tickers:
+            errors.append(f"{date_key} 일자별 추천 티커 중복: {', '.join(sorted(duplicate_tickers))}")
+        if duplicate_companies:
+            errors.append(f"{date_key} 일자별 추천 회사명 중복: {', '.join(sorted(duplicate_companies))}")
+
+
 def validate_tracking_milestones(record: dict[str, Any], errors: list[str]) -> None:
     label = record.get("company_name") or record.get("ticker") or record.get("record_id")
     recommendation_date = parse_iso_date(record.get("recommendation_date"))
@@ -218,6 +265,7 @@ def main() -> int:
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
     parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
     parser.add_argument("--daily-time", default="09:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
+    parser.add_argument("--skip-all-date-integrity", action="store_true", help="전체 추천 이력의 날짜별 1~3위 무결성 점검을 건너뜁니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -255,6 +303,10 @@ def main() -> int:
         errors.append(f"{latest_date} 추천 수 부족: {len(latest)}개 / 필요 {args.min_latest}개")
     if args.expected_latest_count > 0 and len(latest) != args.expected_latest_count:
         errors.append(f"{latest_date} 추천 수 불일치: {len(latest)}개 / 기대 {args.expected_latest_count}개")
+    expected_date_count = args.expected_latest_count if args.expected_latest_count > 0 else args.min_latest
+    if not args.skip_all_date_integrity:
+        validate_all_date_rank_integrity(records, expected_date_count, errors)
+
     if args.require_milestones:
         for record in latest:
             missing = EXPECTED_MILESTONES - milestone_keys(record)

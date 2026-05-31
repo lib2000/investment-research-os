@@ -131,7 +131,7 @@ python tools\check_research_source_store.py --strict
 
 `check_llm_bridge_store.py --require-active-rag`는 LLM 연동으로 저장한 원 프롬프트와 응답이 Markdown/JSON 원본 및 RAG 색인에 모두 연결되어 있는지 백엔드 없이 확인합니다.
 
-`check_daily_recommendations_store.py`의 최신성 판정은 실행 서버 로컬 시간이 아니라 `Asia/Seoul` 기준 날짜를 사용합니다.
+`check_daily_recommendations_store.py`의 최신성 판정은 실행 서버 로컬 시간이 아니라 `Asia/Seoul` 기준 날짜를 사용합니다. 기본 실행은 저장된 전체 추천 이력도 날짜별 1·2·3위 누락, 순위 중복, 회사명/티커 중복까지 확인합니다.
 
 매일 추천 저장 원본과 사후 추적표만 확인하려면 아래 점검을 사용합니다.
 
