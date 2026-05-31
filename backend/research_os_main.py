@@ -2642,7 +2642,10 @@ def save_shinhan_research_item(item: dict, settings: Settings, save_result: bool
         source_url=item.get("url"),
         as_of=item.get("published_at") or current_storage_date().isoformat(),
         confidence=0.82,
-        tags=["shinhan_research", "auto_ingested", f"shinhan_category:{item.get('category') or 'unknown'}"],
+        tags=merge_research_tags(
+            ["shinhan_research", "auto_ingested", f"shinhan_category:{item.get('category') or 'unknown'}"],
+            classification_system_tags(target, source_type, source_hint),
+        ),
         run_thesis_impact=target not in SPECIAL_RESEARCH_KEYS,
         save_result=save_result,
     )
@@ -3367,12 +3370,15 @@ def save_naver_research_item(item: dict, settings: Settings, save_result: bool =
         source_url=item.get("url"),
         as_of=item.get("published_at") or current_storage_date().isoformat(),
         confidence=0.8 if item.get("pdf_url") else 0.74,
-        tags=[
-            "naver_research",
-            "auto_ingested",
-            "pdf_structured_signals" if (item.get("pdf_analysis") or {}).get("status") == "success" else "pdf_signal_unavailable",
-            f"naver_category:{item.get('category') or 'unknown'}",
-        ],
+        tags=merge_research_tags(
+            [
+                "naver_research",
+                "auto_ingested",
+                "pdf_structured_signals" if (item.get("pdf_analysis") or {}).get("status") == "success" else "pdf_signal_unavailable",
+                f"naver_category:{item.get('category') or 'unknown'}",
+            ],
+            classification_system_tags(target, source_type, source_hint),
+        ),
         run_thesis_impact=target not in SPECIAL_RESEARCH_KEYS,
         save_result=save_result,
     )
@@ -8146,12 +8152,43 @@ def manifest_entry_markdown_path(entry: dict | None, vault_dir: Path) -> Path | 
 def merge_research_tags(*tag_groups: object) -> list[str]:
     tags: list[str] = []
     for group in tag_groups:
-        if not isinstance(group, list):
+        if group is None:
             continue
-        for tag in group:
+        if isinstance(group, str):
+            candidates = [group]
+        elif isinstance(group, list | tuple | set):
+            candidates = list(group)
+        else:
+            candidates = [group]
+        for tag in candidates:
             cleaned = str(tag or "").strip()
             if cleaned and cleaned not in tags:
                 tags.append(cleaned)
+    return tags
+
+
+def normalize_system_tag_value(value: object) -> str:
+    return sub(r"\s+", "_", str(value or "").strip().lower())
+
+
+def classification_system_tags(
+    ticker: object,
+    source_type: object | None = None,
+    scope_reason: object | None = None,
+) -> list[str]:
+    tags: list[str] = []
+    normalized_ticker = str(ticker or "").strip().upper()
+    if normalized_ticker in SPECIAL_RESEARCH_KEYS:
+        tags.append(f"research_scope:{normalized_ticker.lower()}")
+        if normalized_ticker.startswith("MARKET-"):
+            tags.append("research_scope:market")
+    if source_type is not None:
+        source_value = normalize_system_tag_value(enum_or_str_value(source_type))
+        if source_value:
+            tags.append(f"source_type:{source_value}")
+    reason_value = normalize_system_tag_value(scope_reason)
+    if reason_value:
+        tags.append(f"auto_scope:{reason_value}")
     return tags
 
 
@@ -19341,7 +19378,10 @@ def save_capture_request(
     ticker = ensure_verified_ticker(request.ticker, settings)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     storage_date = current_storage_date()
-    tags = infer_capture_tags(request.raw_content, request.tags)
+    tags = merge_research_tags(
+        infer_capture_tags(request.raw_content, request.tags),
+        classification_system_tags(request.ticker, request.source_type),
+    )
     raw_content_hash = content_fingerprint(request.raw_content)
     duplicate_check = detect_capture_duplicate(
         vault_dir=vault_dir,
@@ -19637,8 +19677,7 @@ def auto_capture_research_item(
         else infer_capture_source_type(raw_content, request.file_name)
     )
     tags = [f"auto_ticker:{ticker_inference}", "auto_classified"]
-    if inferred_ticker in SPECIAL_RESEARCH_KEYS:
-        tags.append(f"research_scope:{inferred_ticker.lower()}")
+    tags = merge_research_tags(tags, classification_system_tags(inferred_ticker, source_type, ticker_inference))
     tags = infer_capture_tags(raw_content, tags)
     tags.extend(inferred_investment_scope.get("tags") or [])
     if request.file_name:

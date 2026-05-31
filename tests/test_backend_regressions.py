@@ -1501,6 +1501,46 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class ResearchCaptureClassificationTagTests(unittest.TestCase):
+    def test_classification_system_tags_include_scope_source_and_reason(self):
+        import research_os_main as main
+
+        tags = main.classification_system_tags("MARKET-KR", "market_research", "naver market research")
+
+        self.assertIn("research_scope:market-kr", tags)
+        self.assertIn("research_scope:market", tags)
+        self.assertIn("source_type:market_research", tags)
+        self.assertIn("auto_scope:naver_market_research", tags)
+
+    def test_capture_request_adds_source_type_tag(self):
+        import research_os_main as main
+        from research_os.models import ResearchCaptureRequest
+        from research_os.settings import Settings
+
+        request = ResearchCaptureRequest(
+            ticker="SECTOR",
+            title="AI 전력 인프라 자료",
+            raw_content="AI 데이터센터 전력 인프라 수요와 섹터 성장 자료입니다.",
+            source_type="sector_research",
+            confidence=0.78,
+            tags=["auto_classified"],
+            run_thesis_impact=False,
+            save_result=True,
+        )
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))
+            response = main.save_capture_request(request, settings)
+            manifest = json.loads((Path(temp_dir) / "research_vault" / "manifest.json").read_text(encoding="utf-8"))
+
+        tags = manifest[0]["tags"]
+        self.assertIn("research_scope:sector", tags)
+        self.assertIn("source_type:sector_research", tags)
+        self.assertIn("sector", tags)
+        self.assertTrue(response.rag_document)
+
+
 class ResearchCaptureInferenceTests(unittest.TestCase):
     def test_empty_pdf_filename_context_infers_policy_and_investment_scope(self):
         import research_os_main as main
