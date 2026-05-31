@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from build_code_knowledge_graph import DEFAULT_OUTPUT, build_graph, project_root
@@ -47,6 +48,7 @@ def main() -> int:
     parser.add_argument("--graph", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--refresh", action="store_true", help="점검 전에 그래프를 다시 생성합니다.")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--max-graph-age-hours", type=float, default=24.0, help="그래프 생성 시각 최신성 기준")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -62,6 +64,33 @@ def main() -> int:
 
     if graph.get("schema_version") != 1:
         errors.append(f"지원하지 않는 그래프 schema_version: {graph.get('schema_version')}")
+    generated_at = str(graph.get("generated_at") or "").strip()
+    graph_age_hours: float | None = None
+    if not generated_at:
+        errors.append("그래프 생성 시각 누락")
+    else:
+        try:
+            parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+            if parsed_generated_at.tzinfo is None:
+                parsed_generated_at = parsed_generated_at.replace(tzinfo=timezone.utc)
+            graph_age_hours = (datetime.now(timezone.utc) - parsed_generated_at.astimezone(timezone.utc)).total_seconds() / 3600
+            if graph_age_hours < -0.1:
+                errors.append(f"그래프 생성 시각이 미래입니다: {generated_at}")
+            if graph_age_hours > args.max_graph_age_hours:
+                errors.append(f"그래프 생성 시각 오래됨: {generated_at} / 허용 {args.max_graph_age_hours:g}시간")
+        except ValueError:
+            errors.append(f"그래프 생성 시각 파싱 실패: {generated_at}")
+    if graph.get("node_count") != len(nodes):
+        errors.append(f"그래프 node_count 불일치: {graph.get('node_count')} / 실제 {len(nodes)}")
+    if graph.get("edge_count") != len(edges):
+        errors.append(f"그래프 edge_count 불일치: {graph.get('edge_count')} / 실제 {len(edges)}")
+    summary = graph.get("summary") if isinstance(graph.get("summary"), dict) else {}
+    if summary.get("flows_ok") != sum(1 for flow in flows if flow.get("status") == "ok"):
+        errors.append("그래프 summary.flows_ok 불일치")
+    summary_needing = summary.get("flows_needing_review")
+    actual_needing = sorted(flow.get("id") for flow in flows if flow.get("status") != "ok")
+    if isinstance(summary_needing, list) and sorted(str(item) for item in summary_needing) != actual_needing:
+        errors.append("그래프 summary.flows_needing_review 불일치")
     if len(nodes) < MIN_NODES:
         errors.append(f"노드 수 부족: {len(nodes)}개 / 최소 {MIN_NODES}개")
     if len(edges) < MIN_EDGES:
@@ -93,6 +122,8 @@ def main() -> int:
 
     print(f"프로젝트 루트: {root}")
     print(f"그래프 파일: {graph_path.relative_to(root)}")
+    age_label = "미확인" if graph_age_hours is None else f"{graph_age_hours:.1f}시간"
+    print(f"생성 시각: {graph.get('generated_at') or '미확인'} | 경과 {age_label}")
     print(f"노드: {len(nodes)}개 / 엣지: {len(edges)}개")
     print(f"API route: {len(api_routes)}개 / 콘솔 API call: {len(api_calls)}개 / 버튼: {len(buttons)}개")
     print("운영 흐름: " + ", ".join(f"{flow['id']}={flow.get('status')}" for flow in flows))

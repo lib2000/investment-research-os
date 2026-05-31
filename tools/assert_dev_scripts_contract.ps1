@@ -346,6 +346,24 @@ $contracts = @(
 
 
   @{
+    Path = "tools\check_code_knowledge_graph.py"
+    Snippets = @(
+      'REQUIRED_FLOW_IDS',
+      'REQUIRED_NODE_IDS',
+      '--max-graph-age-hours',
+      '그래프 생성 시각 오래됨',
+      '그래프 node_count 불일치',
+      '그래프 edge_count 불일치',
+      '그래프 summary.flows_ok 불일치',
+      '코드 지식 그래프 상태 정상'
+    )
+  },
+
+
+
+
+
+  @{
     Path = "tools\check_operational_readiness_score.py"
     Snippets = @(
       '운영 완성도 점수',
