@@ -160,7 +160,9 @@ from research_os.portfolio_performance import (
     filter_target_price_outliers,
     is_plausible_target_price,
     is_probable_year_or_metadata_number,
+    target_price_context_source_type,
     target_price_currency,
+    target_price_result,
 )
 from research_os.portfolio_analysis_coverage import (
     REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
@@ -20304,24 +20306,6 @@ def target_price_numeric_value(raw_value: object, unit: str | None) -> float | N
     return value
 
 
-def target_price_result(
-    value: float,
-    currency: str,
-    memory_file,
-    source_label: str,
-    confidence: float,
-) -> dict | None:
-    if not is_plausible_target_price(value, currency):
-        return None
-    return {
-        "target_price": round(value, 4),
-        "target_price_currency": currency,
-        "target_price_source_file": memory_file.file_name,
-        "target_price_source_type": source_label,
-        "target_price_confidence": round(confidence, 2),
-    }
-
-
 def parse_structured_trade_target_from_json(memory_file, holding_currency: str) -> dict | None:
     json_path = Path(memory_file.absolute_path).with_suffix(".json")
     if not json_path.exists():
@@ -20403,17 +20387,6 @@ def parse_tactical_trade_target_from_text(
         if result:
             return result
     return None
-
-
-def target_price_context_source_type(text: str) -> tuple[str, float]:
-    normalized = text.lower()
-    if any(keyword in text for keyword in ["컨센서스", "평균 목표", "증권사 평균", "시장 평균"]):
-        return "증권사 컨센서스 목표주가", 0.95
-    if any(keyword in text for keyword in ["증권사", "투자의견", "리포트", "목표주가", "목표가"]):
-        return "증권사 리포트 목표주가", 0.88
-    if "target price" in normalized or "analyst" in normalized:
-        return "애널리스트 목표주가", 0.86
-    return "저장 리포트 목표주가", 0.78
 
 
 def extract_target_price_observations_from_text(

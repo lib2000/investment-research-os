@@ -118,6 +118,8 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_progress_graph": "경과 그래프",
     "daily_recommendation_short_label_helper": "dailyRecommendationMilestoneShortLabel",
     "daily_recommendation_tone_helper": "dailyRecommendationMilestoneTone",
+    "portfolio_store_freshness_summary": "portfolioStoreFreshnessSummary",
+    "portfolio_store_stale_warning": "갱신 권고",
     "code_knowledge_readiness_output": "운영 준비도",
     "code_knowledge_signal_output": "운영 주의 신호",
 }

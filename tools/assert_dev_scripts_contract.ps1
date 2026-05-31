@@ -609,6 +609,8 @@ $contracts = @(
       'target_price_currency',
       'is_plausible_target_price',
       'is_probable_year_or_metadata_number',
+      'target_price_context_source_type',
+      'target_price_result',
       'filter_target_price_outliers'
     )
   },

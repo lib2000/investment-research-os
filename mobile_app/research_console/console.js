@@ -2963,6 +2963,28 @@ function updatePortfolioLoadedAt(portfolio, label = "불러온") {
   elements.portfolioLoadedAt.textContent = parts.join(" · ");
 }
 
+function portfolioStoreFreshnessSummary(portfolio = {}) {
+  const updatedAt =
+    portfolio.updated_at ||
+    portfolio.updatedAt ||
+    portfolio.modified_at ||
+    portfolio.modifiedAt ||
+    "";
+  if (!updatedAt) {
+    return "수정 미확인 · 갱신 권고";
+  }
+  const updatedDate = new Date(updatedAt);
+  const baseText = `수정 ${formatDateTime(updatedAt)}`;
+  if (Number.isNaN(updatedDate.getTime())) {
+    return `${baseText} · 갱신 확인 필요`;
+  }
+  const ageHours = Math.max(0, Math.round((Date.now() - updatedDate.getTime()) / (1000 * 60 * 60)));
+  if (ageHours > 24) {
+    return `${baseText} · ${formatNumber(ageHours)}시간 경과 · 갱신 권고`;
+  }
+  return `${baseText} · ${formatNumber(ageHours)}시간 경과`;
+}
+
 function portfolioSyncStatusLabel(status) {
   const labels = {
     account_synced: "키움 동기화",
@@ -14264,7 +14286,7 @@ function formatKoreanResult(value) {
       `현재 보유 포트폴리오 목록`,
       ...((value.portfolios || []).map(
         (item, index) =>
-          `${index + 1}. ${item.portfolio_name} · 보유 ${item.holding_count || 0}개 · 총액 ${formatMoney(item.portfolio_value, "KRW", "n/a")} · 수정 ${item.updated_at || "미확인"}`
+          `${index + 1}. ${item.portfolio_name} · 보유 ${item.holding_count || 0}개 · 총액 ${formatMoney(item.portfolio_value, "KRW", "n/a")} · ${portfolioStoreFreshnessSummary(item)}`
       )),
       ``,
       `선택 포트폴리오 종목`,
