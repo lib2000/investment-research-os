@@ -21,9 +21,11 @@ CHECKS = [
         "포트폴리오 분석 커버리지",
         [
             "tools/check_portfolio_analysis_coverage.py",
-            "--portfolio",
-            "이형주",
+            "--all-portfolios",
+            "--min-average-completion",
+            "0.95",
             "--write-backlog",
+            "--strict",
         ],
     ),
     (

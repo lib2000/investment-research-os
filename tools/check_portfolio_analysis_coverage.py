@@ -94,9 +94,47 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
     }
 
 
+def unique_holdings_from_portfolios(portfolios: dict[str, Any]) -> list[dict[str, Any]]:
+    by_ticker: dict[str, dict[str, Any]] = {}
+    for portfolio_name, portfolio in portfolios.items():
+        if not isinstance(portfolio, dict):
+            continue
+        holdings = (
+            portfolio.get("holdings")
+            if isinstance(portfolio.get("holdings"), list)
+            else []
+        )
+        for holding in holdings:
+            ticker = normalize_ticker(holding.get("ticker"))
+            if not ticker or ticker in {"CASH", "UNKNOWN"}:
+                continue
+            current = by_ticker.setdefault(
+                ticker,
+                {
+                    **holding,
+                    "ticker": ticker,
+                    "name": holding.get("name") or ticker,
+                    "market_value": 0,
+                    "portfolios": [],
+                },
+            )
+            try:
+                current["market_value"] = float(current.get("market_value") or 0) + float(
+                    holding.get("market_value") or 0
+                )
+            except (TypeError, ValueError):
+                pass
+            if portfolio_name not in current["portfolios"]:
+                current["portfolios"].append(portfolio_name)
+            if not current.get("name") or current.get("name") == ticker:
+                current["name"] = holding.get("name") or ticker
+    return list(by_ticker.values())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="포트폴리오 분석 모듈 커버리지를 백엔드 없이 점검합니다.")
     parser.add_argument("--portfolio", default="이형주")
+    parser.add_argument("--all-portfolios", action="store_true")
     parser.add_argument("--min-average-completion", type=float, default=0.0)
     parser.add_argument("--min-ready-count", type=int, default=0)
     parser.add_argument("--write-backlog", action="store_true")
@@ -113,11 +151,20 @@ def main() -> int:
         manifest = []
     store = load_json(vault / "_system" / "user_portfolios.json", {"portfolios": {}})
     portfolios = store.get("portfolios") if isinstance(store.get("portfolios"), dict) else {}
-    selected = portfolios.get(args.portfolio)
-    if not isinstance(selected, dict):
-        raise SystemExit(f"포트폴리오를 찾지 못했습니다: {args.portfolio}")
-    holdings = selected.get("holdings") if isinstance(selected.get("holdings"), list) else []
-    result = coverage_for_portfolio(args.portfolio, holdings, manifest)
+    if args.all_portfolios:
+        holdings = unique_holdings_from_portfolios(portfolios)
+        result = coverage_for_portfolio("전체 포트폴리오", holdings, manifest)
+        result["portfolio_names"] = sorted(portfolios)
+    else:
+        selected = portfolios.get(args.portfolio)
+        if not isinstance(selected, dict):
+            raise SystemExit(f"포트폴리오를 찾지 못했습니다: {args.portfolio}")
+        holdings = (
+            selected.get("holdings")
+            if isinstance(selected.get("holdings"), list)
+            else []
+        )
+        result = coverage_for_portfolio(args.portfolio, holdings, manifest)
     result["module"] = "portfolio_analysis_coverage"
     result["generated_at"] = datetime.now(ZoneInfo("Asia/Seoul")).replace(microsecond=0).isoformat()
     result["thresholds"] = {
@@ -133,7 +180,10 @@ def main() -> int:
     average = float(result["average_completion"])
     ready = int(result["ready_count"])
     print(f"프로젝트 루트: {root}")
-    print(f"포트폴리오: {args.portfolio} | 보유 {result['holding_count']}개 | 준비 완료 {ready}개 | 평균 완료율 {average:.1%}")
+    print(
+        f"포트폴리오: {result['portfolio_name']} | 보유 {result['holding_count']}개 "
+        f"| 준비 완료 {ready}개 | 평균 완료율 {average:.1%}"
+    )
     for item in result["items"][: max(0, args.limit)]:
         missing = ", ".join(item["missing_modules"]) if item["missing_modules"] else "누락 없음"
         print(f"- {item['company_name']} ({item['ticker']}): {item['completion_rate']:.0%} | 부족: {missing} | 다음: {item['next_action']}")
