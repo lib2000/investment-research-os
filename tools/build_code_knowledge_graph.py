@@ -29,6 +29,7 @@ SCAN_GLOBS = [
     "tools/*.py",
     "docs/structure-map.md",
     "docs/operations-readiness.md",
+    "docs/testing.md",
 ]
 EXCLUDED_PARTS = {"__pycache__", "node_modules", ".git", "research_vault"}
 HTTP_METHODS = {"get", "post", "put", "delete", "patch"}

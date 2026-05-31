@@ -61,6 +61,7 @@ python tools\check_storage_quality_store.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict
+python tools\check_operational_readiness_score.py --strict --min-score 95
 python tools\analyze_code_diff_impact.py --refresh --strict
 ```
 
@@ -88,7 +89,7 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 - 코드 지식 그래프는 백엔드 없이 `research_vault\_system\code_knowledge_graph.json`에 생성되며, 소스코드 원문을 외부로 전송하지 않는다.
 - `시스템 구조 맵` 버튼은 운영 콘솔에서 코드/운영 흐름 연결 상태를 보여주는 확인 전용 액션이다.
 - 변경 전후에는 `python tools\analyze_code_diff_impact.py --refresh`로 매일 추천, RAG, 포트폴리오, 소스 자동화, 자동 분류, 콘솔 클릭 회귀, 백엔드 모듈 헬스 중 어느 검증을 다시 돌려야 하는지 확인한다.
-- 오프라인 준비 점검에는 코드 지식 그래프 엄격 검증과 변경 영향 분석이 포함되어, 필수 흐름이나 핵심 모듈이 빠지거나 새 코드 파일이 그래프에 매핑되지 않으면 운영 전 점검에서 실패한다.
+- 오프라인 준비 점검에는 코드 지식 그래프 엄격 검증, 운영 완성도 95% 점검, 변경 영향 분석이 포함되어, 필수 흐름이나 핵심 모듈이 빠지거나 새 코드 파일이 그래프에 매핑되지 않으면 운영 전 점검에서 실패한다.
 
 ## 빠른 복구/확인 위치
 

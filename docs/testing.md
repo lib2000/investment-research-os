@@ -99,6 +99,7 @@ python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/consol
 
 ```powershell
 python tools\check_offline_readiness.py
+python tools\check_operational_readiness_score.py --strict --min-score 95
 python tools\check_git_sync_status.py
 python tools\check_public_repo_safety.py
 python tools\check_backend_runtime_env.py
