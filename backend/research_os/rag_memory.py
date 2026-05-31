@@ -683,11 +683,13 @@ def search_research_memory_documents(
     query: str | None = None,
     limit: int = 5,
     include_low_quality: bool = False,
+    refresh_index: bool = True,
 ) -> dict[str, Any]:
     initialize_rag_db(vault_dir)
     # Opportunistic backfill keeps the DB useful even when new reports were saved
     # before the document index existed.
-    backfill_research_memory_documents_from_manifest(vault_dir)
+    if refresh_index:
+        backfill_research_memory_documents_from_manifest(vault_dir)
 
     normalized_key = key.strip().upper()
     normalized_query = (query or "").strip().lower()

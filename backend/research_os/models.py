@@ -983,6 +983,7 @@ class TeamAnalysisRequest(BaseModel):
     auto_inject_data: bool = True
     realtime_data: List[InjectedDataPoint] = Field(default_factory=list)
     save_result: bool = True
+    refresh_dossier: bool = False
 
 
 class SkillContribution(BaseModel):
@@ -1018,4 +1019,5 @@ class TeamAnalysisResponse(BaseModel):
     next_actions: List[str]
     injected_data: List[InjectedDataPoint] = Field(default_factory=list)
     saved_to_research_memory: bool = True
+    dossier_refresh_status: str = "deferred"
     storage: Optional[ResearchStorageInfo] = None

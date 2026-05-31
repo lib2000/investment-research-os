@@ -7473,7 +7473,12 @@ def collect_workspace_context(
             )
         )
     try:
-        memory_search = search_research_memory_documents(vault_dir, ticker, limit=4)
+        memory_search = search_research_memory_documents(
+            vault_dir,
+            ticker,
+            limit=4,
+            refresh_index=False,
+        )
     except Exception:
         memory_search = {"documents": []}
     for index, document in enumerate(memory_search.get("documents", []), start=1):
@@ -7497,7 +7502,12 @@ def collect_workspace_context(
         if ticker.upper() == scope_key:
             continue
         try:
-            scope_search = search_research_memory_documents(vault_dir, scope_key, limit=1)
+            scope_search = search_research_memory_documents(
+                vault_dir,
+                scope_key,
+                limit=1,
+                refresh_index=False,
+            )
         except Exception:
             scope_search = {"documents": []}
         for document in scope_search.get("documents", [])[:1]:
@@ -23758,6 +23768,17 @@ def run_collaborative_team_report(
             }),
             report_date=storage_date,
         )
+        saved_entry = next(
+            (
+                entry
+                for entry in read_manifest(vault_dir)
+                if entry.get("file_name") == report.storage.file_name
+                and str(entry.get("ticker") or "").upper() == ticker
+            ),
+            None,
+        )
+        if saved_entry:
+            upsert_research_memory_document(vault_dir=vault_dir, entry=saved_entry)
         upsert_ticker_thesis_snapshot(
             vault_dir=vault_dir,
             ticker=ticker,
@@ -23774,18 +23795,23 @@ def run_collaborative_team_report(
             },
             confidence=report.data_quality.source_confidence,
         )
-        try:
-            synthesize_and_save_dossier(ticker, settings, save_result=True)
-        except Exception as exc:
-            append_jsonl(
-                user_state_dir(settings) / "dossier_refresh_errors.jsonl",
-                {
-                    "ticker": ticker,
-                    "at": current_storage_timestamp(),
-                    "source": "team_report",
-                    "error": str(exc),
-                },
-            )
+        if request.refresh_dossier:
+            try:
+                synthesize_and_save_dossier(ticker, settings, save_result=True)
+                report.dossier_refresh_status = "refreshed"
+            except Exception as exc:
+                report.dossier_refresh_status = "failed"
+                append_jsonl(
+                    user_state_dir(settings) / "dossier_refresh_errors.jsonl",
+                    {
+                        "ticker": ticker,
+                        "at": current_storage_timestamp(),
+                        "source": "team_report",
+                        "error": str(exc),
+                    },
+                )
+        else:
+            report.dossier_refresh_status = "deferred"
 
     return report
 

@@ -1955,6 +1955,7 @@ export async function saveMarketCloseReview(
  * @param {boolean} [params.autoInjectData] 시장/재무 데이터 자동 주입 여부
  * @param {Array<Object>} [params.realtimeData] 실시간 또는 사용자 주입 데이터
  * @param {boolean} [params.saveResult] Markdown 자동 저장 여부
+ * @param {boolean} [params.refreshDossier] 저장 직후 Dossier도 즉시 갱신할지 여부
  * @returns {Promise<Object|null>} 협업 분석 보고서
  */
 export async function runCollaborativeTeamReport(
@@ -1970,6 +1971,7 @@ export async function runCollaborativeTeamReport(
     autoInjectData = true,
     realtimeData = [],
     saveResult = true,
+    refreshDossier = false,
   }
 ) {
   try {
@@ -1987,6 +1989,7 @@ export async function runCollaborativeTeamReport(
         auto_inject_data: autoInjectData,
         realtime_data: realtimeData,
         save_result: saveResult,
+        refresh_dossier: refreshDossier,
       }),
     });
   } catch (error) {

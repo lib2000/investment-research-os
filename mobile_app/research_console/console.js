@@ -85,7 +85,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=557444265726";
+} from "./api.js?v=fb15c14bad2e";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -13477,6 +13477,7 @@ function formatKoreanResult(value) {
       `출처 신뢰도: ${toPercent(value.data_quality?.source_confidence)}`,
       `부족한 데이터: ${(value.data_quality?.missing_data || []).join(", ") || "없음"}`,
       `오래된/모의 데이터 경고: ${value.data_quality?.stale_data_warning ? "있음" : "없음"}`,
+      `Dossier 갱신: ${translateDossierRefreshStatus(value.dossier_refresh_status)}`,
       ``,
       `요약`,
       `${value.executive_summary}`,
@@ -15241,6 +15242,15 @@ function translateSourceType(value) {
     other: "기타",
   };
   return map[value] || value || "출처 미확인";
+}
+
+function translateDossierRefreshStatus(value) {
+  const map = {
+    deferred: "후속 큐로 분리",
+    refreshed: "완료",
+    failed: "실패 - 오류 로그 확인 필요",
+  };
+  return map[value] || value || "후속 큐로 분리";
 }
 
 function translateDashboardStatus(value) {
