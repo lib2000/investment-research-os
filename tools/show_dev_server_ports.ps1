@@ -3,6 +3,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $aiAppFolderName = -join @([char]0xC571, [char]0x0020, [char]0xC81C, [char]0xC791)
 $aiAppRoot = Join-Path "C:\AI" $aiAppFolderName
@@ -105,6 +107,9 @@ $rows = foreach ($entry in $registry) {
 
 if ($OnlyConflicts) {
   $rows = @($rows | Where-Object { $_.Conflict })
+  if ($rows.Count -eq 0) {
+    Write-Host "예약 포트 충돌 없음"
+  }
 }
 
 $rows | Sort-Object Port, App | Format-Table -AutoSize

@@ -668,8 +668,10 @@ $contracts = @(
     Snippets = @(
       'Get-Command netstat',
       '$netstatCommand',
+      '[Console]::OutputEncoding',
       'return @($listeners | Sort-Object Address, Port -Unique)',
-      'Port conflicts detected'
+      'Port conflicts detected',
+      '예약 포트 충돌 없음'
     )
   },
   @{
