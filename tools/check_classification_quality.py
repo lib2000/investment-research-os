@@ -63,8 +63,15 @@ def load_rag_document_ids(vault_dir: Path) -> set[str]:
     db_path = vault_dir / "_system" / "research_memory.sqlite3"
     if not db_path.exists():
         return set()
-    with sqlite3.connect(db_path) as connection:
-        rows = connection.execute("SELECT document_id FROM research_memory_documents").fetchall()
+    try:
+        with sqlite3.connect(db_path) as connection:
+            rows = connection.execute("SELECT document_id FROM research_memory_documents").fetchall()
+    except sqlite3.OperationalError as exc:
+        if "readonly" not in str(exc).lower():
+            raise
+        uri = f"file:{db_path.as_posix()}?mode=ro&immutable=1"
+        with sqlite3.connect(uri, uri=True) as connection:
+            rows = connection.execute("SELECT document_id FROM research_memory_documents").fetchall()
     return {str(row[0]) for row in rows if row and row[0]}
 
 

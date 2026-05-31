@@ -113,6 +113,79 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertNotIn("api_key", json.dumps(payload).lower())
         self.assertNotIn("token", json.dumps(payload).lower())
 
+    def test_llm_bridge_status_uses_rag_db_paths_not_search_result_window(self):
+        from research_os.llm_bridge_status import build_llm_bridge_storage_status
+        from research_os.rag_memory import connect_rag_db, initialize_rag_db
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault_dir = root / "research_vault"
+            capture_dir = vault_dir / "SECTOR"
+            capture_dir.mkdir(parents=True)
+            relative_path = "research_vault/SECTOR/SECTOR-research-capture-llm.md"
+            json_relative_path = "research_vault/SECTOR/SECTOR-research-capture-llm.json"
+            (root / relative_path).write_text("# LLM", encoding="utf-8")
+            (root / json_relative_path).write_text(
+                json.dumps(
+                    {
+                        "raw_content": "[수동 LLM 분석 응답]\n[원 프롬프트]\n질문\n[LLM 응답]\n답변",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "type": "research-capture",
+                            "ticker": "SECTOR",
+                            "date": "2026-05-31",
+                            "file_name": "SECTOR-research-capture-llm.md",
+                            "relative_path": relative_path,
+                            "json_relative_path": json_relative_path,
+                            "tags": ["research_scope:sector"],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            initialize_rag_db(vault_dir)
+            with connect_rag_db(vault_dir) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO research_memory_documents (
+                        document_id,
+                        ticker,
+                        source_relative_path,
+                        tags_json,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "llm-sector-doc",
+                        "SECTOR",
+                        relative_path,
+                        "[]",
+                        "2026-05-31T09:00:00+09:00",
+                    ),
+                )
+
+            payload = build_llm_bridge_storage_status(
+                Settings(research_vault_dir=str(vault_dir)),
+                limit=1,
+            )
+
+        self.assertEqual(payload["saved_count"], 1)
+        self.assertEqual(payload["active_count"], 1)
+        self.assertEqual(payload["rag_connected_count"], 1)
+        self.assertEqual(payload["active_rag_connected_count"], 1)
+        self.assertTrue(payload["latest_entries"][0]["rag_connected"])
+        self.assertEqual(payload["latest_entries"][0]["display_label"], "섹터/산업 자료")
+
     def test_data_provider_status_payload_builder_is_in_backend_module(self):
         from research_os.settings import Settings
         from research_os.system_health import build_data_provider_status_payload

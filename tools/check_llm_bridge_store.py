@@ -74,7 +74,12 @@ class LlmCapture:
             "POLICY": "정책/규제 자료",
             "FLOWS": "수급/자금 흐름 자료",
             "MARKET": "시장/시황 자료",
+            "MARKET-KR": "국내 시장 자료",
+            "MARKET-US": "미국 시장 자료",
+            "MARKET-GLOBAL": "글로벌 시장 자료",
             "MACRO": "매크로 자료",
+            "RATES": "금리/물가 자료",
+            "CUSTOMS": "수출입/관세 자료",
             "INBOX": "미분류 입력 자료",
         }
         return scope_labels.get(self.ticker, self.ticker or "회사명 확인 필요")
