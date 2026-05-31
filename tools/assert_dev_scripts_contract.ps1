@@ -8,6 +8,16 @@ $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -Projec
 
 $contracts = @(
   @{
+    Path = "scripts\start-research-backend.ps1"
+    Snippets = @(
+      'assert_project_root.ps1',
+      'research_os_main.py',
+      'research_os_main:app',
+      'Get-Command netstat',
+      '-StopExistingPortProcess'
+    )
+  },
+  @{
     Path = "tools\start_backend.ps1"
     Snippets = @(
       'assert_project_root.ps1',
@@ -36,8 +46,8 @@ $contracts = @(
     Snippets = @(
       'assert_project_root.ps1',
       'stop_dev_servers.ps1',
-      'Start-Process',
-      '-WindowStyle Hidden',
+      'Invoke-CimMethod',
+      'Win32_Process',
       '$FallbackPorts',
       'UsedFallback',
       'ConvertTo-Json',
@@ -140,6 +150,7 @@ $contracts = @(
       '[switch]$DryRun',
       '[switch]$ForceAnyProcess',
       '$AllowedProcessNames',
+      'Get-Command netstat',
       'Test-CanStopProcess',
       'remainingProcessIds',
       '기본 개발 포트가 아니며 허용된 개발 프로세스가 아닙니다'
@@ -539,7 +550,7 @@ foreach ($contract in $contracts) {
     continue
   }
 
-  $content = Get-Content -LiteralPath $path -Raw
+  $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
   foreach ($snippet in $contract.Snippets) {
     if (-not $content.Contains($snippet)) {
       $missing += "$($contract.Path): $snippet"
@@ -549,8 +560,8 @@ foreach ($contract in $contracts) {
   if ($contract.Path.EndsWith(".ps1")) {
     $tokens = $null
     $parseErrors = $null
-    [System.Management.Automation.Language.Parser]::ParseFile(
-      $path,
+    [System.Management.Automation.Language.Parser]::ParseInput(
+      $content,
       [ref]$tokens,
       [ref]$parseErrors
     ) | Out-Null

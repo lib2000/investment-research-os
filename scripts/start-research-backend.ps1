@@ -24,22 +24,25 @@ function Get-PortOwningProcessIds {
     $processIds += @($connections | Select-Object -ExpandProperty OwningProcess)
   }
 
-  $netstatLines = netstat -ano 2>$null |
-    Select-String -Pattern "[:.]$LocalPort\s" |
-    Select-String -Pattern "LISTENING"
-  foreach ($line in $netstatLines) {
-    $parts = ($line.Line.Trim() -split "\s+") | Where-Object { $_ }
-    if ($parts.Count -lt 4) {
-      continue
-    }
-    $localAddress = $parts[1]
-    $ownerText = $parts[-1]
-    if ($localAddress -notmatch "[:.]$LocalPort$") {
-      continue
-    }
-    $ownerProcessId = 0
-    if ([int]::TryParse($ownerText, [ref]$ownerProcessId) -and $ownerProcessId -gt 0) {
-      $processIds += $ownerProcessId
+  $netstatCommand = Get-Command netstat -ErrorAction SilentlyContinue
+  if ($netstatCommand) {
+    $netstatLines = & $netstatCommand.Source -ano 2>$null |
+      Select-String -Pattern "[:.]$LocalPort\s" |
+      Select-String -Pattern "LISTENING"
+    foreach ($line in $netstatLines) {
+      $parts = ($line.Line.Trim() -split "\s+") | Where-Object { $_ }
+      if ($parts.Count -lt 4) {
+        continue
+      }
+      $localAddress = $parts[1]
+      $ownerText = $parts[-1]
+      if ($localAddress -notmatch "[:.]$LocalPort$") {
+        continue
+      }
+      $ownerProcessId = 0
+      if ([int]::TryParse($ownerText, [ref]$ownerProcessId) -and $ownerProcessId -gt 0) {
+        $processIds += $ownerProcessId
+      }
     }
   }
 

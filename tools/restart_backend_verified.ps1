@@ -39,15 +39,27 @@ foreach ($candidatePort in $candidatePorts) {
     $uvicornArgs += "--reload"
   }
 
+  $pythonLauncher = Get-Command python.exe -ErrorAction SilentlyContinue
+  $pythonExecutable = if ($pythonLauncher) { $pythonLauncher.Source } else { "python.exe" }
+  $quotedArgs = @($uvicornArgs | ForEach-Object {
+    $arg = [string]$_
+    if ($arg -match '\s') {
+      '"' + ($arg -replace '"', '\"') + '"'
+    } else {
+      $arg
+    }
+  })
+  $commandLine = '"' + $pythonExecutable + '" ' + ($quotedArgs -join ' ')
+
   Write-Output "백엔드를 백그라운드에서 시작합니다: http://$HostName`:$candidatePort"
-  $process = Start-Process `
-    -FilePath "python.exe" `
-    -ArgumentList $uvicornArgs `
-    -WorkingDirectory $backendPath `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog `
-    -PassThru
+  $createdProcess = Invoke-CimMethod `
+    -ClassName Win32_Process `
+    -MethodName Create `
+    -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $backendPath }
+  if ($createdProcess.ReturnValue -ne 0) {
+    throw "백엔드 프로세스 생성에 실패했습니다. Win32_Process.Create ReturnValue=$($createdProcess.ReturnValue)"
+  }
+  $process = Get-Process -Id $createdProcess.ProcessId -ErrorAction Stop
 
   $baseUrl = "http://$HostName`:$candidatePort"
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -55,11 +67,6 @@ foreach ($candidatePort in $candidatePorts) {
 
   try {
     while ((Get-Date) -lt $deadline) {
-      if ($process.HasExited) {
-        $stderr = if (Test-Path -LiteralPath $stderrLog) { Get-Content -LiteralPath $stderrLog -Raw } else { "" }
-        throw "백엔드 프로세스가 시작 직후 종료되었습니다. PID=$($process.Id)`n$stderr"
-      }
-
       try {
         $openapi = Invoke-RestMethod -Uri "$baseUrl/openapi.json" -TimeoutSec 3
         $paths = @($openapi.paths.PSObject.Properties.Name)
@@ -73,19 +80,25 @@ foreach ($candidatePort in $candidatePorts) {
           throw "CSV 템플릿 API 응답 검증에 실패했습니다."
         }
 
+        $listener = Get-NetTCPConnection -LocalPort $candidatePort -ErrorAction SilentlyContinue |
+          Where-Object { $_.OwningProcess -and $_.OwningProcess -gt 0 } |
+          Select-Object -First 1
+        $verifiedPid = if ($listener) { $listener.OwningProcess } else { $process.Id }
         $result = [PSCustomObject]@{
           Status = "success"
           Message = "백엔드 재시작 및 CSV 템플릿 API 검증 완료"
-          Pid = $process.Id
+          Pid = $verifiedPid
+          LauncherPid = $process.Id
           Url = $baseUrl
           Port = $candidatePort
           RequestedPort = $Port
           UsedFallback = ($candidatePort -ne $Port)
+          PythonExecutable = $pythonExecutable
           StdoutLog = $stdoutLog
           StderrLog = $stderrLog
         }
         Write-Host ($result | ConvertTo-Json -Depth 4)
-        return
+        exit 0
       } catch {
         $lastError = $_.Exception.Message
         Start-Sleep -Milliseconds 500

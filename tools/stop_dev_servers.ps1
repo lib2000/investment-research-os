@@ -3,7 +3,7 @@ param(
   [int[]]$Ports = @(8010, 8082),
   [switch]$DryRun,
   [int[]]$DefaultDevPorts = @(8010, 8082),
-  [string[]]$AllowedProcessNames = @("python", "node", "pwsh", "powershell"),
+  [string[]]$AllowedProcessNames = @("python", "pythonw", "node", "pwsh", "powershell"),
   [switch]$ForceAnyProcess
 )
 
@@ -26,22 +26,25 @@ function Get-PortOwningProcessIds {
     return @($processIds | Sort-Object -Unique)
   }
 
-  $netstatLines = netstat -ano 2>$null | Select-String -Pattern "[:.]$Port\s"
-  foreach ($line in $netstatLines) {
-    $parts = ($line.Line.Trim() -split "\s+") | Where-Object { $_ }
-    if ($parts.Count -lt 4) {
-      continue
-    }
+  $netstatCommand = Get-Command netstat -ErrorAction SilentlyContinue
+  if ($netstatCommand) {
+    $netstatLines = & $netstatCommand.Source -ano 2>$null | Select-String -Pattern "[:.]$Port\s"
+    foreach ($line in $netstatLines) {
+      $parts = ($line.Line.Trim() -split "\s+") | Where-Object { $_ }
+      if ($parts.Count -lt 4) {
+        continue
+      }
 
-    $localAddress = $parts[1]
-    $ownerText = $parts[-1]
-    if ($localAddress -notmatch "[:.]$Port$") {
-      continue
-    }
+      $localAddress = $parts[1]
+      $ownerText = $parts[-1]
+      if ($localAddress -notmatch "[:.]$Port$") {
+        continue
+      }
 
-    $ownerProcessId = 0
-    if ([int]::TryParse($ownerText, [ref]$ownerProcessId) -and $ownerProcessId -gt 0) {
-      $processIds += $ownerProcessId
+      $ownerProcessId = 0
+      if ([int]::TryParse($ownerText, [ref]$ownerProcessId) -and $ownerProcessId -gt 0) {
+        $processIds += $ownerProcessId
+      }
     }
   }
 

@@ -31,6 +31,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\scripts\start-research-backend.ps1 -Port 8001
 ```
 
+주의: `8001` 연구 콘솔은 `research_os_main:app` 진입점입니다. `tools\restart_backend_verified.ps1`는 `main:app` 기반 모바일/API 백엔드 검증용이므로 연구 콘솔 8001 재시작에는 사용하지 않습니다.
+
 연구 콘솔 백엔드가 정상인지 빠르게 볼 때는 읽기 전용 헬스 엔드포인트를 확인합니다.
 
 ```powershell
