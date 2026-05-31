@@ -209,7 +209,7 @@ def wait_for_page(port: int, timeout: float = 15) -> dict:
     if is_wsl_like() and is_localhost_permission_error(last_error):
         raise RuntimeError(
             "Chrome DevTools localhost 접근이 WSL/Codex 격리 환경에서 차단되었습니다. "
-            r"Windows PowerShell에서 `python tools\smoke_research_console_clicks.py --only-system-check`로 실행하세요."
+            r"Windows PowerShell에서 `.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckPortfolioStore`를 먼저 실행하세요. Windows Python이 PATH에 있으면 `python tools\smoke_research_console_clicks.py --only-system-check`도 사용할 수 있습니다."
         ) from last_error
     raise RuntimeError(f"Chrome DevTools page not ready: {last_error}")
 
