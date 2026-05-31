@@ -137,8 +137,16 @@ def main() -> int:
         errors.append(f"research_os_main.py 줄 수 상한 초과: {main_lines}줄 / 상한 {args.main_max_lines}줄")
     if main_lines > args.main_large_warning_lines:
         delta = main_lines - CURRENT_MAIN_LINE_BASELINE
-        trend = f"기준 대비 {delta:+}줄"
-        warnings.append(f"research_os_main.py가 아직 큼: {main_lines}줄({trend}). 라우터/도메인 분리 계속 권장")
+        if delta < 0:
+            trend = f"기준 대비 {abs(delta)}줄 감소"
+        elif delta > 0:
+            trend = f"기준 대비 {delta}줄 증가"
+        else:
+            trend = "기준 대비 변화 없음"
+        remaining = args.main_max_lines - main_lines
+        warnings.append(
+            f"research_os_main.py가 아직 큼: {main_lines}줄({trend}, 상한까지 {remaining}줄 여유). 라우터/도메인 분리 계속 권장"
+        )
 
     largest_modules = sorted(
         ((path.name, len(path.read_text(encoding="utf-8-sig").splitlines())) for path in module_paths),
