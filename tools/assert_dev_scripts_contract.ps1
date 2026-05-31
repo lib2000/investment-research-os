@@ -313,6 +313,18 @@ $contracts = @(
 
 
   @{
+    Path = "tools\smoke_research_console_menus.py"
+    Snippets = @(
+      "DEFAULT_URL",
+      "include_write_actions",
+      "dashboardCommandLayout",
+      "clippedDashboardCommands",
+      "menuResults",
+      "shortcutResults",
+      "runtimeErrors"
+    )
+  },
+  @{
     Path = "tools\check_offline_readiness.py"
     Snippets = @(
       'CHECKS',
