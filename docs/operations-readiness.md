@@ -32,7 +32,7 @@
 - EMERiCs/CSF: 지역·중국·신흥국 자료를 제목/링크/발행기관/요약 기준으로 활용한다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 네이버 리서치, 신한 리서치, 마감 시황 시장일지, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다. 이 점검은 마감 시황 자동 수집 시도 상태와 리서치 자동화 Dossier 갱신 상태도 함께 확인하며, 네이버 리서치 저장경로 누락은 기본 허용 0건으로 본다.
 - 네이버 리서치 캐시에 메타데이터와 PDF 링크는 있으나 저장경로만 비어 있으면 삭제하지 않고 `repair_naver_research_cache(..., save_result=True)` 경로로 Markdown/JSON 저장을 보강한다. 복구 후 `python tools\check_research_source_store.py --strict`에서 `저장경로 누락 0개`, `파일 누락 0개`가 나와야 한다.
-- 중복 Dossier 큐 갱신은 `dossier_refresh_queue_status.json`뿐 아니라 `research_automation_status.json`의 상위 `updated_at`과 `last_deduped_dossier_refresh.updated_at`도 함께 갱신해야 한다.
+- 중복 Dossier 큐 갱신은 `dossier_refresh_queue_status.json`뿐 아니라 `research_automation_status.json`의 상위 `updated_at`과 `last_deduped_dossier_refresh.updated_at`도 함께 갱신해야 한다. 소스 자동화 점검은 저장 성공, 실패 0건, RAG 연결, 뉴스 미승격 0건까지 같이 확인한다.
 - 네이버/신한 리서치 캐시는 제목·발행일·링크·요약·저장 경로가 모두 있어야 정상이며, 저장 경로의 Markdown/JSON 파일이 실제로 존재해야 한다. 네이버 캐시는 `시황정보` 항목이 있어야 시장일지 자동 활용 흐름을 통과한다.
 
 ## 포트폴리오 연결

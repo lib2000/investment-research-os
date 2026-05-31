@@ -191,6 +191,11 @@ def main() -> int:
     deduped_refresh_age = age_hours(deduped_refresh.get("updated_at") if isinstance(deduped_refresh, dict) else None)
     add_issue(issues, not isinstance(deduped_refresh, dict), "리서치 자동화 Dossier 갱신 상태 누락")
     add_issue(issues, automation_age is None or automation_age > args.max_dossier_queue_age_hours, "리서치 자동화 상태 상위 updated_at 최신성 확인 필요")
+    add_issue(issues, automation.get("save_result") is not True, "리서치 자동화 저장 결과 확인 필요")
+    add_issue(issues, int(automation.get("failed_count") or 0) > 0, "리서치 자동화 실패 건 존재")
+    add_issue(issues, int(automation.get("dossier_count") or 0) < 1, "리서치 자동화 Dossier 결과 부족")
+    add_issue(issues, int(automation.get("rag_connected_count") or 0) < 1, "리서치 자동화 RAG 연결 결과 부족")
+    add_issue(issues, int(automation.get("news_unpromoted_count") or 0) > 0, "리서치 자동화 뉴스 미승격 항목 존재")
     if isinstance(deduped_refresh, dict):
         deduped_refresh_timestamp = deduped_refresh.get("updated_at")
         add_issue(issues, int(deduped_refresh.get("failed_count") or 0) > 0, "리서치 자동화 Dossier 갱신 실패 건 존재")
@@ -276,6 +281,11 @@ def main() -> int:
     print(f"EMERiCs/CSF/KIEP 관련 자료: {regional_related}개 | {provider_summary} | 실패 소스 {len(failed_sources)}개 | 갱신 {regional.get('updated_at')}")
     print(f"티커 레지스트리: {registry.get('entry_count')}개 | 성공 {registry.get('success_count')}/{registry.get('source_count')} | 갱신 {registry.get('updated_at')}")
     print(f"중복 Dossier 큐: 후보 {dossier.get('candidate_count')}개 | 갱신 {dossier.get('refreshed_count')}개 | 실패 {dossier.get('failed_count')}개 | 갱신 {dossier_timestamp}")
+    print(
+        f"리서치 자동화 상태: 저장 {automation.get('save_result')} | Dossier {automation.get('dossier_count')}개 | "
+        f"RAG 연결 {automation.get('rag_connected_count')}개 | 실패 {automation.get('failed_count')}개 | "
+        f"뉴스 미승격 {automation.get('news_unpromoted_count')}개 | 갱신 {automation_timestamp}"
+    )
     if isinstance(deduped_refresh, dict):
         print(f"리서치 자동화 Dossier 갱신: 후보 {deduped_refresh.get('candidate_count')}개 | 갱신 {deduped_refresh.get('refreshed_count')}개 | 실패 {deduped_refresh.get('failed_count')}개 | 갱신 {deduped_refresh.get('updated_at')}")
     naver_category_summary = ", ".join(f"{name}={count}" for name, count in naver_category_counts.most_common(4))
