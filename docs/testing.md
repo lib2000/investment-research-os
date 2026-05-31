@@ -140,6 +140,8 @@ python tools\check_daily_recommendations_store.py --require-milestones --require
 python tools\smoke_research_console_clicks.py --only-system-check
 ```
 
+브라우저 스모크도 WSL/Codex 격리 환경에서는 Chrome DevTools 포트 접근이 차단될 수 있으므로, 실제 화면 검증은 Windows PowerShell에서 실행합니다.
+
 ## React 콘솔 검증
 
 ```powershell

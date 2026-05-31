@@ -27,6 +27,23 @@ DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks"
 COMMON_TICKER_PATTERN = r"005930\.KS|000660\.KS|207940\.KS|033500"
 
 
+def is_wsl_like() -> bool:
+    if os.name == "nt":
+        return False
+    try:
+        version = Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        version = ""
+    return "microsoft" in version or "wsl" in version
+
+
+def is_localhost_permission_error(error: Exception | None) -> bool:
+    if error is None:
+        return False
+    message = str(error).lower()
+    return "operation not permitted" in message or "errno 1" in message or "permission denied" in message
+
+
 class CdpClient:
     def __init__(self, websocket_url: str) -> None:
         parsed = urllib.parse.urlparse(websocket_url)
@@ -158,11 +175,15 @@ def chrome_path() -> str:
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+        "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+        "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe",
+        "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     ]
     for candidate in candidates:
         if Path(candidate).exists():
             return candidate
-    found = shutil.which("chrome") or shutil.which("msedge")
+    found = shutil.which("chrome") or shutil.which("google-chrome") or shutil.which("msedge")
     if found:
         return found
     raise RuntimeError("Chrome 또는 Edge 실행 파일을 찾지 못했습니다.")
@@ -185,13 +206,26 @@ def wait_for_page(port: int, timeout: float = 15) -> dict:
         except Exception as exc:  # noqa: BLE001 - smoke helper should keep retrying.
             last_error = exc
         time.sleep(0.25)
+    if is_wsl_like() and is_localhost_permission_error(last_error):
+        raise RuntimeError(
+            "Chrome DevTools localhost 접근이 WSL/Codex 격리 환경에서 차단되었습니다. "
+            r"Windows PowerShell에서 `python tools\smoke_research_console_clicks.py --only-system-check`로 실행하세요."
+        ) from last_error
     raise RuntimeError(f"Chrome DevTools page not ready: {last_error}")
 
 
 def assert_project_root() -> None:
-    expected = Path(r"C:\Users\lib20\InvestmentJournalApp")
-    if PROJECT_ROOT != expected:
-        raise RuntimeError(f"Unexpected project root: {PROJECT_ROOT}")
+    root_parts = {part.lower() for part in PROJECT_ROOT.parts}
+    if "onedrive" in root_parts:
+        raise RuntimeError(f"OneDrive path is not allowed for InvestmentJournalApp: {PROJECT_ROOT}")
+    required_markers = [
+        PROJECT_ROOT / "backend" / "research_os_main.py",
+        PROJECT_ROOT / "mobile_app" / "research_console" / "index.html",
+        PROJECT_ROOT / "research_vault",
+    ]
+    missing_markers = [str(path) for path in required_markers if not path.exists()]
+    if missing_markers:
+        raise RuntimeError(f"Unexpected project root: {PROJECT_ROOT} | missing: {', '.join(missing_markers)}")
 
 
 def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check: bool = False) -> dict:
@@ -1128,19 +1162,24 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 process.kill()
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description="Research console headless click smoke test")
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
     args = parser.parse_args()
-    result = run_click_smoke(
-        args.url,
-        include_llm_save=args.include_llm_save,
-        only_system_check=args.only_system_check,
-    )
+    try:
+        result = run_click_smoke(
+            args.url,
+            include_llm_save=args.include_llm_save,
+            only_system_check=args.only_system_check,
+        )
+    except (AssertionError, RuntimeError, TimeoutError) as exc:
+        print(json.dumps({"status": "failure", "message": str(exc)}, ensure_ascii=False, indent=2))
+        return 1
     print(json.dumps({"status": "success", **result}, ensure_ascii=False, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
