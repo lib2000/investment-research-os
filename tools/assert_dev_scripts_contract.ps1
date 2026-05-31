@@ -315,6 +315,8 @@ $contracts = @(
       '--expected-holdings-count',
       'check_research_source_store.py',
       'check_backend_module_health.py',
+      'check_operational_readiness_score.py',
+      '운영 완성도 95%',
       'check_console_static_contract.py',
       'check_console_asset_and_js.py',
       'check_storage_quality_store.py',
@@ -322,6 +324,23 @@ $contracts = @(
       'check_daily_recommendations_store.py',
       'LLM/RAG 저장 상태',
       '오프라인 운영 점검 통과'
+    )
+  },
+
+
+
+
+
+  @{
+    Path = "tools\check_operational_readiness_score.py"
+    Snippets = @(
+      '운영 완성도 점수',
+      '--min-score',
+      'daily_recommendations_state.json',
+      'code_knowledge_graph.json',
+      'user_portfolios.json',
+      'research_automation_status.json',
+      '운영 완성도 점검 정상'
     )
   },
 

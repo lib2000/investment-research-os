@@ -27,6 +27,7 @@ SCAN_GLOBS = [
     "mobile_app/research_console/*.js",
     "mobile_app/research_console/*.html",
     "tools/*.py",
+    "tools/*.ps1",
     "docs/structure-map.md",
     "docs/operations-readiness.md",
     "docs/testing.md",
