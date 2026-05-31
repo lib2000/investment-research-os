@@ -156,9 +156,12 @@ from research_os.models import (
 from research_os.portfolio_performance import build_price_refresh_summary
 from research_os.portfolio_store import portfolio_name_sort_key, portfolio_store_key
 from research_os.portfolio_sync import (
+    append_portfolio_sync_history,
     apply_kiwoom_domestic_balance_to_portfolio,
+    portfolio_sync_history_path,
     portfolio_sync_status_summary,
     protect_manual_or_overseas_holding_sync_state,
+    read_portfolio_sync_history,
 )
 from research_os.research_memory import (
     ResearchStorageInfo,
@@ -5248,9 +5251,6 @@ def portfolio_store_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "user_portfolios.json"
 
 
-def portfolio_sync_history_path(settings: Settings) -> Path:
-    return user_state_dir(settings) / "portfolio_sync_history.jsonl"
-
 
 def interest_list_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "interest_list.json"
@@ -5441,54 +5441,6 @@ def sync_saved_portfolio_with_kiwoom_domestic(
     synced_portfolio = sort_and_weight_portfolio(synced_portfolio, settings, refresh_prices=False)
     return synced_portfolio, sync_summary
 
-
-def append_portfolio_sync_history(
-    settings: Settings,
-    *,
-    portfolio_name: str,
-    summary: dict,
-) -> None:
-    append_jsonl(
-        portfolio_sync_history_path(settings),
-        {
-            "created_at": current_storage_timestamp(),
-            "portfolio_name": portfolio_name,
-            "broker": summary.get("broker"),
-            "scope": summary.get("scope"),
-            "mode": summary.get("mode"),
-            "checked_at": summary.get("checked_at"),
-            "updated_count": summary.get("updated_count", 0),
-            "confirmed_count": summary.get("confirmed_count", 0),
-            "skipped_count": summary.get("skipped_count", 0),
-            "changes": summary.get("changes", []),
-            "skipped": summary.get("skipped", []),
-            "message": summary.get("message"),
-        },
-    )
-
-
-def read_portfolio_sync_history(settings: Settings, *, limit: int = 10) -> list[dict]:
-    path = portfolio_sync_history_path(settings)
-    if not path.exists():
-        return []
-    records: list[dict] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    for line in reversed(lines):
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            records.append(payload)
-        if len(records) >= limit:
-            break
-    return records
 
 
 def latest_provider_price(

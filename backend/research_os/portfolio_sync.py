@@ -2,12 +2,84 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from research_os.models import PortfolioHolding, SavedPortfolio
 from research_os.portfolio_import import (
     is_domestic_sync_like_ticker,
     normalize_import_ticker,
     portfolio_currency_for_ticker,
 )
+from research_os.research_memory import resolve_vault_dir
+from research_os.settings import Settings
+
+
+def _current_sync_timestamp() -> str:
+    try:
+        korea_timezone = ZoneInfo("Asia/Seoul")
+    except ZoneInfoNotFoundError:
+        korea_timezone = timezone(timedelta(hours=9))
+    return datetime.now(korea_timezone).isoformat(timespec="seconds")
+
+
+def portfolio_sync_history_path(settings: Settings) -> Path:
+    state_dir = resolve_vault_dir(settings.research_vault_dir) / "_system"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "portfolio_sync_history.jsonl"
+
+
+def append_portfolio_sync_history(
+    settings: Settings,
+    *,
+    portfolio_name: str,
+    summary: dict,
+) -> None:
+    path = portfolio_sync_history_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "created_at": _current_sync_timestamp(),
+        "portfolio_name": portfolio_name,
+        "broker": summary.get("broker"),
+        "scope": summary.get("scope"),
+        "mode": summary.get("mode"),
+        "checked_at": summary.get("checked_at"),
+        "updated_count": summary.get("updated_count", 0),
+        "confirmed_count": summary.get("confirmed_count", 0),
+        "skipped_count": summary.get("skipped_count", 0),
+        "changes": summary.get("changes", []),
+        "skipped": summary.get("skipped", []),
+        "message": summary.get("message"),
+    }
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(payload, ensure_ascii=False))
+        file.write("\n")
+
+
+def read_portfolio_sync_history(settings: Settings, *, limit: int = 10) -> list[dict]:
+    path = portfolio_sync_history_path(settings)
+    if not path.exists():
+        return []
+    records: list[dict] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in reversed(lines):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            records.append(payload)
+        if len(records) >= limit:
+            break
+    return records
 
 
 def protect_manual_or_overseas_holding_sync_state(

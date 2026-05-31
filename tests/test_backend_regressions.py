@@ -3280,7 +3280,7 @@ class PortfolioPerformanceTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        with patch.object(main, "portfolio_sync_history_path", return_value=history_path):
+        with patch("research_os.portfolio_sync.portfolio_sync_history_path", return_value=history_path):
             records = main.read_portfolio_sync_history(settings, limit=3)
 
         self.assertEqual([record["created_at"] for record in records], [
