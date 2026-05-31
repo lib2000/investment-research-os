@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import json
 import os
 import socket
+import subprocess
 import sys
 from pathlib import Path
 from urllib import error, request
@@ -33,11 +35,53 @@ def project_root(start: Path) -> Path:
     raise SystemExit("InvestmentJournalApp 프로젝트 루트를 찾지 못했습니다.")
 
 
+def preferred_python(root: Path) -> Path:
+    candidates = [
+        root / ".venv" / "Scripts" / "python.exe",
+        root / ".venv" / "bin" / "python",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return Path(sys.executable)
+
+
 def installed_version(distribution: str) -> str | None:
     try:
         return importlib.metadata.version(distribution)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def installed_versions_with_python(
+    python_executable: Path,
+    distributions: list[str],
+) -> dict[str, str | None]:
+    if Path(sys.executable).absolute() == python_executable.absolute():
+        return {name: installed_version(name) for name in distributions}
+    probe = "\n".join(
+        [
+            "import importlib.metadata as md",
+            "import json",
+            f"names = {distributions!r}",
+            "out = {}",
+            "for name in names:",
+            "    try:",
+            "        out[name] = md.version(name)",
+            "    except md.PackageNotFoundError:",
+            "        out[name] = None",
+            "print(json.dumps(out))",
+        ]
+    )
+    completed = subprocess.run(
+        [str(python_executable), "-c", probe],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return {name: None for name in distributions}
+    return json.loads(completed.stdout or "{}")
 
 
 def check_http_health(url: str, timeout: float) -> tuple[bool, str]:
@@ -83,13 +127,20 @@ def main() -> int:
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
+    runtime_python = preferred_python(root)
     print(f"프로젝트 루트: {root}")
-    print(f"Python: {sys.executable}")
+    print(f"Python: {runtime_python}")
+    if Path(sys.executable).absolute() != runtime_python.absolute():
+        print(f"검사 실행 Python: {sys.executable}")
 
+    detected_versions = installed_versions_with_python(
+        runtime_python,
+        list(REQUIRED_DISTRIBUTIONS),
+    )
     missing: list[str] = []
     mismatched: list[str] = []
     for distribution, expected in REQUIRED_DISTRIBUTIONS.items():
-        actual = installed_version(distribution)
+        actual = detected_versions.get(distribution)
         if actual is None:
             missing.append(distribution)
             print(f"{distribution}: 없음 | 기대 {expected}")
