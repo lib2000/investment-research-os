@@ -256,6 +256,9 @@ if ($CheckPortfolioStore) {
   Invoke-VerifyStep "포트폴리오 저장 파일 오프라인 확인" {
     python tools\check_portfolio_store.py --portfolio $PortfolioQuantityName --expected $PortfolioQuantityExpectedHoldings --min-holdings 1 --forbid-zero
   }
+  Invoke-VerifyStep "전체 포트폴리오 저장 구조 확인" {
+    python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero
+  }
 }
 
 if ($CheckStorageQualitySafeguards) {
