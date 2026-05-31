@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from re import fullmatch, sub
 from typing import Any
 
 
@@ -70,3 +71,55 @@ def filter_target_price_outliers(values: list[float]) -> list[float]:
         return values
     filtered = [value for value in values if median * 0.35 <= value <= median * 2.8]
     return filtered if len(filtered) >= 2 else values
+
+
+def _normalize_target_ticker(value: object) -> str:
+    return sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip().upper()).strip("-") or "UNKNOWN"
+
+
+def is_probable_year_or_metadata_number(
+    raw_value: object,
+    symbol: str | None,
+    unit: str | None,
+    context: str,
+    ticker_context: str | None = None,
+) -> bool:
+    raw_text = str(raw_value or "").strip().replace(",", "")
+    unit_text = str(unit or "").strip()
+    symbol_text = str(symbol or "").strip()
+    context_text = context.lower()
+    metadata_blockers = [
+        "mime",
+        "bytes",
+        "파일명",
+        "파일 이름",
+        "파일 크기",
+        "크기:",
+        "pdf 링크",
+        "원문 링크",
+        "nid=",
+        "page=",
+        "종목코드",
+        "발행일",
+        "저장 범위",
+        "분류 근거",
+        "as of",
+        "quarter 20",
+        "fy20",
+        "fiscal",
+        "financial results",
+    ]
+    if any(blocker in context_text for blocker in metadata_blockers):
+        return True
+    if not unit_text and not symbol_text and raw_text.isdigit() and len(raw_text) == 4:
+        year_value = int(raw_text)
+        if 1900 <= year_value <= 2100:
+            return True
+    normalized_ticker_context = _normalize_target_ticker(ticker_context)
+    if raw_text.isdigit() and fullmatch(r"\d{6}", normalized_ticker_context):
+        try:
+            if int(raw_text) == int(normalized_ticker_context):
+                return True
+        except ValueError:
+            pass
+    return False

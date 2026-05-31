@@ -159,6 +159,7 @@ from research_os.portfolio_performance import (
     build_price_refresh_summary,
     filter_target_price_outliers,
     is_plausible_target_price,
+    is_probable_year_or_metadata_number,
     target_price_currency,
 )
 from research_os.portfolio_analysis_coverage import (
@@ -20291,10 +20292,6 @@ def get_portfolio_team_report_queue(
     }
 
 
-
-
-
-
 def target_price_numeric_value(raw_value: object, unit: str | None) -> float | None:
     value = parse_float_or_none(raw_value)
     if value is None:
@@ -20305,56 +20302,6 @@ def target_price_numeric_value(raw_value: object, unit: str | None) -> float | N
     if unit_text in {"BN", "B"}:
         return None
     return value
-
-
-def is_probable_year_or_metadata_number(
-    raw_value: object,
-    symbol: str | None,
-    unit: str | None,
-    context: str,
-    ticker_context: str | None = None,
-) -> bool:
-    raw_text = str(raw_value or "").strip().replace(",", "")
-    unit_text = str(unit or "").strip()
-    symbol_text = str(symbol or "").strip()
-    context_text = context.lower()
-    metadata_blockers = [
-        "mime",
-        "bytes",
-        "파일명",
-        "파일 이름",
-        "파일 크기",
-        "크기:",
-        "pdf 링크",
-        "원문 링크",
-        "nid=",
-        "page=",
-        "종목코드",
-        "발행일",
-        "저장 범위",
-        "분류 근거",
-        "as of",
-        "quarter 20",
-        "fy20",
-        "fiscal",
-        "financial results",
-    ]
-    if any(blocker in context_text for blocker in metadata_blockers):
-        return True
-    if not unit_text and not symbol_text and raw_text.isdigit() and len(raw_text) == 4:
-        year_value = int(raw_text)
-        if 1900 <= year_value <= 2100:
-            return True
-    normalized_ticker_context = normalize_ticker(ticker_context or "")
-    if raw_text.isdigit() and fullmatch(r"\d{6}", normalized_ticker_context):
-        try:
-            if int(raw_text) == int(normalized_ticker_context):
-                return True
-        except ValueError:
-            pass
-    return False
-
-
 
 
 def target_price_result(
