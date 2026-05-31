@@ -176,7 +176,7 @@ class ConsoleHtmlParser(HTMLParser):
         self.ids: list[str] = []
         self.sections: set[str] = set()
         self.tab_targets: set[str] = set()
-        self.buttons: list[tuple[str | None, str | None, str | None]] = []
+        self.buttons: list[dict[str, str | None]] = []
         self.workflow_actions: set[str] = set()
         self.attrs_by_id: dict[str, dict[str, str | None]] = {}
 
@@ -190,7 +190,7 @@ class ConsoleHtmlParser(HTMLParser):
             self.sections.add(element_id)
         if tag == "button":
             workflow_action = attr.get("data-workflow-action")
-            self.buttons.append((element_id, attr.get("data-tab"), workflow_action))
+            self.buttons.append({"id": element_id, "data_tab": attr.get("data-tab"), "workflow_action": workflow_action, "type": attr.get("type")})
             if attr.get("data-tab"):
                 self.tab_targets.add(attr["data-tab"] or "")
             if workflow_action:
@@ -219,6 +219,14 @@ def selector_ids(js_text: str) -> set[str]:
 
 def workflow_actions_in_js_templates(js_text: str) -> set[str]:
     return set(re.findall(r"data-workflow-action=['\"]([^'\"]+)['\"]", js_text))
+
+
+def js_button_tags(js_text: str) -> list[str]:
+    return re.findall(r"<button\b[^>]*>", js_text, flags=re.IGNORECASE)
+
+
+def button_label(button: dict[str, str | None]) -> str:
+    return button.get("id") or button.get("data_tab") or button.get("workflow_action") or "button"
 
 
 def handled_workflow_actions(js_text: str) -> set[str]:
@@ -284,6 +292,18 @@ def main() -> int:
         for element_id, expected in REQUIRED_LIVE_REGIONS.items()
         if parser_obj.attrs_by_id.get(element_id, {}).get("aria-live") != expected
     )
+    html_buttons_missing_type = sorted(
+        button_label(button)
+        for button in parser_obj.buttons
+        if not str(button.get("type") or "").strip()
+    )
+    html_buttons_invalid_type = sorted(
+        f"{button_label(button)}:{button.get('type')}"
+        for button in parser_obj.buttons
+        if str(button.get("type") or "").strip().lower() not in {"button", "submit", "reset"}
+    )
+    js_buttons = js_button_tags(js)
+    js_buttons_missing_type = sorted(button for button in js_buttons if "type=" not in button.lower())
 
     errors: list[str] = []
     if duplicate_ids:
@@ -312,6 +332,12 @@ def main() -> int:
         errors.append("추천 결과 UI JS 계약 누락: " + ", ".join(missing_js_snippets))
     if missing_live_regions:
         errors.append("실시간 피드백 aria-live 계약 누락: " + ", ".join(missing_live_regions))
+    if html_buttons_missing_type:
+        errors.append("HTML 버튼 type 속성 누락: " + ", ".join(html_buttons_missing_type))
+    if html_buttons_invalid_type:
+        errors.append("HTML 버튼 type 값 확인 필요: " + ", ".join(html_buttons_invalid_type))
+    if js_buttons_missing_type:
+        errors.append("JS 템플릿 버튼 type 속성 누락: " + ", ".join(js_buttons_missing_type[:20]))
 
     print(f"HTML id 수: {len(ids)}개")
     print(f"JS 참조 id 수: {len(referenced_ids)}개")
@@ -322,6 +348,8 @@ def main() -> int:
     print(f"메뉴/버튼 레이아웃 CSS: {len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets)}/{len(REQUIRED_CSS_SNIPPETS)}개")
     print(f"추천 결과 UI JS: {len(REQUIRED_JS_SNIPPETS) - len(missing_js_snippets)}/{len(REQUIRED_JS_SNIPPETS)}개")
     print(f"실시간 피드백 영역: {len(REQUIRED_LIVE_REGIONS) - len(missing_live_regions)}/{len(REQUIRED_LIVE_REGIONS)}개")
+    print(f"HTML 버튼 타입: {len(parser_obj.buttons) - len(html_buttons_missing_type) - len(html_buttons_invalid_type)}/{len(parser_obj.buttons)}개")
+    print(f"JS 템플릿 버튼 타입: {len(js_buttons) - len(js_buttons_missing_type)}/{len(js_buttons)}개")
     if errors:
         for error in errors:
             print(f"오류: {error}")
