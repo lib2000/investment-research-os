@@ -346,6 +346,16 @@ $contracts = @(
 
 
   @{
+    Path = "tools\build_code_knowledge_graph.py"
+    Snippets = @(
+      "SCAN_GLOBS",
+      "backend/research_os/README.md",
+      "docs/structure-map.md",
+      "FLOW_DEFINITIONS",
+      "code_knowledge_graph.json"
+    )
+  },
+  @{
     Path = "tools\check_code_knowledge_graph.py"
     Snippets = @(
       'REQUIRED_FLOW_IDS',
@@ -553,6 +563,17 @@ $contracts = @(
       '큰 도메인 모듈',
       '줄 수 상한 초과',
       '백엔드 모듈 상태 정상'
+    )
+  },
+  @{
+    Path = "backend\research_os\README.md"
+    Snippets = @(
+      "docs/structure-map.md",
+      "portfolio_analysis_coverage.py",
+      "regional_sources.py",
+      "source_url_preview.py",
+      "ticker_registry.py",
+      "system_health.py"
     )
   },
   @{

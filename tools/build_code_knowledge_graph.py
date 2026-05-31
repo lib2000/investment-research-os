@@ -25,6 +25,7 @@ SCAN_GLOBS = [
     "backend/research_os_main.py",
     "backend/research_os/*.py",
     "backend/requirements.txt",
+    "backend/research_os/README.md",
     "mobile_app/research_console/*.js",
     "mobile_app/research_console/*.html",
     "tools/*.py",
