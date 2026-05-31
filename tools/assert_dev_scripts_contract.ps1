@@ -322,6 +322,8 @@ $contracts = @(
       '--min-average-completion',
       '포트폴리오 분석 커버리지',
       'check_portfolio_store.py',
+      'check_all_portfolio_store.py',
+      '전체 포트폴리오 저장 구조',
       '--expected-holdings-count',
       'check_research_source_store.py',
       'check_backend_module_health.py',
@@ -576,6 +578,22 @@ $contracts = @(
       '해외/수동 수량 보호 상태 누락',
       '포트폴리오 총액 불일치',
       '포트폴리오 저장 수량 상태 정상'
+    )
+  },
+  @{
+    Path = "tools\check_all_portfolio_store.py"
+    Snippets = @(
+      'DEFAULT_STORE',
+      'CASH_TICKERS',
+      '--forbid-zero',
+      '--allow-cash',
+      '--max-portfolio-age-hours',
+      'holding_count 불일치',
+      '중복 보유 종목',
+      '수량 0 종목 잔존',
+      '예수금/CASH 항목 혼입',
+      '포트폴리오 총액 불일치',
+      '전체 포트폴리오 저장 구조 상태 정상'
     )
   },
   @{

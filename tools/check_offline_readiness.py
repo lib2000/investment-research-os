@@ -45,6 +45,15 @@ CHECKS = [
             "24",
         ],
     ),
+    (
+        "전체 포트폴리오 저장 구조",
+        [
+            "tools/check_all_portfolio_store.py",
+            "--min-holdings",
+            "1",
+            "--forbid-zero",
+        ],
+    ),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
     ("자동 분류 태그/RAG 품질", ["tools/check_classification_quality.py", "--strict"]),

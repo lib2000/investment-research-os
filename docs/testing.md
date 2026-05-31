@@ -113,6 +113,7 @@ python tools\check_console_asset_and_js.py
 
 ```powershell
 python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --expected-holdings-count 17 --forbid-zero
+python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero
 python tools\check_storage_quality_store.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 ```
