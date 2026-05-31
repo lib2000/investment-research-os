@@ -314,6 +314,8 @@ $contracts = @(
       'check_public_repo_safety.py',
       'check_backend_runtime_env.py',
       'check_portfolio_analysis_coverage.py',
+      '--all-portfolios',
+      '--min-average-completion',
       '포트폴리오 분석 커버리지',
       'check_portfolio_store.py',
       '--expected-holdings-count',
@@ -357,6 +359,8 @@ $contracts = @(
     Snippets = @(
       '포트폴리오 분석 모듈 커버리지',
       '--write-backlog',
+      '--all-portfolios',
+      'unique_holdings_from_portfolios',
       'portfolio_analysis_backlog.json',
       'portfolio_analysis_module_state',
       'portfolio_analysis_next_action',
@@ -440,6 +444,9 @@ $contracts = @(
     Path = "tools\check_backend_runtime_env.py"
     Snippets = @(
       'REQUIRED_DISTRIBUTIONS',
+      'preferred_python',
+      'installed_versions_with_python',
+      '.venv',
       'python-dotenv',
       '/api/v1/system/health',
       '--strict',
