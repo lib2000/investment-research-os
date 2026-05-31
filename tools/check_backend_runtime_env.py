@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import os
 import socket
 import sys
 from pathlib import Path
@@ -55,6 +56,25 @@ def check_http_health(url: str, timeout: float) -> tuple[bool, str]:
         return False, f"연결 실패: {exc}"
 
 
+def is_wsl_like() -> bool:
+    if os.name == "nt":
+        return False
+    try:
+        version = Path("/proc/version").read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        version = ""
+    return "microsoft" in version or "wsl" in version
+
+
+def health_blocked_by_local_sandbox(message: str) -> bool:
+    lowered = message.lower()
+    return is_wsl_like() and (
+        "operation not permitted" in lowered
+        or "errno 1" in lowered
+        or "permission denied" in lowered
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="백엔드 런타임 준비 상태를 확인합니다.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8001")
@@ -82,13 +102,19 @@ def main() -> int:
     health_url = args.base_url.rstrip("/") + "/api/v1/system/health"
     health_ok, health_message = check_http_health(health_url, args.timeout)
     print(f"백엔드 health: {health_url} | {health_message}")
+    health_sandbox_blocked = health_blocked_by_local_sandbox(health_message)
+    if health_sandbox_blocked:
+        print("참고: WSL/Codex 격리 환경에서 localhost 접근이 차단된 상태일 수 있습니다. Windows PowerShell의 Python으로 재확인하세요.")
 
     if missing or mismatched or not health_ok:
         print("권장 조치:")
         if missing or mismatched:
             print(r"1. Windows PowerShell에서 `pip install -r backend\requirements.txt`로 백엔드 의존성을 맞추세요.")
         if not health_ok:
-            print(r"2. Windows PowerShell에서 `cd C:\Users\lib20\InvestmentJournalApp` 후 `.\scripts\start-research-backend.ps1 -Port 8001`를 실행하세요.")
+            if health_sandbox_blocked:
+                print(r"2. 백엔드가 실제로 꺼졌다고 단정하지 말고 Windows PowerShell에서 `python tools\check_backend_runtime_env.py --strict`로 재확인하세요.")
+            else:
+                print(r"2. Windows PowerShell에서 `cd C:\Users\lib20\InvestmentJournalApp` 후 `.\scripts\start-research-backend.ps1 -Port 8001`를 실행하세요.")
         print("3. 실행 후 `http://127.0.0.1:8001/console/index.html`에서 콘솔을 확인하세요.")
         if args.strict:
             return 1
