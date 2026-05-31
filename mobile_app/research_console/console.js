@@ -2023,11 +2023,12 @@ function portfolioModuleMissingCounts(status) {
       if (!state.team_report) counts.team += 1;
       if (!state.trade_setup) counts.trade += 1;
       if (!state.earnings_reaction) counts.earnings += 1;
+      if (!state.model_update_note) counts.model += 1;
       if (!state.checklist) counts.checklist += 1;
       if (!state.recent_capture) counts.capture += 1;
       return counts;
     },
-    { team: 0, trade: 0, earnings: 0, checklist: 0, capture: 0 }
+    { team: 0, trade: 0, earnings: 0, model: 0, checklist: 0, capture: 0 }
   );
 }
 
@@ -2069,10 +2070,10 @@ function renderPortfolioAnalysisOverview(status = lastPortfolioAnalysisStatus) {
       : "needs_action";
   const missingText = totalMissing === 0
     ? "누락 없음"
-    : `팀 ${missingCounts.team} · 매매 ${missingCounts.trade} · 실적 ${missingCounts.earnings} · 체크 ${missingCounts.checklist} · 정보 ${missingCounts.capture}`;
+    : `팀 ${missingCounts.team} · 매매 ${missingCounts.trade} · 실적 ${missingCounts.earnings} · 모델 ${missingCounts.model} · 체크 ${missingCounts.checklist} · 정보 ${missingCounts.capture}`;
   elements.portfolioAnalysisOverview.innerHTML = [
     `<div class="${statusClass}"><span>전체 연결 상태</span><strong>${readyCount}/${holdingCount}</strong><p>${readyCount === holdingCount && holdingCount > 0 ? "모든 보유 종목이 연결됐습니다." : "추가 연결이 필요한 종목이 있습니다."}</p></div>`,
-    `<div><span>평균 완성도</span><strong>${escapeHtml(completionText)}</strong><p>5개 모듈 기준 자동 계산</p></div>`,
+    `<div><span>평균 완성도</span><strong>${escapeHtml(completionText)}</strong><p>6개 모듈 기준 자동 계산</p></div>`,
     `<div class="${totalMissing === 0 ? "ok" : "warning"}"><span>누락 모듈</span><strong>${totalMissing}개</strong><p>${escapeHtml(missingText)}</p></div>`,
     `<div><span>최근 업데이트</span><strong>${escapeHtml(latestDate)}</strong><p>저장 리포트 기준</p></div>`,
     `<div class="${staleItems.length ? "warning" : "ok"}"><span>다음 액션</span><strong>${staleItems.length ? "점검" : "유지"}</strong><p>${escapeHtml(staleItems.length ? `${staleItems.join(", ")} 먼저 보강` : "새 자료 입력 시 자동 비교")}</p></div>`,
@@ -14592,6 +14593,7 @@ function formatKoreanResult(value) {
         `팀 ${state.team_report ? "완료" : "필요"}`,
         `매매 ${state.trade_setup ? "완료" : "필요"}`,
         `실적 ${state.earnings_reaction ? "완료" : "필요"}`,
+        `모델 ${state.model_update_note ? "완료" : "필요"}`,
         `체크 ${state.checklist ? "완료" : "필요"}`,
         `정보 ${state.recent_capture ? "있음" : "없음"}`,
       ].join(" · ");

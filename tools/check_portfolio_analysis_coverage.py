@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-REQUIRED_MODULES = [
-    ("team_report", "기준 리포트", {"collaborative-team-report", "institutional-stock-breakdown"}),
-    ("trade_setup", "매매 전략", {"smart-trade-setup"}),
-    ("earnings_reaction", "실적 분석", {"earnings-reaction"}),
-    ("model_update_note", "모델 업데이트 노트", {"earnings-filing-note"}),
-    ("checklist", "체크리스트", {"research-checklist"}),
-    ("recent_capture", "최근 정보 입력", {"research-capture"}),
-]
+ROOT_CANDIDATE = Path(__file__).resolve().parents[1]
+BACKEND_DIR = ROOT_CANDIDATE / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from research_os.portfolio_analysis_coverage import (  # noqa: E402
+    REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
+    missing_portfolio_analysis_labels,
+    portfolio_analysis_module_state,
+    portfolio_analysis_next_action,
+)
 
 
 def project_root(start: Path) -> Path:
@@ -45,25 +49,11 @@ def manifest_entries_for_ticker(entries: list[dict[str, Any]], ticker: str) -> l
 
 
 def module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
-    types = {str(entry.get("type") or "") for entry in entries}
-    return {key: bool(types & expected_types) for key, _label, expected_types in REQUIRED_MODULES}
+    return portfolio_analysis_module_state(entries)
 
 
 def next_action(missing: list[str]) -> str:
-    if not missing:
-        return "핵심 분석이 모두 연결되어 있습니다."
-    first = missing[0]
-    if first == "기준 리포트":
-        return "팀 리포트를 먼저 실행해 기준 투자 논거를 저장하세요."
-    if first == "매매 전략":
-        return "매매 전략을 실행해 진입/손절/목표가를 저장하세요."
-    if first == "실적 분석":
-        return "실적 분석을 실행해 다음 실적 전 추적 항목을 정리하세요."
-    if first == "모델 업데이트 노트":
-        return "보고 자동화에서 공시/어닝콜 기반 모델 업데이트 노트를 저장하세요."
-    if first == "체크리스트":
-        return "리서치 체크리스트를 저장해 투자 준비도를 수치화하세요."
-    return "최근 정보 입력을 저장해 새 자료 영향도를 연결하세요."
+    return portfolio_analysis_next_action(missing)
 
 
 def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], manifest: list[dict[str, Any]]) -> dict[str, Any]:
@@ -75,7 +65,7 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
         entries = manifest_entries_for_ticker(manifest, ticker)
         state = module_state(entries)
         completed = sum(1 for value in state.values() if value)
-        missing = [label for key, label, _types in REQUIRED_MODULES if not state[key]]
+        missing = missing_portfolio_analysis_labels(state)
         latest_date = max((str(entry.get("date") or "") for entry in entries), default="") or None
         rows.append(
             {
@@ -85,8 +75,8 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
                 "market_value": holding.get("market_value"),
                 "module_state": state,
                 "completed_count": completed,
-                "required_count": len(REQUIRED_MODULES),
-                "completion_rate": round(completed / len(REQUIRED_MODULES), 4),
+                "required_count": len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
+                "completion_rate": round(completed / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES), 4),
                 "missing_modules": missing,
                 "latest_report_date": latest_date,
                 "next_action": next_action(missing),

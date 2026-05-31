@@ -156,6 +156,12 @@ from research_os.models import (
     WatchItemSignal,
 )
 from research_os.portfolio_performance import build_price_refresh_summary
+from research_os.portfolio_analysis_coverage import (
+    REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
+    missing_portfolio_analysis_labels,
+    portfolio_analysis_module_state,
+    portfolio_analysis_next_action,
+)
 from research_os.portfolio_store import portfolio_name_sort_key, portfolio_store_key
 from research_os.portfolio_sync import (
     append_portfolio_sync_history,
@@ -20073,14 +20079,6 @@ def check_portfolio_analysis_status(
             if record.get("market_value") is None and holding.market_value is not None:
                 record["market_value"] = holding.market_value
 
-    required_modules = [
-        ("team_report", "기준 리포트"),
-        ("trade_setup", "매매 전략"),
-        ("earnings_reaction", "실적 분석"),
-        ("model_update_note", "모델 업데이트 노트"),
-        ("checklist", "체크리스트"),
-        ("recent_capture", "최근 정보 입력"),
-    ]
     items = []
     for ticker, record in sorted(by_ticker.items()):
         verification = verify_ticker_symbol(ticker, settings)
@@ -20100,44 +20098,10 @@ def check_portfolio_analysis_status(
             ),
             reverse=True,
         )
-        team_report = latest_manifest_entry(
-            ticker_entries,
-            "collaborative-team-report",
-            "institutional-stock-breakdown",
-        )
-        trade_setup = latest_manifest_entry(ticker_entries, "smart-trade-setup")
-        earnings_reaction = latest_manifest_entry(ticker_entries, "earnings-reaction")
-        model_update_note = latest_manifest_entry(ticker_entries, "earnings-filing-note")
-        checklist = latest_manifest_entry(ticker_entries, "research-checklist")
-        recent_capture = latest_manifest_entry(ticker_entries, "research-capture")
-        module_state = {
-            "team_report": bool(team_report),
-            "trade_setup": bool(trade_setup),
-            "earnings_reaction": bool(earnings_reaction),
-            "model_update_note": bool(model_update_note),
-            "checklist": bool(checklist),
-            "recent_capture": bool(recent_capture),
-        }
+        module_state = portfolio_analysis_module_state(ticker_entries)
         completed_count = sum(1 for value in module_state.values() if value)
-        missing_labels = [
-            label for key, label in required_modules if not module_state.get(key)
-        ]
-        if not verification.verified:
-            next_action = "공식 티커 인증을 먼저 보강하세요."
-        elif not team_report:
-            next_action = "팀 리포트로 기준 투자 논거를 먼저 생성하세요."
-        elif not trade_setup:
-            next_action = "매매 전략에서 진입 구간, 손절, 목표가를 설계하세요."
-        elif not earnings_reaction:
-            next_action = "최근 실적 반응을 연결해 다음 실적 전 추적 항목을 정리하세요."
-        elif not model_update_note:
-            next_action = "보고 자동화에서 어닝 콜/공시 기반 모델 업데이트 노트를 작성하세요."
-        elif not checklist:
-            next_action = "16개 리서치 체크리스트로 투자 준비도를 수치화하세요."
-        elif not recent_capture:
-            next_action = "뉴스/리포트/메모를 정보 입력에 저장해 논거 변화를 추적하세요."
-        else:
-            next_action = "핵심 분석이 모두 연결되어 있습니다. 새 데이터 유입 시 갱신만 하면 됩니다."
+        missing_labels = missing_portfolio_analysis_labels(module_state)
+        next_action = portfolio_analysis_next_action(missing_labels, verified=verification.verified)
 
         items.append(
             {
@@ -20149,8 +20113,8 @@ def check_portfolio_analysis_status(
                 "market_value": record.get("market_value"),
                 "module_state": module_state,
                 "completed_count": completed_count,
-                "required_count": len(required_modules),
-                "completion_rate": completed_count / len(required_modules),
+                "required_count": len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
+                "completion_rate": completed_count / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
                 "missing_modules": missing_labels,
                 "latest_report_date": sorted_entries[0].get("date") if sorted_entries else None,
                 "latest_report_summary": sorted_entries[0].get("summary") if sorted_entries else None,

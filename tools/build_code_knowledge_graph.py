@@ -24,6 +24,7 @@ DEFAULT_OUTPUT = Path("research_vault/_system/code_knowledge_graph.json")
 SCAN_GLOBS = [
     "backend/research_os_main.py",
     "backend/research_os/*.py",
+    "backend/requirements.txt",
     "mobile_app/research_console/*.js",
     "mobile_app/research_console/*.html",
     "tools/*.py",
@@ -75,8 +76,8 @@ FLOW_DEFINITIONS = {
     },
     "backend_module_health": {
         "label": "백엔드 모듈 헬스/구조 안정화",
-        "keywords": ["check_backend_module_health", "research_os_main", "코드 지식 그래프", "구조 지도"],
-        "expected_files": ["backend/research_os/code_knowledge.py", "tools/check_backend_module_health.py", "tools/check_offline_readiness.py", "docs/structure-map.md"],
+        "keywords": ["check_backend_module_health", "research_os_main", "requirements", "fastapi", "코드 지식 그래프", "구조 지도"],
+        "expected_files": ["backend/research_os/code_knowledge.py", "backend/requirements.txt", "tools/check_backend_module_health.py", "tools/check_offline_readiness.py", "docs/structure-map.md"],
     },
 }
 
