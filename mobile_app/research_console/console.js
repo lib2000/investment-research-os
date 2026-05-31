@@ -10999,6 +10999,13 @@ async function addInterestSectorDraftToList({ autoSave = true, announce = true }
     return false;
   }
   if (autoSave) {
+    if (announce) {
+      startOutputLoading("관심섹터 추가 저장 중", [
+        String(draft.name || "관심섹터") + " 항목을 관심섹터 목록에 반영",
+        "지역과 우선순위 정리",
+        "저장소 업데이트 후 화면 새로고침",
+      ]);
+    }
     try {
       const result = await addInterestSector(token(), draft);
       fillInterestsForm(result);

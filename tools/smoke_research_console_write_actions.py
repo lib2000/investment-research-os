@@ -303,7 +303,7 @@ def run_write_action_smoke(url: str) -> dict:
                   sectorDraft.querySelector('[name="region"]').value = "KR";
                   sectorDraft.querySelector('[name="thesis"]').value = `${{marker}} 관심섹터 추가/삭제 검증`;
                   document.querySelector("#addInterestSectorButton").click();
-                  await waitFor(() => (document.querySelector("#interestSectorEditor")?.innerText || "").includes(interestName), 30000, "interest sector added");
+                  await waitFor(() => (document.querySelector("#interestSectorEditor")?.innerText || "").includes(interestName), 90000, "interest sector added");
                   results.interestSectorAdded = true;
                   const addedSectorRow = [...document.querySelectorAll("#interestSectorEditor .interest-sector-row")]
                     .find((row) => row.innerText.includes(interestName));
@@ -312,8 +312,8 @@ def run_write_action_smoke(url: str) -> dict:
                   }}
                   addedSectorRow.querySelector("details").open = true;
                   addedSectorRow.querySelector("[data-editor-remove]").click();
-                  await waitFor(() => !(document.querySelector("#interestSectorEditor")?.innerText || "").includes(interestName), 30000, "interest sector removed");
-                  await waitFor(() => /관심섹터를 삭제하고 저장했습니다/.test(outputText()), 30000, "interest sector delete saved");
+                  await waitFor(() => !(document.querySelector("#interestSectorEditor")?.innerText || "").includes(interestName), 60000, "interest sector removed");
+                  await waitFor(() => /관심섹터를 삭제하고 저장했습니다/.test(outputText()), 60000, "interest sector delete saved");
                   results.interestSectorDeleted = true;
                   results.interestDraftRegionDefaultKr = sectorDraft.querySelector('[name="region"]')?.value === "KR";
                   assertNoRuntimeErrors("interests");

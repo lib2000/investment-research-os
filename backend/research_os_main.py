@@ -22395,12 +22395,40 @@ def add_interest_sector(
         for item in payload.get("sectors", [])
         if isinstance(item, dict)
     ]
-    response = normalize_interest_list(
-        InterestListUpdateRequest(
-            tickers=existing_tickers,
-            sectors=[*existing_sectors, request_item],
-        ),
-        settings,
+    now = current_storage_timestamp()
+    prior_by_name = {
+        item.name.strip().lower(): item
+        for item in existing_sectors
+        if item.name and item.name.strip()
+    }
+    latest_sectors: dict[str, InterestSector] = {
+        item.name.strip().lower(): item
+        for item in existing_sectors
+        if item.name and item.name.strip()
+    }
+    latest_sectors[request_item.name.strip().lower()] = request_item
+    normalized_sectors = []
+    for item in latest_sectors.values():
+        prior = prior_by_name.get(item.name.strip().lower())
+        created_at = item.created_at or (prior.created_at if prior else None) or now
+        normalized_sectors.append(
+            InterestSector(
+                name=item.name.strip(),
+                region=item.region or "KR",
+                priority=item.priority or "medium",
+                thesis=item.thesis,
+                notes=item.notes,
+                tags=item.tags,
+                attachment=item.attachment,
+                created_at=created_at,
+                updated_at=now,
+            )
+        )
+    response = InterestListResponse(
+        tickers=existing_tickers,
+        sectors=normalized_sectors,
+        updated_at=now,
+        storage_path=str(interest_list_path(settings)),
     )
     write_json_store(
         interest_list_path(settings),
