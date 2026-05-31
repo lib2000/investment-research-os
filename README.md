@@ -4,6 +4,17 @@
 
 현재 운영 제품은 Python FastAPI 백엔드와 정적 HTML/JavaScript 리서치 콘솔로 구성됩니다. React/Vite 콘솔과 Expo 모바일 앱은 점진 이관 대상입니다.
 
+## 오픈소스 공개 범위
+
+이 저장소는 Investment Research OS의 코드, 운영 문서, 검증 스크립트, 예시 설정을 공개합니다. 실제 포트폴리오 데이터, API 키, 증권사 토큰, 리서치 원문 저장소, 로컬 DB는 공개 범위가 아니며 `.gitignore`와 안전 점검 스크립트로 Git 추적을 차단합니다.
+
+- Maintainer: `lib2000` / HYUNGJU LEE
+- Repository: `https://github.com/lib2000/investment-research-os`
+- Public safety check: `python tools\check_public_repo_safety.py`
+- Security policy: [SECURITY.md](SECURITY.md)
+- Contribution and maintenance workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Codex support application notes: [docs/open-source-support-application.md](docs/open-source-support-application.md)
+
 ## 구조 명칭
 
 혼동을 줄이기 위해 이 저장소에서는 아래 명칭을 기준으로 사용합니다.

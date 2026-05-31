@@ -309,6 +309,7 @@ $contracts = @(
     Snippets = @(
       'CHECKS',
       'check_git_sync_status.py',
+      'check_public_repo_safety.py',
       'check_backend_runtime_env.py',
       'check_portfolio_store.py',
       '--expected-holdings-count',
@@ -321,6 +322,22 @@ $contracts = @(
       'check_daily_recommendations_store.py',
       'LLM/RAG 저장 상태',
       '오프라인 운영 점검 통과'
+    )
+  },
+
+
+
+
+
+  @{
+    Path = "tools\check_public_repo_safety.py"
+    Snippets = @(
+      'FORBIDDEN_PATH_PATTERNS',
+      'ALLOWED_PATHS',
+      'SECRET_VALUE_PATTERNS',
+      '--exclude-standard',
+      '공개 후보 파일',
+      '공개 저장소 안전 점검 통과'
     )
   },
 
