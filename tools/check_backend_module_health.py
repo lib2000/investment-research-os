@@ -9,6 +9,7 @@ from pathlib import Path
 EXPECTED_MODULES = {
     "classification.py",
     "brokerage.py",
+    "code_knowledge.py",
     "customs_trade.py",
     "daily_recommendations.py",
     "data_providers.py",
@@ -37,6 +38,7 @@ EXPECTED_MODULES = {
 EXPECTED_MAIN_IMPORTS = {
     "research_os.classification",
     "research_os.brokerage",
+    "research_os.code_knowledge",
     "research_os.customs_trade",
     "research_os.daily_recommendations",
     "research_os.data_providers",

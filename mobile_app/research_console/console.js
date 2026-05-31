@@ -11951,6 +11951,10 @@ function codeKnowledgeGraphOutput(result = {}) {
   });
   const signals = Array.isArray(result.operation_signals) ? result.operation_signals : [];
   const signalSummary = result.signal_summary || {};
+  const readiness = result.operation_readiness || {};
+  const readinessScore = Number(readiness.score);
+  const readinessText = Number.isFinite(readinessScore) ? `${readinessScore.toFixed(1)}%` : "n/a";
+  const readinessTarget = Number(readiness.target_score || 95);
   const signalLines = signals.map((signal) => {
     const status = signal.status === "ok" ? "정상" : signal.status === "error" ? "오류" : "주의";
     const nextAction = signal.next_action ? ` · 다음: ${signal.next_action}` : "";
@@ -11967,6 +11971,10 @@ function codeKnowledgeGraphOutput(result = {}) {
     "",
     "## 운영 흐름 연결",
     ...(flowLines.length ? flowLines : ["- 표시할 운영 흐름이 없습니다."]),
+    "",
+    "## 운영 준비도",
+    `${readinessText} / 목표 ${readinessTarget.toFixed(0)}% · ${readiness.label || "상태 미확인"}`,
+    readiness.next_action ? `다음 조치: ${readiness.next_action}` : "",
     "",
     "## 운영 주의 신호",
     `정상 ${formatNumber(signalSummary.ok || 0)}개 · 주의 ${formatNumber(signalSummary.warning || 0)}개 · 오류 ${formatNumber(signalSummary.error || 0)}개`,

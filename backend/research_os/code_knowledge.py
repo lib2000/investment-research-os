@@ -56,6 +56,14 @@ def code_knowledge_graph_path(settings: Settings) -> Path:
     return resolve_vault_dir(settings.research_vault_dir) / "_system" / "code_knowledge_graph.json"
 
 
+def _default_signal_score(status: str) -> float:
+    if status == "ok":
+        return 100.0
+    if status == "warning":
+        return 70.0
+    return 0.0
+
+
 def _signal(
     *,
     signal_id: str,
@@ -65,11 +73,14 @@ def _signal(
     flow_id: str,
     next_action: str | None = None,
     detail: dict[str, Any] | None = None,
+    score: float | None = None,
 ) -> dict[str, Any]:
+    signal_score = _default_signal_score(status) if score is None else max(0.0, min(100.0, float(score)))
     return {
         "id": signal_id,
         "label": label,
         "status": status,
+        "score": round(signal_score, 1),
         "message": message,
         "flow_id": flow_id,
         "next_action": next_action or "",
@@ -108,7 +119,9 @@ def _recommendation_signal(settings: Settings) -> dict[str, Any]:
     selected_count = selected_count_value if isinstance(selected_count_value, int) else len(state.get("selected") or [])
     last_run_date = str(state.get("last_run_date") or state.get("last_run_at") or "")
     expected_dates = _recommendation_expected_dates(settings)
-    ok = selected_count == 3 and last_run_date[:10] in expected_dates
+    date_ok = last_run_date[:10] in expected_dates
+    ok = selected_count == 3 and date_ok
+    score = (50.0 if date_ok else 0.0) + min(selected_count, 3) / 3 * 50.0
     return _signal(
         signal_id="daily_recommendations_latest",
         label="오늘 추천 최신성",
@@ -121,6 +134,7 @@ def _recommendation_signal(settings: Settings) -> dict[str, Any]:
         flow_id="daily_recommendations",
         next_action="python tools\\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1",
         detail={"selected_count": selected_count, "last_run_date": last_run_date, "expected_dates": sorted(expected_dates)},
+        score=score,
     )
 
 
@@ -147,6 +161,7 @@ def _storage_quality_signal(settings: Settings) -> dict[str, Any]:
         if has_ocr_issue and active:
             ocr_needed.append(rel)
     issue_count = len(body_missing) + len(ocr_needed)
+    score = max(0.0, 100.0 - issue_count * 20.0)
     return _signal(
         signal_id="storage_quality_open_issues",
         label="저장 자료 품질",
@@ -166,6 +181,7 @@ def _storage_quality_signal(settings: Settings) -> dict[str, Any]:
             "sample_body_missing": body_missing[:5],
             "sample_ocr_needed": ocr_needed[:5],
         },
+        score=score,
     )
 
 
@@ -177,6 +193,9 @@ def _source_automation_signal(settings: Settings) -> dict[str, Any]:
     duplicate_failures = int(duplicate.get("failed_count") or 0) if isinstance(duplicate, dict) else 0
     status = str(automation.get("status") or "").lower()
     ok = failures == 0 and duplicate_failures == 0 and status not in {"error", "failed"}
+    score = max(0.0, 100.0 - (failures + duplicate_failures) * 25.0)
+    if status in {"error", "failed"}:
+        score = min(score, 50.0)
     return _signal(
         signal_id="source_automation_failures",
         label="소스 자동화 실패",
@@ -189,6 +208,7 @@ def _source_automation_signal(settings: Settings) -> dict[str, Any]:
         flow_id="source_automation",
         next_action="python tools\\check_research_source_store.py --strict",
         detail={"status": status or "unknown", "failed_count": failures, "dossier_failed_count": duplicate_failures},
+        score=score,
     )
 
 
@@ -209,6 +229,7 @@ def _portfolio_signal(settings: Settings) -> dict[str, Any]:
             if str(item.get("sync_status") or item.get("sync_state") or "").lower() == "manual_or_overseas_protected"
         )
     ok = holdings_count > 0
+    score = 100.0 if ok else 30.0
     return _signal(
         signal_id="portfolio_quantity_guard",
         label="포트폴리오 수량 보호",
@@ -221,11 +242,13 @@ def _portfolio_signal(settings: Settings) -> dict[str, Any]:
         flow_id="portfolio_realtime",
         next_action="python tools\\check_portfolio_store.py --portfolio 이형주 --expected-holdings-count 17 --forbid-zero",
         detail={"portfolio_count": len(portfolios), "holdings_count": holdings_count, "protected_count": protected_count},
+        score=score,
     )
 
 
 def _graph_flow_signal(flows: list[dict[str, Any]]) -> dict[str, Any]:
     needing = [flow for flow in flows if flow.get("status") != "ok"]
+    score = 100.0 if not flows else (len(flows) - len(needing)) / len(flows) * 100.0
     return _signal(
         signal_id="code_graph_flow_integrity",
         label="운영 흐름 연결",
@@ -238,6 +261,7 @@ def _graph_flow_signal(flows: list[dict[str, Any]]) -> dict[str, Any]:
         flow_id="backend_module_health",
         next_action="python tools\\check_code_knowledge_graph.py --strict",
         detail={"flow_count": len(flows), "needing_review": [flow.get("id") for flow in needing]},
+        score=score,
     )
 
 
@@ -267,6 +291,14 @@ def build_code_knowledge_graph_payload(settings: Settings) -> dict[str, Any]:
         "warning": sum(1 for item in signals if item.get("status") == "warning"),
         "error": sum(1 for item in signals if item.get("status") == "error"),
     }
+    readiness_score = round(sum(float(item.get("score") or 0) for item in signals) / len(signals), 1) if signals else 0.0
+    operation_readiness = {
+        "score": readiness_score,
+        "target_score": 95.0,
+        "is_target_met": readiness_score >= 95.0 and signal_summary["error"] == 0,
+        "label": "95% 이상" if readiness_score >= 95.0 else "보강 필요",
+        "next_action": "주의 신호를 먼저 해소하세요." if signal_summary["warning"] or signal_summary["error"] else "운영 기준을 유지하면서 정기 점검을 계속하세요.",
+    }
     return {
         "status": "success" if signal_summary["error"] == 0 else "warning",
         "module": "code_knowledge_graph",
@@ -277,6 +309,7 @@ def build_code_knowledge_graph_payload(settings: Settings) -> dict[str, Any]:
         "flows": flows,
         "operation_signals": signals,
         "signal_summary": signal_summary,
+        "operation_readiness": operation_readiness,
         "storage_path": str(graph_path),
-        "message": f"운영 흐름 {sum(1 for item in flows if item.get('status') == 'ok')}/{len(flows)}개가 코드 그래프에 연결되어 있습니다. 운영 신호 {signal_summary['ok']}/{len(signals)}개 정상입니다.",
+        "message": f"운영 흐름 {sum(1 for item in flows if item.get('status') == 'ok')}/{len(flows)}개가 코드 그래프에 연결되어 있습니다. 운영 신호 {signal_summary['ok']}/{len(signals)}개 정상, 준비도 {readiness_score:.1f}%입니다.",
     }

@@ -802,6 +802,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       return text.includes("시스템 구조 맵") &&
                         text.includes("운영 흐름") &&
                         text.includes("노드/엣지") &&
+                        text.includes("운영 준비도") &&
                         text.includes("운영 주의 신호") &&
                         text.includes("백엔드 모듈 헬스")
                         ? text
@@ -1028,6 +1029,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     codeKnowledgeGraphShowsFlows:
                       codeKnowledgeGraphText.includes("시스템 구조 맵") &&
                       codeKnowledgeGraphText.includes("운영 흐름") &&
+                      codeKnowledgeGraphText.includes("운영 준비도") &&
                       codeKnowledgeGraphText.includes("운영 주의 신호") &&
                       codeKnowledgeGraphText.includes("백엔드 모듈 헬스"),
                     memoryFilterResults,
