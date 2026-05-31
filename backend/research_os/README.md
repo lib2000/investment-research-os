@@ -20,6 +20,7 @@
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_extraction.py`: 첨부 파일명 정리, base64 디코딩, PDF/OCR/Office/텍스트/표 본문 추출 유틸
 - `web_capture.py`: 웹 URL 안전성, HTML 본문 추출, 네트워크 재시도/fallback, 언어 감지, 로컬 한국어 분석 메모 변환, URL-only 보관 문구 유틸
+- `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 사후 추적표, 추천 후보 저장 품질 점수 보정 유틸
 
 ## 장기 분리 기준
 

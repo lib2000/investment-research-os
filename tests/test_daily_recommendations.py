@@ -3,6 +3,8 @@ import sys
 from datetime import date, datetime
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
@@ -243,6 +245,51 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertIn("중복 의심 자료는 대표 자료만 근거로 사용", candidate["quality_flags"])
         self.assertIn("본문/OCR 보강 전 투자 근거 가중치 제한", candidate["quality_flags"])
         self.assertTrue(candidate["evidence_sources"][0].startswith("저장 품질:"))
+
+    def test_daily_recommendation_candidate_ranking_uses_split_quality_helpers(self):
+        import research_os_main as main
+
+        settings = Settings(research_vault_dir="../research_vault")
+        consensus_scan = {
+            "summary": "테스트 후보 1개",
+            "warnings": [],
+            "as_of": "2026-05-31T09:00:00+09:00",
+            "price_refresh_mode": "test",
+            "rows": [
+                {
+                    "ticker": "003230",
+                    "company_name": "삼양식품",
+                    "current_price": 100000,
+                    "price_source": "test",
+                    "target_upside": 0.2,
+                    "valuation_signal": "저평가",
+                    "source_count": 2,
+                    "market_value": 12000000,
+                }
+            ],
+        }
+
+        with (
+            patch.object(main, "read_manifest", return_value=[{"ticker": "003230", "date": "2026-05-31"}]),
+            patch.object(main, "read_dart_filing_cache", return_value={}),
+            patch.object(main, "build_interest_automation_board", return_value={"ticker_targets": []}),
+            patch.object(main, "build_target_consensus_scan", return_value=consensus_scan),
+            patch.object(
+                main,
+                "verify_ticker_symbol_local_cached",
+                return_value=SimpleNamespace(official_symbol="003230", company_name="삼양식품"),
+            ),
+            patch.object(main, "official_ticker_profile", return_value={"analysis_focus": "실적과 해외 성장"}),
+            patch.object(main, "build_ticker_freshness_status", return_value={"tone": "ok", "summary": "저장자료 신선도 양호"}),
+        ):
+            result = main.build_daily_recommendation_candidates(settings, limit=3)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["selected_count"], 1)
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["company_name"], "삼양식품")
+        self.assertIn("검증 저장자료 품질", [item["label"] for item in candidate["score_components"]])
+        self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):
         import research_os_main as main

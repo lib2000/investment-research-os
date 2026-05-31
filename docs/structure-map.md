@@ -40,7 +40,7 @@
 |---|---|---|
 | `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
 | `backend\research_os\customs_trade.py` | 관세청 수출입 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
-| `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표 | `check_daily_recommendations_store.py` |
+| `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
 | `backend\research_os\data_providers.py` | KIS/OpenDART/가격/외부 데이터 프로바이더 호출 | `check_backend_runtime_env.py` |
 | `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
