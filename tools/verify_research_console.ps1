@@ -43,6 +43,75 @@ $env:PYTHONIOENCODING = "utf-8"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 
+function Convert-ToWslPath {
+  param([string]$Path)
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  if ($fullPath -match '^([A-Za-z]):\\(.*)$') {
+    $drive = $Matches[1].ToLowerInvariant()
+    $rest = $Matches[2] -replace '\\', '/'
+    return "/mnt/$drive/$rest"
+  }
+  return $fullPath -replace '\\', '/'
+}
+
+function Convert-ToolArgsForWsl {
+  param([object[]]$Values)
+  return @(
+    $Values | ForEach-Object {
+      if ($_ -is [string]) { $_ -replace '\\', '/' } else { $_ }
+    }
+  )
+}
+
+function Resolve-VerifyPython {
+  $nativePython = Join-Path $ProjectRootPath ".venv\Scripts\python.exe"
+  if (Test-Path -LiteralPath $nativePython) {
+    return @{ Mode = "native"; Command = $nativePython }
+  }
+  $wslPython = Join-Path $ProjectRootPath ".venv\bin\python"
+  $wslCommand = Get-Command wsl.exe -ErrorAction SilentlyContinue
+  if ((Test-Path -LiteralPath $wslPython) -and $null -ne $wslCommand) {
+    return @{ Mode = "wsl"; Command = $wslCommand.Source; Cwd = (Convert-ToWslPath $ProjectRootPath); Runtime = ".venv/bin/python" }
+  }
+  $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+  if ($null -ne $pythonCommand) {
+    return @{ Mode = "native"; Command = $pythonCommand.Source }
+  }
+  throw "Python 실행 파일을 찾지 못했습니다. .venv를 만들거나 Python을 PATH에 추가하세요."
+}
+
+$script:PythonRuntime = Resolve-VerifyPython
+function python {
+  $pythonArgs = Convert-ToolArgsForWsl -Values $args
+  if ($script:PythonRuntime.Mode -eq "wsl") {
+    & $script:PythonRuntime.Command --cd $script:PythonRuntime.Cwd $script:PythonRuntime.Runtime @pythonArgs
+  } else {
+    & $script:PythonRuntime.Command @args
+  }
+}
+
+function Resolve-VerifyNode {
+  $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+  if ($null -ne $nodeCommand) {
+    return @{ Mode = "native"; Command = $nodeCommand.Source }
+  }
+  $wslCommand = Get-Command wsl.exe -ErrorAction SilentlyContinue
+  if ($null -ne $wslCommand) {
+    return @{ Mode = "wsl"; Command = $wslCommand.Source; Cwd = (Convert-ToWslPath $ProjectRootPath) }
+  }
+  throw "Node 실행 파일을 찾지 못했습니다. Node를 PATH에 추가하거나 WSL Node를 사용할 수 있게 하세요."
+}
+
+$script:NodeRuntime = Resolve-VerifyNode
+function node {
+  $nodeArgs = Convert-ToolArgsForWsl -Values $args
+  if ($script:NodeRuntime.Mode -eq "wsl") {
+    & $script:NodeRuntime.Command --cd $script:NodeRuntime.Cwd node @nodeArgs
+  } else {
+    & $script:NodeRuntime.Command @args
+  }
+}
+
 function Invoke-VerifyStep {
   param(
     [string]$Name,
