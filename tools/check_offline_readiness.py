@@ -13,6 +13,7 @@ CHECKS = [
     ("백엔드 런타임 준비도", ["tools/check_backend_runtime_env.py"]),
     ("백엔드 모듈 상태", ["tools/check_backend_module_health.py", "--strict"]),
     ("코드 지식 그래프", ["tools/check_code_knowledge_graph.py", "--strict"]),
+    ("변경 영향 분석", ["tools/analyze_code_diff_impact.py", "--refresh", "--strict"]),
     ("클래식 콘솔 정적 계약", ["tools/check_console_static_contract.py", "--strict"]),
     ("클래식 콘솔 자산/JS", ["tools/check_console_asset_and_js.py"]),
     (

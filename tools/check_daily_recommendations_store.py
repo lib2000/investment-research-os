@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -135,6 +135,25 @@ def local_today() -> date:
     return datetime.now(LOCAL_TIMEZONE).date()
 
 
+def parse_hhmm(value: str | None, default: time) -> time:
+    if not value:
+        return default
+    try:
+        hour, minute = [int(part) for part in str(value).split(":", 1)]
+        return time(hour=hour, minute=minute)
+    except (TypeError, ValueError):
+        return default
+
+
+def before_daily_run(daily_time: str | None) -> bool:
+    return datetime.now(LOCAL_TIMEZONE).time() < parse_hhmm(daily_time, time(hour=9))
+
+
+def baseline_age_limit_hours(args: argparse.Namespace, latest_age_days: int | None) -> float:
+    if latest_age_days == 1 and before_daily_run(args.daily_time):
+        return max(float(args.max_baseline_age_hours), 36.0)
+    return float(args.max_baseline_age_hours)
+
 def validate_tracking_milestones(record: dict[str, Any], errors: list[str]) -> None:
     label = record.get("company_name") or record.get("ticker") or record.get("record_id")
     recommendation_date = parse_iso_date(record.get("recommendation_date"))
@@ -198,6 +217,7 @@ def main() -> int:
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
     parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
+    parser.add_argument("--daily-time", default="09:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -259,6 +279,8 @@ def main() -> int:
     if not str(state.get("last_tracking_at") or "").strip():
         errors.append("매일 추천 마지막 추적 시각 누락")
 
+    baseline_limit_hours = baseline_age_limit_hours(args, latest_age_days)
+
     if args.require_quality:
         expected_ranks = set(range(1, args.min_latest + 1))
         actual_ranks = {record_rank(record) for record in latest[: args.min_latest]}
@@ -288,6 +310,7 @@ def main() -> int:
             evidence = non_empty_strings(record.get("evidence_sources"))
             risk_notes = non_empty_strings(record.get("risk_notes"))
             quality_flags = non_empty_strings(record.get("quality_flags"))
+            score_components = record.get("score_components") if isinstance(record.get("score_components"), list) else []
             currency = str(record.get("currency") or "KRW").upper()
             overseas_tracking = record.get("overseas_tracking")
             portfolio_risk = record.get("portfolio_risk_connection")
@@ -301,14 +324,26 @@ def main() -> int:
             if checked_at[:10] != latest_date:
                 errors.append(f"{label} 기준가 조회일 불일치 또는 누락: {checked_at}")
             baseline_age = age_hours(checked_at)
-            if baseline_age is None or baseline_age > args.max_baseline_age_hours:
+            if baseline_age is None or baseline_age > baseline_limit_hours:
                 errors.append(
-                    f"{label} 기준가 조회 시각 오래됨/누락: {checked_at or '미확인'} / 허용 {args.max_baseline_age_hours:g}시간"
+                    f"{label} 기준가 조회 시각 오래됨/누락: {checked_at or '미확인'} / 허용 {baseline_limit_hours:g}시간"
                 )
             if record.get("baseline_price") in (None, ""):
                 errors.append(f"{label} 기준가 누락")
             if not record.get("baseline_price_source"):
                 errors.append(f"{label} 기준가 출처 누락")
+            if len(score_components) < 3:
+                errors.append(f"{label} 점수 구성 부족: {len(score_components)}개 / 최소 3개")
+            for index, component in enumerate(score_components, start=1):
+                if not isinstance(component, dict):
+                    errors.append(f"{label} 점수 구성 {index} 형식 오류")
+                    continue
+                component_label = str(component.get("label") or component.get("name") or "").strip()
+                component_points = component.get("points", component.get("score", component.get("value")))
+                if not component_label:
+                    errors.append(f"{label} 점수 구성 {index} 이름 누락")
+                if not isinstance(component_points, (int, float)):
+                    errors.append(f"{label} 점수 구성 {index} 점수 누락")
             if len(reasons) < 2:
                 errors.append(f"{label} 추천 사유 부족: {len(reasons)}개")
             if len(evidence) < 2:
@@ -356,8 +391,9 @@ def main() -> int:
         evidence_count = len(evidence)
         evidence_categories = len(evidence_category_names(evidence))
         nearest = nearest_milestone_label(record)
+        score_component_count = len(record.get("score_components") or [])
         print(
-            f"{record_rank(record)}위 {company} | 점수 {score} | "
+            f"{record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
             f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}"
         )
 

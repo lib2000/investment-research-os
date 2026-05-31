@@ -25,6 +25,7 @@ REQUIRED_NODE_IDS = {
     "file:backend/research_os/daily_recommendations.py",
     "file:backend/research_os/rag_memory.py",
     "file:backend/research_os/portfolio_store.py",
+    "file:backend/research_os/code_knowledge.py",
     "file:mobile_app/research_console/console.js",
     "file:mobile_app/research_console/index.html",
     "file:tools/check_offline_readiness.py",

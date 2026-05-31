@@ -11949,6 +11949,13 @@ function codeKnowledgeGraphOutput(result = {}) {
     const files = (flow.sample_files || []).slice(0, 4).join(", ");
     return `- ${flow.label || flow.id}: ${status} · 연결 파일 ${flow.matched_file_count || 0}개${files ? ` · 예: ${files}` : ""}`;
   });
+  const signals = Array.isArray(result.operation_signals) ? result.operation_signals : [];
+  const signalSummary = result.signal_summary || {};
+  const signalLines = signals.map((signal) => {
+    const status = signal.status === "ok" ? "정상" : signal.status === "error" ? "오류" : "주의";
+    const nextAction = signal.next_action ? ` · 다음: ${signal.next_action}` : "";
+    return `- ${signal.label || signal.id}: ${status} · ${signal.message || "상태 메시지 없음"}${nextAction}`;
+  });
   return [
     "# 시스템 구조 맵",
     "",
@@ -11960,6 +11967,10 @@ function codeKnowledgeGraphOutput(result = {}) {
     "",
     "## 운영 흐름 연결",
     ...(flowLines.length ? flowLines : ["- 표시할 운영 흐름이 없습니다."]),
+    "",
+    "## 운영 주의 신호",
+    `정상 ${formatNumber(signalSummary.ok || 0)}개 · 주의 ${formatNumber(signalSummary.warning || 0)}개 · 오류 ${formatNumber(signalSummary.error || 0)}개`,
+    ...(signalLines.length ? signalLines : ["- 표시할 운영 신호가 없습니다."]),
     "",
     "## 파일 계층",
     layerLines || "- 계층 요약 없음",
@@ -11976,6 +11987,7 @@ elements.codeKnowledgeGraphButton?.addEventListener("click", async () => {
   startOutputLoading("시스템 구조 맵 조회 중", [
     "코드 지식 그래프 읽기",
     "운영 흐름 연결 상태 확인",
+    "추천·저장품질·포트폴리오 운영 신호 요약",
     "파일 계층과 API/버튼 관계 요약",
   ]);
   try {

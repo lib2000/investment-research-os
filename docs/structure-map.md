@@ -72,7 +72,7 @@ Understand-Anything류의 코드 이해 방식을 로컬 운영에 맞춰 가볍
 ```powershell
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict
-python tools\analyze_code_diff_impact.py --refresh
+python tools\analyze_code_diff_impact.py --refresh --strict
 ```
 
 그래프는 아래 운영 흐름을 코드 파일, API route, 콘솔 API 호출, DOM 버튼과 연결합니다.
@@ -87,7 +87,7 @@ python tools\analyze_code_diff_impact.py --refresh
 | 콘솔 클릭/쓰기 회귀 | 버튼 피드백, 쓰기 액션, 메뉴 스모크 영향 확인 |
 | 백엔드 모듈 헬스/구조 안정화 | main 파일 비대화, 모듈 경계, 운영 가드 영향 확인 |
 
-Classic Research Console의 저장 데이터 탭에는 `시스템 구조 맵` 버튼이 있으며, 생성된 그래프의 노드/엣지 수와 운영 흐름 연결 상태를 한국어로 보여줍니다. 구조 변경 전에는 `python tools\analyze_code_diff_impact.py --refresh`로 어떤 운영 흐름을 다시 검증해야 하는지 먼저 확인합니다.
+Classic Research Console의 저장 데이터 탭에는 `시스템 구조 맵` 버튼이 있으며, 생성된 그래프의 노드/엣지 수, 운영 흐름 연결 상태, 추천/저장품질/소스/포트폴리오 운영 주의 신호를 한국어로 보여줍니다. 구조 변경 전에는 `python tools\analyze_code_diff_impact.py --refresh`로 어떤 운영 흐름을 다시 검증해야 하는지 먼저 확인합니다.
 
 ## 실행 가드
 

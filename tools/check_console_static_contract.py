@@ -24,6 +24,7 @@ REQUIRED_IDS = {
     "llmResultForm",
     "llmStorageStatusButton",
     "researchAutomationStatusButton",
+    "codeKnowledgeGraphButton",
     "output",
     "outputStatus",
 }
@@ -79,6 +80,7 @@ REQUIRED_FEEDBACK_BUTTON_IDS = {
     "dailyBriefButton",
     "researchAutomationButton",
     "researchAutomationStatusButton",
+    "codeKnowledgeGraphButton",
     "ragBackfillButton",
     "ocrReprocessButton",
     "storageCleanupButton",
@@ -116,6 +118,7 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_progress_graph": "경과 그래프",
     "daily_recommendation_short_label_helper": "dailyRecommendationMilestoneShortLabel",
     "daily_recommendation_tone_helper": "dailyRecommendationMilestoneTone",
+    "code_knowledge_signal_output": "운영 주의 신호",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
