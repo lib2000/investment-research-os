@@ -29,6 +29,8 @@ SCAN_GLOBS = [
     "mobile_app/research_console/*.html",
     "tools/*.py",
     "tools/*.ps1",
+    "scripts/*.ps1",
+    "README.md",
     "docs/structure-map.md",
     "docs/operations-readiness.md",
     "docs/testing.md",
@@ -76,8 +78,8 @@ FLOW_DEFINITIONS = {
     },
     "backend_module_health": {
         "label": "백엔드 모듈 헬스/구조 안정화",
-        "keywords": ["check_backend_module_health", "research_os_main", "requirements", "fastapi", "코드 지식 그래프", "구조 지도"],
-        "expected_files": ["backend/research_os/code_knowledge.py", "backend/requirements.txt", "tools/check_backend_module_health.py", "tools/check_offline_readiness.py", "docs/structure-map.md"],
+        "keywords": ["check_backend_module_health", "research_os_main", "requirements", "fastapi", "start-research-backend", "백엔드 실행", "코드 지식 그래프", "구조 지도"],
+        "expected_files": ["backend/research_os/code_knowledge.py", "backend/requirements.txt", "scripts/start-research-backend.ps1", "tools/check_backend_module_health.py", "tools/check_offline_readiness.py", "docs/structure-map.md"],
     },
 }
 

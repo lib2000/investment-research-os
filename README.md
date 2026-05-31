@@ -109,6 +109,12 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\scripts\start-research-backend.ps1
 ```
 
+`python`이 PATH에 없으면 Windows 가상환경이나 설치된 Python을 직접 지정합니다.
+
+```powershell
+.\scripts\start-research-backend.ps1 -PythonExe C:\Path\To\python.exe -Port 8001
+```
+
 API 문서:
 
 ```text

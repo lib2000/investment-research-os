@@ -13,6 +13,8 @@ $contracts = @(
       'assert_project_root.ps1',
       'research_os_main.py',
       'research_os_main:app',
+      'Resolve-BackendPython',
+      '-PythonExe',
       'Get-Command netstat',
       '-StopExistingPortProcess'
     )
@@ -356,11 +358,24 @@ $contracts = @(
       '포트폴리오 분석 모듈 커버리지',
       '--write-backlog',
       'portfolio_analysis_backlog.json',
-      'team_report',
-      'smart-trade-setup',
+      'portfolio_analysis_module_state',
+      'portfolio_analysis_next_action',
       '포트폴리오 분석 커버리지 점검 정상'
     )
   },
+
+
+  @{
+    Path = "backend\research_os\portfolio_analysis_coverage.py"
+    Snippets = @(
+      'REQUIRED_PORTFOLIO_ANALYSIS_MODULES',
+      'team_report',
+      'smart-trade-setup',
+      'missing_portfolio_analysis_labels',
+      'portfolio_analysis_next_action'
+    )
+  },
+
 
 
 

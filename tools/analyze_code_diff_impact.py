@@ -73,6 +73,8 @@ def fallback_flow_ids(path: str) -> set[str]:
         if path.endswith("api.js") or path.endswith("console.js") or path.endswith("index.html"):
             ids.update({"daily_recommendations", "research_storage_rag", "portfolio_realtime", "source_automation", "classification_quality"})
         return ids
+    if path == "README.md" or path.startswith("scripts/"):
+        return {"backend_module_health"}
     if path.startswith("tools/"):
         ids = {"backend_module_health"}
         lower = path.lower()
@@ -123,7 +125,7 @@ def main() -> int:
     graph = load_graph(root, args.graph, refresh=args.refresh)
     files = changed_files(root, args.base)
     known_files = file_nodes(graph)
-    relevant = [path for path in files if path.startswith(("backend/", "mobile_app/", "tools/", "docs/"))]
+    relevant = [path for path in files if path == "README.md" or path.startswith(("backend/", "mobile_app/", "tools/", "scripts/", "docs/"))]
     unmapped = [path for path in relevant if path not in known_files]
     flow_hits: dict[str, dict] = {}
     file_impacts: list[tuple[str, list[dict]]] = []
