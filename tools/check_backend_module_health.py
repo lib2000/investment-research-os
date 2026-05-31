@@ -7,6 +7,7 @@ import ast
 from pathlib import Path
 
 EXPECTED_MODULES = {
+    "classification.py",
     "brokerage.py",
     "customs_trade.py",
     "daily_recommendations.py",
@@ -34,6 +35,7 @@ EXPECTED_MODULES = {
     "web_capture.py",
 }
 EXPECTED_MAIN_IMPORTS = {
+    "research_os.classification",
     "research_os.brokerage",
     "research_os.customs_trade",
     "research_os.daily_recommendations",

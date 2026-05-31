@@ -14,6 +14,7 @@
 ## 현재 분리된 모듈
 
 - `models.py`: API 입출력 모델과 도메인 스키마
+- `classification.py`: 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 유틸
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
 - `rag_memory.py`: RAG 문서와 thesis snapshot 색인/검색
 - `data_providers.py`: 외부 데이터 프로바이더 클라이언트

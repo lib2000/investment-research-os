@@ -32,12 +32,13 @@
 3. 외부 API 호출과 파일 저장은 서비스 함수로 분리하고, 라우터는 요청/응답 조립만 담당하게 합니다.
 4. 각 분리 단계마다 기존 Classic Research Console의 API 호출이 깨지지 않는지 확인합니다.
 
-운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-05-31 기준 `research_os_main.py`는 23,872줄이고, 스크립트는 도메인 모듈 최소 24개, 메인 파일 26,000줄 상한, 핵심 분리 모듈의 파일 존재와 `research_os_main.py` import 연결을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
+운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-05-31 기준 `research_os_main.py`는 23,869줄이고, 스크립트는 도메인 모듈 최소 24개, 메인 파일 26,000줄 상한, 핵심 분리 모듈의 파일 존재와 `research_os_main.py` import 연결을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
 
 현재 분리된 도메인 모듈은 아래와 같습니다.
 
 | 모듈 | 역할 | 대표 회귀 테스트 |
 |---|---|---|
+| `backend\research_os\classification.py` | 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 | `check_classification_quality.py` |
 | `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
 | `backend\research_os\customs_trade.py` | 관세청 수출입 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
 | `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
