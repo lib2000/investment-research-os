@@ -87,7 +87,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=3f4c1b7a9d21";
+} from "./api.js?v=8b0f51c2e7aa";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -13093,6 +13093,21 @@ function formatKoreanResult(value) {
       ``,
       `### 다음 액션`,
       ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180)),
+    ].join("\n");
+  }
+
+  if (value.module === "recent_weekly_research_brief_route_missing") {
+    return [
+      `### 최근 1주 자료를 바로 불러오지 못했습니다`,
+      ``,
+      `- **상태:** 백엔드 재시작 필요`,
+      `- **원인:** ${value.message || "실행 중인 백엔드에 최신 API가 없습니다."}`,
+      `- **요청 경로:** ${value.requested_path || "미확인"}`,
+      ``,
+      `### 조치 방법`,
+      ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180)),
+      ``,
+      `백엔드를 재시작하면 보유/관심종목 기준 최근 공시, 리포트, 수출입 자료가 이 화면에 표시됩니다.`,
     ].join("\n");
   }
 

@@ -231,7 +231,7 @@ export async function fetchDartFilingWatchStatus(accessToken) {
  */
 export async function refreshDartFilingWatch(accessToken, options = {}) {
   try {
-    return request("/api/v1/dart/filings/refresh", {
+    return await request("/api/v1/dart/filings/refresh", {
       method: "POST",
       accessToken,
       body: JSON.stringify({
@@ -259,13 +259,26 @@ export async function fetchRecentWeeklyResearchBrief(accessToken, options = {}) 
   params.set("days", String(options.days || 7));
   params.set("refresh_if_due", options.refreshIfDue === false ? "false" : "true");
   try {
-    return request(`/api/v1/research/recent-weekly-brief?${params.toString()}`, {
+    return await request(`/api/v1/research/recent-weekly-brief?${params.toString()}`, {
       method: "GET",
       accessToken,
       timeoutMs: 45000,
     });
   } catch (error) {
     console.error("최근 1주일 리서치 브리프를 불러오는 중 오류 발생:", error);
+    if (error?.status === 404) {
+      return {
+        status: "route_missing",
+        module: "recent_weekly_research_brief_route_missing",
+        message: "실행 중인 백엔드가 최근 1주 자료 API를 아직 반영하지 않았습니다.",
+        requested_path: `/api/v1/research/recent-weekly-brief?${params.toString()}`,
+        next_actions: [
+          "백엔드를 최신 코드로 재시작하세요.",
+          "PowerShell에서 C:\\Users\\lib20\\InvestmentJournalApp 이동 후 .\\scripts\\start-research-backend.ps1 -Port 8001을 실행하세요.",
+          "브라우저를 새로고침한 뒤 최근 1주 자료 버튼을 다시 누르세요.",
+        ],
+      };
+    }
     return null;
   }
 }
