@@ -14139,6 +14139,7 @@ def recent_activity_target_terms(settings: Settings) -> dict:
     tickers: set[str] = set()
     names: set[str] = set()
     sectors: set[str] = set()
+    ticker_names: dict[str, str] = {}
     try:
         store = read_portfolio_store(settings)
         for portfolio in (store.get("portfolios") or {}).values():
@@ -14153,6 +14154,8 @@ def recent_activity_target_terms(settings: Settings) -> dict:
                 name = str(holding.get("name") or holding.get("company_name") or "").strip()
                 if name:
                     names.add(name)
+                    if ticker:
+                        ticker_names[ticker] = name
     except Exception:
         pass
     try:
@@ -14172,6 +14175,8 @@ def recent_activity_target_terms(settings: Settings) -> dict:
             ).strip()
             if name:
                 names.add(name)
+                if ticker:
+                    ticker_names[ticker] = name
         for item in interests.get("sectors", []):
             if not isinstance(item, dict):
                 continue
@@ -14180,7 +14185,13 @@ def recent_activity_target_terms(settings: Settings) -> dict:
                 sectors.add(sector)
     except Exception:
         pass
-    return {"tickers": sorted(tickers), "names": sorted(names), "sectors": sorted(sectors)}
+    return {
+        "tickers": sorted(tickers),
+        "names": sorted(names),
+        "sectors": sorted(sectors),
+        "ticker_names": ticker_names,
+        "ticker_set": set(tickers),
+    }
 
 
 def recent_activity_cutoff(days: int) -> date:
@@ -14199,8 +14210,9 @@ def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | Non
     )
     text += " " + " ".join(tags)
     related_targets: list[str] = []
-    if ticker and ticker in set(target_terms.get("tickers") or []):
-        related_targets.append(ticker_company_name(ticker))
+    ticker_names = target_terms.get("ticker_names") or {}
+    if ticker and ticker in (target_terms.get("ticker_set") or set(target_terms.get("tickers") or [])):
+        related_targets.append(ticker_names.get(ticker) or ticker)
     for name in target_terms.get("names") or []:
         if name and name in text and name not in related_targets:
             related_targets.append(name)
@@ -14226,7 +14238,7 @@ def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | Non
         "category": category,
         "date": entry_date.isoformat(),
         "ticker": ticker,
-        "company_name": ticker_company_name(ticker) if ticker else (related_targets[0] if related_targets else "시장/섹터 공통"),
+        "company_name": ticker_names.get(ticker) or (related_targets[0] if related_targets else "시장/섹터 공통"),
         "report_type": report_type or "research",
         "source_type": source_type,
         "summary": entry.get("summary") or entry.get("file_name") or "요약 없음",
@@ -14251,7 +14263,7 @@ def compact_recent_dart_entry(entry: dict) -> dict | None:
         "category": "filing",
         "date": entry_date.isoformat(),
         "ticker": ticker,
-        "company_name": filing.get("corp_name") or entry.get("corp_name") or ticker_company_name(ticker),
+        "company_name": filing.get("corp_name") or entry.get("corp_name") or ticker,
         "report_type": "dart-filing-watch",
         "source_type": "official_filing",
         "summary": filing.get("report_name") or filing.get("report_nm") or "DART 공시",
@@ -14263,7 +14275,7 @@ def compact_recent_dart_entry(entry: dict) -> dict | None:
             if filing.get("rcept_no")
             else None
         ),
-        "related_targets": [filing.get("corp_name") or ticker_company_name(ticker)],
+        "related_targets": [filing.get("corp_name") or ticker],
         "tags": entry.get("tags") or [],
     }
 
