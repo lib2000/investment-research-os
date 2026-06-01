@@ -16,7 +16,11 @@ $contracts = @(
       'Resolve-BackendPython',
       '-PythonExe',
       'Get-Command netstat',
-      '-StopExistingPortProcess'
+      '-StopExistingPortProcess',
+      'Get-CimInstance Win32_Process',
+      'Test-ResearchBackendCommandLine',
+      'Stop-ResearchBackendProcesses',
+      '중복 백엔드 프로세스 정리'
     )
   },
   @{
@@ -29,7 +33,12 @@ $contracts = @(
       '/console/index.html',
       'RedirectStandardOutput',
       'RedirectStandardError',
-      '재시작 확인 완료'
+      '재시작 확인 완료',
+      'Get-CimInstance Win32_Process',
+      'Get-PortOwningProcessIds',
+      'Assert-SingleResearchBackendListener',
+      '백엔드 포트 단일성 확인 완료',
+      '중복 백엔드 프로세스 정리'
     )
   },
   @{

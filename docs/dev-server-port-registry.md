@@ -37,6 +37,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\scripts\restart-research-backend.ps1 -Port 8001
 ```
 
+재시작 스크립트는 `research_os_main:app --port 8001`로 떠 있는 중복 백엔드 프로세스를 먼저 정리하고, health/콘솔 응답 뒤 8001 리스너가 하나만 남았는지 확인합니다.
+
 주의: `8001` 연구 콘솔은 `research_os_main:app` 진입점입니다. `tools\restart_backend_verified.ps1`는 `main:app` 기반 모바일/API 백엔드 검증용이므로 연구 콘솔 8001 재시작에는 사용하지 않습니다.
 
 연구 콘솔 백엔드가 정상인지 빠르게 볼 때는 읽기 전용 헬스 엔드포인트를 확인합니다.

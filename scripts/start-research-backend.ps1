@@ -88,6 +88,47 @@ function Get-PortOwningProcessIds {
   return @($processIds | Sort-Object -Unique)
 }
 
+function Test-ResearchBackendCommandLine {
+  param(
+    [string]$CommandLine,
+    [int]$LocalPort
+  )
+
+  if ([string]::IsNullOrWhiteSpace($CommandLine)) {
+    return $false
+  }
+
+  $portPattern = "(^|\s)--port\s+$LocalPort(\s|$)"
+  return ($CommandLine -like "*uvicorn*" -and
+    $CommandLine -like "*research_os_main:app*" -and
+    $CommandLine -match $portPattern)
+}
+
+function Get-ResearchBackendProcessInfo {
+  param([int]$LocalPort)
+
+  return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object { Test-ResearchBackendCommandLine -CommandLine ([string]$_.CommandLine) -LocalPort $LocalPort })
+}
+
+function Stop-ResearchBackendProcesses {
+  param([int]$LocalPort)
+
+  $processes = @(Get-ResearchBackendProcessInfo -LocalPort $LocalPort)
+  foreach ($process in $processes) {
+    try {
+      Write-Host "중복 백엔드 프로세스 정리: PID $($process.ProcessId)"
+      Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+    } catch {
+      Write-Warning "중복 백엔드 프로세스 정리 실패: PID $($process.ProcessId) - $($_.Exception.Message)"
+    }
+  }
+
+  if ($processes.Count -gt 0) {
+    Start-Sleep -Seconds 1
+  }
+}
+
 function Stop-PortProcess {
   param([int]$LocalPort)
 
@@ -121,6 +162,7 @@ function Assert-PortAvailable {
 }
 
 if ($StopExistingPortProcess) {
+  Stop-ResearchBackendProcesses -LocalPort $Port
   Stop-PortProcess -LocalPort $Port
 }
 

@@ -125,6 +125,8 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\scripts\restart-research-backend.ps1 -Port 8001
 ```
 
+`scripts\restart-research-backend.ps1`는 중복 실행된 `research_os_main:app --port 8001` 프로세스까지 정리한 뒤 health, 콘솔 HTML, 백엔드 포트 단일성을 함께 확인합니다.
+
 `python`이 PATH에 없고 `.venv-win`도 없으면 설치된 Python을 직접 지정합니다.
 
 ```powershell
