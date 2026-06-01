@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
@@ -26,6 +26,32 @@ function Add-StatusFailure {
   $script:StatusFailures += $Message
 }
 
+function Get-Utf8ResponseContent {
+  param($Response)
+
+  if ($Response -and $Response.RawContentStream) {
+    try {
+      if ($Response.RawContentStream.CanSeek) {
+        $Response.RawContentStream.Position = 0
+      }
+      $reader = [System.IO.StreamReader]::new(
+        $Response.RawContentStream,
+        [System.Text.UTF8Encoding]::new($false),
+        $true
+      )
+      try {
+        return $reader.ReadToEnd()
+      } finally {
+        $reader.Dispose()
+      }
+    } catch {
+      return [string]$Response.Content
+    }
+  }
+
+  return [string]$Response.Content
+}
+
 function Invoke-JsonStatus {
   param(
     [string]$Name,
@@ -38,7 +64,7 @@ function Invoke-JsonStatus {
   try {
     $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $Headers -UseBasicParsing -TimeoutSec 10
     Write-Host "정상 $Name - $uri"
-    return ($response.Content | ConvertFrom-Json)
+    return (Get-Utf8ResponseContent $response | ConvertFrom-Json)
   } catch {
     if ($Required) {
       Write-Host "실패 $Name - $uri"
@@ -62,8 +88,10 @@ function Invoke-TextStatus {
   $uri = "$BaseUrl$Path"
   try {
     $response = Invoke-WebRequest -Uri $uri -Method Get -UseBasicParsing -TimeoutSec 10
+    $content = Get-Utf8ResponseContent $response
+    $response | Add-Member -NotePropertyName DecodedContentLength -NotePropertyValue $content.Length -Force
     Write-Host "정상 $Name - $uri"
-    if ($RequiredText -and $response.Content -notlike "*$RequiredText*") {
+    if ($RequiredText -and $content -notlike "*$RequiredText*") {
       Write-Host "주의 $Name 응답에 기대 문구가 없습니다: $RequiredText"
       Add-StatusFailure "$Name 응답에 기대 문구가 없습니다: $RequiredText"
     }
@@ -111,7 +139,8 @@ if ($dailyRecommendations) {
   Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
 }
 if ($console) {
-  Write-Host "콘솔 HTML 크기: $($console.RawContentLength) bytes"
+  $consoleSize = if ($console.RawContentLength) { $console.RawContentLength } else { $console.DecodedContentLength }
+  Write-Host "콘솔 HTML 크기: $consoleSize bytes"
 }
 
 Write-Section "점검 요약"
