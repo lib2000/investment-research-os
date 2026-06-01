@@ -20,6 +20,19 @@ $contracts = @(
     )
   },
   @{
+    Path = "scripts\restart-research-backend.ps1"
+    Snippets = @(
+      'assert_project_root.ps1',
+      'start-research-backend.ps1',
+      '-StopExistingPortProcess',
+      '/api/v1/system/health',
+      '/console/index.html',
+      'RedirectStandardOutput',
+      'RedirectStandardError',
+      '재시작 확인 완료'
+    )
+  },
+  @{
     Path = "tools\start_backend.ps1"
     Snippets = @(
       'assert_project_root.ps1',

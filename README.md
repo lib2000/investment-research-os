@@ -118,6 +118,13 @@ C:\Users\lib20\AppData\Local\Programs\Python\Python312\python.exe -m venv .venv-
 .\scripts\start-research-backend.ps1 -Port 8001
 ```
 
+이미 8001 포트가 꼬였거나 `http://127.0.0.1:8001/console/index.html`이 열리지 않으면 재시작 검증 스크립트를 사용합니다. 기존 8001 프로세스를 정리하고 백그라운드로 다시 띄운 뒤 health와 콘솔 HTML 응답을 확인합니다.
+
+```powershell
+cd C:\Users\lib20\InvestmentJournalApp
+.\scripts\restart-research-backend.ps1 -Port 8001
+```
+
 `python`이 PATH에 없고 `.venv-win`도 없으면 설치된 Python을 직접 지정합니다.
 
 ```powershell

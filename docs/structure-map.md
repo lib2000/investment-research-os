@@ -32,7 +32,7 @@
 3. 외부 API 호출과 파일 저장은 서비스 함수로 분리하고, 라우터는 요청/응답 조립만 담당하게 합니다.
 4. 각 분리 단계마다 기존 Classic Research Console의 API 호출이 깨지지 않는지 확인합니다.
 
-운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-06-01 기준 `research_os_main.py`는 23,896줄이고, 스크립트는 도메인 모듈 최소 24개, 메인 파일 26,000줄 상한, 핵심 분리 모듈의 파일 존재와 `research_os_main.py` import 연결을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
+운영 가드는 `python tools\check_backend_module_health.py --strict`입니다. 2026-06-01 기준 `research_os_main.py`는 23,865줄이고, 스크립트는 도메인 모듈 최소 24개, 메인 파일 26,000줄 상한, 핵심 분리 모듈의 파일 존재와 `research_os_main.py` import 연결을 확인합니다. 큰 기능을 추가할 때 main 파일이 상한에 가까워지면 먼저 서비스 함수 또는 라우터 경계로 분리합니다.
 
 현재 분리된 도메인 모듈은 아래와 같습니다.
 
@@ -47,6 +47,7 @@
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
 | `backend\research_os\kcif_reports.py` | KCIF 보고서 메타데이터 수집/시장일지 연결 | `check_research_source_store.py` |
 | `backend\research_os\kiwoom_auth.py` | 키움 인증/토큰 상태 확인 | `smoke_kiwoom_history_live.ps1` |
+| `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
 | `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
 | `backend\research_os\models.py` | FastAPI 요청/응답 모델 | `python -m py_compile backend\research_os_main.py` |

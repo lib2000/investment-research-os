@@ -18,12 +18,14 @@ REQUIRED_FLOW_IDS = {
     "portfolio_realtime",
     "source_automation",
     "classification_quality",
+    "investment_calendar",
     "console_click_regression",
     "backend_module_health",
 }
 REQUIRED_NODE_IDS = {
     "file:backend/research_os_main.py",
     "file:backend/research_os/daily_recommendations.py",
+    "file:backend/research_os/investment_calendar.py",
     "file:backend/research_os/rag_memory.py",
     "file:backend/research_os/portfolio_store.py",
     "file:backend/research_os/code_knowledge.py",

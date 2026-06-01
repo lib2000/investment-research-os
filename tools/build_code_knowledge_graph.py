@@ -72,6 +72,11 @@ FLOW_DEFINITIONS = {
         "keywords": ["classification", "classification_system_tags", "source_type", "자동 분류"],
         "expected_files": ["backend/research_os/classification.py", "tools/check_classification_quality.py"],
     },
+    "investment_calendar": {
+        "label": "투자 캘린더/실적 일정",
+        "keywords": ["investment_calendar", "investment-calendar", "투자 캘린더", "실적발표"],
+        "expected_files": ["backend/research_os/investment_calendar.py", "mobile_app/research_console/console.js"],
+    },
     "console_click_regression": {
         "label": "콘솔 클릭/쓰기 회귀",
         "keywords": ["smoke_research_console", "data-workflow-action", "actionFeedback", "클래식 콘솔"],
