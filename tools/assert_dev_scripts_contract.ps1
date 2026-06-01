@@ -398,6 +398,22 @@ $contracts = @(
 
 
 
+
+  @{
+    Path = "tools\check_investment_calendar_store.py"
+    Snippets = @(
+      '투자 캘린더 저장 파일',
+      'build_investment_calendar_earnings_events',
+      'load_latest_calendar_file_payload',
+      'merge_investment_calendar_events',
+      'earnings_calendar_cache.json',
+      'user_portfolios.json',
+      'interest_list.json',
+      '--min-earnings-events',
+      '실적발표 이벤트 제목 표기 누락',
+      '투자 캘린더 저장/실적발표 상태 정상'
+    )
+  },
   @{
     Path = "tools\check_operational_readiness_score.py"
     Snippets = @(
@@ -407,6 +423,7 @@ $contracts = @(
       'code_knowledge_graph.json',
       'user_portfolios.json',
       'research_automation_status.json',
+      '투자 캘린더/실적 일정',
       '운영 완성도 점검 정상'
     )
   },

@@ -145,6 +145,63 @@ def source_signal(system_dir: Path) -> dict[str, Any]:
     )
 
 
+def investment_calendar_signal(vault_dir: Path) -> dict[str, Any]:
+    calendar_dir = vault_dir / "MARKET-CALENDAR"
+    candidates = sorted(
+        calendar_dir.glob("MARKET-CALENDAR-investment-calendar-*.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return signal(
+            "investment_calendar_store",
+            "투자 캘린더/실적 일정",
+            0.0,
+            "생성된 투자 캘린더 없음",
+            "python tools\\check_investment_calendar_store.py --strict",
+        )
+    latest = candidates[0]
+    payload = load_json(latest, {})
+    monthly = payload.get("monthly") if isinstance(payload.get("monthly"), dict) else {}
+    kr_events = monthly.get("KR") if isinstance(monthly.get("KR"), list) else []
+    us_events = monthly.get("US") if isinstance(monthly.get("US"), list) else []
+    weekly = payload.get("weekly") if isinstance(payload.get("weekly"), dict) else {}
+    earnings_cache = load_json(vault_dir / "_system" / "earnings_calendar_cache.json", {"entries": {}})
+    entries = earnings_cache.get("entries") if isinstance(earnings_cache.get("entries"), dict) else {}
+    month = str(payload.get("calendar_month") or "")
+    earnings_candidates = 0
+    if month:
+        for entry in entries.values():
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("next_earnings_date") or "").startswith(month):
+                earnings_candidates += 1
+                continue
+            for event in entry.get("events") or []:
+                if isinstance(event, dict) and str(event.get("date") or "").startswith(month):
+                    earnings_candidates += 1
+                    break
+    score = 0.0
+    # Generated calendar JSON files may omit status; successful loading plus a valid month is enough.
+    if month and payload.get("status", "ok") == "ok":
+        score += 30.0
+    if kr_events:
+        score += 20.0
+    if us_events:
+        score += 20.0
+    if weekly:
+        score += 10.0
+    if earnings_candidates:
+        score += 20.0
+    return signal(
+        "investment_calendar_store",
+        "투자 캘린더/실적 일정",
+        score,
+        f"{month or '월 미확인'}, 한국 {len(kr_events)}개, 미국 {len(us_events)}개, 실적 후보 {earnings_candidates}개",
+        "python tools\\check_investment_calendar_store.py --strict",
+    )
+
+
 def portfolio_signal(system_dir: Path) -> dict[str, Any]:
     payload = load_json(system_dir / "user_portfolios.json", {"portfolios": {}})
     portfolios = payload.get("portfolios") if isinstance(payload.get("portfolios"), dict) else {}
@@ -185,6 +242,7 @@ def main() -> int:
         recommendation_signal(system_dir, args.daily_time),
         storage_signal(vault_dir),
         source_signal(system_dir),
+        investment_calendar_signal(vault_dir),
         portfolio_signal(system_dir),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0

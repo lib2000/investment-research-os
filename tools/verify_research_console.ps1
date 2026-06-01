@@ -143,6 +143,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os_main.py `
     backend\research_os\customs_trade.py `
     backend\research_os\daily_recommendations.py `
+    backend\research_os\investment_calendar.py `
     backend\research_os\kcif_reports.py `
     backend\research_os\market_journal.py `
     backend\research_os\portfolio_import.py `
@@ -155,6 +156,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     tools\smoke_research_console_clicks.py `
     tools\check_daily_recommendations_store.py `
     tools\check_research_source_store.py `
+    tools\check_investment_calendar_store.py `
     tools\check_portfolio_store.py `
     tools\smoke_research_console_external_sources.py `
     tools\smoke_research_console_menus.py `
