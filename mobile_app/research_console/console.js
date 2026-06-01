@@ -86,7 +86,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=8f551ab89ca5";
+} from "./api.js?v=1c85e93f74aa";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -900,7 +900,8 @@ function formDataObject(form) {
 }
 
 function isClickSmokeMode() {
-  return new URLSearchParams(window.location.search).get("smoke") === "clicks";
+  const smokeMode = new URLSearchParams(window.location.search).get("smoke") || "";
+  return smokeMode === "clicks" || smokeMode.startsWith("clicks-");
 }
 
 function buildManualLlmPrompt(data) {
@@ -3946,11 +3947,33 @@ async function refreshPortfolioPerformance({ silent = false } = {}) {
     }
     return result;
   } catch (error) {
+    if (elements.portfolioPerformanceOverview) {
+      const message = error?.message || "저장 포트폴리오와 가격 데이터 연결을 확인하세요.";
+      elements.portfolioPerformanceOverview.innerHTML = `
+        <div class="portfolio-performance-header">
+          <div>
+            <span>기간 수익 비교</span>
+            <strong>계산 보류</strong>
+            <p>저장 현재가 사용 · 외부 가격 히스토리 응답 지연으로 화면 표시를 우선했습니다.</p>
+          </div>
+          <div class="portfolio-performance-metrics">
+            <span>정확도 <b>확인 필요</b></span>
+            <span>가격 차이 <b>확인 보류</b></span>
+          </div>
+        </div>
+        <div class="portfolio-performance-grid">
+          ${["최근 1주일", "최근 1개월", "최근 6개월", "최근 1년"].map((label) => `
+            <article class="portfolio-performance-card neutral">
+              <span>${label}</span>
+              <strong>계산 보류</strong>
+              <p>가격 히스토리 응답 확인 후 다시 계산합니다.</p>
+            </article>
+          `).join("")}
+        </div>
+        <p class="portfolio-performance-note">기간 수익 비교를 불러오지 못했습니다. ${escapeHtml(message)}</p>`;
+    }
     if (!silent) {
       setError(error);
-    } else if (elements.portfolioPerformanceOverview) {
-      elements.portfolioPerformanceOverview.innerHTML =
-        '<p class="empty-state">기간 수익 비교를 불러오지 못했습니다. 저장 포트폴리오와 가격 데이터 연결을 확인하세요.</p>';
     }
     return null;
   }

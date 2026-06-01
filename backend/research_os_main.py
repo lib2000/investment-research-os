@@ -5,6 +5,7 @@ import json
 import math
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
@@ -6000,7 +6001,7 @@ def is_naver_domestic_stock_code(value: str) -> bool:
     return bool(search(r"^[0-9A-Z]{6}$", str(value or "").strip().upper()))
 
 
-def fetch_naver_domestic_stock_basic(ticker: str, settings: Settings) -> dict:
+def fetch_naver_domestic_stock_basic(ticker: str, settings: Settings, timeout_seconds: float | None = None) -> dict:
     if not settings.naver_finance_enabled:
         raise HTTPException(status_code=422, detail="NAVER_FINANCE_ENABLED=false 상태입니다.")
     code = normalize_kr_stock_code(ticker)
@@ -6021,7 +6022,7 @@ def fetch_naver_domestic_stock_basic(ticker: str, settings: Settings) -> dict:
         "Accept": "application/json,text/plain,*/*",
     }
     with httpx.Client(
-        timeout=settings.naver_finance_timeout_seconds,
+        timeout=timeout_seconds or settings.naver_finance_timeout_seconds,
         headers=headers,
         trust_env=False,
     ) as client:
@@ -6038,8 +6039,11 @@ def fetch_naver_domestic_price_history(
     ticker: str,
     settings: Settings,
     page_size: int = 180,
+    *,
+    include_basic: bool = True,
+    timeout_seconds: float | None = None,
 ) -> tuple[dict, list[dict]]:
-    basic = fetch_naver_domestic_stock_basic(ticker, settings)
+    basic = fetch_naver_domestic_stock_basic(ticker, settings, timeout_seconds=timeout_seconds) if include_basic else {}
     code = normalize_kr_stock_code(ticker)
     if not is_naver_domestic_stock_code(code):
         code = ensure_verified_ticker(ticker, settings)
@@ -6051,11 +6055,14 @@ def fetch_naver_domestic_price_history(
         ),
         "Accept": "application/json,text/plain,*/*",
     }
-    request_page_size = 60
+    # The portfolio performance view may request history for many holdings in one click.
+    # Use a larger page size so a one-year comparison usually needs one provider request per ticker.
+    request_page_size = min(max(int(page_size or 180), 60), 300)
     pages_to_fetch = max(1, math.ceil(max(page_size, request_page_size) / request_page_size))
     payload: list[dict] = []
+    request_timeout = timeout_seconds if timeout_seconds is not None else max(settings.naver_finance_timeout_seconds, 10)
     with httpx.Client(
-        timeout=max(settings.naver_finance_timeout_seconds, 10),
+        timeout=request_timeout,
         headers=headers,
         trust_env=False,
     ) as client:
@@ -20702,6 +20709,7 @@ def portfolio_history_rows_for_ticker(
     ticker: str,
     settings: Settings,
     page_size: int = 280,
+    timeout_seconds: float | None = None,
 ) -> tuple[str, list[dict], dict]:
     code = normalize_kr_stock_code(ticker)
     if not is_naver_domestic_stock_code(code):
@@ -20714,7 +20722,13 @@ def portfolio_history_rows_for_ticker(
     cache_key = f"{code}:{page_size}"
     cache_hit = cache_key in PORTFOLIO_HISTORY_CACHE
     if not cache_hit:
-        _, rows = fetch_naver_domestic_price_history(code, settings, page_size=page_size)
+        _, rows = fetch_naver_domestic_price_history(
+            code,
+            settings,
+            page_size=page_size,
+            include_basic=False,
+            timeout_seconds=timeout_seconds,
+        )
         PORTFOLIO_HISTORY_CACHE[cache_key] = rows
     return code, PORTFOLIO_HISTORY_CACHE[cache_key], {
         "cache_key": cache_key,
@@ -20752,6 +20766,7 @@ def build_portfolio_performance(
     settings: Settings,
     *,
     force_price_refresh: bool = False,
+    allow_live_history: bool = False,
 ) -> dict:
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
@@ -20773,7 +20788,7 @@ def build_portfolio_performance(
         description=(
             "기간 수익 비교 요청에서 현재가 제공자 강제 갱신을 실행했습니다."
             if force_price_refresh
-            else "기간 수익 비교는 빠른 응답을 위해 저장 현재가와 국내 가격 히스토리 최신 종가를 사용합니다. 최신 현재가 갱신은 포트폴리오의 가격 갱신 불러오기를 먼저 실행하세요."
+            else "기간 수익 비교는 빠른 응답을 위해 저장 현재가와 캐시된 국내 가격 히스토리를 우선 사용합니다. 새 히스토리 조회는 외부 응답 지연을 막기 위해 기본 화면 흐름에서 보류합니다."
         ),
     )
     as_of = current_storage_date()
@@ -20813,6 +20828,8 @@ def build_portfolio_performance(
         if getattr(holding, "price_checked_at", None)
     )
     price_comparisons: list[dict] = []
+    history_deadline_seconds = 35.0
+    history_deadline = time.monotonic() + history_deadline_seconds
 
     for holding in portfolio.holdings:
         ticker = normalize_ticker(holding.ticker)
@@ -20851,8 +20868,48 @@ def build_portfolio_performance(
             })
             continue
 
+        if time.monotonic() > history_deadline:
+            skipped.append({
+                "ticker": ticker,
+                "name": holding.name,
+                "market_value": round(current_value_for_total, 2) if current_value_for_total else None,
+                "reason": f"기간 수익 비교 응답 시간 제한({history_deadline_seconds:.0f}초)을 넘어 계산을 보류했습니다.",
+                "category": "price_history_timeout_guard",
+                "quantity": holding.quantity,
+                "average_cost": holding.average_cost,
+                "current_price": holding.current_price,
+                "currency": holding.currency,
+                "impact": "화면 응답을 우선하기 위해 해당 종목의 기간 가격 히스토리 계산을 이번 요청에서 건너뛰었습니다. 다시 조회하면 캐시된 종목은 더 빠르게 반영됩니다.",
+            })
+            continue
+
+        history_cache_key = f"{normalize_kr_stock_code(ticker)}:280"
+        if not allow_live_history and history_cache_key not in PORTFOLIO_HISTORY_CACHE:
+            code_for_skip = normalize_kr_stock_code(ticker)
+            category = "price_history_live_lookup_deferred" if is_naver_domestic_stock_code(code_for_skip) else "overseas_or_unsupported_history"
+            skipped.append({
+                "ticker": ticker,
+                "name": holding.name,
+                "market_value": round(current_value_for_total, 2) if current_value_for_total else None,
+                "reason": "외부 가격 히스토리 실시간 조회는 화면 응답 안정화를 위해 기본 버튼에서 보류했습니다.",
+                "category": category,
+                "quantity": holding.quantity,
+                "average_cost": holding.average_cost,
+                "current_price": holding.current_price,
+                "currency": holding.currency,
+                "impact": "현재 평가금액과 저장 손익은 유지하고, 기간 수익 비교는 캐시된 히스토리가 생긴 뒤 반영합니다.",
+            })
+            if category == "overseas_or_unsupported_history":
+                overseas_unsupported_count += 1
+                unsupported_market_value += current_value_for_total
+            continue
+
         try:
-            official_symbol, history_rows, history_cache_info = portfolio_history_rows_for_ticker(ticker, settings)
+            official_symbol, history_rows, history_cache_info = portfolio_history_rows_for_ticker(
+                ticker,
+                settings,
+                timeout_seconds=min(float(settings.naver_finance_timeout_seconds or 6), 2.5),
+            )
             if history_cache_info.get("cache_hit"):
                 history_cache_hits += 1
             else:
@@ -21063,6 +21120,10 @@ def build_portfolio_performance(
         "portfolio_name": portfolio.portfolio_name,
         "as_of": current_storage_timestamp(),
         "calculation_mode": "recomputed_on_request",
+        "live_history_lookup": {
+            "enabled": allow_live_history,
+            "default_behavior": "화면 응답 안정화를 위해 기본 조회는 캐시된 가격 히스토리만 사용합니다.",
+        },
         "current_price_refresh": current_price_refresh,
         "result_cache": {
             "enabled": False,
@@ -21074,13 +21135,15 @@ def build_portfolio_performance(
             "provider": "naver_finance_mobile_price_api",
             "hit_count": history_cache_hits,
             "miss_count": history_cache_misses,
+            "request_deadline_seconds": history_deadline_seconds,
+            "live_lookup_enabled": allow_live_history,
             "description": "국내 종목 가격 히스토리 원천 조회만 서버 프로세스 메모리에 임시 캐시합니다. 서버 재시작 시 초기화됩니다.",
         },
         "price_data_as_of": sorted(price_as_of_dates)[-1] if price_as_of_dates else None,
         "latest_stored_price_checked_at": latest_stored_price_checked_at,
         "price_basis": price_basis,
         "price_refresh_guidance": (
-            "가격 갱신 불러오기를 먼저 실행한 뒤 기간 수익 비교를 보면 저장 현재가 기준 정확도가 올라갑니다."
+            "기본 화면은 멈춤 방지를 위해 캐시된 가격 히스토리만 사용합니다. 가격 갱신/차트 조회 등으로 히스토리가 확보되면 기간 수익 비교 커버리지가 올라갑니다."
             if not force_price_refresh
             else "이번 요청에서 현재가 강제 갱신을 시도했습니다."
         ),
@@ -21107,7 +21170,7 @@ def build_portfolio_performance(
         "method": (
             "현재가는 요청 시 강제 갱신하고, 국내 기간 수익은 가격 히스토리의 최신 종가와 기간별 과거 종가를 비교해 평가금액 차이를 계산했습니다."
             if force_price_refresh
-            else "빠른 응답을 위해 저장 현재가를 기준 정보로 유지하고, 국내 기간 수익은 가격 히스토리의 최신 종가와 기간별 과거 종가를 비교해 계산했습니다."
+            else "빠른 응답을 위해 저장 현재가를 기준 정보로 유지하고, 캐시된 국내 가격 히스토리가 있는 종목만 기간별 과거 종가를 비교해 계산했습니다."
         ),
         "portfolio_value": round(current_portfolio_value or portfolio.portfolio_value or 0, 2),
         "current_unrealized_gain": round(current_unrealized_gain, 2),
@@ -22162,12 +22225,14 @@ def get_portfolio_intelligent_table(
 def get_portfolio_performance(
     portfolio_name: str,
     force_price_refresh: bool = False,
+    allow_live_history: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_portfolio_performance(
         portfolio_name,
         settings,
         force_price_refresh=force_price_refresh,
+        allow_live_history=allow_live_history,
     )
 
 

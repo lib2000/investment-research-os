@@ -612,21 +612,43 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       await sleep(100);
                     }}
                   }}
-                  document.querySelector("#portfolioPerformanceButton").click();
-                  const portfolioPerformanceText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#portfolioPerformanceOverview")?.innerText || "";
-                      return text.includes("기간 수익 비교") &&
-                        (text.includes("현재가 강제 갱신") || text.includes("저장 현재가 사용")) &&
-                        text.includes("최근 1주일") &&
-                        text.includes("정확도") &&
-                        text.includes("가격 차이")
-                        ? text
-                        : "";
-                    }},
-                    120000,
-                    "portfolio performance overview"
+                  const portfolioPerformanceButton = document.querySelector("#portfolioPerformanceButton");
+                  if (!portfolioPerformanceButton) {{
+                    throw new Error("portfolio performance button missing");
+                  }}
+                  await waitFor(
+                    () => !portfolioPerformanceButton.disabled,
+                    10000,
+                    "portfolio performance button enabled"
                   );
+                  portfolioPerformanceButton.dispatchEvent(new MouseEvent("click", {{ bubbles: true, cancelable: true }}));
+                  await sleep(250);
+                  let portfolioPerformanceText = "";
+                  try {{
+                    portfolioPerformanceText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#portfolioPerformanceOverview")?.innerText || "";
+                        return text.includes("기간 수익 비교") &&
+                          (text.includes("현재가 강제 갱신") || text.includes("저장 현재가 사용")) &&
+                          text.includes("최근 1주일") &&
+                          text.includes("정확도") &&
+                          text.includes("가격 차이")
+                          ? text
+                          : "";
+                      }},
+                      120000,
+                      "portfolio performance overview"
+                    );
+                  }} catch (error) {{
+                    const overview = document.querySelector("#portfolioPerformanceOverview")?.innerText || "";
+                    const output = document.querySelector("#output")?.innerText || "";
+                    const selected = document.querySelector("#portfolioSelect")?.value || "";
+                    const formName = document.querySelector('#portfolioForm [name="portfolioName"]')?.value || "";
+                    const buttonDisabled = document.querySelector("#portfolioPerformanceButton")?.disabled;
+                    throw new Error(
+                      `portfolio performance overview failed: ${{error.message}} | selected=${{selected}} | form=${{formName}} | buttonDisabled=${{buttonDisabled}} | overview=${{overview.split("\\n").slice(0, 8).join(" / ")}} | output=${{output.split("\\n").slice(0, 8).join(" / ")}}`
+                    );
+                  }}
                   document.querySelector("#portfolioQuickRiskButton").click();
                   const portfolioRiskText = await waitFor(
                     () => {{

@@ -23,25 +23,36 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const { accessToken, timeoutMs = 0, signal: optionSignal, ...fetchOptions } = options;
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(new Error(`요청 시간이 ${Math.round(timeoutMs / 1000)}초를 넘었습니다.`)), timeoutMs)
+    : null;
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
+      signal: controller?.signal || optionSignal,
       headers: {
         "Content-Type": "application/json",
-        ...(options.accessToken
-          ? { Authorization: `Bearer ${options.accessToken}` }
+        ...(accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
           : {}),
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
     });
   } catch (error) {
+    const abortedMessage = controller?.signal?.aborted
+      ? `요청 시간이 ${Math.round(timeoutMs / 1000)}초를 넘었습니다.`
+      : error?.message || String(error);
     throw new ApiError(
-      `API 연결 실패: ${API_BASE_URL}${path} - ${
-        error?.message || String(error)
-      }`,
+      `API 연결 실패: ${API_BASE_URL}${path} - ${abortedMessage}`,
       0
     );
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 
   if (!response.ok) {
@@ -1664,6 +1675,7 @@ export async function fetchPortfolioPerformance(
     {
       method: "GET",
       accessToken,
+      timeoutMs: 30000,
     }
   );
 }

@@ -321,6 +321,20 @@ $contracts = @(
       '본문 보강 대상='
     )
   },
+
+  @{
+    Path = "tools\smoke_research_console_windows.ps1"
+    Snippets = @(
+      'assert_project_root.ps1',
+      'Resolve-WindowsPython',
+      'Start-Process',
+      'smoke_research_console_menus.py',
+      'smoke_research_console_clicks.py',
+      '--only-system-check',
+      '실제 브라우저 스모크 검증 완료'
+    )
+  },
+
   @{
     Path = "tools\smoke_research_console_clicks.py"
     Snippets = @(
