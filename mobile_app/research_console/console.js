@@ -7895,6 +7895,10 @@ function investmentCalendarMonthLabel(calendarMonth) {
   return `${year}년 ${Number(month)}월 투자 캘린더`;
 }
 
+function investmentCalendarEventIsEarnings(event) {
+  return event?.event_type === "earnings" || /실적|earnings/i.test(`${event?.category || ""} ${event?.title || ""}`);
+}
+
 function renderInvestmentCalendar(payload) {
   if (!elements.investmentCalendarMonthly || !elements.investmentCalendarWeekly) {
     return;
@@ -7906,7 +7910,9 @@ function renderInvestmentCalendar(payload) {
     elements.investmentCalendarTitle.textContent = title;
   }
   if (elements.investmentCalendarMeta) {
-    elements.investmentCalendarMeta.textContent = `보유 ${formatNumber(universe.holdings_count || 0)}개 · 관심 ${formatNumber(universe.interest_count || 0)}개 · 갱신 ${formatDateTime(payload?.updated_at || payload?.generated_at)}`;
+    const earningsCount = Number(payload?.earnings_event_count || 0);
+    const earningsLabel = earningsCount ? ` · 실적발표 ${formatNumber(earningsCount)}건` : "";
+    elements.investmentCalendarMeta.textContent = `보유 ${formatNumber(universe.holdings_count || 0)}개 · 관심 ${formatNumber(universe.interest_count || 0)}개${earningsLabel} · 갱신 ${formatDateTime(payload?.updated_at || payload?.generated_at)}`;
   }
   if (!calendarMonth || !payload?.monthly) {
     elements.investmentCalendarMonthly.innerHTML = `<p class="empty-state">${escapeHtml(payload?.message || "표시할 투자 캘린더가 없습니다.")}</p>`;
@@ -7933,9 +7939,9 @@ function renderInvestmentCalendar(payload) {
             .slice(0, 4)
             .map(
               (event) => `
-                <div class="investment-calendar-event market-${escapeHtml(String(event.market || "").toLowerCase())}">
-                  <b>${escapeHtml(event.market || "시장")}</b>
-                  <span>${escapeHtml(compactOutputText(event.title || "일정", 54))}</span>
+                <div class="investment-calendar-event market-${escapeHtml(String(event.market || "").toLowerCase())}${investmentCalendarEventIsEarnings(event) ? " is-earnings" : ""}" title="${escapeHtml(`${event.date || ""} · ${event.category || "일정"} · ${event.title || "일정"}`)}">
+                  <b>${escapeHtml(event.market || "시장")} · ${escapeHtml(event.category || "일정")}</b>
+                  <span>${escapeHtml(compactOutputText(event.title || "일정", 72))}</span>
                   <em>${escapeHtml((event.related || []).slice(0, 2).join(" · ") || "전체")}</em>
                 </div>
               `
@@ -7978,11 +7984,11 @@ function renderInvestmentCalendarMarketColumn(label, events) {
         ? events
             .map(
               (event) => `
-                <article class="investment-calendar-list-event">
+                <article class="investment-calendar-list-event${investmentCalendarEventIsEarnings(event) ? " is-earnings" : ""}">
                   <span>${escapeHtml(event.date || "날짜 미확인")} · ${escapeHtml(event.category || "일정")}</span>
                   <strong>${escapeHtml(event.title || "시장 일정")}</strong>
                   <p>${escapeHtml(event.impact || "투자 영향 메모 없음")}</p>
-                  <small>${escapeHtml((event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체")}</small>
+                  <small>${escapeHtml((event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체")}${event.source ? ` · 출처 ${escapeHtml(event.source)}` : ""}</small>
                 </article>
               `
             )

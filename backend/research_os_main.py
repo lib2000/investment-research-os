@@ -17129,6 +17129,149 @@ style: {report.style}
 """
 
 
+def investment_calendar_universe_tickers(settings: Settings) -> dict[str, str]:
+    tickers: dict[str, str] = {}
+    dynamic_registry = read_dynamic_ticker_registry(settings)
+
+    def remember_ticker(raw_ticker: object, raw_name: object = "") -> None:
+        raw = str(raw_ticker or "").strip()
+        if not raw:
+            return
+        resolved = resolve_ticker_symbol_from_alias(raw, settings) or raw
+        ticker = normalize_ticker(resolved)
+        if not ticker:
+            return
+        profile = OFFICIAL_TICKER_REGISTRY.get(ticker) or dynamic_registry.get(ticker) or {}
+        name = str(raw_name or profile.get("company_name") or "").strip()
+        tickers[ticker] = name or tickers.get(ticker) or ticker
+
+    try:
+        store = read_portfolio_store(settings)
+        for portfolio in (store.get("portfolios") or {}).values():
+            if not isinstance(portfolio, dict):
+                continue
+            for holding in portfolio.get("holdings") or []:
+                if not isinstance(holding, dict) or not holding.get("ticker"):
+                    continue
+                remember_ticker(holding.get("ticker"), holding.get("name"))
+    except Exception:
+        pass
+    try:
+        interests = read_json_store(interest_list_path(settings), {"tickers": []})
+        for item in interests.get("tickers") or []:
+            if not isinstance(item, dict) or not item.get("ticker"):
+                continue
+            verification = item.get("verification") if isinstance(item.get("verification"), dict) else {}
+            name = str(verification.get("company_name") or item.get("name") or "").strip()
+            remember_ticker(item.get("ticker"), name)
+    except Exception:
+        pass
+    for ticker in list(tickers):
+        profile = OFFICIAL_TICKER_REGISTRY.get(ticker) or dynamic_registry.get(ticker) or {}
+        name = str(profile.get("company_name") or "").strip()
+        if name and (tickers[ticker] == ticker or not tickers[ticker]):
+            tickers[ticker] = name
+    return tickers
+
+
+def calendar_week_name_for_date(value: str) -> str:
+    parsed = parse_iso_date(value)
+    if not parsed:
+        return "기타"
+    return f"{((parsed.day - 1) // 7) + 1}주"
+
+
+def build_investment_calendar_earnings_events(payload: dict, settings: Settings) -> list[dict]:
+    calendar_month = str(payload.get("calendar_month") or "")
+    if not fullmatch(r"\d{4}-\d{2}", calendar_month):
+        return []
+    universe = investment_calendar_universe_tickers(settings)
+    if not universe:
+        return []
+    cache = read_earnings_calendar_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    events: list[dict] = []
+    for ticker, company_name in universe.items():
+        entry = entries.get(normalize_ticker(ticker)) if isinstance(entries, dict) else None
+        if not isinstance(entry, dict):
+            continue
+        candidate_events = []
+        for event in entry.get("events") or []:
+            if isinstance(event, dict) and str(event.get("date") or "").startswith(calendar_month):
+                candidate_events.append(event)
+        next_date = str(entry.get("next_earnings_date") or "")[:10]
+        if next_date.startswith(calendar_month) and not any(str(event.get("date") or "")[:10] == next_date for event in candidate_events):
+            candidate_events.append({"date": next_date, "symbol": ticker})
+        for event in candidate_events:
+            event_date = str(event.get("date") or "")[:10]
+            if not event_date:
+                continue
+            source = str(entry.get("source") or "실적 캘린더 캐시")
+            title = f"{company_name} 실적발표"
+            time_label = str(event.get("time") or "").strip()
+            if time_label:
+                title = f"{title}({time_label})"
+            details = []
+            if event.get("eps_estimated") not in (None, ""):
+                details.append(f"예상 EPS {event.get('eps_estimated')}")
+            if event.get("revenue_estimated") not in (None, ""):
+                details.append(f"예상 매출 {event.get('revenue_estimated')}")
+            events.append(
+                {
+                    "date": event_date,
+                    "week": calendar_week_name_for_date(event_date),
+                    "market": "KR" if str(ticker).isdigit() else "US",
+                    "category": "실적발표",
+                    "title": title,
+                    "impact": "보유/관심 종목 실적 발표 전후 가이던스, 매출, 마진, 주가 반응을 점검",
+                    "related": [company_name],
+                    "action": "발표 전 컨센서스와 발표 후 가격 반응을 저장 데이터와 추천 추적에 반영",
+                    "source": source,
+                    "ticker": ticker,
+                    "event_type": "earnings",
+                    "details": details,
+                }
+            )
+    return events
+
+
+def merge_investment_calendar_events(payload: dict, extra_events: list[dict]) -> dict:
+    if not extra_events:
+        payload["earnings_event_count"] = 0
+        return payload
+    monthly = payload.setdefault("monthly", {})
+    weekly = payload.setdefault("weekly", {})
+    seen = {
+        (str(event.get("date") or ""), str(event.get("market") or ""), str(event.get("title") or ""))
+        for market_events in monthly.values()
+        if isinstance(market_events, list)
+        for event in market_events
+        if isinstance(event, dict)
+    }
+    inserted = 0
+    for event in extra_events:
+        key = (str(event.get("date") or ""), str(event.get("market") or ""), str(event.get("title") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        market = str(event.get("market") or "KR")
+        week = str(event.get("week") or calendar_week_name_for_date(str(event.get("date") or "")))
+        monthly.setdefault(market, []).append(event)
+        weekly.setdefault(week, {}).setdefault(market, []).append(event)
+        inserted += 1
+    for events in monthly.values():
+        if isinstance(events, list):
+            events.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("category") or ""), str(item.get("title") or "")))
+    for markets in weekly.values():
+        if not isinstance(markets, dict):
+            continue
+        for events in markets.values():
+            if isinstance(events, list):
+                events.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("category") or ""), str(item.get("title") or "")))
+    payload["earnings_event_count"] = inserted
+    return payload
+
+
 def load_latest_investment_calendar_payload(settings: Settings) -> dict:
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     calendar_dir = vault_dir / "MARKET-CALENDAR"
@@ -17157,6 +17300,8 @@ def load_latest_investment_calendar_payload(settings: Settings) -> dict:
     payload.setdefault("status", "ok")
     payload["source_file"] = str(latest_path.relative_to(vault_dir))
     payload["updated_at"] = datetime.fromtimestamp(latest_path.stat().st_mtime, ZoneInfo("Asia/Seoul")).isoformat()
+    earnings_events = build_investment_calendar_earnings_events(payload, settings)
+    merge_investment_calendar_events(payload, earnings_events)
     return payload
 
 

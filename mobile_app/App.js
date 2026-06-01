@@ -173,14 +173,22 @@ function CalendarMarketBlock({ label, events }) {
     <View style={styles.calendarMarketBlock}>
       <Text style={styles.calendarMarketTitle}>{label}</Text>
       {events.length ? (
-        events.map((event, index) => (
-          <View key={`${event.date}-${event.title}-${index}`} style={styles.calendarEvent}>
-            <Text style={styles.mutedText}>{event.date} · {event.category || "일정"}</Text>
-            <Text style={styles.itemName}>{event.title || "시장 일정"}</Text>
-            <Text style={styles.mutedText}>{event.impact || "투자 영향 메모 없음"}</Text>
-            <Text style={styles.calendarRelated}>{(event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체"}</Text>
-          </View>
-        ))
+        events.map((event, index) => {
+          const isEarnings = event.event_type === "earnings" || /실적|earnings/i.test(`${event.category || ""} ${event.title || ""}`);
+          return (
+            <View
+              key={`${event.date}-${event.title}-${index}`}
+              style={[styles.calendarEvent, isEarnings ? styles.calendarEventEarnings : null]}
+            >
+              <Text style={[styles.mutedText, isEarnings ? styles.calendarEventBadge : null]}>
+                {event.date} · {event.category || "일정"}
+              </Text>
+              <Text style={styles.itemName}>{event.title || "시장 일정"}</Text>
+              <Text style={styles.mutedText}>{event.impact || "투자 영향 메모 없음"}</Text>
+              <Text style={styles.calendarRelated}>{(event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체"}</Text>
+            </View>
+          );
+        })
       ) : (
         <Text style={styles.emptyText}>관련 일정 없음</Text>
       )}
@@ -451,6 +459,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
     padding: 10,
+  },
+  calendarEventEarnings: {
+    backgroundColor: "#fff7ed",
+    borderColor: "#fdba74",
+  },
+  calendarEventBadge: {
+    color: "#9a3412",
+    fontWeight: "800",
   },
   calendarRelated: {
     color: "#0f766e",
