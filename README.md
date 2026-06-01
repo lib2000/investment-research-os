@@ -109,7 +109,16 @@ cd C:\Users\lib20\InvestmentJournalApp
 .\scripts\start-research-backend.ps1
 ```
 
-`python`이 PATH에 없으면 Windows 가상환경이나 설치된 Python을 직접 지정합니다.
+`scripts\start-research-backend.ps1`는 프로젝트의 `.venv-win\Scripts\python.exe`를 먼저 사용합니다. Windows에서 처음 실행하거나 콘솔이 열리지 않으면 아래처럼 Windows 전용 가상환경을 만든 뒤 다시 시작합니다.
+
+```powershell
+cd C:\Users\lib20\InvestmentJournalApp
+C:\Users\lib20\AppData\Local\Programs\Python\Python312\python.exe -m venv .venv-win
+.\.venv-win\Scripts\pip.exe install -r backend\requirements.txt
+.\scripts\start-research-backend.ps1 -Port 8001
+```
+
+`python`이 PATH에 없고 `.venv-win`도 없으면 설치된 Python을 직접 지정합니다.
 
 ```powershell
 .\scripts\start-research-backend.ps1 -PythonExe C:\Path\To\python.exe -Port 8001

@@ -30,6 +30,7 @@ function Resolve-BackendPython {
   }
 
   $localCandidates = @(
+    (Join-Path $ProjectRootPath ".venv-win\Scripts\python.exe"),
     (Join-Path $ProjectRootPath ".venv\Scripts\python.exe"),
     (Join-Path $ProjectRootPath "venv\Scripts\python.exe")
   )

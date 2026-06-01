@@ -30,6 +30,7 @@ backend/credentials/
 .ruff_cache/
 .mypy_cache/
 .venv/
+.venv-win/
 venv/
 
 # Node/build outputs
@@ -57,6 +58,7 @@ backend/backups/
 backend/tessdata/*.traineddata
 
 # Logs and temporary local artifacts
+tmp/
 *.log
 *.out.log
 *.err.log
