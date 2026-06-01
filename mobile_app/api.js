@@ -106,6 +106,19 @@ export async function fetchKiwoomOrderExecutions(accessToken) {
   }
 }
 
+
+export async function fetchInvestmentCalendar(accessToken) {
+  try {
+    return request("/api/v1/investment-calendar/latest", {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("투자 캘린더를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
 export async function fetchPortfolio(accessToken) {
   try {
     return request("/api/v1/portfolio", {

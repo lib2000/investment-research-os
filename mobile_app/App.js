@@ -13,6 +13,7 @@ import {
 import {
   API_BASE_URL,
   fetchJournalDrafts,
+  fetchInvestmentCalendar,
   fetchLatestSync,
   fetchPortfolio,
   syncKiwoomData,
@@ -23,6 +24,7 @@ const ACCESS_TOKEN =
 
 const TABS = [
   { id: "portfolio", label: "포트폴리오" },
+  { id: "calendar", label: "캘린더" },
   { id: "sync", label: "동기화" },
   { id: "drafts", label: "일지 초안" },
 ];
@@ -32,6 +34,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [portfolio, setPortfolio] = useState(null);
   const [latestSync, setLatestSync] = useState(null);
+  const [investmentCalendar, setInvestmentCalendar] = useState(null);
   const [drafts, setDrafts] = useState([]);
   const [lastError, setLastError] = useState("");
 
@@ -39,15 +42,17 @@ export default function App() {
     setLoading(true);
     setLastError("");
     try {
-      const [portfolioResult, syncResult, draftResult] = await Promise.all([
+      const [portfolioResult, syncResult, draftResult, calendarResult] = await Promise.all([
         fetchPortfolio(ACCESS_TOKEN),
         fetchLatestSync(ACCESS_TOKEN),
         fetchJournalDrafts(ACCESS_TOKEN),
+        fetchInvestmentCalendar(ACCESS_TOKEN),
       ]);
 
       setPortfolio(portfolioResult);
       setLatestSync(syncResult?.sync_run || null);
       setDrafts(draftResult?.drafts || []);
+      setInvestmentCalendar(calendarResult);
     } catch (error) {
       setLastError(error.message);
     } finally {
@@ -77,11 +82,14 @@ export default function App() {
     if (activeTab === "portfolio") {
       return <PortfolioView portfolio={portfolio} />;
     }
+    if (activeTab === "calendar") {
+      return <CalendarView calendar={investmentCalendar} />;
+    }
     if (activeTab === "sync") {
       return <SyncView latestSync={latestSync} onSync={runSync} loading={loading} />;
     }
     return <DraftsView drafts={drafts} />;
-  }, [activeTab, drafts, latestSync, loading, portfolio, runSync]);
+  }, [activeTab, drafts, investmentCalendar, latestSync, loading, portfolio, runSync]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -120,6 +128,63 @@ export default function App() {
 
       <ScrollView contentContainerStyle={styles.content}>{content}</ScrollView>
     </SafeAreaView>
+  );
+}
+
+
+function CalendarView({ calendar }) {
+  const weekly = calendar?.weekly || {};
+  const monthTitle = formatCalendarMonth(calendar?.calendar_month);
+  const universe = calendar?.universe_summary || {};
+  const weekEntries = Object.entries(weekly);
+
+  return (
+    <View style={styles.stack}>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>{monthTitle}</Text>
+        <Text style={styles.mutedText}>
+          보유 {universe.holdings_count || 0}개 · 관심 {universe.interest_count || 0}개 · 한국/미국 구분 표시
+        </Text>
+      </View>
+      {weekEntries.length ? (
+        weekEntries.map(([weekName, markets]) => (
+          <View key={weekName} style={styles.panel}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.panelTitle}>{weekName}</Text>
+              <Text style={styles.countText}>
+                {(markets.KR || []).length + (markets.US || []).length}
+              </Text>
+            </View>
+            <CalendarMarketBlock label="한국" events={markets.KR || []} />
+            <CalendarMarketBlock label="미국" events={markets.US || []} />
+          </View>
+        ))
+      ) : (
+        <View style={styles.panel}>
+          <Text style={styles.emptyText}>{calendar?.message || "표시할 투자 캘린더가 없습니다."}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CalendarMarketBlock({ label, events }) {
+  return (
+    <View style={styles.calendarMarketBlock}>
+      <Text style={styles.calendarMarketTitle}>{label}</Text>
+      {events.length ? (
+        events.map((event, index) => (
+          <View key={`${event.date}-${event.title}-${index}`} style={styles.calendarEvent}>
+            <Text style={styles.mutedText}>{event.date} · {event.category || "일정"}</Text>
+            <Text style={styles.itemName}>{event.title || "시장 일정"}</Text>
+            <Text style={styles.mutedText}>{event.impact || "투자 영향 메모 없음"}</Text>
+            <Text style={styles.calendarRelated}>{(event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체"}</Text>
+          </View>
+        ))
+      ) : (
+        <Text style={styles.emptyText}>관련 일정 없음</Text>
+      )}
+    </View>
   );
 }
 
@@ -281,6 +346,15 @@ function formatPercent(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+
+function formatCalendarMonth(value) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) {
+    return "투자 캘린더";
+  }
+  const [year, month] = value.split("-");
+  return `${year}년 ${Number(month)}월 투자 캘린더`;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return "-";
@@ -360,6 +434,29 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     marginBottom: 12,
+  },
+  calendarMarketBlock: {
+    gap: 8,
+    marginTop: 12,
+  },
+  calendarMarketTitle: {
+    color: "#0f766e",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  calendarEvent: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  calendarRelated: {
+    color: "#0f766e",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 2,
   },
   metricGrid: {
     flexDirection: "row",

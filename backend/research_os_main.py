@@ -17129,6 +17129,37 @@ style: {report.style}
 """
 
 
+def load_latest_investment_calendar_payload(settings: Settings) -> dict:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    calendar_dir = vault_dir / "MARKET-CALENDAR"
+    candidates = sorted(
+        calendar_dir.glob("MARKET-CALENDAR-investment-calendar-*.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return {
+            "module": "investment_calendar",
+            "status": "missing",
+            "message": "생성된 투자 캘린더가 없습니다. 먼저 월간 투자 캘린더 자료를 생성하세요.",
+            "calendar_month": None,
+            "weekly": {},
+            "monthly": {"KR": [], "US": []},
+        }
+    latest_path = candidates[0]
+    try:
+        payload = json.loads(latest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"투자 캘린더 JSON을 읽지 못했습니다: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=500, detail="투자 캘린더 JSON 형식이 올바르지 않습니다.")
+    payload.setdefault("module", "investment_calendar")
+    payload.setdefault("status", "ok")
+    payload["source_file"] = str(latest_path.relative_to(vault_dir))
+    payload["updated_at"] = datetime.fromtimestamp(latest_path.stat().st_mtime, ZoneInfo("Asia/Seoul")).isoformat()
+    return payload
+
+
 @app.get("/")
 def read_root() -> dict:
     return {"message": "매매일지 백엔드 서버가 정상 작동 중입니다."}
@@ -18280,6 +18311,14 @@ def get_research_memory_files(
         ),
         data_warnings=data_warnings,
     )
+
+
+@app.get(
+    "/api/v1/investment-calendar/latest",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_latest_investment_calendar(settings: Settings = Depends(get_settings)) -> dict:
+    return load_latest_investment_calendar_payload(settings)
 
 
 @app.get(

@@ -4252,3 +4252,193 @@ pre {
     display: grid;
   }
 }
+
+
+.calendar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.calendar-toolbar span,
+.investment-calendar-week header span,
+.investment-calendar-list-event span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.calendar-toolbar strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.calendar-toolbar p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.investment-calendar-weekdays,
+.investment-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.investment-calendar-weekdays {
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.investment-calendar-weekdays b {
+  padding: 8px;
+  color: var(--muted);
+  background: #eef2f6;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.investment-calendar-grid {
+  gap: 6px;
+}
+
+.investment-calendar-day {
+  min-height: 138px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.investment-calendar-day.is-empty {
+  background: #f4f6f8;
+  border-style: dashed;
+}
+
+.investment-calendar-day.has-events {
+  border-color: #99d5cb;
+  background: #fbfffe;
+}
+
+.investment-calendar-day-number {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.investment-calendar-events {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.investment-calendar-event {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #17345f;
+}
+
+.investment-calendar-event.market-kr {
+  background: #ecfdf5;
+  color: #14532d;
+}
+
+.investment-calendar-event b,
+.investment-calendar-event span,
+.investment-calendar-event em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investment-calendar-event b {
+  font-size: 11px;
+}
+
+.investment-calendar-event span {
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.investment-calendar-event em,
+.investment-calendar-events small,
+.investment-calendar-list-event small {
+  color: inherit;
+  opacity: 0.78;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.investment-calendar-weekly {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.investment-calendar-week {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.investment-calendar-week header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: #f8fbfd;
+}
+
+.investment-calendar-market-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.investment-calendar-market-column {
+  display: grid;
+  gap: 8px;
+}
+
+.investment-calendar-market-column h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.investment-calendar-list-event {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.investment-calendar-list-event strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.investment-calendar-list-event p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}

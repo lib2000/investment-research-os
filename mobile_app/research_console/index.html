@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=fd583dc685a1" />
+    <link rel="stylesheet" href="./styles.css?v=8c252e6b6a90" />
   </head>
   <body>
     <main class="app-shell">
@@ -55,6 +55,7 @@
         <button class="tab" data-tab="llmBridge" type="button">LLM 연동</button>
         <button class="tab" data-tab="reportAutomation" type="button">보고 자동화</button>
         <button class="tab" data-tab="marketClose" type="button">시장 일지</button>
+        <button class="tab" data-tab="investmentCalendar" type="button">투자 캘린더</button>
         <button class="tab" data-tab="portfolio" type="button">포트폴리오</button>
         <button class="tab" data-tab="interests" type="button">관심종목/섹터</button>
         <button class="tab" data-tab="checklist" type="button">체크리스트</button>
@@ -676,6 +677,24 @@
         </form>
       </section>
 
+
+      <section id="investmentCalendar" class="panel">
+        <div class="panel-intro">
+          <h2>투자 캘린더</h2>
+          <p>보유종목과 관심종목에 연결되는 한국·미국 증시 일정을 월간 달력과 주간 목록으로 확인합니다.</p>
+        </div>
+        <div class="calendar-toolbar">
+          <div>
+            <span>자료 범위</span>
+            <strong id="investmentCalendarTitle">캘린더 대기</strong>
+            <p id="investmentCalendarMeta">캘린더를 불러오면 생성일과 대상 종목 수가 표시됩니다.</p>
+          </div>
+          <button id="investmentCalendarRefreshButton" type="button">캘린더 새로고침</button>
+        </div>
+        <div id="investmentCalendarMonthly" class="investment-calendar-month" aria-live="polite"></div>
+        <div id="investmentCalendarWeekly" class="investment-calendar-weekly" aria-live="polite"></div>
+      </section>
+
       <section id="portfolio" class="panel">
         <div class="panel-intro">
           <h2>내 포트폴리오</h2>
@@ -1092,6 +1111,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=562f9acd6988"></script>
+  <script type="module" src="./console.js?v=2f89658dce5d"></script>
 </body>
 </html>

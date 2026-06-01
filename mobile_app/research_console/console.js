@@ -49,6 +49,7 @@
   refreshRegionalBusinessSourcesWatch,
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
+  fetchInvestmentCalendar,
   runDailyRecommendations,
   trackDailyRecommendations,
   promoteNewsInboxItem,
@@ -85,7 +86,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=fb15c14bad2e";
+} from "./api.js?v=8f551ab89ca5";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -219,6 +220,11 @@ const elements = {
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
+  investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
+  investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
+  investmentCalendarMonthly: document.querySelector("#investmentCalendarMonthly"),
+  investmentCalendarWeekly: document.querySelector("#investmentCalendarWeekly"),
+  investmentCalendarRefreshButton: document.querySelector("#investmentCalendarRefreshButton"),
   researchAutomationStatusButton: document.querySelector("#researchAutomationStatusButton"),
   codeKnowledgeGraphButton: document.querySelector("#codeKnowledgeGraphButton"),
   ragBackfillButton: document.querySelector("#ragBackfillButton"),
@@ -7864,6 +7870,138 @@ function dailyRecommendationMilestoneSummary(records) {
   return order.map((label) => summary[label]).filter((item) => item.total > 0);
 }
 
+
+function investmentCalendarEventsByDate(payload) {
+  const monthly = payload?.monthly || {};
+  const events = [...(monthly.KR || []), ...(monthly.US || [])];
+  return events.reduce((acc, event) => {
+    const dateKey = String(event.date || "").slice(0, 10);
+    if (!dateKey) {
+      return acc;
+    }
+    if (!acc.has(dateKey)) {
+      acc.set(dateKey, []);
+    }
+    acc.get(dateKey).push(event);
+    return acc;
+  }, new Map());
+}
+
+function investmentCalendarMonthLabel(calendarMonth) {
+  if (!calendarMonth || !/^\d{4}-\d{2}$/.test(calendarMonth)) {
+    return "투자 캘린더";
+  }
+  const [year, month] = calendarMonth.split("-");
+  return `${year}년 ${Number(month)}월 투자 캘린더`;
+}
+
+function renderInvestmentCalendar(payload) {
+  if (!elements.investmentCalendarMonthly || !elements.investmentCalendarWeekly) {
+    return;
+  }
+  const calendarMonth = payload?.calendar_month || "";
+  const title = investmentCalendarMonthLabel(calendarMonth);
+  const universe = payload?.universe_summary || {};
+  if (elements.investmentCalendarTitle) {
+    elements.investmentCalendarTitle.textContent = title;
+  }
+  if (elements.investmentCalendarMeta) {
+    elements.investmentCalendarMeta.textContent = `보유 ${formatNumber(universe.holdings_count || 0)}개 · 관심 ${formatNumber(universe.interest_count || 0)}개 · 갱신 ${formatDateTime(payload?.updated_at || payload?.generated_at)}`;
+  }
+  if (!calendarMonth || !payload?.monthly) {
+    elements.investmentCalendarMonthly.innerHTML = `<p class="empty-state">${escapeHtml(payload?.message || "표시할 투자 캘린더가 없습니다.")}</p>`;
+    elements.investmentCalendarWeekly.innerHTML = "";
+    return;
+  }
+  const [year, month] = calendarMonth.split("-").map(Number);
+  const first = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0).getDate();
+  const offset = first.getDay();
+  const byDate = investmentCalendarEventsByDate(payload);
+  const dayCells = [];
+  for (let i = 0; i < offset; i += 1) {
+    dayCells.push('<div class="investment-calendar-day is-empty"></div>');
+  }
+  for (let day = 1; day <= lastDay; day += 1) {
+    const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const events = (byDate.get(dateKey) || []).slice().sort((left, right) => String(left.market).localeCompare(String(right.market)));
+    dayCells.push(`
+      <div class="investment-calendar-day${events.length ? " has-events" : ""}">
+        <div class="investment-calendar-day-number">${day}</div>
+        <div class="investment-calendar-events">
+          ${events
+            .slice(0, 4)
+            .map(
+              (event) => `
+                <div class="investment-calendar-event market-${escapeHtml(String(event.market || "").toLowerCase())}">
+                  <b>${escapeHtml(event.market || "시장")}</b>
+                  <span>${escapeHtml(compactOutputText(event.title || "일정", 54))}</span>
+                  <em>${escapeHtml((event.related || []).slice(0, 2).join(" · ") || "전체")}</em>
+                </div>
+              `
+            )
+            .join("")}
+          ${events.length > 4 ? `<small>+${events.length - 4}개 더 있음</small>` : ""}
+        </div>
+      </div>
+    `);
+  }
+  elements.investmentCalendarMonthly.innerHTML = `
+    <div class="investment-calendar-weekdays">
+      ${["일", "월", "화", "수", "목", "금", "토"].map((day) => `<b>${day}</b>`).join("")}
+    </div>
+    <div class="investment-calendar-grid">${dayCells.join("")}</div>
+  `;
+  const weekly = payload.weekly || {};
+  elements.investmentCalendarWeekly.innerHTML = Object.entries(weekly)
+    .map(([weekName, markets]) => {
+      const krEvents = markets.KR || [];
+      const usEvents = markets.US || [];
+      return `
+        <section class="investment-calendar-week">
+          <header><strong>${escapeHtml(weekName)}</strong><span>한국 ${formatNumber(krEvents.length)}개 · 미국 ${formatNumber(usEvents.length)}개</span></header>
+          <div class="investment-calendar-market-columns">
+            ${renderInvestmentCalendarMarketColumn("한국", krEvents)}
+            ${renderInvestmentCalendarMarketColumn("미국", usEvents)}
+          </div>
+        </section>
+      `;
+    })
+    .join("") || '<p class="empty-state">주간 일정이 없습니다.</p>';
+}
+
+function renderInvestmentCalendarMarketColumn(label, events) {
+  return `
+    <div class="investment-calendar-market-column">
+      <h3>${escapeHtml(label)}</h3>
+      ${events.length
+        ? events
+            .map(
+              (event) => `
+                <article class="investment-calendar-list-event">
+                  <span>${escapeHtml(event.date || "날짜 미확인")} · ${escapeHtml(event.category || "일정")}</span>
+                  <strong>${escapeHtml(event.title || "시장 일정")}</strong>
+                  <p>${escapeHtml(event.impact || "투자 영향 메모 없음")}</p>
+                  <small>${escapeHtml((event.related || []).slice(0, 5).join(" · ") || "보유/관심 전체")}</small>
+                </article>
+              `
+            )
+            .join("")
+        : '<p class="empty-state">관련 일정 없음</p>'}
+    </div>
+  `;
+}
+
+async function loadInvestmentCalendar({ showOutput = false } = {}) {
+  syncApiBaseUrl();
+  const payload = await fetchInvestmentCalendar(token());
+  renderInvestmentCalendar(payload);
+  if (showOutput) {
+    setOutput(payload || "투자 캘린더를 불러오지 못했습니다.");
+  }
+  return payload;
+}
+
 function renderDailyRecommendationCards(payload) {
   if (!elements.dailyRecommendationCards || !payload || typeof payload !== "object") {
     return;
@@ -8121,6 +8259,9 @@ function activateTab(tabName, options = {}) {
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === tabName);
   });
+  if (tabName === "investmentCalendar") {
+    loadInvestmentCalendar({ showOutput: false }).catch(setError);
+  }
   if (!options.keepOutput) {
     setOutput(tabHelpText(tabName));
   }
@@ -11271,7 +11412,22 @@ const MEMORY_ACTION_MESSAGES = {
   dedupedDossierRefreshButton: "중복 종목 Dossier 갱신을 시작했습니다.",
   manifestButton: "전체 저장 목록 조회를 시작했습니다.",
   tickerCacheButton: "티커 캐시 조회를 시작했습니다.",
+  investmentCalendarRefreshButton: "투자 캘린더를 새로고침합니다.",
 };
+
+
+elements.investmentCalendarRefreshButton?.addEventListener("click", async () => {
+  startOutputLoading("투자 캘린더 불러오는 중", [
+    "최근 생성된 월간 캘린더 확인",
+    "한국/미국 시장 일정 분리",
+    "보유/관심 종목 관련 일정 렌더링",
+  ]);
+  try {
+    await loadInvestmentCalendar({ showOutput: true });
+  } catch (error) {
+    setError(error);
+  }
+});
 
 elements.memoryForm.addEventListener(
   "click",

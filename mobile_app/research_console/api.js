@@ -110,6 +110,14 @@ export async function exportResultXlsx(
   });
 }
 
+
+export async function fetchInvestmentCalendar(accessToken) {
+  return request("/api/v1/investment-calendar/latest", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 /**
  * 백엔드 서버에 접속하여 정규화된 매매 내역을 가져옵니다.
  *

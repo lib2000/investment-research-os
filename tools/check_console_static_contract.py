@@ -15,6 +15,9 @@ REQUIRED_IDS = {
     "dailyRecommendationsButton",
     "dailyRecommendationsStatusButton",
     "dailyRecommendationCards",
+    "investmentCalendarRefreshButton",
+    "investmentCalendarMonthly",
+    "investmentCalendarWeekly",
     "portfolioLoadButton",
     "portfolioKiwoomSyncButton",
     "portfolioPerformanceButton",
@@ -87,6 +90,7 @@ REQUIRED_FEEDBACK_BUTTON_IDS = {
     "dedupedDossierRefreshButton",
     "manifestButton",
     "tickerCacheButton",
+    "investmentCalendarRefreshButton",
 }
 
 FEEDBACK_TOKENS = (
@@ -110,6 +114,8 @@ REQUIRED_CSS_SNIPPETS = {
     "daily_recommendation_date_groups": ".daily-recommendation-date-groups",
     "daily_recommendation_progress_grid": ".daily-recommendation-progress-grid",
     "daily_recommendation_timeline_steps": ".daily-recommendation-timeline-steps",
+    "investment_calendar_grid": ".investment-calendar-grid",
+    "investment_calendar_weekly": ".investment-calendar-weekly",
 }
 
 REQUIRED_JS_SNIPPETS = {
@@ -122,6 +128,7 @@ REQUIRED_JS_SNIPPETS = {
     "portfolio_store_stale_warning": "갱신 권고",
     "code_knowledge_readiness_output": "운영 준비도",
     "code_knowledge_signal_output": "운영 주의 신호",
+    "investment_calendar_renderer": "renderInvestmentCalendar",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
@@ -165,6 +172,7 @@ REQUIRED_TABS = {
     "llmBridge",
     "reportAutomation",
     "marketClose",
+    "investmentCalendar",
     "portfolio",
     "interests",
     "checklist",
