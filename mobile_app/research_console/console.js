@@ -49,6 +49,7 @@
   refreshRegionalBusinessSourcesWatch,
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
+  fetchRecentWeeklyResearchBrief,
   fetchInvestmentCalendar,
   runDailyRecommendations,
   trackDailyRecommendations,
@@ -86,7 +87,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1c85e93f74aa";
+} from "./api.js?v=3f4c1b7a9d21";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -217,6 +218,7 @@ const elements = {
   naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
   dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
   dailyRecommendationsQuickButton: document.querySelector("#dailyRecommendationsQuickButton"),
+  recentWeeklyBriefButton: document.querySelector("#recentWeeklyBriefButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
@@ -11753,6 +11755,24 @@ async function runDailyRecommendationsStatusFlow() {
   }
 }
 
+async function runRecentWeeklyBriefFlow() {
+  syncApiBaseUrl();
+  activateTab("dashboard");
+  startOutputLoading("최근 1주 자료 조회 중", [
+    "보유/관심종목 기준 공시 확인",
+    "저장 리포트와 RAG 반영 자료 집계",
+    "관세청 수출입 저장 자료 확인",
+    "자동 점검 상태 정리",
+  ]);
+  try {
+    const result = await fetchRecentWeeklyResearchBrief(token(), { days: 7, refreshIfDue: true });
+    setOutput(result || "최근 1주 자료를 확인하지 못했습니다.");
+    await runSecondaryRefresh("DART/자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
 [elements.dailyRecommendationsButton, elements.dailyRecommendationsQuickButton]
   .filter(Boolean)
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsFlow));
@@ -11760,6 +11780,8 @@ async function runDailyRecommendationsStatusFlow() {
 [elements.dailyRecommendationsStatusButton, elements.dailyRecommendationsStatusQuickButton]
   .filter(Boolean)
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
+
+elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
 
 elements.researchAutomationButton.addEventListener("click", async () => {
   syncApiBaseUrl();
@@ -13032,6 +13054,46 @@ function formatKoreanResult(value) {
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  if (
+    value.module === "recent_weekly_research_brief"
+  ) {
+    const counts = value.counts || {};
+    const daily = value.daily_watch?.dart || {};
+    const lineForItem = (item) => {
+      const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
+      const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
+      const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+    };
+    const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
+      const status = item.due ? "점검 필요" : "최신";
+      return `${item.label || item.key || "외부 소스"} · ${status} · 자동 ${item.auto_refresh ? "켜짐" : "꺼짐"} · 최근 ${formatDateTime(item.last_checked_at)}`;
+    });
+    return [
+      `### 최근 1주 자료`,
+      ``,
+      `- **기간:** ${value.period_start || "미확인"} ~ ${value.period_end || "미확인"}`,
+      `- **대상:** 보유/관심 종목 ${formatNumber(value.target_scope?.holding_and_interest_ticker_count || 0)}개`,
+      `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
+      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건 / 리포트 ${formatNumber(counts.reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      ``,
+      `### 최근 공시`,
+      ...formatBulletList(value.filings, lineForItem, "최근 1주일 내 보유/관심종목 공시가 없습니다."),
+      ``,
+      `### 최근 리포트`,
+      ...formatBulletList(value.reports, lineForItem, "최근 1주일 내 보유/관심종목 연결 리포트가 없습니다."),
+      ``,
+      `### 수출입/시장 공통 자료`,
+      ...formatBulletList([...(value.customs_exports || []), ...(value.market_context || [])], lineForItem, "최근 1주일 내 표시할 수출입/시장 공통 자료가 없습니다."),
+      ``,
+      `### 자동 점검 상태`,
+      ...formatBulletList(sourceLines, (item) => item, "자동 점검 상태가 없습니다."),
+      ``,
+      `### 다음 액션`,
+      ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180)),
+    ].join("\n");
   }
 
   if (

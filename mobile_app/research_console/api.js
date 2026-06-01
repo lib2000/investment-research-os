@@ -234,14 +234,38 @@ export async function refreshDartFilingWatch(accessToken, options = {}) {
     return request("/api/v1/dart/filings/refresh", {
       method: "POST",
       accessToken,
-      body: {
+      body: JSON.stringify({
         tickers: options.tickers || undefined,
         force: Boolean(options.force),
         save_result: options.saveResult !== false,
-      },
+      }),
     });
   } catch (error) {
     console.error("DART 신규 공시 감시를 재실행하는 중 오류 발생:", error);
+    return null;
+  }
+}
+
+
+/**
+ * 보유/관심종목 기준 최근 공시, 리포트, 수출입 자료를 1주일 단위로 조회합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {{days?: number, refreshIfDue?: boolean}} options 조회 기간과 DART 보강 실행 여부
+ * @returns {Promise<Object|null>} 최근 1주일 리서치 브리프
+ */
+export async function fetchRecentWeeklyResearchBrief(accessToken, options = {}) {
+  const params = new URLSearchParams();
+  params.set("days", String(options.days || 7));
+  params.set("refresh_if_due", options.refreshIfDue === false ? "false" : "true");
+  try {
+    return request(`/api/v1/research/recent-weekly-brief?${params.toString()}`, {
+      method: "GET",
+      accessToken,
+      timeoutMs: 45000,
+    });
+  } catch (error) {
+    console.error("최근 1주일 리서치 브리프를 불러오는 중 오류 발생:", error);
     return null;
   }
 }

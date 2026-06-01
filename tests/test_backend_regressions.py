@@ -2739,6 +2739,97 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(status["coverage_rate"], 0)
         self.assertEqual(status["missing_tickers"], ["003230", "071050"])
 
+    def test_recent_weekly_brief_filters_targets_and_dedupes_reports(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio_store = {
+            "portfolios": {
+                "DEFAULT": {
+                    "holdings": [
+                        {"ticker": "003230", "name": "삼양식품"},
+                    ]
+                }
+            }
+        }
+        interest_store = {
+            "tickers": [{"ticker": "327260", "name": "RF머트리얼즈"}],
+            "sectors": [{"name": "반도체"}],
+        }
+        manifest_entries = [
+            {
+                "date": "2026-05-31",
+                "ticker": "003230",
+                "type": "broker-report",
+                "summary": "삼양식품 실적 발표 리포트",
+                "relative_path": "REPORT/003230-a.md",
+            },
+            {
+                "date": "2026-05-31",
+                "ticker": "003230",
+                "type": "broker-report",
+                "summary": "삼양식품 실적 발표 리포트",
+                "relative_path": "REPORT/003230-b.md",
+            },
+            {
+                "date": "2026-05-30",
+                "type": "sector-note",
+                "summary": "반도체 수출 장비 사이클 점검",
+                "relative_path": "SECTOR/semiconductor.md",
+            },
+            {
+                "date": "2026-05-30",
+                "type": "market-note",
+                "summary": "유럽 금리와 환율 점검",
+                "tags": ["macro"],
+                "relative_path": "MARKET/europe-rate.md",
+            },
+            {
+                "date": "2026-05-29",
+                "type": "customs-trade-brief",
+                "summary": "5월 수출입 실적 업데이트",
+                "tags": ["customs", "export"],
+                "relative_path": "CUSTOMS/export.md",
+            },
+        ]
+        dart_cache = {
+            "entries": {
+                "003230-20260531": {
+                    "ticker": "003230",
+                    "filing": {
+                        "corp_name": "삼양식품",
+                        "stock_code": "003230",
+                        "report_name": "주식등의대량보유상황보고서",
+                        "receipt_date": "20260531",
+                        "rcept_no": "20260531000123",
+                    },
+                }
+            }
+        }
+
+        with (
+            patch.object(main, "current_storage_date", return_value=date(2026, 6, 1)),
+            patch.object(main, "current_storage_timestamp", return_value="2026-06-01T09:00:00+09:00"),
+            patch.object(main, "read_portfolio_store", return_value=portfolio_store),
+            patch.object(main, "read_interest_list", return_value=interest_store),
+            patch.object(main, "read_manifest", return_value=manifest_entries),
+            patch.object(main, "read_dart_filing_cache", return_value=dart_cache),
+            patch.object(main, "resolve_vault_dir", return_value=PROJECT_ROOT / "research_vault"),
+            patch.object(main, "dart_daily_check_status", return_value={"status": "complete", "due": False}),
+            patch.object(main, "build_external_source_schedule_status", return_value=[]),
+        ):
+            brief = main.build_recent_weekly_research_brief(settings, days=7, refresh_if_due=False)
+
+        self.assertEqual(brief["counts"]["filings"], 1)
+        self.assertEqual(brief["counts"]["reports"], 2)
+        self.assertEqual(brief["counts"]["customs_exports"], 1)
+        summaries = [item["summary"] for item in brief["items"]]
+        self.assertEqual(summaries.count("삼양식품 실적 발표 리포트"), 1)
+        self.assertIn("반도체 수출 장비 사이클 점검", summaries)
+        self.assertIn("5월 수출입 실적 업데이트", summaries)
+        self.assertNotIn("유럽 금리와 환율 점검", summaries)
+
 
 class CustomsTradeDataQualityTests(unittest.TestCase):
     def test_service_status_only_customs_rows_are_not_counted_as_trade_data(self):

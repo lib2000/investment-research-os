@@ -14135,6 +14135,236 @@ def build_external_source_schedule_status(settings: Settings) -> list[dict]:
     ]
 
 
+def recent_activity_target_terms(settings: Settings) -> dict:
+    tickers: set[str] = set()
+    names: set[str] = set()
+    sectors: set[str] = set()
+    try:
+        store = read_portfolio_store(settings)
+        for portfolio in (store.get("portfolios") or {}).values():
+            if not isinstance(portfolio, dict):
+                continue
+            for holding in portfolio.get("holdings") or []:
+                if not isinstance(holding, dict):
+                    continue
+                ticker = normalize_ticker(str(holding.get("ticker") or ""))
+                if ticker and ticker not in {"CASH", "UNKNOWN"}:
+                    tickers.add(ticker)
+                name = str(holding.get("name") or holding.get("company_name") or "").strip()
+                if name:
+                    names.add(name)
+    except Exception:
+        pass
+    try:
+        interests = read_interest_list(settings)
+        for item in interests.get("tickers", []):
+            if not isinstance(item, dict):
+                continue
+            ticker = normalize_ticker(str(item.get("ticker") or ""))
+            if ticker and ticker not in {"CASH", "UNKNOWN"}:
+                tickers.add(ticker)
+            verification = item.get("verification") if isinstance(item.get("verification"), dict) else {}
+            name = str(
+                item.get("name")
+                or item.get("company_name")
+                or verification.get("company_name")
+                or ""
+            ).strip()
+            if name:
+                names.add(name)
+        for item in interests.get("sectors", []):
+            if not isinstance(item, dict):
+                continue
+            sector = str(item.get("name") or item.get("sector") or "").strip()
+            if sector:
+                sectors.add(sector)
+    except Exception:
+        pass
+    return {"tickers": sorted(tickers), "names": sorted(names), "sectors": sorted(sectors)}
+
+
+def recent_activity_cutoff(days: int) -> date:
+    return current_storage_date() - timedelta(days=max(1, int(days or 7)) - 1)
+
+
+def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | None:
+    entry_date = parse_iso_date(entry.get("date"))
+    if not entry_date:
+        return None
+    ticker = normalize_ticker(str(entry.get("ticker") or ""))
+    tags = [str(tag) for tag in (entry.get("tags") or []) if isinstance(tag, str)]
+    text = " ".join(
+        str(entry.get(key) or "")
+        for key in ["summary", "source_url", "file_name", "relative_path", "type", "source_type"]
+    )
+    text += " " + " ".join(tags)
+    related_targets: list[str] = []
+    if ticker and ticker in set(target_terms.get("tickers") or []):
+        related_targets.append(ticker_company_name(ticker))
+    for name in target_terms.get("names") or []:
+        if name and name in text and name not in related_targets:
+            related_targets.append(name)
+    for sector in target_terms.get("sectors") or []:
+        if sector and sector in text and sector not in related_targets:
+            related_targets.append(sector)
+    report_type = str(entry.get("type") or entry.get("report_type") or "")
+    source_type = str(entry.get("source_type") or "")
+    is_market_context = (
+        report_type in {"customs-trade-brief", "daily-dossier-brief", "market-close-review"}
+        or any(tag in {"customs", "export"} for tag in tags)
+    )
+    if not related_targets and not is_market_context:
+        return None
+    category = "report"
+    if report_type == "customs-trade-brief" or "customs" in tags:
+        category = "customs_export"
+    elif source_type == "official_filing" or report_type == "dart-filing-watch":
+        category = "filing"
+    elif report_type in {"daily-dossier-brief", "market-close-review"}:
+        category = "market_context"
+    return {
+        "category": category,
+        "date": entry_date.isoformat(),
+        "ticker": ticker,
+        "company_name": ticker_company_name(ticker) if ticker else (related_targets[0] if related_targets else "시장/섹터 공통"),
+        "report_type": report_type or "research",
+        "source_type": source_type,
+        "summary": entry.get("summary") or entry.get("file_name") or "요약 없음",
+        "relative_path": entry.get("relative_path"),
+        "source_url": entry.get("source_url"),
+        "related_targets": related_targets or ["시장/섹터 공통"],
+        "tags": tags[:12],
+    }
+
+
+def compact_recent_dart_entry(entry: dict) -> dict | None:
+    filing = entry.get("filing") if isinstance(entry.get("filing"), dict) else {}
+    receipt = str(filing.get("receipt_date") or filing.get("rcept_dt") or "")
+    if not fullmatch(r"\d{8}", receipt):
+        return None
+    try:
+        entry_date = datetime.strptime(receipt, "%Y%m%d").date()
+    except ValueError:
+        return None
+    ticker = normalize_ticker(str(entry.get("ticker") or filing.get("stock_code") or ""))
+    return {
+        "category": "filing",
+        "date": entry_date.isoformat(),
+        "ticker": ticker,
+        "company_name": filing.get("corp_name") or entry.get("corp_name") or ticker_company_name(ticker),
+        "report_type": "dart-filing-watch",
+        "source_type": "official_filing",
+        "summary": filing.get("report_name") or filing.get("report_nm") or "DART 공시",
+        "importance": entry.get("importance"),
+        "action": entry.get("action"),
+        "relative_path": ((entry.get("storage") or {}).get("relative_path") if isinstance(entry.get("storage"), dict) else None),
+        "source_url": filing.get("source_url") or (
+            f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={filing.get('rcept_no')}"
+            if filing.get("rcept_no")
+            else None
+        ),
+        "related_targets": [filing.get("corp_name") or ticker_company_name(ticker)],
+        "tags": entry.get("tags") or [],
+    }
+
+
+def recent_activity_item_key(item: dict) -> tuple:
+    summary = sub(r"\s+", " ", str(item.get("summary") or "").strip().lower())[:180]
+    source_url = str(item.get("source_url") or "").strip()
+    source_key = f"url:{source_url}" if source_url else f"summary:{summary}"
+    return (
+        str(item.get("category") or ""),
+        str(item.get("date") or ""),
+        normalize_ticker(str(item.get("ticker") or "")),
+        str(item.get("company_name") or ""),
+        str(item.get("report_type") or ""),
+        source_key,
+    )
+
+
+def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
+    unique_items: list[dict] = []
+    seen: set[tuple] = set()
+    for item in items:
+        key = recent_activity_item_key(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_items.append(item)
+    return unique_items
+
+
+def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refresh_if_due: bool = True) -> dict:
+    normalized_days = max(1, min(int(days or 7), 30))
+    cutoff = recent_activity_cutoff(normalized_days)
+    target_terms = recent_activity_target_terms(settings)
+    if refresh_if_due and settings.dart_filing_auto_refresh and settings.dart_api_key:
+        cache = read_dart_filing_cache(settings)
+        if dart_daily_check_status(cache, settings).get("due"):
+            try:
+                refresh_dart_filing_watch(settings, force=False, save_result=True)
+            except Exception:
+                pass
+    dart_cache = read_dart_filing_cache(settings)
+    dart_items = []
+    for entry in (dart_cache.get("entries") or {}).values():
+        item = compact_recent_dart_entry(entry if isinstance(entry, dict) else {})
+        item_date = parse_iso_date(item.get("date")) if item else None
+        if item and item_date and item_date >= cutoff:
+            dart_items.append(item)
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    manifest_items = []
+    for entry in read_manifest(vault_dir):
+        if not isinstance(entry, dict):
+            continue
+        item = compact_recent_manifest_entry(entry, target_terms)
+        item_date = parse_iso_date(item.get("date")) if item else None
+        if item and item_date and item_date >= cutoff:
+            if item.get("category") == "filing" and item.get("source_type") == "official_filing":
+                continue
+            manifest_items.append(item)
+    all_items = dedupe_recent_activity_items(dart_items + manifest_items)
+    all_items.sort(key=lambda item: (item.get("date") or "", item.get("category") or ""), reverse=True)
+    filings = [item for item in all_items if item.get("category") == "filing"]
+    reports = [item for item in all_items if item.get("category") == "report"]
+    customs_exports = [item for item in all_items if item.get("category") == "customs_export"]
+    market_context = [item for item in all_items if item.get("category") == "market_context"]
+    return {
+        "status": "success",
+        "module": "recent_weekly_research_brief",
+        "as_of": current_storage_timestamp(),
+        "period_days": normalized_days,
+        "period_start": cutoff.isoformat(),
+        "period_end": current_storage_date().isoformat(),
+        "target_scope": {
+            "holding_and_interest_ticker_count": len(target_terms.get("tickers") or []),
+            "company_names": target_terms.get("names") or [],
+            "sectors": target_terms.get("sectors") or [],
+        },
+        "daily_watch": {
+            "dart": dart_daily_check_status(dart_cache, settings),
+            "source_schedule": build_external_source_schedule_status(settings),
+        },
+        "counts": {
+            "filings": len(filings),
+            "reports": len(reports),
+            "customs_exports": len(customs_exports),
+            "market_context": len(market_context),
+            "total": len(all_items),
+        },
+        "filings": filings[:30],
+        "reports": reports[:30],
+        "customs_exports": customs_exports[:20],
+        "market_context": market_context[:20],
+        "items": all_items[:80],
+        "next_actions": [
+            "DART 점검 필요 상태이면 공시 재점검을 실행하세요.",
+            "최근 리포트는 보유/관심 종목과 연결된 항목만 우선 검토하세요.",
+            "관세청 수출입 자료는 실제 수치가 있는 경우에만 저장/RAG에 반영됩니다.",
+        ],
+    }
+
+
 def safe_rag_memory_status(vault_dir: Path) -> dict:
     try:
         return rag_memory_status(vault_dir)
@@ -19113,6 +19343,26 @@ def get_dart_filing_watch_status(
         "last_failures": (cache.get("last_failures") or [])[:10],
         "cache_path": str(dart_filing_cache_path(settings)),
     }
+
+
+@app.get(
+    "/api/v1/research/recent-weekly-brief",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_recent_weekly_research_brief(
+    days: int = Query(default=7, ge=1, le=30),
+    refresh_if_due: bool = Query(default=True),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    보유종목과 관심종목을 기준으로 최근 공시, 리포트, 수출입 자료를 묶어 보여줍니다.
+    DART 일일 점검이 밀려 있으면 조회 시 한 번 보강 실행해 사용자가 놓친 공시를 바로 확인할 수 있게 합니다.
+    """
+    return build_recent_weekly_research_brief(
+        settings,
+        days=days,
+        refresh_if_due=refresh_if_due,
+    )
 
 
 @app.post(
