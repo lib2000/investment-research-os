@@ -791,6 +791,35 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
 
 
 class ExternalSourceScheduleStatusTests(unittest.TestCase):
+    def test_regional_source_failure_preserves_cached_provider_items(self):
+        import research_os_main as main
+
+        fetched_items = [
+            {"item_id": "csf-1", "source_provider": "CSF", "title": "중국 통상 점검"},
+        ]
+        source_results = [
+            {"provider": "CSF", "status": "success"},
+            {"provider": "KIEP", "status": "failed", "error": "timeout"},
+        ]
+        cache = {
+            "items": [
+                {"item_id": "kiep-1", "source_provider": "KIEP", "title": "세계경제 보고서"},
+                {"item_id": "csf-old", "source_provider": "CSF", "title": "중국 과거 자료"},
+            ]
+        }
+
+        items, results, restored_count = main.merge_cached_regional_items_for_failed_sources(
+            fetched_items,
+            source_results,
+            cache,
+        )
+
+        self.assertEqual(restored_count, 1)
+        self.assertIn("kiep-1", {item["item_id"] for item in items})
+        by_provider = {item["provider"]: item for item in results}
+        self.assertEqual(by_provider["KIEP"]["status"], "cache_fallback")
+        self.assertEqual(by_provider["KIEP"]["cached_item_count"], 1)
+
     def test_external_source_schedule_status_includes_regional_macro_sources(self):
         import research_os_main as main
         from research_os.settings import Settings
@@ -2831,12 +2860,14 @@ class DartFilingWatchTests(unittest.TestCase):
 
         self.assertEqual(brief["counts"]["filings"], 1)
         self.assertEqual(brief["counts"]["important_filings"], 1)
+        self.assertEqual(brief["counts"]["ownership_filings"], 1)
         self.assertEqual(brief["counts"]["reports"], 3)
         self.assertEqual(brief["counts"]["display_reports"], 2)
         self.assertEqual(brief["counts"]["hidden_low_signal_reports"], 1)
         self.assertEqual(brief["counts"]["customs_exports"], 1)
         self.assertEqual(brief["watch_summary"]["status"], "점검 완료")
         self.assertEqual(brief["important_filings"][0]["summary"], "주식등의대량보유상황보고서")
+        self.assertEqual(brief["ownership_filings"][0]["company_name"], "삼양식품")
         summaries = [item["summary"] for item in brief["items"]]
         self.assertEqual(summaries.count("삼양식품 실적 발표 리포트"), 1)
         self.assertIn("반도체 수출 장비 사이클 점검", summaries)

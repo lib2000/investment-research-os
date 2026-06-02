@@ -120,7 +120,7 @@ class Settings(BaseModel):
     regional_business_sources_enabled: bool = True
     regional_business_sources_auto_refresh: bool = True
     regional_business_sources_refresh_hours: float = 24.0
-    regional_business_sources_timeout_seconds: float = 10.0
+    regional_business_sources_timeout_seconds: float = 30.0
     regional_business_sources_max_items: int = 40
     regional_business_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     nps_odcloud_enabled: bool = True
@@ -348,7 +348,7 @@ class Settings(BaseModel):
                 os.getenv("REGIONAL_BUSINESS_SOURCES_REFRESH_HOURS", "24")
             ),
             regional_business_sources_timeout_seconds=float(
-                os.getenv("REGIONAL_BUSINESS_SOURCES_TIMEOUT_SECONDS", "10")
+                os.getenv("REGIONAL_BUSINESS_SOURCES_TIMEOUT_SECONDS", "30")
             ),
             regional_business_sources_max_items=int(
                 os.getenv("REGIONAL_BUSINESS_SOURCES_MAX_ITEMS", "40")

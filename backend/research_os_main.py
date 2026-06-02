@@ -14285,6 +14285,23 @@ def recent_filing_priority(item: dict) -> int:
     return score
 
 
+def recent_ownership_filing_items(filings: list[dict]) -> list[dict]:
+    ownership_keywords = ("대량보유", "주요주주", "소유상황", "5%")
+    ownership_items = []
+    for item in filings:
+        tags = {str(tag) for tag in (item.get("tags") or [])}
+        summary = str(item.get("summary") or "")
+        if tags.intersection({"ownership", "flows", "institution"}) or any(
+            keyword in summary for keyword in ownership_keywords
+        ):
+            ownership_items.append({**item, "filing_priority": recent_filing_priority(item)})
+    ownership_items.sort(
+        key=lambda item: (int(item.get("filing_priority") or 0), item.get("date") or ""),
+        reverse=True,
+    )
+    return ownership_items
+
+
 def recent_watch_summary(daily_watch: dict, counts: dict) -> dict:
     dart = daily_watch.get("dart") if isinstance(daily_watch.get("dart"), dict) else {}
     schedules = daily_watch.get("source_schedule") if isinstance(daily_watch.get("source_schedule"), list) else []
@@ -14402,6 +14419,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         key=lambda item: (recent_filing_priority(item), item.get("date") or ""),
         reverse=True,
     )
+    ownership_filings = recent_ownership_filing_items(important_filings)
     display_reports = sorted(
         [
             {**item, "display_priority": recent_report_display_priority(item)}
@@ -14414,6 +14432,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
     counts = {
         "filings": len(filings),
         "important_filings": len(important_filings),
+        "ownership_filings": len(ownership_filings),
         "reports": len(reports),
         "display_reports": len(display_reports),
         "hidden_low_signal_reports": max(0, len(reports) - len(display_reports)),
@@ -14441,6 +14460,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "watch_summary": recent_watch_summary(daily_watch, counts),
         "counts": counts,
         "important_filings": important_filings[:15],
+        "ownership_filings": ownership_filings[:10],
         "filings": filings[:30],
         "display_reports": display_reports[:20],
         "reports": reports[:30],
@@ -16181,6 +16201,47 @@ def build_regional_business_watch_next_actions(related_items: list[dict], warnin
     return actions[:5]
 
 
+def merge_cached_regional_items_for_failed_sources(
+    fetched_items: list[dict],
+    source_results: list[dict],
+    cache: dict,
+) -> tuple[list[dict], list[dict], int]:
+    if not isinstance(cache, dict) or not isinstance(source_results, list):
+        return fetched_items, source_results, 0
+    failed_providers = {
+        str(item.get("provider") or "")
+        for item in source_results
+        if isinstance(item, dict) and item.get("status") != "success"
+    }
+    failed_providers.discard("")
+    if not failed_providers:
+        return fetched_items, source_results, 0
+    merged_items = list(fetched_items)
+    seen_ids = {str(item.get("item_id") or "") for item in merged_items if isinstance(item, dict)}
+    cached_count_by_provider: dict[str, int] = {provider: 0 for provider in failed_providers}
+    for item in cache.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("source_provider") or "")
+        item_id = str(item.get("item_id") or "")
+        if provider not in failed_providers or not item_id or item_id in seen_ids:
+            continue
+        merged_items.append(item)
+        seen_ids.add(item_id)
+        cached_count_by_provider[provider] = cached_count_by_provider.get(provider, 0) + 1
+    merged_results = []
+    for item in source_results:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "")
+        cached_count = cached_count_by_provider.get(provider, 0)
+        if cached_count and item.get("status") != "success":
+            merged_results.append({**item, "status": "cache_fallback", "cached_item_count": cached_count})
+        else:
+            merged_results.append(item)
+    return merged_items, merged_results, sum(cached_count_by_provider.values())
+
+
 def build_regional_business_sources_watch_payload(
     settings: Settings,
     *,
@@ -16205,8 +16266,17 @@ def build_regional_business_sources_watch_payload(
                 timeout=settings.regional_business_sources_timeout_seconds,
                 user_agent=settings.regional_business_sources_user_agent,
             )
+            items, source_results, restored_count = merge_cached_regional_items_for_failed_sources(
+                items,
+                source_results,
+                cache if isinstance(cache, dict) else {},
+            )
+            if restored_count:
+                warnings.append(f"일부 소스 실패로 기존 캐시 {restored_count}건을 보존했습니다.")
+                source_status = "cache_fallback"
             warnings.extend(fetch_warnings)
-            source_status = "refreshed"
+            if source_status != "cache_fallback":
+                source_status = "refreshed"
         except Exception as exc:
             source_status = "cache_fallback" if items else "failed"
             warnings.append(f"EMERiCs/CSF/KIEP 목록 확인 실패: {provider_error_message(exc, settings)}")

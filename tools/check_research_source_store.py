@@ -155,7 +155,11 @@ def main() -> int:
     regional_complete_rows = non_empty_rows(regional_rows, "title", "published_at", "detail_url", "source_url", "source_provider")
     regional_age = age_hours(regional.get("updated_at"))
     source_results = regional.get("source_results") or []
-    failed_sources = [item for item in source_results if isinstance(item, dict) and item.get("status") != "success"]
+    failed_sources = [
+        item
+        for item in source_results
+        if isinstance(item, dict) and item.get("status") not in {"success", "cache_fallback"}
+    ]
     provider_counts = Counter(str(item.get("source_provider") or "미확인") for item in regional_rows if isinstance(item, dict))
     expected_providers = {"EMERiCs", "CSF", "KIEP"}
     missing_providers = expected_providers - set(provider_counts)
@@ -188,7 +192,12 @@ def main() -> int:
     automation_timestamp = automation.get("updated_at")
     automation_age = age_hours(automation_timestamp)
     deduped_refresh = automation.get("last_deduped_dossier_refresh")
-    deduped_refresh_age = age_hours(deduped_refresh.get("updated_at") if isinstance(deduped_refresh, dict) else None)
+    deduped_refresh_timestamp = (
+        deduped_refresh.get("updated_at") or deduped_refresh.get("as_of")
+        if isinstance(deduped_refresh, dict)
+        else None
+    )
+    deduped_refresh_age = age_hours(deduped_refresh_timestamp)
     add_issue(issues, not isinstance(deduped_refresh, dict), "리서치 자동화 Dossier 갱신 상태 누락")
     add_issue(issues, automation_age is None or automation_age > args.max_dossier_queue_age_hours, "리서치 자동화 상태 상위 updated_at 최신성 확인 필요")
     add_issue(issues, automation.get("save_result") is not True, "리서치 자동화 저장 결과 확인 필요")
@@ -197,7 +206,6 @@ def main() -> int:
     add_issue(issues, int(automation.get("rag_connected_count") or 0) < 1, "리서치 자동화 RAG 연결 결과 부족")
     add_issue(issues, int(automation.get("news_unpromoted_count") or 0) > 0, "리서치 자동화 뉴스 미승격 항목 존재")
     if isinstance(deduped_refresh, dict):
-        deduped_refresh_timestamp = deduped_refresh.get("updated_at")
         add_issue(issues, int(deduped_refresh.get("failed_count") or 0) > 0, "리서치 자동화 Dossier 갱신 실패 건 존재")
         add_issue(issues, deduped_refresh_age is None or deduped_refresh_age > args.max_dossier_queue_age_hours, "리서치 자동화 Dossier 갱신 최신성 확인 필요")
         add_issue(
