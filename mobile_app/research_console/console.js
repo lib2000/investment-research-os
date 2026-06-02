@@ -13061,11 +13061,13 @@ function formatKoreanResult(value) {
   ) {
     const counts = value.counts || {};
     const daily = value.daily_watch?.dart || {};
+    const watch = value.watch_summary || {};
     const lineForItem = (item) => {
       const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
       const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      const importance = item.importance ? ` · 중요도 ${item.importance}` : "";
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${importance} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13077,13 +13079,14 @@ function formatKoreanResult(value) {
       `- **기간:** ${value.period_start || "미확인"} ~ ${value.period_end || "미확인"}`,
       `- **대상:** 보유/관심 종목 ${formatNumber(value.target_scope?.holding_and_interest_ticker_count || 0)}개`,
       `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
-      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건 / 리포트 ${formatNumber(counts.reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
+      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
       ``,
-      `### 최근 공시`,
-      ...formatBulletList(value.filings, lineForItem, "최근 1주일 내 보유/관심종목 공시가 없습니다."),
+      `### 중요 공시`,
+      ...formatBulletList(value.important_filings || value.filings, lineForItem, "최근 1주일 내 중요 공시가 없습니다."),
       ``,
-      `### 최근 리포트`,
-      ...formatBulletList(value.reports, lineForItem, "최근 1주일 내 보유/관심종목 연결 리포트가 없습니다."),
+      `### 핵심 리포트`,
+      ...formatBulletList(value.display_reports || value.reports, lineForItem, "최근 1주일 내 보유/관심종목 핵심 리포트가 없습니다."),
       ``,
       `### 수출입/시장 공통 자료`,
       ...formatBulletList([...(value.customs_exports || []), ...(value.market_context || [])], lineForItem, "최근 1주일 내 표시할 수출입/시장 공통 자료가 없습니다."),

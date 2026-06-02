@@ -2786,6 +2786,14 @@ class DartFilingWatchTests(unittest.TestCase):
                 "relative_path": "MARKET/europe-rate.md",
             },
             {
+                "date": "2026-05-30",
+                "ticker": "003230",
+                "type": "research-capture",
+                "summary": "삼양식품 자동 운영 메모",
+                "tags": ["auto_operational_note", "coverage_backfill_note"],
+                "relative_path": "REPORT/003230-auto.md",
+            },
+            {
                 "date": "2026-05-29",
                 "type": "customs-trade-brief",
                 "summary": "5월 수출입 실적 업데이트",
@@ -2822,13 +2830,20 @@ class DartFilingWatchTests(unittest.TestCase):
             brief = main.build_recent_weekly_research_brief(settings, days=7, refresh_if_due=False)
 
         self.assertEqual(brief["counts"]["filings"], 1)
-        self.assertEqual(brief["counts"]["reports"], 2)
+        self.assertEqual(brief["counts"]["important_filings"], 1)
+        self.assertEqual(brief["counts"]["reports"], 3)
+        self.assertEqual(brief["counts"]["display_reports"], 2)
+        self.assertEqual(brief["counts"]["hidden_low_signal_reports"], 1)
         self.assertEqual(brief["counts"]["customs_exports"], 1)
+        self.assertEqual(brief["watch_summary"]["status"], "점검 완료")
+        self.assertEqual(brief["important_filings"][0]["summary"], "주식등의대량보유상황보고서")
         summaries = [item["summary"] for item in brief["items"]]
         self.assertEqual(summaries.count("삼양식품 실적 발표 리포트"), 1)
         self.assertIn("반도체 수출 장비 사이클 점검", summaries)
         self.assertIn("5월 수출입 실적 업데이트", summaries)
         self.assertNotIn("유럽 금리와 환율 점검", summaries)
+        display_summaries = [item["summary"] for item in brief["display_reports"]]
+        self.assertNotIn("삼양식품 자동 운영 메모", display_summaries)
 
 
 class CustomsTradeDataQualityTests(unittest.TestCase):

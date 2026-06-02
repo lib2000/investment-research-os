@@ -14249,6 +14249,62 @@ def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | Non
     }
 
 
+def recent_report_display_priority(item: dict) -> int:
+    report_type = str(item.get("report_type") or "")
+    tags = {str(tag) for tag in (item.get("tags") or [])}
+    if item.get("category") != "report":
+        return 0
+    if tags.intersection({"auto_operational_note", "coverage_backfill_note"}):
+        return 0
+    if report_type in {"research-checklist", "smart-trade-setup"}:
+        return 0
+    if report_type in {"broker-report", "naver-research-report", "shinhan-research-report"}:
+        return 90
+    if report_type in {"earnings-filing-note", "earnings-reaction"}:
+        return 80
+    if report_type in {"collaborative-team-report", "dossier-synthesis"}:
+        return 70
+    if report_type in {"source-url-capture", "research-capture"}:
+        return 60
+    if tags.intersection({"earnings", "filing", "valuation", "growth", "risk", "institution"}):
+        return 55
+    return 30
+
+
+def recent_filing_priority(item: dict) -> int:
+    importance = str(item.get("importance") or "")
+    tags = {str(tag) for tag in (item.get("tags") or [])}
+    summary = str(item.get("summary") or "")
+    score = {"높음": 100, "중간": 70, "보통": 30}.get(importance, 30)
+    if tags.intersection({"ownership", "flows"}) or any(keyword in summary for keyword in ["대량보유", "주요주주", "소유상황"]):
+        score += 20
+    if tags.intersection({"earnings", "financials"}) or any(keyword in summary for keyword in ["사업보고서", "반기보고서", "분기보고서"]):
+        score += 20
+    if tags.intersection({"event", "risk", "financing", "dilution"}):
+        score += 25
+    return score
+
+
+def recent_watch_summary(daily_watch: dict, counts: dict) -> dict:
+    dart = daily_watch.get("dart") if isinstance(daily_watch.get("dart"), dict) else {}
+    schedules = daily_watch.get("source_schedule") if isinstance(daily_watch.get("source_schedule"), list) else []
+    due_sources = [item for item in schedules if isinstance(item, dict) and item.get("due")]
+    failed_sources = [
+        item for item in schedules
+        if isinstance(item, dict) and str(item.get("source_status") or "").lower() in {"error", "failed", "failure"}
+    ]
+    return {
+        "status": "점검 완료" if not dart.get("due") and not due_sources and not failed_sources else "확인 필요",
+        "dart_message": dart.get("reliability_message") or dart.get("status") or "DART 상태 미확인",
+        "dart_coverage_rate": dart.get("coverage_rate"),
+        "due_source_count": len(due_sources),
+        "failed_source_count": len(failed_sources),
+        "recent_signal_count": int(counts.get("filings") or 0) + int(counts.get("reports") or 0) + int(counts.get("customs_exports") or 0),
+        "due_sources": [item.get("label") or item.get("key") for item in due_sources[:5]],
+        "failed_sources": [item.get("label") or item.get("key") for item in failed_sources[:5]],
+    }
+
+
 def compact_recent_dart_entry(entry: dict) -> dict | None:
     filing = entry.get("filing") if isinstance(entry.get("filing"), dict) else {}
     receipt = str(filing.get("receipt_date") or filing.get("rcept_dt") or "")
@@ -14341,6 +14397,34 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
     reports = [item for item in all_items if item.get("category") == "report"]
     customs_exports = [item for item in all_items if item.get("category") == "customs_export"]
     market_context = [item for item in all_items if item.get("category") == "market_context"]
+    important_filings = sorted(
+        [item for item in filings if recent_filing_priority(item) >= 50],
+        key=lambda item: (recent_filing_priority(item), item.get("date") or ""),
+        reverse=True,
+    )
+    display_reports = sorted(
+        [
+            {**item, "display_priority": recent_report_display_priority(item)}
+            for item in reports
+            if recent_report_display_priority(item) > 0
+        ],
+        key=lambda item: (int(item.get("display_priority") or 0), item.get("date") or ""),
+        reverse=True,
+    )
+    counts = {
+        "filings": len(filings),
+        "important_filings": len(important_filings),
+        "reports": len(reports),
+        "display_reports": len(display_reports),
+        "hidden_low_signal_reports": max(0, len(reports) - len(display_reports)),
+        "customs_exports": len(customs_exports),
+        "market_context": len(market_context),
+        "total": len(all_items),
+    }
+    daily_watch = {
+        "dart": dart_daily_check_status(dart_cache, settings),
+        "source_schedule": build_external_source_schedule_status(settings),
+    }
     return {
         "status": "success",
         "module": "recent_weekly_research_brief",
@@ -14353,18 +14437,12 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
             "company_names": target_terms.get("names") or [],
             "sectors": target_terms.get("sectors") or [],
         },
-        "daily_watch": {
-            "dart": dart_daily_check_status(dart_cache, settings),
-            "source_schedule": build_external_source_schedule_status(settings),
-        },
-        "counts": {
-            "filings": len(filings),
-            "reports": len(reports),
-            "customs_exports": len(customs_exports),
-            "market_context": len(market_context),
-            "total": len(all_items),
-        },
+        "daily_watch": daily_watch,
+        "watch_summary": recent_watch_summary(daily_watch, counts),
+        "counts": counts,
+        "important_filings": important_filings[:15],
         "filings": filings[:30],
+        "display_reports": display_reports[:20],
         "reports": reports[:30],
         "customs_exports": customs_exports[:20],
         "market_context": market_context[:20],
@@ -21986,6 +22064,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
     manifest_quality_by_ticker = _daily_recommendation_manifest_quality_by_ticker(manifest_entries)
     dart_cache = read_dart_filing_cache(settings)
     priority_targets = _daily_recommendation_priority_targets(settings)
+    try:
+        recent_weekly = build_recent_weekly_research_brief(settings, days=7, refresh_if_due=False)
+    except Exception:
+        recent_weekly = {}
     consensus_scan = build_target_consensus_scan(
         settings,
         portfolio_name=None,
@@ -22135,6 +22217,32 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             )
         if target.get("next_action"):
             candidate["risk_notes"].append(str(target.get("next_action")))
+
+    recent_items_by_ticker: dict[str, list[dict]] = {}
+    for item in [
+        *(recent_weekly.get("important_filings") or []),
+        *(recent_weekly.get("display_reports") or []),
+        *(recent_weekly.get("customs_exports") or []),
+    ]:
+        if not isinstance(item, dict):
+            continue
+        key = normalize_ticker(str(item.get("ticker") or ""))
+        if not key:
+            continue
+        recent_items_by_ticker.setdefault(key, []).append(item)
+    for ticker, recent_items in recent_items_by_ticker.items():
+        if ticker not in candidates_by_ticker:
+            continue
+        candidate = candidates_by_ticker[ticker]
+        important_count = sum(1 for item in recent_items if item.get("category") == "filing")
+        report_count = sum(1 for item in recent_items if item.get("category") == "report")
+        if important_count:
+            add_candidate_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
+            candidate["reasons"].append(f"최근 1주 중요 공시 {important_count}건 확인")
+            candidate["evidence_sources"].append("최근 1주 공시 브리프 반영")
+        if report_count:
+            add_candidate_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
+            candidate["evidence_sources"].append(f"최근 1주 핵심 리포트 {report_count}건")
 
     for ticker, candidate in list(candidates_by_ticker.items()):
         _apply_daily_recommendation_storage_quality(candidate, manifest_quality_by_ticker.get(ticker))
