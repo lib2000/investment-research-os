@@ -5539,10 +5539,16 @@ def enrich_portfolio_holding(
     current_price = holding.current_price
     currency = (holding.currency or "USD").upper()
     ticker = normalize_ticker(holding.ticker)
+    sync_checked_at = holding.sync_checked_at
+
+    if refresh_price and holding.sync_status in {"manual", "manual_or_overseas_protected"}:
+        sync_checked_at = current_storage_timestamp()
 
     if refresh_price and ticker != "CASH" and currency in {"KRW", "USD"}:
         previous_price = current_price
         price_checked_at = current_storage_timestamp()
+        if holding.sync_status in {"manual", "manual_or_overseas_protected"}:
+            sync_checked_at = price_checked_at
         provider_price, provider_source = latest_provider_price(
             ticker,
             settings,
@@ -5598,6 +5604,7 @@ def enrich_portfolio_holding(
                     "price_source": price_source,
                     "price_refresh_status": price_refresh_status,
                     "price_checked_at": price_checked_at,
+                    "sync_checked_at": sync_checked_at,
                 }
             ),
             checked_at=price_checked_at,
@@ -5645,6 +5652,7 @@ def enrich_portfolio_holding(
                 "price_source": price_source,
                 "price_refresh_status": price_refresh_status,
                 "price_checked_at": price_checked_at,
+                "sync_checked_at": sync_checked_at,
             }
         ),
         checked_at=price_checked_at,
