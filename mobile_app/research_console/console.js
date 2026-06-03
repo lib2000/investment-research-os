@@ -2165,7 +2165,7 @@ function renderPortfolioPerformanceOverview(result) {
           : ""
       }`;
   const skippedText = skipped.length
-    ? `제외 ${skipped.length}개: ${skipped.slice(0, 4).map((item) => item.name || "종목 미확인").join(", ")}${skipped.length > 4 ? " 외" : ""}`
+    ? `기간 수익 제외 ${skipped.length}개: ${skipped.slice(0, 4).map((item) => item.name || "종목 미확인").join(", ")}${skipped.length > 4 ? " 외" : ""}`
     : "제외 종목 없음";
   const skippedDetails = skipped.length
     ? `<details class="portfolio-performance-skip">
@@ -2181,8 +2181,11 @@ function renderPortfolioPerformanceOverview(result) {
                 const manualGain = item.manual_unrealized_gain === null || item.manual_unrealized_gain === undefined
                   ? ""
                   : ` · 수동 손익 ${formatMoney(item.manual_unrealized_gain, "KRW", "n/a")}`;
-                const note = item.manual_result_note ? ` · ${item.manual_result_note}` : "";
-                return `<li>${escapeHtml(item.name || "종목 미확인")} · ${escapeHtml(item.reason || "가격 히스토리 없음")} · ${escapeHtml(item.impact || "기간 비교에서 제외")}${escapeHtml(manualGain)}${escapeHtml(manualReturn)}${escapeHtml(note)}</li>`;
+                const categoryLabel = item.category === "overseas_or_unsupported_history"
+                  ? "해외/미지원 히스토리"
+                  : item.category === "price_history_live_lookup_deferred" ? "실시간 히스토리 보류" : "히스토리 제한";
+                const note = item.manual_result_note ? ` · ${item.manual_result_note}` : " · 저장 손익은 별도 유지합니다.";
+                return `<li>${escapeHtml(item.name || "종목 미확인")} · 기간 수익 제외 · ${escapeHtml(categoryLabel)} · ${escapeHtml(item.reason || "가격 히스토리 없음")} · ${escapeHtml(item.impact || "기간 비교에서 제외")}${escapeHtml(manualGain)}${escapeHtml(manualReturn)}${escapeHtml(note)}</li>`;
               }
             )
             .join("")}
@@ -7774,6 +7777,33 @@ function dailyRecommendationStatusLabel(status) {
   }[status] || status || "상태 미확인";
 }
 
+function dailyRecommendationEvidenceCategories(record) {
+  const text = [
+    ...(record?.score_components || []).map((item) => item.label),
+    ...(record?.evidence_sources || []),
+    ...(record?.reasons || []),
+    ...(record?.risk_notes || []),
+    ...(record?.score_penalties || []),
+    ...(record?.quality_flags || []),
+  ].join(" ");
+  const categories = [];
+  const add = (label, pattern) => {
+    if (pattern.test(text) && !categories.includes(label)) {
+      categories.push(label);
+    }
+  };
+  add("가격/밸류", /가격|현재가|목표가|밸류|상승여력|valuation/i);
+  add("공시", /공시|DART|filing/i);
+  add("리포트", /리포트|증권사|컨센서스|목표주가|report/i);
+  add("수급/보유", /보유|포트폴리오|관심|수급|대량보유|institution/i);
+  add("저장/RAG", /저장|RAG|자료|문서|스냅샷|시장일지/i);
+  add("리스크", /리스크|위험|감점|확인|보강|미확인|quality|penalt/i);
+  if (!categories.length) {
+    categories.push("기본 점검");
+  }
+  return categories.slice(0, 6);
+}
+
 function dailyRecommendationChangeText(milestone, currency = "KRW") {
   if (!milestone || milestone.price === null || milestone.price === undefined) {
     return "가격 대기";
@@ -8090,6 +8120,7 @@ function renderDailyRecommendationCards(payload) {
       const overseasTracking = record.overseas_tracking || {};
       const portfolioRisk = record.portfolio_risk_connection || {};
       const milestones = (record.tracking_milestones || []).slice(0, 5);
+      const categories = dailyRecommendationEvidenceCategories(record);
       return `
         <article class="daily-recommendation-card">
           <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")} · ${escapeHtml(record.rank || "-")}위</span>
@@ -8110,6 +8141,7 @@ function renderDailyRecommendationCards(payload) {
                   .join(" · ")}`
               : "점수 비중은 다음 추천 생성부터 표시됩니다."
           )}</small>
+          <small>${escapeHtml(`근거 분류: ${categories.join(" · ")}`)}</small>
           ${
             penalties.length || qualityFlags.length
               ? `<p class="daily-recommendation-warning">확인/감점: ${escapeHtml(
@@ -14661,7 +14693,10 @@ function formatKoreanResult(value) {
         const manualGain = item.manual_unrealized_gain === null || item.manual_unrealized_gain === undefined
           ? ""
           : ` / 수동 손익 ${formatMoney(item.manual_unrealized_gain, "KRW", "n/a")}`;
-        return `- ${displayCompanyName(item)}: ${item.reason || "기간 가격 데이터 없음"} / ${item.impact || "기간 비교에서 제외"}${manualGain}${manualReturn}`;
+        const categoryLabel = item.category === "overseas_or_unsupported_history"
+          ? "해외/미지원 히스토리"
+          : item.category === "price_history_live_lookup_deferred" ? "실시간 히스토리 보류" : "히스토리 제한";
+        return `- ${displayCompanyName(item)}: 기간 수익 제외 / ${categoryLabel} / ${item.reason || "기간 가격 데이터 없음"} / ${item.impact || "기간 비교에서 제외"}${manualGain}${manualReturn}`;
       }
     );
     const priceCache = value.price_history_cache || {};

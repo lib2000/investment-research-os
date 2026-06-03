@@ -422,6 +422,21 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     "dashboard output completion"
                   );
 
+                  document.querySelector("#recentWeeklyBriefButton")?.click();
+                  const recentWeeklyBriefText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      return text.includes("최근 1주 자료") &&
+                        text.includes("기준 시각") &&
+                        (text.includes("DART 점검 시각") || text.includes("공시")) &&
+                        (text.includes("자동 점검 상태") || text.includes("최근 1주일"))
+                        ? text
+                        : "";
+                    }},
+                    120000,
+                    "recent weekly research brief"
+                  );
+
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
                     await waitFor(() => document.querySelector(`#${{tab}}`)?.classList.contains("active"), 5000, `${{tab}} active`);
@@ -944,6 +959,28 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     dailyRecommendationsStatusText = await dailyRecommendationApiFallback("daily recommendations status button");
                   }}
 
+                  document.querySelector('[data-tab="investmentCalendar"]').click();
+                  await waitFor(() => document.querySelector("#investmentCalendar")?.classList.contains("active"), 5000, "investment calendar active");
+                  document.querySelector("#investmentCalendarRefreshButton")?.click();
+                  const investmentCalendarText = await waitFor(
+                    () => {{
+                      const title = document.querySelector("#investmentCalendarTitle")?.innerText || "";
+                      const meta = document.querySelector("#investmentCalendarMeta")?.innerText || "";
+                      const monthly = document.querySelector("#investmentCalendarMonthly")?.innerText || "";
+                      const weekly = document.querySelector("#investmentCalendarWeekly")?.innerText || "";
+                      const output = document.querySelector("#output")?.innerText || "";
+                      const combined = `${{title}}\n${{meta}}\n${{monthly}}\n${{weekly}}\n${{output}}`;
+                      return combined.includes("투자 캘린더") &&
+                        combined.includes("한국") &&
+                        combined.includes("미국") &&
+                        (combined.includes("실적발표") || combined.includes("실적"))
+                        ? combined
+                        : "";
+                    }},
+                    120000,
+                    "investment calendar refresh"
+                  );
+
                   document.querySelector('[data-tab="llmBridge"]').click();
                   await waitFor(() => document.querySelector("#llmBridge")?.classList.contains("active"), 5000, "llm active");
                   const llmPromptForm = document.querySelector("#llmPromptForm");
@@ -1007,6 +1044,18 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     dashboardShowsDailyRecommendationShortcuts:
                       !!document.querySelector("#dailyRecommendationsQuickButton") &&
                       !!document.querySelector("#dailyRecommendationsStatusQuickButton"),
+                    recentWeeklyShowsTimestamps:
+                      recentWeeklyBriefText.includes("최근 1주 자료") &&
+                      recentWeeklyBriefText.includes("기준 시각") &&
+                      (recentWeeklyBriefText.includes("DART 점검 시각") || recentWeeklyBriefText.includes("공시")),
+                    recentWeeklyShowsSourceGroups:
+                      recentWeeklyBriefText.includes("수급/대량보유") &&
+                      recentWeeklyBriefText.includes("리포트") &&
+                      recentWeeklyBriefText.includes("수출입"),
+                    investmentCalendarShowsMarkets:
+                      investmentCalendarText.includes("한국") && investmentCalendarText.includes("미국"),
+                    investmentCalendarShowsEarningsTitle:
+                      investmentCalendarText.includes("실적발표") || investmentCalendarText.includes("실적"),
                     macroHasTicker: tickerRegex.test(macroText),
                     compounderHasTicker: tickerRegex.test(compounderText),
                     interestsRendered: interestsText.includes("관심종목 목록") && interestsText.includes("관심섹터 목록"),
@@ -1118,6 +1167,14 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("대시보드 DART 스트립에 대상/확인 커버리지 정보가 표시되지 않았습니다.")
             if not result["dashboardShowsDailyRecommendationShortcuts"]:
                 raise AssertionError("대시보드에 오늘 추천 1~3위와 추천 추적 바로가기 버튼이 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsTimestamps"]:
+                raise AssertionError("최근 1주 자료 화면에 기준 시각/DART 점검 시각이 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsSourceGroups"]:
+                raise AssertionError("최근 1주 자료 화면에 공시/리포트/수출입 자료 그룹이 표시되지 않았습니다.")
+            if not result["investmentCalendarShowsMarkets"]:
+                raise AssertionError("투자 캘린더 화면에 한국/미국 시장 구분이 표시되지 않았습니다.")
+            if not result["investmentCalendarShowsEarningsTitle"]:
+                raise AssertionError("투자 캘린더 화면에 실적발표 제목/일정이 표시되지 않았습니다.")
             if result["macroHasTicker"]:
                 raise AssertionError("매크로 분석 화면 결과에 주요 티커 코드가 남아 있습니다.")
             if result["compounderHasTicker"]:
