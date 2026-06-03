@@ -3685,10 +3685,14 @@ class PortfolioPerformanceTests(unittest.TestCase):
             {"date": "2026-05-18", "close": 120},
         ]
 
-        def fake_history_rows(ticker, _settings):
+        def fake_history_rows(ticker, _settings, **_kwargs):
             if ticker == "003230":
                 return "003230", history_rows, {"cache_hit": True}
             raise ValueError("국내 가격 히스토리 지원 대상이 아닙니다.")
+
+        original_history_cache = dict(main.PORTFOLIO_HISTORY_CACHE)
+        main.PORTFOLIO_HISTORY_CACHE.clear()
+        main.PORTFOLIO_HISTORY_CACHE["003230:280"] = history_rows
 
         with (
             patch.object(main, "read_portfolio_store", return_value=store),
@@ -3698,6 +3702,9 @@ class PortfolioPerformanceTests(unittest.TestCase):
             patch.object(main, "current_storage_timestamp", return_value="2026-05-18T09:00:00+09:00"),
         ):
             result = main.build_portfolio_performance("테스트", settings)
+
+        main.PORTFOLIO_HISTORY_CACHE.clear()
+        main.PORTFOLIO_HISTORY_CACHE.update(original_history_cache)
 
         self.assertEqual(result["calculation_mode"], "recomputed_on_request")
         self.assertFalse(result["current_price_refresh"]["enabled"])
@@ -3711,7 +3718,7 @@ class PortfolioPerformanceTests(unittest.TestCase):
         self.assertEqual(result["current_price_comparison"]["difference_count"], 1)
         self.assertEqual(result["current_price_comparison"]["items"][0]["name"], "삼양식품")
         self.assertEqual(result["price_basis"], "저장 현재가 + 국내 가격 히스토리 최신 종가")
-        self.assertIn("가격 갱신 불러오기", result["price_refresh_guidance"])
+        self.assertIn("가격 갱신/차트 조회", result["price_refresh_guidance"])
         self.assertEqual(result["unsupported_history_count"], 1)
         self.assertEqual(result["unsupported_history_market_value"], 14000)
         self.assertEqual(result["skipped_holdings"][0]["category"], "overseas_or_unsupported_history")
@@ -4388,6 +4395,117 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
                 list_journal_drafts(settings, include_completed=True)[0]["draft_status"],
                 "completed",
             )
+
+
+    def test_completed_trade_journal_links_matching_order_execution_draft(self):
+        from app.application_models import JournalSourceTradesResponse, PortfolioResponse
+        from app.database import (
+            create_or_update_journal_entry,
+            finish_sync_run,
+            get_journal_analytics,
+            init_db,
+            list_journal_drafts,
+            list_journal_entries,
+            start_sync_run,
+        )
+        from app.kiwoom_balance import KiwoomBalanceSummary
+        from app.kiwoom_order_execution import KiwoomOrderExecution
+        from app.kiwoom_trade_journal import KiwoomTradeJournalItem, KiwoomTradeJournalSummary
+
+        with self.temp_database_dir() as temp_dir:
+            settings = self.make_settings(temp_dir)
+            init_db(settings)
+            sync_run_id = start_sync_run(settings, broker="KIWOOM")
+            portfolio = PortfolioResponse(
+                broker="KIWOOM",
+                synced_from="mock",
+                summary=KiwoomBalanceSummary(),
+                holdings_count=0,
+                holdings=[],
+            )
+            journal = JournalSourceTradesResponse(
+                broker="KIWOOM",
+                synced_from=["ka10170", "kt00007"],
+                base_date="20260115",
+                trade_summary=KiwoomTradeJournalSummary(),
+                trade_journal_items_count=1,
+                trade_journal_items=[
+                    KiwoomTradeJournalItem(
+                        ticker="005930",
+                        name="삼성전자",
+                        buy_average_price=70000,
+                        buy_quantity=10,
+                        sell_average_price=71000,
+                        sell_quantity=10,
+                        buy_amount=700000,
+                        sell_amount=710000,
+                        profit_loss_amount=5000,
+                        profit_rate=0.7,
+                    )
+                ],
+                order_executions_count=1,
+                order_executions=[
+                    KiwoomOrderExecution(
+                        order_no="100001",
+                        ticker="005930",
+                        name="삼성전자",
+                        trade_side_name="매도",
+                        order_status="체결",
+                        order_time="090000",
+                        confirm_time="090100",
+                        order_price=71000,
+                        order_quantity=10,
+                        filled_price=71000,
+                        filled_quantity=10,
+                        remaining_quantity=0,
+                    )
+                ],
+                needs_review_count=2,
+            )
+            finish_sync_run(settings, sync_run_id, portfolio, journal)
+
+            pending = list_journal_drafts(settings)
+            self.assertEqual(len(pending), 2)
+            trade_draft = next(
+                item for item in pending if item["source_type"] == "trade_journal"
+            )
+
+            entry = create_or_update_journal_entry(
+                settings=settings,
+                draft_id=int(trade_draft["id"]),
+                strategy_name="ORB",
+                setup_tags=["breakout"],
+                entry_reason="키움 원천 거래 복기",
+                exit_reason="",
+                rule_followed=True,
+                good_points="",
+                improvement_points="",
+                memo="",
+                manual_profit_loss_amount=5000,
+            )
+
+            self.assertEqual(list_journal_drafts(settings), [])
+            all_drafts = list_journal_drafts(settings, include_completed=True)
+            statuses = {item["source_type"]: item["draft_status"] for item in all_drafts}
+            self.assertEqual(statuses["trade_journal"], "completed")
+            self.assertEqual(statuses["order_execution"], "linked")
+            self.assertEqual(entry["source_payload"]["related_order_executions_count"], 1)
+            self.assertEqual(
+                entry["source_payload"]["related_order_executions"][0]["order_no"],
+                "100001",
+            )
+
+            entries = list_journal_entries(settings)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(
+                entries[0]["source_payload"]["related_order_executions_count"],
+                1,
+            )
+            analytics = get_journal_analytics(settings)
+            self.assertEqual(analytics["total_entries"], 1)
+            self.assertEqual(analytics["pending_drafts"], 0)
+            self.assertEqual(analytics["completed_drafts"], 1)
+
 
 
 if __name__ == "__main__":

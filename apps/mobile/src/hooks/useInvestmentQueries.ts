@@ -33,13 +33,19 @@ export function usePortfolio() {
   });
 }
 
-export function useJournalDrafts(page = 1, pageSize = 20) {
+export function useJournalDrafts(page = 1, pageSize = 20, includeCompleted = false) {
   return useQuery({
-    queryKey: ["journal-drafts", page, pageSize],
-    queryFn: () =>
-      apiGet<PaginatedResponse<JournalDraft, "drafts">>(
-        `/api/v1/journal/drafts?page=${page}&page_size=${pageSize}`,
-      ),
+    queryKey: ["journal-drafts", page, pageSize, includeCompleted],
+    queryFn: () => {
+      const query = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (includeCompleted) query.set("include_completed", "true");
+      return apiGet<PaginatedResponse<JournalDraft, "drafts">>(
+        `/api/v1/journal/drafts?${query.toString()}`,
+      );
+    },
     staleTime: 15_000,
   });
 }

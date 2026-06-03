@@ -13078,16 +13078,29 @@ function formatKoreanResult(value) {
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
-      return `${item.label || item.key || "외부 소스"} · ${status} · 자동 ${item.auto_refresh ? "켜짐" : "꺼짐"} · 최근 ${formatDateTime(item.last_checked_at)}`;
+      const nextCheck = item.next_check_after ? ` · 다음 ${formatDateTime(item.next_check_after)}` : "";
+      const failure = item.last_error ? ` · 오류 ${compactOutputText(item.last_error, 90)}` : "";
+      return `${item.label || item.key || "외부 소스"} · ${status} · 자동 ${item.auto_refresh ? "켜짐" : "꺼짐"} · 최근 ${formatDateTime(item.last_checked_at)}${nextCheck}${failure}`;
     });
+    const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
+    const dartNextCheck = daily.next_check_after;
+    const noRecentSignal =
+      !counts.ownership_filings &&
+      !counts.important_filings &&
+      !counts.display_reports &&
+      !counts.customs_exports &&
+      !counts.market_context;
     return [
       `### 최근 1주 자료`,
       ``,
       `- **기간:** ${value.period_start || "미확인"} ~ ${value.period_end || "미확인"}`,
+      `- **기준 시각:** ${formatDateTime(value.as_of)}`,
       `- **대상:** 보유/관심 종목 ${formatNumber(value.target_scope?.holding_and_interest_ticker_count || 0)}개`,
       `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
+      `- **DART 점검 시각:** 최근 ${formatDateTime(dartLastChecked)} · 다음 ${dartNextCheck ? formatDateTime(dartNextCheck) : "미확인"}`,
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
       `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·수출입·시장 자료가 없습니다.` : "",
       ``,
       `### 핵심 요약`,
       `- **수급/대량보유:** ${formatNumber(counts.ownership_filings || 0)}건 · 상위 ${Math.min((value.ownership_filings || []).length, 3)}건 먼저 확인`,

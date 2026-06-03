@@ -21305,6 +21305,14 @@ def build_portfolio_performance(
         if not allow_live_history and history_cache_key not in PORTFOLIO_HISTORY_CACHE:
             code_for_skip = normalize_kr_stock_code(ticker)
             category = "price_history_live_lookup_deferred" if is_naver_domestic_stock_code(code_for_skip) else "overseas_or_unsupported_history"
+            manual_gain = holding.unrealized_gain
+            manual_return = holding.unrealized_return
+            manual_note = (
+                "저장 수량, 저장 현재가, 저장 평단 기준의 수동 손익으로 별도 표시합니다."
+                if category == "overseas_or_unsupported_history"
+                and (manual_gain is not None or manual_return is not None)
+                else None
+            )
             skipped.append({
                 "ticker": ticker,
                 "name": holding.name,
@@ -21315,6 +21323,9 @@ def build_portfolio_performance(
                 "average_cost": holding.average_cost,
                 "current_price": holding.current_price,
                 "currency": holding.currency,
+                "manual_unrealized_gain": round(manual_gain, 2) if manual_gain is not None else None,
+                "manual_unrealized_return": round(manual_return, 4) if manual_return is not None else None,
+                "manual_result_note": manual_note,
                 "impact": "현재 평가금액과 저장 손익은 유지하고, 기간 수익 비교는 캐시된 히스토리가 생긴 뒤 반영합니다.",
             })
             if category == "overseas_or_unsupported_history":

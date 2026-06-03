@@ -138,9 +138,9 @@ EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8010
 
 수동 입력 화면은 타 증권사 거래내역 CSV 템플릿 불러오기, 파일 선택, 붙여넣기 가져오기를 지원합니다. 템플릿은 `GET /api/v1/manual-transactions/import.csv/template`에서 받은 한글 헤더 CSV를 입력칸에 채웁니다. 파일 선택은 원본 인코딩 보존을 위해 `multipart/form-data`로 전송하고, 붙여넣기는 `text/csv`로 `POST /api/v1/manual-transactions/import.csv`에 전송합니다. 가져오기 후 `manual-transactions`와 `journal-analytics` Query를 다시 불러옵니다.
 
-일지 초안 화면은 초안 선택 후 복기 내용을 입력하고 `일지 작성 완료`로 저장할 수 있습니다. 저장 후 `journal-drafts`와 `journal-analytics` Query를 다시 불러와 복기 대기 목록과 분석 차트가 갱신됩니다.
+일지 초안 화면은 초안 선택 후 복기 내용을 입력하고 `일지 작성 완료`로 저장할 수 있습니다. 기본 목록은 `needs_review` 복기 대기 초안만 보여주며, `전체` 전환으로 `completed`, `linked` 상태까지 확인할 수 있습니다. 저장 후 `journal-drafts`, `journal-entries`, `journal-analytics` Query를 다시 불러와 복기 대기 목록과 분석 차트가 갱신됩니다.
 
-일지 화면은 작성 완료 일지 조회, 수정, 삭제를 지원합니다. 삭제된 일지는 연결된 초안이 다시 복기 대기 상태로 돌아갑니다.
+일지 화면은 작성 완료 일지 조회, 수정, 삭제를 지원합니다. 키움 체결 상세(`order_execution`)는 별도 복기 건으로 중복 표시하지 않고 완료 일지의 `연결된 체결 상세` 영역에 붙여 보여줍니다. 삭제된 일지는 연결된 초안이 다시 복기 대기 상태로 돌아갑니다.
 
 분석 화면 차트는 `react-native-gifted-charts`로 구현합니다.
 

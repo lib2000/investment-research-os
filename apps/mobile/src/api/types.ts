@@ -56,6 +56,29 @@ export type JournalEntryMutationResponse = {
   entry: Record<string, unknown>;
 };
 
+export type RelatedOrderExecution = {
+  draft_id?: number;
+  source_key?: string;
+  order_no?: string;
+  ticker?: string;
+  name?: string;
+  trade_side_name?: string;
+  order_status?: string;
+  order_time?: string;
+  confirm_time?: string;
+  order_price?: number | null;
+  order_quantity?: number | null;
+  filled_price?: number | null;
+  filled_quantity?: number | null;
+  remaining_quantity?: number | null;
+  trade_date?: string;
+};
+
+export type JournalEntrySourcePayload = Record<string, unknown> & {
+  related_order_executions?: RelatedOrderExecution[];
+  related_order_executions_count?: number;
+};
+
 export type JournalEntry = {
   id: number;
   draft_id: number;
@@ -71,6 +94,7 @@ export type JournalEntry = {
   improvement_points?: string;
   memo?: string;
   manual_profit_loss_amount?: number | null;
+  source_payload?: JournalEntrySourcePayload;
   updated_at?: string;
 };
 

@@ -407,13 +407,15 @@ Expo 모바일 앱의 수동입력 화면은 CSV 템플릿 불러오기, 파일 
 React Native 일지 초안 화면:
 
 - 초안을 선택하고 전략, 셋업 태그, 진입/청산 근거, 원칙 준수 여부, 복기 메모를 입력한다.
-- `일지 작성 완료` 저장 후 `journal-drafts`와 `journal-analytics` Query를 다시 불러온다.
-- 저장된 초안은 백엔드에서 `completed` 상태로 전환되고 분석 손익에 반영된다.
+- 기본 목록은 `needs_review` 복기 대기 초안만 보여주며, `전체` 전환으로 `completed`, `linked` 상태까지 확인한다.
+- `일지 작성 완료` 저장 후 `journal-drafts`, `journal-entries`, `journal-analytics` Query를 다시 불러온다.
+- 저장된 매매 요약 초안은 백엔드에서 `completed` 상태로 전환되고 분석 손익에 반영된다. 같은 거래일/종목의 체결 상세 초안은 `linked` 상태로 전환되어 중복 일지로 계산하지 않는다.
 
 React Native 작성 완료 일지 화면:
 
 - 작성 완료 일지 목록을 조회한다.
 - 기존 일지를 선택해 전략, 태그, 근거, 원칙 준수 여부, 손익, 메모를 수정한다.
+- 키움 체결 상세(`order_execution`)는 별도 복기 건으로 중복 표시하지 않고 완료 일지의 `연결된 체결 상세` 영역에 붙여 보여준다.
 - 일지를 삭제하면 백엔드에서 연결된 초안이 다시 `needs_review` 상태로 돌아간다.
 - 수정/삭제 후 `journal-entries`, `journal-drafts`, `journal-analytics` Query를 다시 불러온다.
 
@@ -442,7 +444,7 @@ React Native 작성 완료 일지 화면:
 - 수량
 - 가격
 
-키움 동기화 데이터는 `trade_dedup_keys`에 우선 등록된다. 수동 입력 거래가 같은 지문을 가지면 `dedup_status=duplicate_kiwoom`으로 저장하고 분석 합산에서는 제외한다. 과거 거래 재실행은 `journal_drafts`의 `UNIQUE(source_type, source_key)`와 안정적인 source key, dedup key 등록을 통해 기본적으로 upsert 방식으로 동작한다.
+키움 동기화 데이터는 `trade_dedup_keys`에 우선 등록된다. 수동 입력 거래가 같은 지문을 가지면 `dedup_status=duplicate_kiwoom`으로 저장하고 분석 합산에서는 제외한다. 과거 거래 재실행은 `journal_drafts`의 `UNIQUE(source_type, source_key)`와 안정적인 source key, dedup key 등록을 통해 기본적으로 upsert 방식으로 동작한다. `trade_journal` 완료 시 같은 거래일/종목의 `order_execution` 초안은 완료 일지의 `related_order_executions` payload에 연결하고 `linked` 상태로 전환해 분석 중복을 막는다.
 
 ### SQLite 동시성 설정
 

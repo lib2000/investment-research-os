@@ -1373,6 +1373,22 @@ def create_or_update_journal_entry(
     rule_value = None if rule_followed is None else int(rule_followed)
 
     with connect_db(settings) as connection:
+        source_payload = draft["payload"]
+        related_order_execution_draft_ids: list[int] = []
+        if draft.get("source_type") == "trade_journal":
+            related_order_execution_drafts = _related_order_execution_drafts_for_trade(
+                connection,
+                draft,
+            )
+            if related_order_execution_drafts:
+                source_payload = _source_payload_with_related_order_executions(
+                    source_payload,
+                    related_order_execution_drafts,
+                )
+                related_order_execution_draft_ids = [
+                    int(item["id"]) for item in related_order_execution_drafts
+                ]
+
         connection.execute(
             """
             INSERT INTO journal_entries
@@ -1433,7 +1449,7 @@ def create_or_update_journal_entry(
                 exit_price,
                 planned_risk_amount,
                 realized_r_multiple,
-                json.dumps(draft["payload"], ensure_ascii=False),
+                json.dumps(source_payload, ensure_ascii=False),
                 now,
                 now,
             ),
@@ -1446,6 +1462,12 @@ def create_or_update_journal_entry(
             """,
             ("completed", now, draft_id),
         )
+        if related_order_execution_draft_ids:
+            _mark_journal_drafts_linked(
+                connection,
+                related_order_execution_draft_ids,
+                now,
+            )
         row = connection.execute(
             """
             SELECT *
@@ -1456,6 +1478,103 @@ def create_or_update_journal_entry(
         ).fetchone()
 
     return _format_journal_entry(dict(row))
+
+
+def _related_order_execution_drafts_for_trade(
+    connection: sqlite3.Connection,
+    draft: dict,
+) -> list[dict]:
+    payload = draft.get("payload") or {}
+    ticker = draft.get("ticker") or payload.get("ticker") or payload.get("stk_cd")
+    trade_date = _payload_trade_date_key(payload)
+    if not ticker or not trade_date:
+        return []
+
+    rows = connection.execute(
+        """
+        SELECT id, sync_run_id, broker, source_type, source_key,
+               ticker, name, draft_status, payload_json, created_at, updated_at
+        FROM journal_drafts
+        WHERE deleted_at IS NULL
+          AND source_type = 'order_execution'
+          AND ticker = ?
+        ORDER BY updated_at DESC, id DESC
+        """,
+        (ticker,),
+    ).fetchall()
+    related = []
+    for row in rows:
+        item = dict(row)
+        item["payload"] = json.loads(item.pop("payload_json"))
+        if _payload_trade_date_key(item["payload"]) == trade_date:
+            related.append(item)
+    return related
+
+
+def _source_payload_with_related_order_executions(
+    source_payload: dict,
+    related_order_execution_drafts: list[dict],
+) -> dict:
+    merged_payload = dict(source_payload)
+    existing = list(merged_payload.get("related_order_executions") or [])
+    seen = {_order_execution_identity(item) for item in existing}
+
+    for draft in related_order_execution_drafts:
+        related_payload = dict(draft.get("payload") or {})
+        related_payload["draft_id"] = int(draft["id"])
+        related_payload["source_key"] = draft.get("source_key")
+        identity = _order_execution_identity(related_payload)
+        if identity in seen:
+            continue
+        existing.append(related_payload)
+        seen.add(identity)
+
+    merged_payload["related_order_executions"] = existing
+    merged_payload["related_order_executions_count"] = len(existing)
+    return merged_payload
+
+
+def _order_execution_identity(payload: dict) -> str:
+    return "|".join(
+        str(payload.get(key) or "")
+        for key in (
+            "source_key",
+            "order_no",
+            "ticker",
+            "trade_date",
+            "confirm_time",
+            "filled_quantity",
+            "filled_price",
+        )
+    )
+
+
+def _payload_trade_date_key(payload: dict) -> str:
+    value = payload.get("trade_date") or payload.get("base_date") or payload.get("ord_dt")
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return digits[:8] if len(digits) >= 8 else ""
+
+
+def _mark_journal_drafts_linked(
+    connection: sqlite3.Connection,
+    draft_ids: list[int],
+    now: str,
+) -> None:
+    ids = sorted(set(int(value) for value in draft_ids if value))
+    if not ids:
+        return
+
+    placeholders = ",".join("?" for _ in ids)
+    connection.execute(
+        f"""
+        UPDATE journal_drafts
+        SET draft_status = ?,
+            updated_at = ?
+        WHERE id IN ({placeholders})
+          AND draft_status != 'completed'
+        """,
+        ("linked", now, *ids),
+    )
 
 
 def list_journal_entries(

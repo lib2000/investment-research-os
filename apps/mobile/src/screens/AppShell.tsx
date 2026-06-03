@@ -29,7 +29,7 @@ import {
   useManualTransactions,
   usePortfolio,
 } from "../hooks/useInvestmentQueries";
-import type { JournalEntry, ManualTransactionsImportError } from "../api/types";
+import type { JournalEntry, ManualTransactionsImportError, RelatedOrderExecution } from "../api/types";
 
 type TabKey = "portfolio" | "drafts" | "entries" | "manual" | "analytics";
 type AnalyticsRangeKey = "1m" | "3m" | "6m" | "1y" | "all";
@@ -183,7 +183,8 @@ function PortfolioScreen() {
 }
 
 function DraftsScreen() {
-  const drafts = useJournalDrafts();
+  const [showAllDrafts, setShowAllDrafts] = useState(false);
+  const drafts = useJournalDrafts(1, 20, showAllDrafts);
   const createJournalEntry = useCreateJournalEntry();
   const [form, setForm] = useState<JournalEntryFormState>(() => defaultJournalEntryForm());
   const [formMessage, setFormMessage] = useState("");
@@ -197,6 +198,12 @@ function DraftsScreen() {
     setFormMessage("");
   };
   const selectDraft = (draftId: number) => {
+    const draft = (drafts.data?.drafts ?? []).find((item) => item.id === draftId);
+    if (draft && draft.draft_status !== "needs_review") {
+      setForm(defaultJournalEntryForm());
+      setFormMessage("작성 대기 상태의 초안만 일지로 저장할 수 있습니다.");
+      return;
+    }
     setForm({ ...defaultJournalEntryForm(), draftId });
     setFormMessage("");
   };
@@ -217,14 +224,26 @@ function DraftsScreen() {
   return (
     <View style={styles.panel}>
       <Text style={styles.panelTitle}>복기 대기</Text>
-      <Metric label="전체" value={`${drafts.data?.total ?? 0}건`} />
+      <SegmentedControl
+        options={[
+          { key: "pending", label: "대기" },
+          { key: "all", label: "전체" },
+        ]}
+        value={showAllDrafts ? "all" : "pending"}
+        onChange={(value) => {
+          setShowAllDrafts(value === "all");
+          setForm(defaultJournalEntryForm());
+          setFormMessage("");
+        }}
+      />
+      <Metric label={showAllDrafts ? "전체 초안" : "복기 대기"} value={`${drafts.data?.total ?? 0}건`} />
       {selectedDraft ? (
         <View style={styles.reviewBox}>
           <Text style={styles.reviewTitle}>
             {selectedDraft.name || selectedDraft.ticker || "선택한 초안"}
           </Text>
           <Text style={styles.rowDetail}>
-            {`${selectedDraft.source_type} · ${selectedDraft.draft_status}`}
+            {`${draftSourceLabel(selectedDraft.source_type)} · ${draftStatusLabel(selectedDraft.draft_status)}`}
           </Text>
           <FormInput label="전략" value={form.strategyName} onChangeText={(value) => updateForm("strategyName", value)} placeholder="예: ORB" />
           <FormInput label="셋업 태그" value={form.setupTags} onChangeText={(value) => updateForm("setupTags", value)} placeholder="쉼표로 구분" />
@@ -255,17 +274,29 @@ function DraftsScreen() {
         </View>
       ) : null}
       {formMessage ? <Text style={styles.formMessage}>{formMessage}</Text> : null}
-      {(drafts.data?.drafts ?? []).map((item) => (
-        <View key={item.id} style={styles.row}>
-          <View style={styles.rowBody}>
-            <Text style={styles.rowTitle}>{item.name || item.ticker || "미분류"}</Text>
-            <Text style={styles.rowDetail}>{`${item.source_type} · ${item.draft_status}`}</Text>
+      {(drafts.data?.drafts ?? []).length === 0 ? (
+        <Text style={styles.muted}>표시할 초안이 없습니다.</Text>
+      ) : null}
+      {(drafts.data?.drafts ?? []).map((item) => {
+        const canWrite = item.draft_status === "needs_review";
+        return (
+          <View key={item.id} style={styles.row}>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowTitle}>{item.name || item.ticker || "미분류"}</Text>
+              <Text style={styles.rowDetail}>
+                {`${draftSourceLabel(item.source_type)} · ${draftStatusLabel(item.draft_status)}`}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => selectDraft(item.id)}
+              disabled={!canWrite}
+              style={[styles.smallButton, !canWrite && styles.disabledButton]}
+            >
+              <Text style={styles.smallButtonText}>{canWrite ? "작성" : draftStatusActionLabel(item.draft_status)}</Text>
+            </Pressable>
           </View>
-          <Pressable onPress={() => selectDraft(item.id)} style={styles.smallButton}>
-            <Text style={styles.smallButtonText}>작성</Text>
-          </Pressable>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -370,6 +401,7 @@ function JournalEntriesScreen() {
             <Text style={styles.rowDetail}>
               {`${entry.strategy_name || "전략 미지정"} · ${formatKrw(entry.manual_profit_loss_amount ?? 0)}원`}
             </Text>
+            <RelatedOrderExecutionsSummary entry={entry} />
           </View>
           <View style={styles.rowActions}>
             <Pressable onPress={() => startEdit(entry)} style={styles.smallButton}>
@@ -948,6 +980,25 @@ function AnalyticsNotice({ message, testID }: { message: string; testID?: string
   );
 }
 
+function RelatedOrderExecutionsSummary({ entry }: { entry: JournalEntry }) {
+  const executions = relatedOrderExecutions(entry);
+  if (!executions.length) return null;
+
+  return (
+    <View style={styles.linkedExecutionBox}>
+      <Text style={styles.linkedExecutionTitle}>연결된 체결 상세 {executions.length}건</Text>
+      {executions.slice(0, 3).map((execution, index) => (
+        <Text key={`${execution.source_key || execution.order_no || index}`} style={styles.linkedExecutionText}>
+          {formatOrderExecutionLine(execution)}
+        </Text>
+      ))}
+      {executions.length > 3 ? (
+        <Text style={styles.linkedExecutionText}>외 {executions.length - 3}건 더 있음</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function EmptyChart({
   message = "표시할 차트 데이터가 없습니다.",
   testID,
@@ -978,6 +1029,47 @@ function ErrorText({ message }: { message: string }) {
 
 function formatKrw(value?: number) {
   return Number(value || 0).toLocaleString("ko-KR");
+}
+
+function relatedOrderExecutions(entry: JournalEntry): RelatedOrderExecution[] {
+  return entry.source_payload?.related_order_executions ?? [];
+}
+
+function formatOrderExecutionLine(execution: RelatedOrderExecution) {
+  const side = execution.trade_side_name || "체결";
+  const status = execution.order_status || "상태 미확인";
+  const time = formatOrderExecutionTime(execution.confirm_time || execution.order_time);
+  const price = execution.filled_price ?? execution.order_price;
+  const quantity = execution.filled_quantity ?? execution.order_quantity;
+  const priceText = price == null ? "단가 -" : `${formatKrw(price)}원`;
+  const quantityText = quantity == null ? "수량 -" : `${formatKrw(quantity)}주`;
+  return `${time} · ${side}/${status} · ${priceText} · ${quantityText}`;
+}
+
+function formatOrderExecutionTime(value?: string | null) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length >= 6) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}:${digits.slice(4, 6)}`;
+  if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  return "시간 -";
+}
+
+function draftSourceLabel(value: string) {
+  if (value === "trade_journal") return "매매 요약";
+  if (value === "order_execution") return "체결 상세";
+  return value || "원천 미확인";
+}
+
+function draftStatusLabel(value: string) {
+  if (value === "needs_review") return "복기 대기";
+  if (value === "completed") return "작성 완료";
+  if (value === "linked") return "완료 일지에 연결";
+  return value || "상태 미확인";
+}
+
+function draftStatusActionLabel(value: string) {
+  if (value === "completed") return "완료";
+  if (value === "linked") return "연결됨";
+  return "확인";
 }
 
 function buildCsvFormData(asset: DocumentPicker.DocumentPickerAsset) {
@@ -1440,6 +1532,25 @@ const styles = StyleSheet.create({
     color: "#07111f",
     fontSize: 16,
     fontWeight: "900",
+  },
+  linkedExecutionBox: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#dce5f1",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    marginTop: 8,
+    padding: 10,
+  },
+  linkedExecutionTitle: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  linkedExecutionText: {
+    color: "#536174",
+    fontSize: 12,
+    lineHeight: 18,
   },
   metric: {
     backgroundColor: "#f7f9fc",
