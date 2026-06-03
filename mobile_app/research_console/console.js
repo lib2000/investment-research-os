@@ -87,7 +87,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=8b0f51c2e7aa";
+} from "./api.js?v=933c6e1312e7";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -13062,6 +13062,13 @@ function formatKoreanResult(value) {
     const counts = value.counts || {};
     const daily = value.daily_watch?.dart || {};
     const watch = value.watch_summary || {};
+    const headlineForItem = (item) => {
+      const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
+      const type = translateReportType(item.report_type || item.category);
+      const importance = item.importance ? ` · ${item.importance}` : "";
+      const summary = compactOutputText(item.summary || item.action || item.title || "요약 없음", 90);
+      return `${item.date || "날짜 미확인"} · ${target} · ${type}${importance} · ${summary}`;
+    };
     const lineForItem = (item) => {
       const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
@@ -13081,6 +13088,22 @@ function formatKoreanResult(value) {
       `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
       `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      ``,
+      `### 핵심 요약`,
+      `- **수급/대량보유:** ${formatNumber(counts.ownership_filings || 0)}건 · 상위 ${Math.min((value.ownership_filings || []).length, 3)}건 먼저 확인`,
+      `- **중요 공시:** ${formatNumber(counts.important_filings || 0)}건 · DART 일일 점검 ${(daily.coverage_rate === 1 || daily.coverage_rate === 1.0) ? "100%" : daily.status || "확인 필요"}`,
+      `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
+      `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
+      ``,
+      `### 바로 볼 상위 항목`,
+      ...formatBulletList(
+        [
+          ...(value.ownership_filings || []).slice(0, 3),
+          ...(value.display_reports || []).slice(0, 3),
+        ],
+        headlineForItem,
+        "바로 볼 핵심 항목이 없습니다."
+      ),
       ``,
       `### 수급/대량보유 핵심 공시`,
       ...formatBulletList(value.ownership_filings, lineForItem, "최근 1주일 내 수급/대량보유 핵심 공시가 없습니다."),
