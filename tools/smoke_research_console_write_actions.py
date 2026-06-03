@@ -296,6 +296,25 @@ def run_write_action_smoke(url: str) -> dict:
                   await clickTab("interests");
                   document.querySelector("#interestsLoadButton").click();
                   await waitFor(() => (document.querySelector("#interests")?.innerText || "").includes("관심종목 목록"), 30000, "interests loaded");
+                  const interestTickerName = `${{marker}} 관심종목`;
+                  document.querySelectorAll("#interests details.interest-add-panel")[0].open = true;
+                  const tickerDraft = document.querySelector("#interestTickerDraft");
+                  tickerDraft.querySelector('[name="ticker"]').value = interestTickerName;
+                  tickerDraft.querySelector('[name="priority"]').value = "medium";
+                  tickerDraft.querySelector('[name="thesis"]').value = `${{marker}} 관심종목 추가/삭제 검증`;
+                  document.querySelector("#addInterestTickerButton").click();
+                  await waitFor(() => (document.querySelector("#interestTickerEditor")?.innerText || "").includes(interestTickerName), 90000, "interest ticker added");
+                  results.interestTickerAdded = true;
+                  const addedTickerRow = [...document.querySelectorAll("#interestTickerEditor .interest-ticker-row")]
+                    .find((row) => row.innerText.includes(interestTickerName));
+                  if (!addedTickerRow) {{
+                    throw new Error("QA 관심종목 행을 찾지 못했습니다.");
+                  }}
+                  addedTickerRow.querySelector("details")?.setAttribute("open", "");
+                  addedTickerRow.querySelector("[data-editor-remove]").click();
+                  await waitFor(() => !(document.querySelector("#interestTickerEditor")?.innerText || "").includes(interestTickerName), 60000, "interest ticker removed");
+                  await waitFor(() => /관심종목을 삭제하고 저장했습니다/.test(outputText()), 60000, "interest ticker delete saved");
+                  results.interestTickerDeleted = true;
                   const interestName = `${{marker}} 관심섹터`;
                   document.querySelectorAll("#interests details.interest-add-panel")[1].open = true;
                   const sectorDraft = document.querySelector("#interestSectorDraft");
@@ -372,6 +391,8 @@ def run_write_action_smoke(url: str) -> dict:
                 "newsCardFound",
                 "newsHeld",
                 "newsDeleted",
+                "interestTickerAdded",
+                "interestTickerDeleted",
                 "interestSectorAdded",
                 "interestSectorDeleted",
                 "interestDraftRegionDefaultKr",
