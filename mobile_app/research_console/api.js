@@ -254,6 +254,43 @@ export async function refreshDartFilingWatch(accessToken, options = {}) {
  * @param {{days?: number, refreshIfDue?: boolean}} options 조회 기간과 DART 보강 실행 여부
  * @returns {Promise<Object|null>} 최근 1주일 리서치 브리프
  */
+export async function fetchPublicIrSecStatus(accessToken, limit = 10) {
+  try {
+    return request(`/api/v1/public-ir-sec/status?limit=${encodeURIComponent(limit)}`, {
+      method: "GET",
+      accessToken,
+      timeoutMs: 30000,
+    });
+  } catch (error) {
+    console.error("공개 IR/SEC 상태 조회 중 오류 발생:", error);
+    return null;
+  }
+}
+
+export async function collectPublicIrSec(
+  accessToken,
+  { url, targetKey = "PUBLIC_IR_SEC", saveResult = true, force = false, noScreenshot = true } = {}
+) {
+  try {
+    return request("/api/v1/public-ir-sec/collect", {
+      method: "POST",
+      accessToken,
+      timeoutMs: 60000,
+      body: JSON.stringify({
+        url,
+        target_key: targetKey,
+        save_result: saveResult,
+        force,
+        no_screenshot: noScreenshot,
+      }),
+    });
+  } catch (error) {
+    console.error("공개 IR/SEC 자료 수집 중 오류 발생:", error);
+    return null;
+  }
+}
+
+
 export async function fetchRecentWeeklyResearchBrief(accessToken, options = {}) {
   const params = new URLSearchParams();
   params.set("days", String(options.days || 7));

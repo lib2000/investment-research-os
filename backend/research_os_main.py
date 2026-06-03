@@ -81,6 +81,11 @@ from research_os.portfolio_import import (
     portfolio_currency_for_ticker,
     portfolio_holding_from_row,
 )
+from research_os.public_ir_sec import (
+    PublicIrSecCollectRequest,
+    collect_public_ir_sec_url,
+    public_ir_sec_status_payload,
+)
 from research_os.classification import classification_system_tags, merge_research_tags
 from research_os.models import (
     Broker,
@@ -18760,6 +18765,33 @@ def get_research_memory_files(
 )
 def read_latest_investment_calendar(settings: Settings = Depends(get_settings)) -> dict:
     return load_latest_investment_calendar_payload(settings)
+
+
+@app.get(
+    "/api/v1/public-ir-sec/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_public_ir_sec_status(
+    limit: int = Query(10, ge=1, le=50),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return public_ir_sec_status_payload(settings, limit=limit)
+
+
+@app.post(
+    "/api/v1/public-ir-sec/collect",
+    dependencies=[Depends(verify_user_token)],
+)
+def collect_public_ir_sec(
+    request: PublicIrSecCollectRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        return collect_public_ir_sec_url(request, settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get(

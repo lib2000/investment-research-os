@@ -50,6 +50,8 @@
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
   fetchRecentWeeklyResearchBrief,
+  fetchPublicIrSecStatus,
+  collectPublicIrSec,
   fetchInvestmentCalendar,
   runDailyRecommendations,
   trackDailyRecommendations,
@@ -87,7 +89,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=933c6e1312e7";
+} from "./api.js?v=cdb888f10fb1";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -234,6 +236,9 @@ const elements = {
   storageCleanupButton: document.querySelector("#storageCleanupButton"),
   dedupedDossierRefreshButton: document.querySelector("#dedupedDossierRefreshButton"),
   tickerCacheButton: document.querySelector("#tickerCacheButton"),
+  publicIrSecUrl: document.querySelector('[name="publicIrSecUrl"]'),
+  publicIrSecCollectButton: document.querySelector("#publicIrSecCollectButton"),
+  publicIrSecStatusButton: document.querySelector("#publicIrSecStatusButton"),
   tickerCacheList: document.querySelector("#tickerCacheList"),
   dashboardTickerSelect: document.querySelector("#dashboardTickerSelect"),
   dashboardTickerOptions: document.querySelector("#dashboardTickerOptions"),
@@ -11475,6 +11480,8 @@ const MEMORY_ACTION_MESSAGES = {
   dedupedDossierRefreshButton: "중복 종목 Dossier 갱신을 시작했습니다.",
   manifestButton: "전체 저장 목록 조회를 시작했습니다.",
   tickerCacheButton: "티커 캐시 조회를 시작했습니다.",
+  publicIrSecCollectButton: "공개 IR/SEC 자료 수집을 시작했습니다.",
+  publicIrSecStatusButton: "공개 IR/SEC 저장 상태를 조회합니다.",
   investmentCalendarRefreshButton: "투자 캘린더를 새로고침합니다.",
 };
 
@@ -11814,6 +11821,46 @@ async function runRecentWeeklyBriefFlow() {
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
+
+elements.publicIrSecCollectButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  const sourceUrl = elements.publicIrSecUrl?.value?.trim() || "";
+  if (!sourceUrl) {
+    setOutput("**입력 필요**\n\n공개 IR/SEC URL을 입력한 뒤 수집 버튼을 누르세요.");
+    elements.publicIrSecUrl?.focus();
+    return;
+  }
+  startOutputLoading("공개 IR/SEC 자료 수집 중", [
+    "공개 URL 안전성 확인",
+    "본문/메타데이터 추출",
+    "저장 데이터와 RAG 색인 반영",
+  ]);
+  try {
+    const result = await collectPublicIrSec(token(), { url: sourceUrl, targetKey: "PUBLIC_IR_SEC", saveResult: true });
+    setOutput(result || "공개 IR/SEC 수집 결과를 확인하지 못했습니다.");
+    if (result?.storage?.relative_path && elements.publicIrSecUrl) {
+      elements.publicIrSecUrl.value = "";
+    }
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.publicIrSecStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("공개 IR/SEC 저장 상태 조회 중", [
+    "저장 manifest 확인",
+    "본문 보강 필요 자료 집계",
+    "최근 수집 자료 표시",
+  ]);
+  try {
+    const result = await fetchPublicIrSecStatus(token(), 12);
+    setOutput(result || "공개 IR/SEC 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
 
 elements.researchAutomationButton.addEventListener("click", async () => {
   syncApiBaseUrl();
@@ -14466,6 +14513,45 @@ function formatKoreanResult(value) {
       ...(value.next_actions || []).map((item) => `- ${item}`),
       ``,
       `저장 데이터: ${value.storage?.relative_path || "저장 안 됨"}`,
+    ].join("\n");
+  }
+
+  if (value.module === "public_ir_sec_collection") {
+    const quality = value.capture_quality || {};
+    const ragText = value.rag_document?.document_id
+      ? `RAG 색인 완료 · ${value.rag_document.document_id}`
+      : value.status === "skipped_existing" ? "기존 저장 데이터 사용" : "RAG 색인 대기";
+    const storagePath = value.storage?.relative_path || value.existing_entry?.relative_path || "저장 안 됨";
+    return [
+      `### 공개 IR/SEC 수집`,
+      `상태: ${value.status || "미확인"}`,
+      `제목: ${value.title || value.existing_entry?.title || "제목 미확인"}`,
+      `출처: ${value.source_provider || value.existing_entry?.source_provider || "공개 자료"}`,
+      `URL: ${value.source_url || "미확인"}`,
+      `본문 글자 수: ${formatNumber(value.body_chars || value.existing_entry?.body_chars || 0)}자`,
+      `품질 상태: ${quality.status || value.existing_entry?.capture_quality_status || "미확인"}`,
+      `저장/RAG: ${ragText}`,
+      `저장 데이터: ${storagePath}`,
+      `정책: ${value.copyright_policy || "공개 자료만 수집하고 제한 자료는 URL/메타데이터 중심으로 보관합니다."}`,
+      quality.recommended_action ? `다음 조치: ${quality.recommended_action}` : "",
+      value.message ? `메시지: ${value.message}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (value.module === "public_ir_sec_status") {
+    const entries = Array.isArray(value.recent_entries) ? value.recent_entries : [];
+    const entryLines = entries.length
+      ? entries.slice(0, 12).map((item, index) => `${index + 1}. ${item.title || item.file_name || "제목 없음"} · ${item.date || "날짜 없음"} · ${item.source_provider || "출처 미확인"} · ${item.capture_quality_status || item.capture_quality?.status || "품질 미확인"}`)
+      : ["최근 공개 IR/SEC 저장 자료가 없습니다."];
+    return [
+      `### 공개 IR/SEC 저장 상태`,
+      `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
+      `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
+      `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,
+      `정책: ${value.policy || "공개 자료만 수집합니다."}`,
+      ``,
+      `최근 자료`,
+      ...entryLines,
     ].join("\n");
   }
 
