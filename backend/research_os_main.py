@@ -22676,10 +22676,22 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             weekly_groups.append(group)
         if weekly_groups:
             candidate["weekly_evidence_groups"] = weekly_groups[:5]
+            def weekly_group_evidence_text(group: dict) -> str:
+                label = str(group.get("label") or group.get("key") or "자료").strip()
+                if not label:
+                    return ""
+                text = f"{label} {int(group.get('count') or 0)}건"
+                if str(group.get("key") or "") == "public_ir_sec":
+                    quality = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
+                    usable = int(quality.get("usable_for_recommendation") or 0)
+                    blocked = int(quality.get("needs_body_copy") or quality.get("blocked_or_needs_review") or 0)
+                    text += f"(추천 가능 {usable}건/본문 보강 {blocked}건)"
+                return text
+
             weekly_group_text = ", ".join(
-                f"{group.get('label')} {group.get('count')}건"
-                for group in weekly_groups[:4]
-                if group.get("label")
+                item
+                for item in (weekly_group_evidence_text(group) for group in weekly_groups[:4])
+                if item
             )
             if weekly_group_text:
                 candidate["evidence_sources"].append(f"최근 1주 자료 묶음: {weekly_group_text}")
