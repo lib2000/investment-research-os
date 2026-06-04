@@ -13361,7 +13361,13 @@ function formatKoreanResult(value) {
       const penalties = (item.score_penalties || []).slice(0, 2).join(" / ");
       const weeklyGroups = (item.weekly_evidence_groups || [])
         .slice(0, 3)
-        .map((group) => `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건`)
+        .map((group) => {
+          const quality = group.quality_summary || {};
+          const qualityText = group.key === "public_ir_sec"
+            ? ` (추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)} / 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)})`
+            : "";
+          return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${qualityText}`;
+        })
         .join(" / ");
       const overseas = item.overseas_tracking?.needs_fx_conversion
         ? `\n  해외 추적: ${item.overseas_tracking.currency || item.currency || "USD"} 기준 가격 + USD/KRW 환율 확인`

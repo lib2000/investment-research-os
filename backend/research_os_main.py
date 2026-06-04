@@ -22617,6 +22617,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         group_key = str(group.get("key") or "").strip()
         group_label = str(group.get("label") or group_key or "최근 자료").strip()
         group_count = int(group.get("count") or 0)
+        quality_summary = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
         for item in group.get("items") or []:
             if not isinstance(item, dict):
                 continue
@@ -22628,6 +22629,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                     "key": group_key,
                     "label": group_label,
                     "count": group_count,
+                    "quality_summary": quality_summary,
                     "summary": compact_interest_text(
                         item.get("summary") or item.get("title") or group.get("note") or group_label,
                         90,

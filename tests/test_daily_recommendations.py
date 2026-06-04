@@ -292,6 +292,11 @@ class DailyRecommendationsTests(unittest.TestCase):
                             "key": "public_ir_sec",
                             "label": "공개 IR/SEC",
                             "count": 1,
+                            "quality_summary": {
+                                "usable_for_recommendation": 0,
+                                "needs_body_copy": 1,
+                                "blocked_or_needs_review": 1,
+                            },
                             "items": [
                                 {
                                     "ticker": "003230",
@@ -322,6 +327,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertNotIn("최근 공개 IR/SEC 반영", component_labels)
         self.assertTrue(any("공개 IR/SEC URL-only" in item for item in candidate["risk_notes"]))
         self.assertEqual(candidate["weekly_evidence_groups"][0]["label"], "공개 IR/SEC")
+        self.assertEqual(candidate["weekly_evidence_groups"][0]["quality_summary"]["needs_body_copy"], 1)
         self.assertTrue(any("최근 1주 자료 묶음" in item for item in candidate["evidence_sources"]))
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
