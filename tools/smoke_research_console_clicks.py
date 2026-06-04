@@ -1097,6 +1097,15 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       recentWeeklyBriefText.includes("수급/대량보유") &&
                       recentWeeklyBriefText.includes("리포트") &&
                       recentWeeklyBriefText.includes("수출입"),
+                    recentWeeklyShowsVisibilityCounts:
+                      recentWeeklyBriefText.includes("전체") &&
+                      recentWeeklyBriefText.includes("표시") &&
+                      recentWeeklyBriefText.includes("종목"),
+                    recentWeeklyShowsPublicIrQuality:
+                      !recentWeeklyBriefText.includes("공개 IR/SEC") ||
+                      (recentWeeklyBriefText.includes("공개 IR/SEC") &&
+                        recentWeeklyBriefText.includes("품질") &&
+                        recentWeeklyBriefText.includes("본문 보강")),
                     investmentCalendarShowsMarkets:
                       investmentCalendarText.includes("한국") && investmentCalendarText.includes("미국"),
                     investmentCalendarShowsEarningsTitle:
@@ -1228,6 +1237,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("최근 1주 자료 화면에 기준 시각/DART 점검 시각이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsSourceGroups"]:
                 raise AssertionError("최근 1주 자료 화면에 공시/리포트/수출입 자료 그룹이 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsVisibilityCounts"]:
+                raise AssertionError("최근 1주 자료 화면에 전체/표시/종목 수 메타데이터가 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsPublicIrQuality"]:
+                raise AssertionError("최근 1주 공개 IR/SEC 묶음에 품질/본문 보강 상태가 표시되지 않았습니다.")
             if not result["investmentCalendarShowsMarkets"]:
                 raise AssertionError("투자 캘린더 화면에 한국/미국 시장 구분이 표시되지 않았습니다.")
             if not result["investmentCalendarShowsEarningsTitle"]:
