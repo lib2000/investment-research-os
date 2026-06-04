@@ -821,6 +821,66 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(items[0]["published_at"], "2026-05-07")
         self.assertIn("joby-reports-first-quarter-2026-financial-results", items[0]["detail_url"])
 
+    def test_company_ir_default_sources_cover_core_overseas_holdings(self):
+        from research_os.company_ir_sources import COMPANY_IR_SOURCES
+
+        tickers = {source.ticker for source in COMPANY_IR_SOURCES}
+
+        self.assertTrue({"JOBY", "PL", "CHPT", "ABSI", "RXRX", "OTLY", "CPSH", "GOTU"}.issubset(tickers))
+
+    def test_company_ir_parser_accepts_common_news_detail_url_shapes(self):
+        from research_os.company_ir_sources import CompanyIrSource, parse_company_ir_press_releases
+
+        source = CompanyIrSource(
+            source_key="planet_ir_press_releases",
+            ticker="PL",
+            company_name="Planet Labs PBC",
+            provider="Planet Labs IR",
+            source_url="https://investors.planet.com/news/default.aspx",
+        )
+        html = """
+        <article>
+          <a href="/news/news-details/2026/Planet-Reports-Financial-Results/default.aspx">
+            Planet Reports Financial Results for Fiscal Fourth Quarter
+          </a>
+          <span>March 19, 2026</span>
+        </article>
+        <article>
+          <a href="/news-releases/news-release-details/absci-participate-upcoming-investor-conferences">
+            Absci to Participate in Upcoming Investor Conferences
+          </a>
+        </article>
+        """
+
+        items = parse_company_ir_press_releases(html, source=source, limit=5)
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["ticker"], "PL")
+        self.assertEqual(items[0]["published_at"], "2026-03-19")
+        self.assertIn("Planet-Reports-Financial-Results", items[0]["detail_url"])
+
+    def test_company_ir_parser_skips_generic_investor_navigation_links(self):
+        from research_os.company_ir_sources import CompanyIrSource, parse_company_ir_press_releases
+
+        source = CompanyIrSource(
+            source_key="planet_ir_press_releases",
+            ticker="PL",
+            company_name="Planet Labs PBC",
+            provider="Planet Labs IR",
+            source_url="https://investors.planet.com/news/default.aspx",
+        )
+        html = """
+        <nav>
+          <a href="/financials/quarterly-results/default.aspx">Quarterly Results</a>
+          <a href="/resources/investor-faqs/default.aspx">Investor FAQs</a>
+          <a href="/events-and-presentations/default.aspx">Events & Presentations</a>
+        </nav>
+        """
+
+        items = parse_company_ir_press_releases(html, source=source, limit=5)
+
+        self.assertEqual(items, [])
+
     def test_company_ir_sources_can_be_extended_from_json_config(self):
         from research_os.company_ir_sources import configured_company_ir_sources
 

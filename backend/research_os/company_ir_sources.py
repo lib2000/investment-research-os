@@ -12,6 +12,13 @@ import httpx
 
 
 JOBY_IR_PRESS_RELEASES_URL = "https://ir.jobyaviation.com/news-events/press-releases"
+PL_IR_PRESS_RELEASES_URL = "https://investors.planet.com/news/default.aspx"
+CHPT_IR_PRESS_RELEASES_URL = "https://investors.chargepoint.com/news/default.aspx"
+ABSI_IR_PRESS_RELEASES_URL = "https://investors.absci.com/news-and-events/news-releases/"
+RXRX_IR_PRESS_RELEASES_URL = "https://ir.recursion.com/news-events/press-releases"
+OTLY_IR_PRESS_RELEASES_URL = "https://investors.oatly.com/news-events/press-releases"
+CPSH_IR_PRESS_RELEASES_URL = "https://cpstechnologysolutions.com/investor-overview/press-releases/"
+GOTU_IR_PRESS_RELEASES_URL = "https://ir.gaotu.cn/home"
 DATE_PATTERN = re.compile(r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+20\d{2}|20\d{2}[-./]\d{1,2}[-./]\d{1,2}", re.IGNORECASE)
 SKIP_LINK_TEXTS = {
     "",
@@ -26,6 +33,9 @@ SKIP_LINK_TEXTS = {
     "sec filings",
     "governance",
     "stock information",
+    "events & presentations",
+    "to chargepoint.com",
+    "chevron_left back to jobyaviation.com",
 }
 
 
@@ -60,7 +70,56 @@ COMPANY_IR_SOURCES = [
         company_name="Joby Aviation",
         provider="Joby Aviation IR",
         source_url=JOBY_IR_PRESS_RELEASES_URL,
-    )
+    ),
+    CompanyIrSource(
+        source_key="planet_ir_press_releases",
+        ticker="PL",
+        company_name="Planet Labs PBC",
+        provider="Planet Labs IR",
+        source_url=PL_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="chargepoint_ir_press_releases",
+        ticker="CHPT",
+        company_name="ChargePoint Holdings",
+        provider="ChargePoint IR",
+        source_url=CHPT_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="absci_ir_press_releases",
+        ticker="ABSI",
+        company_name="Absci Corporation",
+        provider="Absci IR",
+        source_url=ABSI_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="recursion_ir_press_releases",
+        ticker="RXRX",
+        company_name="Recursion Pharmaceuticals",
+        provider="Recursion IR",
+        source_url=RXRX_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="oatly_ir_press_releases",
+        ticker="OTLY",
+        company_name="Oatly Group",
+        provider="Oatly IR",
+        source_url=OTLY_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="cpsh_ir_press_releases",
+        ticker="CPSH",
+        company_name="CPS Technologies",
+        provider="CPS Technologies IR",
+        source_url=CPSH_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="gaotu_ir_press_releases",
+        ticker="GOTU",
+        company_name="Gaotu Techedu",
+        provider="Gaotu IR",
+        source_url=GOTU_IR_PRESS_RELEASES_URL,
+    ),
 ]
 
 
@@ -167,16 +226,63 @@ def normalize_ir_date(value: str | None) -> str:
     return ""
 
 
-def _looks_like_press_release(title: str, href: str) -> bool:
+def _looks_like_press_release(title: str, href: str, source: CompanyIrSource | None = None) -> bool:
     cleaned = clean_ir_text(title)
     lowered = cleaned.lower()
+    href_lower = clean_ir_text(href).lower()
     if lowered in SKIP_LINK_TEXTS or len(cleaned) < 12:
         return False
-    if href.startswith("#") or href.lower().startswith("javascript"):
+    if href_lower.startswith("#") or href_lower.startswith("javascript") or href_lower.startswith("mailto:"):
         return False
-    if any(part in href.lower() for part in ["/press-releases/detail/", "news-events/press-releases/detail"]):
+    detail_markers = [
+        "/press-releases/detail/",
+        "news-events/press-releases/detail",
+        "/news/news-details/",
+        "/news-releases/news-release-details/",
+        "/news-and-events/news-releases/",
+        "/investor-overview/press-releases/",
+    ]
+    if any(part in href_lower for part in detail_markers):
         return True
-    return any(keyword in lowered for keyword in ["reports", "announces", "joby", "financial results", "quarter"])
+    generic_href_markers = [
+        "/events",
+        "/financials",
+        "/quarterly-results",
+        "/investor-faq",
+        "/sec-filings",
+        "/stock",
+        "/governance",
+        "/overview",
+        "/contact",
+        "/email-alert",
+        "/presentations",
+    ]
+    if any(part in href_lower for part in generic_href_markers):
+        return False
+    likely_detail_markers = [
+        "/news/",
+        "/press/",
+        "/release/",
+        "/releases/",
+        "/202",
+        "detail",
+    ]
+    if not any(part in href_lower for part in likely_detail_markers):
+        return False
+    signal_keywords = [
+        "reports",
+        "announces",
+        "financial results",
+        "quarter",
+        "fiscal",
+        "earnings",
+        "investor",
+        "conference",
+        "business update",
+        "press release",
+        "webcast",
+    ]
+    return any(keyword in lowered for keyword in signal_keywords)
 
 
 def _nearby_text(tokens: list[dict], index: int, *, before: int = 4, after: int = 10) -> list[str]:
@@ -208,7 +314,7 @@ def parse_company_ir_press_releases(
             continue
         title = clean_ir_text(token.get("text"))
         href = clean_ir_text(token.get("href"))
-        if not _looks_like_press_release(title, href):
+        if not _looks_like_press_release(title, href, source):
             continue
         detail_url = urljoin(source.source_url, href)
         published_at = _date_from_nearby_text(parser.tokens, index)
