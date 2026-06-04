@@ -14349,7 +14349,7 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
     usable_count = 0
     needs_body_count = 0
     quality_statuses: dict[str, int] = {}
-    for item in visible_items:
+    for item in all_items:
         related_targets = item.get("related_targets") if isinstance(item, dict) else []
         if isinstance(related_targets, list):
             for target in related_targets[:3]:

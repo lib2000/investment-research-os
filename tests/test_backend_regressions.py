@@ -2981,7 +2981,7 @@ class DartFilingWatchTests(unittest.TestCase):
 
         items = [
             {
-                "company_name": f"테스트{i}",
+                "company_name": f"테스트{i:02d}",
                 "usable_for_recommendation": i < 4,
                 "needs_body_copy": i >= 4,
                 "quality_status": "정상" if i < 4 else "보강 필요",
@@ -2993,6 +2993,8 @@ class DartFilingWatchTests(unittest.TestCase):
 
         self.assertEqual(group["count"], 10)
         self.assertEqual(group["visible_count"], 2)
+        self.assertEqual(group["target_count"], 10)
+        self.assertIn("테스트07", group["target_names"])
         self.assertEqual(group["quality_summary"]["total_count"], 10)
         self.assertEqual(group["quality_summary"]["usable_for_recommendation"], 4)
         self.assertEqual(group["quality_summary"]["needs_body_copy"], 6)
