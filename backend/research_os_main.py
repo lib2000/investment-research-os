@@ -14370,6 +14370,7 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
     source_family_counts: dict[str, int] = {}
     filing_form_counts: dict[str, int] = {}
     reliability_counts: dict[str, int] = {}
+    tickers: set[str] = set()
     for item in all_items:
         related_targets = item.get("related_targets") if isinstance(item, dict) else []
         if isinstance(related_targets, list):
@@ -14379,6 +14380,9 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         company_name = item.get("company_name") if isinstance(item, dict) else ""
         if company_name:
             target_names.add(str(company_name))
+        ticker = normalize_ticker(str(item.get("ticker") or "")) if isinstance(item, dict) else ""
+        if ticker:
+            tickers.add(ticker)
     quality_items = [item for item in all_items if isinstance(item, dict)]
     for item in quality_items:
         if item.get("usable_for_recommendation"):
@@ -14419,6 +14423,8 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         "visible_count": len(visible_items),
         "target_count": len(target_names),
         "target_names": sorted(target_names)[:8],
+        "ticker_count": len(tickers),
+        "tickers": sorted(tickers),
         "quality_summary": quality_summary,
         "note": note,
         "items": visible_items,
@@ -22705,22 +22711,32 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         group_label = str(group.get("label") or group_key or "최근 자료").strip()
         group_count = int(group.get("count") or 0)
         quality_summary = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
-        for item in group.get("items") or []:
-            if not isinstance(item, dict):
-                continue
+        visible_items = [item for item in group.get("items") or [] if isinstance(item, dict)]
+        linked_tickers = {
+            ticker
+            for ticker in (normalize_ticker(str(ticker or "")) for ticker in group.get("tickers") or [])
+            if ticker
+        }
+        for item in visible_items:
             key = normalize_ticker(str(item.get("ticker") or ""))
-            if not key:
-                continue
+            if key:
+                linked_tickers.add(key)
+        first_visible_item = visible_items[0] if visible_items else {}
+        group_summary = compact_interest_text(
+            first_visible_item.get("summary")
+            or first_visible_item.get("title")
+            or group.get("note")
+            or group_label,
+            90,
+        )
+        for key in sorted(linked_tickers):
             weekly_groups_by_ticker.setdefault(key, []).append(
                 {
                     "key": group_key,
                     "label": group_label,
                     "count": group_count,
                     "quality_summary": quality_summary,
-                    "summary": compact_interest_text(
-                        item.get("summary") or item.get("title") or group.get("note") or group_label,
-                        90,
-                    ),
+                    "summary": group_summary,
                 }
             )
 

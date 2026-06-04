@@ -292,18 +292,15 @@ class DailyRecommendationsTests(unittest.TestCase):
                             "key": "public_ir_sec",
                             "label": "공개 IR/SEC",
                             "count": 1,
+                            "ticker_count": 1,
+                            "tickers": ["003230"],
                             "quality_summary": {
                                 "usable_for_recommendation": 0,
                                 "needs_body_copy": 1,
                                 "blocked_or_needs_review": 1,
                                 "providers": {"SEC EDGAR": 1},
                             },
-                            "items": [
-                                {
-                                    "ticker": "003230",
-                                    "summary": "삼양식품 공개 IR URL-only",
-                                }
-                            ],
+                            "items": [],
                         }
                     ],
                 },
