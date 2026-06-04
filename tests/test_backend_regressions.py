@@ -3069,7 +3069,11 @@ class DartFilingWatchTests(unittest.TestCase):
                 "type": "public-ir-sec",
                 "source_type": "public_ir_sec",
                 "summary": "삼양식품 공개 IR 본문 추출 완료",
-                "source_url": "https://example.com/samyang-ir",
+                "source_url": "https://www.sec.gov/Archives/samyang-8k.htm",
+                "source_provider": "SEC EDGAR",
+                "source_category": "SEC 실적 공시",
+                "filing_form": "8-K",
+                "filing_group": "financial_release",
                 "capture_quality": {"status": "정상", "needs_body_copy": False},
                 "relative_path": "PUBLIC_IR_SEC/samyang.md",
             },
@@ -3143,9 +3147,14 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertNotIn("유럽 금리와 환율 점검", summaries)
         display_summaries = [item["summary"] for item in brief["display_reports"]]
         self.assertNotIn("삼양식품 자동 운영 메모", display_summaries)
-        public_guards = {item["summary"]: item["recommendation_guard"] for item in brief["public_ir_sec_items"]}
+        public_items = {item["summary"]: item for item in brief["public_ir_sec_items"]}
+        public_guards = {summary: item["recommendation_guard"] for summary, item in public_items.items()}
         self.assertEqual(public_guards["삼양식품 공개 IR 본문 추출 완료"], "추천 가산 가능")
         self.assertEqual(public_guards["RF머트리얼즈 공개 IR URL-only 보관"], "본문 보강 전 추천 점수 가산 제외")
+        samyang_public = public_items["삼양식품 공개 IR 본문 추출 완료"]
+        self.assertEqual(samyang_public["source_provider"], "SEC EDGAR")
+        self.assertEqual(samyang_public["filing_form"], "8-K")
+        self.assertEqual(samyang_public["source_reliability"], "공식 SEC 8-K")
         target_digest = {item["target"]: item for item in brief["target_digest"]}
         self.assertEqual(target_digest["삼양식품"]["filing"], 1)
         self.assertEqual(target_digest["삼양식품"]["report"], 1)

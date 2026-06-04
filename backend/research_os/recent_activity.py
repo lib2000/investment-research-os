@@ -186,6 +186,10 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
             "relative_path",
             "type",
             "source_type",
+            "source_provider",
+            "source_category",
+            "filing_form",
+            "filing_group",
         ]
     )
     text += " " + " ".join(tags)
@@ -213,6 +217,18 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
         return None
     quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
     usable = public_ir_sec_entry_is_usable_for_recommendation(entry)
+    source_url = str(entry.get("source_url") or entry.get("final_url") or "")
+    provider = str(entry.get("source_provider") or ("SEC EDGAR" if "sec.gov" in source_url.lower() else "공개 IR/SEC")).strip()
+    filing_form = str(entry.get("filing_form") or "").strip()
+    source_category = str(entry.get("source_category") or "").strip()
+    if "SEC" in provider.upper() and filing_form:
+        reliability_label = f"공식 SEC {filing_form}"
+    elif source_category:
+        reliability_label = source_category
+    elif usable:
+        reliability_label = "본문 추출 완료"
+    else:
+        reliability_label = "URL-only 보강 필요"
     return {
         "category": "public_ir_sec",
         "date": entry_date,
@@ -222,9 +238,14 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
         "company_name": ticker_names.get(matched_ticker) or related_targets[0],
         "report_type": "public-ir-sec",
         "source_type": entry.get("source_type") or "public_ir_sec",
+        "source_provider": provider,
+        "source_category": source_category,
+        "filing_form": filing_form,
+        "filing_group": entry.get("filing_group") or "",
+        "source_reliability": reliability_label,
         "summary": entry.get("summary") or entry.get("title") or entry.get("file_name") or "공개 IR/SEC 자료",
         "relative_path": entry.get("relative_path"),
-        "source_url": entry.get("source_url") or entry.get("final_url"),
+        "source_url": source_url,
         "related_targets": related_targets,
         "tags": tags[:12],
         "quality_status": quality.get("status") or entry.get("capture_quality_status") or "품질 미확인",

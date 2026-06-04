@@ -13192,7 +13192,12 @@ function formatKoreanResult(value) {
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
       const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
       const importance = item.importance ? ` · 중요도 ${item.importance}` : "";
-      const publicIrSecQuality = item.category === "public_ir_sec" ? ` · ${item.recommendation_guard || item.quality_status || "품질 미확인"}` : "";
+      const publicIrSecSource = item.category === "public_ir_sec"
+        ? [item.source_provider, item.filing_form, item.source_reliability].filter(Boolean).join(" · ")
+        : "";
+      const publicIrSecQuality = item.category === "public_ir_sec"
+        ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
+        : "";
       return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${importance}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
