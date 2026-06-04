@@ -22585,6 +22585,32 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if not key:
             continue
         recent_items_by_ticker.setdefault(key, []).append(item)
+
+    weekly_groups_by_ticker: dict[str, list[dict]] = {}
+    for group in recent_weekly.get("category_groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_key = str(group.get("key") or "").strip()
+        group_label = str(group.get("label") or group_key or "최근 자료").strip()
+        group_count = int(group.get("count") or 0)
+        for item in group.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            key = normalize_ticker(str(item.get("ticker") or ""))
+            if not key:
+                continue
+            weekly_groups_by_ticker.setdefault(key, []).append(
+                {
+                    "key": group_key,
+                    "label": group_label,
+                    "count": group_count,
+                    "summary": compact_interest_text(
+                        item.get("summary") or item.get("title") or group.get("note") or group_label,
+                        90,
+                    ),
+                }
+            )
+
     for ticker, recent_items in recent_items_by_ticker.items():
         if ticker not in candidates_by_ticker:
             continue
@@ -22609,6 +22635,23 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if blocked_public_ir_sec_count:
             candidate["risk_notes"].append(f"공개 IR/SEC URL-only 자료 {blocked_public_ir_sec_count}건은 본문 보강 전 추천 점수 가산에서 제외")
             candidate["quality_flags"].append("공개 IR/SEC 본문 보강 필요")
+        weekly_groups = []
+        seen_group_keys = set()
+        for group in weekly_groups_by_ticker.get(ticker, []):
+            group_key = str(group.get("key") or group.get("label") or "")
+            if group_key in seen_group_keys:
+                continue
+            seen_group_keys.add(group_key)
+            weekly_groups.append(group)
+        if weekly_groups:
+            candidate["weekly_evidence_groups"] = weekly_groups[:5]
+            weekly_group_text = ", ".join(
+                f"{group.get('label')} {group.get('count')}건"
+                for group in weekly_groups[:4]
+                if group.get("label")
+            )
+            if weekly_group_text:
+                candidate["evidence_sources"].append(f"최근 1주 자료 묶음: {weekly_group_text}")
 
     for ticker, candidate in list(candidates_by_ticker.items()):
         _apply_daily_recommendation_storage_quality(candidate, manifest_quality_by_ticker.get(ticker))

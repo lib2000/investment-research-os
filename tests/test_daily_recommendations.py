@@ -286,7 +286,20 @@ class DailyRecommendationsTests(unittest.TestCase):
                             "needs_body_copy": True,
                             "usable_for_recommendation": False,
                         }
-                    ]
+                    ],
+                    "category_groups": [
+                        {
+                            "key": "public_ir_sec",
+                            "label": "공개 IR/SEC",
+                            "count": 1,
+                            "items": [
+                                {
+                                    "ticker": "003230",
+                                    "summary": "삼양식품 공개 IR URL-only",
+                                }
+                            ],
+                        }
+                    ],
                 },
             ),
             patch.object(
@@ -307,6 +320,8 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertIn("검증 저장자료 품질", component_labels)
         self.assertNotIn("최근 공개 IR/SEC 반영", component_labels)
         self.assertTrue(any("공개 IR/SEC URL-only" in item for item in candidate["risk_notes"]))
+        self.assertEqual(candidate["weekly_evidence_groups"][0]["label"], "공개 IR/SEC")
+        self.assertTrue(any("최근 1주 자료 묶음" in item for item in candidate["evidence_sources"]))
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):

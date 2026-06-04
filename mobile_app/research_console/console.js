@@ -13355,6 +13355,10 @@ function formatKoreanResult(value) {
         .map((component) => `${component.label} ${component.weight_pct}%`)
         .join(" / ");
       const penalties = (item.score_penalties || []).slice(0, 2).join(" / ");
+      const weeklyGroups = (item.weekly_evidence_groups || [])
+        .slice(0, 3)
+        .map((group) => `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건`)
+        .join(" / ");
       const overseas = item.overseas_tracking?.needs_fx_conversion
         ? `\n  해외 추적: ${item.overseas_tracking.currency || item.currency || "USD"} 기준 가격 + USD/KRW 환율 확인`
         : "";
@@ -13366,7 +13370,7 @@ function formatKoreanResult(value) {
         item.score ?? "n/a"
       }\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
         weights ? `\n  비중: ${weights}` : ""
-      }${penalties ? `\n  감점/확인: ${penalties}` : ""}${overseas}${portfolioRisk}\n  근거: ${
+      }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
         reasons || "근거 요약 없음"
       }\n  출처: ${evidence || "저장 근거 없음"}`;
     });
