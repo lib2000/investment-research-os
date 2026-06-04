@@ -13208,8 +13208,12 @@ function formatKoreanResult(value) {
             const targets = Array.isArray(group.target_names) && group.target_names.length
               ? ` · 관련 ${group.target_names.slice(0, 4).join(", ")}`
               : "";
+            const quality = group.quality_summary || {};
+            const qualityLine = group.key === "public_ir_sec"
+              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건`
+              : "";
             const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
-            return `**${group.label || group.key || "자료"}** · ${formatNumber(group.count || 0)}건${targets}${note}`;
+            return `**${group.label || group.key || "자료"}** · ${formatNumber(group.count || 0)}건${qualityLine}${targets}${note}`;
           })
       : [];
     const targetDigest = new Map();
