@@ -291,7 +291,8 @@ class DailyRecommendationsTests(unittest.TestCase):
                         {
                             "key": "public_ir_sec",
                             "label": "공개 IR/SEC",
-                            "count": 1,
+                            "count": 3,
+                            "visible_count": 1,
                             "ticker_count": 1,
                             "tickers": ["003230"],
                             "quality_summary": {
@@ -329,6 +330,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(candidate["weekly_evidence_groups"][0]["ticker_count"], 1)
         self.assertEqual(candidate["weekly_evidence_groups"][0]["quality_summary"]["needs_body_copy"], 1)
         weekly_evidence = next(item for item in candidate["evidence_sources"] if "최근 1주 자료 묶음" in item)
+        self.assertIn("공개 IR/SEC 3건(표시 1/3건/종목 1개)", weekly_evidence)
         self.assertIn("추천 가능 0건/본문 보강 1건/출처 SEC EDGAR 1건", weekly_evidence)
         self.assertIn("품질 URL-only 보강 필요 1건", weekly_evidence)
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])

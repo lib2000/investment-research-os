@@ -22782,7 +22782,17 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 label = str(group.get("label") or group.get("key") or "자료").strip()
                 if not label:
                     return ""
-                text = f"{label} {int(group.get('count') or 0)}건"
+                total_count = int(group.get("count") or 0)
+                visible_count = int(group.get("visible_count") or 0)
+                ticker_count = int(group.get("ticker_count") or 0)
+                text = f"{label} {total_count}건"
+                details = []
+                if visible_count and total_count > visible_count:
+                    details.append(f"표시 {visible_count}/{total_count}건")
+                if ticker_count:
+                    details.append(f"종목 {ticker_count}개")
+                if details:
+                    text += f"({'/'.join(details)})"
                 if str(group.get("key") or "") == "public_ir_sec":
                     quality = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
                     usable = int(quality.get("usable_for_recommendation") or 0)
