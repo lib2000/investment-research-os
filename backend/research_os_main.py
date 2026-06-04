@@ -35,8 +35,10 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
+    daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
+    daily_recommendation_weekly_group_evidence_text as _daily_recommendation_weekly_group_evidence_text,
     should_run_daily_recommendations,
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
@@ -22524,60 +22526,9 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if target.get("next_action"):
             candidate["risk_notes"].append(str(target.get("next_action")))
 
-    recent_items_by_ticker: dict[str, list[dict]] = {}
-    for item in [
-        *(recent_weekly.get("important_filings") or []),
-        *(recent_weekly.get("display_reports") or []),
-        *(recent_weekly.get("public_ir_sec_items") or []),
-        *(recent_weekly.get("customs_exports") or []),
-    ]:
-        if not isinstance(item, dict):
-            continue
-        key = normalize_ticker(str(item.get("ticker") or ""))
-        if not key:
-            continue
-        recent_items_by_ticker.setdefault(key, []).append(item)
-
-    weekly_groups_by_ticker: dict[str, list[dict]] = {}
-    for group in recent_weekly.get("category_groups") or []:
-        if not isinstance(group, dict):
-            continue
-        group_key = str(group.get("key") or "").strip()
-        group_label = str(group.get("label") or group_key or "최근 자료").strip()
-        group_count = int(group.get("count") or 0)
-        group_visible_count = int(group.get("visible_count") or 0)
-        group_ticker_count = int(group.get("ticker_count") or 0)
-        quality_summary = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
-        visible_items = [item for item in group.get("items") or [] if isinstance(item, dict)]
-        linked_tickers = {
-            ticker
-            for ticker in (normalize_ticker(str(ticker or "")) for ticker in group.get("tickers") or [])
-            if ticker
-        }
-        for item in visible_items:
-            key = normalize_ticker(str(item.get("ticker") or ""))
-            if key:
-                linked_tickers.add(key)
-        first_visible_item = visible_items[0] if visible_items else {}
-        group_summary = compact_interest_text(
-            first_visible_item.get("summary")
-            or first_visible_item.get("title")
-            or group.get("note")
-            or group_label,
-            90,
-        )
-        for key in sorted(linked_tickers):
-            weekly_groups_by_ticker.setdefault(key, []).append(
-                {
-                    "key": group_key,
-                    "label": group_label,
-                    "count": group_count,
-                    "visible_count": group_visible_count,
-                    "ticker_count": group_ticker_count,
-                    "quality_summary": quality_summary,
-                    "summary": group_summary,
-                }
-            )
+    recent_weekly_index = _daily_recommendation_recent_weekly_index(recent_weekly)
+    recent_items_by_ticker = recent_weekly_index["items_by_ticker"]
+    weekly_groups_by_ticker = recent_weekly_index["groups_by_ticker"]
 
     for ticker, recent_items in recent_items_by_ticker.items():
         if ticker not in candidates_by_ticker:
@@ -22613,48 +22564,9 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             weekly_groups.append(group)
         if weekly_groups:
             candidate["weekly_evidence_groups"] = weekly_groups[:5]
-            def weekly_group_evidence_text(group: dict) -> str:
-                label = str(group.get("label") or group.get("key") or "자료").strip()
-                if not label:
-                    return ""
-                total_count = int(group.get("count") or 0)
-                visible_count = int(group.get("visible_count") or 0)
-                ticker_count = int(group.get("ticker_count") or 0)
-                text = f"{label} {total_count}건"
-                details = []
-                if visible_count and total_count > visible_count:
-                    details.append(f"표시 {visible_count}/{total_count}건")
-                if ticker_count:
-                    details.append(f"종목 {ticker_count}개")
-                if details:
-                    text += f"({'/'.join(details)})"
-                if str(group.get("key") or "") == "public_ir_sec":
-                    quality = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
-                    usable = int(quality.get("usable_for_recommendation") or 0)
-                    blocked = int(quality.get("needs_body_copy") or quality.get("blocked_or_needs_review") or 0)
-                    provider_counts = quality.get("source_families") if isinstance(quality.get("source_families"), dict) else quality.get("providers") if isinstance(quality.get("providers"), dict) else {}
-                    provider_text = "/".join(
-                        f"{provider} {count}건"
-                        for provider, count in list(provider_counts.items())[:2]
-                        if provider
-                    )
-                    reliability_counts = quality.get("reliability_labels") if isinstance(quality.get("reliability_labels"), dict) else {}
-                    reliability_text = "/".join(
-                        f"{label} {count}건"
-                        for label, count in list(reliability_counts.items())[:2]
-                        if label
-                    )
-                    text += f"(추천 가능 {usable}건/본문 보강 {blocked}건"
-                    if provider_text:
-                        text += f"/출처 {provider_text}"
-                    if reliability_text:
-                        text += f"/품질 {reliability_text}"
-                    text += ")"
-                return text
-
             weekly_group_text = ", ".join(
                 item
-                for item in (weekly_group_evidence_text(group) for group in weekly_groups[:4])
+                for item in (_daily_recommendation_weekly_group_evidence_text(group) for group in weekly_groups[:4])
                 if item
             )
             if weekly_group_text:
