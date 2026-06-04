@@ -8,6 +8,7 @@ quality semantics.
 from __future__ import annotations
 
 from datetime import date, datetime
+from urllib.parse import urlparse
 
 
 def _parse_iso_date(value: object) -> date | None:
@@ -26,6 +27,17 @@ def _parse_iso_date(value: object) -> date | None:
 
 def _normalize_ticker(value: object) -> str:
     return str(value or "").strip().upper()
+
+
+def _provider_from_public_ir_url(source_url: object) -> str:
+    text = str(source_url or "").strip()
+    parsed = urlparse(text)
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return "공개 IR/SEC"
+    if host.endswith("sec.gov"):
+        return "SEC EDGAR"
+    return host[4:] if host.startswith("www.") else host
 
 
 def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | None:
@@ -218,7 +230,7 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
     quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
     usable = public_ir_sec_entry_is_usable_for_recommendation(entry)
     source_url = str(entry.get("source_url") or entry.get("final_url") or "")
-    provider = str(entry.get("source_provider") or ("SEC EDGAR" if "sec.gov" in source_url.lower() else "공개 IR/SEC")).strip()
+    provider = str(entry.get("source_provider") or _provider_from_public_ir_url(source_url)).strip()
     filing_form = str(entry.get("filing_form") or "").strip()
     source_category = str(entry.get("source_category") or "").strip()
     if "SEC" in provider.upper() and filing_form:

@@ -3171,6 +3171,10 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(samyang_public["source_provider"], "SEC EDGAR")
         self.assertEqual(samyang_public["filing_form"], "8-K")
         self.assertEqual(samyang_public["source_reliability"], "공식 SEC 8-K")
+        rf_public = public_items["RF머트리얼즈 공개 IR URL-only 보관"]
+        self.assertEqual(rf_public["source_provider"], "example.com")
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["providers"]["example.com"], 1)
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["source_families"]["example.com"], 1)
         target_digest = {item["target"]: item for item in brief["target_digest"]}
         self.assertEqual(target_digest["삼양식품"]["filing"], 1)
         self.assertEqual(target_digest["삼양식품"]["report"], 1)
