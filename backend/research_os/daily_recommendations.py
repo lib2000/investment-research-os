@@ -169,6 +169,37 @@ def daily_recommendation_candidate_is_valid(ticker: str, company_name: str) -> b
     return True
 
 
+def ensure_daily_recommendation_candidate(
+    candidates_by_ticker: dict[str, dict],
+    ticker: str,
+    company_name: str,
+) -> dict:
+    key = normalize_recommendation_ticker(ticker)
+    row = candidates_by_ticker.setdefault(
+        key,
+        {
+            "ticker": key,
+            "company_name": company_name,
+            "score": 0,
+            "reasons": [],
+            "evidence_sources": [],
+            "risk_notes": [],
+            "portfolio_context": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "portfolio_risk_connection": {},
+            "overseas_tracking": {},
+            "currency": "KRW" if fullmatch(r"\d{6}", key) else "USD",
+            "baseline_price": None,
+            "baseline_price_source": None,
+            "baseline_price_checked_at": None,
+        },
+    )
+    if company_name and (row.get("company_name") == key or not row.get("company_name")):
+        row["company_name"] = company_name
+    return row
+
+
 def daily_recommendation_manifest_quality_by_ticker(manifest_entries: list[dict]) -> dict[str, dict]:
     quality_by_ticker: dict[str, dict] = {}
     for entry in manifest_entries:

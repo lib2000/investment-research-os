@@ -37,6 +37,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
+    ensure_daily_recommendation_candidate as _ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate as _finalize_daily_recommendation_candidate,
     daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
@@ -22388,38 +22389,12 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
     rows = [item for item in consensus_scan.get("rows", []) if isinstance(item, dict)]
     candidates_by_ticker: dict[str, dict] = {}
 
-    def ensure_candidate(ticker: str, company_name: str) -> dict:
-        key = normalize_ticker(ticker)
-        row = candidates_by_ticker.setdefault(
-            key,
-            {
-                "ticker": key,
-                "company_name": company_name,
-                "score": 0,
-                "reasons": [],
-                "evidence_sources": [],
-                "risk_notes": [],
-                "portfolio_context": [],
-                "score_penalties": [],
-                "quality_flags": [],
-                "portfolio_risk_connection": {},
-                "overseas_tracking": {},
-                "currency": "KRW" if fullmatch(r"\d{6}", key) else "USD",
-                "baseline_price": None,
-                "baseline_price_source": None,
-                "baseline_price_checked_at": None,
-            },
-        )
-        if company_name and (row.get("company_name") == key or not row.get("company_name")):
-            row["company_name"] = company_name
-        return row
-
     for item in rows:
         ticker = normalize_ticker(item.get("ticker"))
         company_name = str(item.get("company_name") or ticker).strip()
         if not _daily_recommendation_candidate_is_valid(ticker, company_name):
             continue
-        candidate = ensure_candidate(ticker, company_name)
+        candidate = _ensure_daily_recommendation_candidate(candidates_by_ticker, ticker, company_name)
         candidate["currency"] = item.get("currency") or candidate["currency"]
         if item.get("current_price") is not None:
             candidate["baseline_price"] = item.get("current_price")
@@ -22476,7 +22451,8 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
         ):
             continue
-        candidate = ensure_candidate(
+        candidate = _ensure_daily_recommendation_candidate(
+            candidates_by_ticker,
             ticker,
             str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
         )

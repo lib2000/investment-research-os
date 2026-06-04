@@ -15,6 +15,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
     daily_recommendation_state_path,
+    ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
     parse_daily_recommendations_time,
     summarize_daily_recommendation_store,
@@ -28,6 +29,21 @@ from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_ensure_daily_recommendation_candidate_initializes_defaults(self):
+        candidates = {}
+
+        first = ensure_daily_recommendation_candidate(candidates, "003230", "삼양식품")
+        second = ensure_daily_recommendation_candidate(candidates, "003230", "삼양식품")
+        overseas = ensure_daily_recommendation_candidate(candidates, "JOBY", "Joby Aviation")
+
+        self.assertIs(first, second)
+        self.assertEqual(first["ticker"], "003230")
+        self.assertEqual(first["company_name"], "삼양식품")
+        self.assertEqual(first["currency"], "KRW")
+        self.assertEqual(first["score"], 0)
+        self.assertEqual(first["portfolio_risk_connection"], {})
+        self.assertEqual(overseas["currency"], "USD")
+
     def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
         candidate = {"score": 10}
 
