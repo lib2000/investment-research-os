@@ -32,6 +32,8 @@ from research_os.data_providers import (
     get_analysis_data_provider,
 )
 from research_os.daily_recommendations import (
+    add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
+    add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
@@ -22412,31 +22414,6 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             row["company_name"] = company_name
         return row
 
-    def add_candidate_score(candidate: dict, points: int | float, label: str) -> None:
-        try:
-            numeric_points = int(points)
-        except (TypeError, ValueError):
-            numeric_points = 0
-        if numeric_points <= 0:
-            return
-        candidate["score"] += numeric_points
-        candidate.setdefault("score_components", []).append(
-            {"label": label, "points": numeric_points}
-        )
-
-    def add_candidate_penalty(candidate: dict, label: str, points: int | float = 0) -> None:
-        try:
-            numeric_points = abs(int(points))
-        except (TypeError, ValueError):
-            numeric_points = 0
-        text = str(label or "").strip()
-        if not text:
-            return
-        if numeric_points:
-            candidate["score"] -= numeric_points
-            text = f"{text} (-{numeric_points})"
-        candidate.setdefault("score_penalties", []).append(text)
-
     for item in rows:
         ticker = normalize_ticker(item.get("ticker"))
         company_name = str(item.get("company_name") or ticker).strip()
@@ -22451,7 +22428,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
         target_upside = item.get("target_upside")
         if target_upside is not None:
-            add_candidate_score(
+            _add_daily_recommendation_score(
                 candidate,
                 max(0, min(35, int(float(target_upside) * 100))),
                 "증권사 목표가 상승여력",
@@ -22460,16 +22437,16 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 f"저장된 증권사 목표주가 대비 상승여력 {float(target_upside) * 100:.1f}%"
             )
         if item.get("valuation_signal") and item.get("valuation_signal") != "계산 보류":
-            add_candidate_score(candidate, 10, "밸류에이션 신호")
+            _add_daily_recommendation_score(candidate, 10, "밸류에이션 신호")
             candidate["reasons"].append(f"밸류에이션 신호: {item.get('valuation_signal')}")
         if item.get("source_count"):
-            add_candidate_score(candidate, min(15, int(item.get("source_count") or 0) * 3), "리포트 근거 수")
+            _add_daily_recommendation_score(candidate, min(15, int(item.get("source_count") or 0) * 3), "리포트 근거 수")
             candidate["evidence_sources"].append(
                 f"목표가/리포트 근거 {item.get('source_count')}건"
             )
         if item.get("market_value"):
             market_value = float(item.get("market_value") or 0)
-            add_candidate_score(candidate, 20, "실제 보유 포트폴리오 비중")
+            _add_daily_recommendation_score(candidate, 20, "실제 보유 포트폴리오 비중")
             candidate["portfolio_context"].append(
                 f"보유 포트폴리오 평가금액 {round(market_value):,}원"
             )
@@ -22480,7 +22457,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 "message": "보유 비중이 연결된 추천 후보입니다. 포트폴리오 리스크 스캔에서 비중·섹터 쏠림을 함께 확인하세요.",
             }
         if item.get("interest"):
-            add_candidate_score(candidate, 10, "관심종목 등록")
+            _add_daily_recommendation_score(candidate, 10, "관심종목 등록")
             candidate["portfolio_context"].append("관심종목 등록")
             if not candidate.get("portfolio_risk_connection"):
                 candidate["portfolio_risk_connection"] = {
@@ -22504,21 +22481,21 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
         )
         priority = str(target.get("priority") or "medium")
-        add_candidate_score(candidate, {"high": 20, "medium": 10, "low": 3}.get(priority, 10), "보유/관심 우선순위")
+        _add_daily_recommendation_score(candidate, {"high": 20, "medium": 10, "low": 3}.get(priority, 10), "보유/관심 우선순위")
         recent_count = int(target.get("recent_document_count") or 0)
         rag_count = int(target.get("rag_document_count") or 0)
         if recent_count:
-            add_candidate_score(candidate, min(15, recent_count), "최근 저장자료")
+            _add_daily_recommendation_score(candidate, min(15, recent_count), "최근 저장자료")
             candidate["reasons"].append(f"최근 저장자료 {recent_count}건")
         if rag_count:
-            add_candidate_score(candidate, min(15, rag_count), "RAG 연결 문서")
+            _add_daily_recommendation_score(candidate, min(15, rag_count), "RAG 연결 문서")
             candidate["evidence_sources"].append(f"RAG 연결 문서 {rag_count}건")
         if target.get("thesis_snapshot_connected"):
-            add_candidate_score(candidate, 12, "최신 투자 논거 스냅샷")
+            _add_daily_recommendation_score(candidate, 12, "최신 투자 논거 스냅샷")
             candidate["evidence_sources"].append("최신 투자 논거 스냅샷 연결")
         market_matches = target.get("market_journal_matches") or []
         if market_matches:
-            add_candidate_score(candidate, min(10, len(market_matches) * 3), "시장일지 연결")
+            _add_daily_recommendation_score(candidate, min(10, len(market_matches) * 3), "시장일지 연결")
             latest_market = market_matches[0]
             candidate["reasons"].append(
                 "시장일지 연결: "
@@ -22542,14 +22519,14 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         usable_public_ir_sec_count = sum(1 for item in public_ir_sec_items_for_ticker if item.get("usable_for_recommendation"))
         blocked_public_ir_sec_count = public_ir_sec_count - usable_public_ir_sec_count
         if important_count:
-            add_candidate_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
+            _add_daily_recommendation_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
             candidate["reasons"].append(f"최근 1주 중요 공시 {important_count}건 확인")
             candidate["evidence_sources"].append("최근 1주 공시 브리프 반영")
         if report_count:
-            add_candidate_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
+            _add_daily_recommendation_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
             candidate["evidence_sources"].append(f"최근 1주 핵심 리포트 {report_count}건")
         if usable_public_ir_sec_count:
-            add_candidate_score(candidate, min(12, usable_public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
+            _add_daily_recommendation_score(candidate, min(12, usable_public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
             candidate["evidence_sources"].append(f"최근 1주 공개 IR/SEC 자료 {usable_public_ir_sec_count}건")
             candidate["reasons"].append("본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨")
         if blocked_public_ir_sec_count:
@@ -22588,11 +22565,11 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 dart_cache,
             )
             if freshness.get("tone") == "ok":
-                add_candidate_score(candidate, 10, "저장자료 신선도 양호")
+                _add_daily_recommendation_score(candidate, 10, "저장자료 신선도 양호")
             elif freshness.get("tone") == "warning":
-                add_candidate_score(candidate, 5, "저장자료 신선도 확인 필요")
+                _add_daily_recommendation_score(candidate, 5, "저장자료 신선도 확인 필요")
                 candidate["quality_flags"].append("저장자료 신선도 확인 필요")
-                add_candidate_penalty(candidate, "최근 자료 신선도 보강 필요", 2)
+                _add_daily_recommendation_penalty(candidate, "최근 자료 신선도 보강 필요", 2)
             candidate["evidence_sources"].append(freshness.get("summary") or "저장자료 신선도 확인")
             if profile.get("analysis_focus"):
                 candidate["reasons"].append(f"분석 초점: {profile.get('analysis_focus')}")
@@ -22605,11 +22582,11 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 candidate["baseline_price"] = price
                 candidate["baseline_price_source"] = source or "data_provider"
                 candidate["baseline_price_checked_at"] = current_storage_timestamp()
-                add_candidate_score(candidate, 5, "현재가 확인")
+                _add_daily_recommendation_score(candidate, 5, "현재가 확인")
             else:
                 candidate["risk_notes"].append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
                 candidate["quality_flags"].append("기준 현재가 미확인")
-                add_candidate_penalty(candidate, "현재가 미확인", 5)
+                _add_daily_recommendation_penalty(candidate, "현재가 미확인", 5)
 
         currency = str(candidate.get("currency") or "KRW").upper()
         if currency != "KRW":

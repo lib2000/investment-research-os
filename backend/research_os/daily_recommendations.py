@@ -219,6 +219,33 @@ def daily_recommendation_manifest_quality_by_ticker(manifest_entries: list[dict]
     return quality_by_ticker
 
 
+def add_daily_recommendation_score(candidate: dict, points: int | float, label: str) -> None:
+    try:
+        numeric_points = int(points)
+    except (TypeError, ValueError):
+        numeric_points = 0
+    if numeric_points <= 0:
+        return
+    candidate["score"] = int(candidate.get("score") or 0) + numeric_points
+    candidate.setdefault("score_components", []).append(
+        {"label": str(label or "").strip() or "점수", "points": numeric_points}
+    )
+
+
+def add_daily_recommendation_penalty(candidate: dict, label: str, points: int | float = 0) -> None:
+    try:
+        numeric_points = abs(int(points))
+    except (TypeError, ValueError):
+        numeric_points = 0
+    text = str(label or "").strip()
+    if not text:
+        return
+    if numeric_points:
+        candidate["score"] = int(candidate.get("score") or 0) - numeric_points
+        text = f"{text} (-{numeric_points})"
+    candidate.setdefault("score_penalties", []).append(text)
+
+
 def apply_daily_recommendation_storage_quality(candidate: dict, quality: dict | None) -> None:
     if not quality:
         candidate.setdefault("quality_flags", []).append("저장 품질 대시보드 연결 없음")
@@ -230,29 +257,20 @@ def apply_daily_recommendation_storage_quality(candidate: dict, quality: dict | 
     archived_count = int(quality.get("archived_count") or 0)
     active_count = int(quality.get("active_count") or 0)
     if high_quality_count >= 3:
-        candidate["score"] += 8
-        candidate.setdefault("score_components", []).append(
-            {"label": "검증 저장자료 품질", "points": 8}
-        )
+        add_daily_recommendation_score(candidate, 8, "검증 저장자료 품질")
     elif high_quality_count > 0:
-        candidate["score"] += 3
-        candidate.setdefault("score_components", []).append(
-            {"label": "검증 저장자료 품질", "points": 3}
-        )
+        add_daily_recommendation_score(candidate, 3, "검증 저장자료 품질")
     else:
         candidate.setdefault("quality_flags", []).append("검증된 활성 저장자료 부족")
         add_points = 3 if active_count else 5
-        candidate["score"] -= add_points
-        candidate.setdefault("score_penalties", []).append(f"검증된 활성 저장자료 부족 (-{add_points})")
+        add_daily_recommendation_penalty(candidate, "검증된 활성 저장자료 부족", add_points)
     if duplicate_count:
         penalty = min(8, max(2, duplicate_count))
-        candidate["score"] -= penalty
-        candidate.setdefault("score_penalties", []).append(f"중복 의심 저장자료 대표화 필요 (-{penalty})")
+        add_daily_recommendation_penalty(candidate, "중복 의심 저장자료 대표화 필요", penalty)
         candidate.setdefault("quality_flags", []).append("중복 의심 자료는 대표 자료만 근거로 사용")
     if body_missing_count or ocr_needed_count:
         penalty = min(10, (body_missing_count * 3) + (ocr_needed_count * 3))
-        candidate["score"] -= penalty
-        candidate.setdefault("score_penalties", []).append(f"본문/OCR 보강 필요 자료 존재 (-{penalty})")
+        add_daily_recommendation_penalty(candidate, "본문/OCR 보강 필요 자료 존재", penalty)
         candidate.setdefault("quality_flags", []).append("본문/OCR 보강 전 투자 근거 가중치 제한")
     if archived_count and not active_count:
         candidate.setdefault("quality_flags", []).append("활성 근거 없이 보관 자료만 존재")

@@ -12,6 +12,8 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.daily_recommendations import (
+    add_daily_recommendation_penalty,
+    add_daily_recommendation_score,
     daily_recommendation_state_path,
     finalize_daily_recommendation_candidate,
     parse_daily_recommendations_time,
@@ -26,6 +28,20 @@ from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
+        candidate = {"score": 10}
+
+        add_daily_recommendation_score(candidate, "5", "리포트")
+        add_daily_recommendation_score(candidate, 0, "무시")
+        add_daily_recommendation_score(candidate, "bad", "무시")
+        add_daily_recommendation_penalty(candidate, "현재가 미확인", "3")
+        add_daily_recommendation_penalty(candidate, "메모만")
+        add_daily_recommendation_penalty(candidate, "")
+
+        self.assertEqual(candidate["score"], 12)
+        self.assertEqual(candidate["score_components"], [{"label": "리포트", "points": 5}])
+        self.assertEqual(candidate["score_penalties"], ["현재가 미확인 (-3)", "메모만"])
+
     def test_finalize_daily_recommendation_candidate_builds_score_explanation(self):
         candidate = {
             "score": 22,
