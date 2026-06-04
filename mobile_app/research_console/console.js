@@ -13214,8 +13214,8 @@ function formatKoreanResult(value) {
               ? ` · 관련 ${group.target_names.slice(0, 4).join(", ")}`
               : "";
             const quality = group.quality_summary || {};
-            const providerLine = group.key === "public_ir_sec" && quality.providers
-              ? Object.entries(quality.providers)
+            const providerLine = group.key === "public_ir_sec" && (quality.source_families || quality.providers)
+              ? Object.entries(quality.source_families || quality.providers)
                   .slice(0, 3)
                   .map(([provider, count]) => `${provider} ${formatNumber(count)}건`)
                   .join(" / ")
@@ -13387,8 +13387,8 @@ function formatKoreanResult(value) {
         .slice(0, 3)
         .map((group) => {
           const quality = group.quality_summary || {};
-          const providerText = group.key === "public_ir_sec" && quality.providers
-            ? Object.entries(quality.providers)
+          const providerText = group.key === "public_ir_sec" && (quality.source_families || quality.providers)
+            ? Object.entries(quality.source_families || quality.providers)
                 .slice(0, 2)
                 .map(([provider, count]) => `${provider} ${formatNumber(count)}건`)
                 .join(" / ")

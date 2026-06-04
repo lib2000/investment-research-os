@@ -14342,6 +14342,21 @@ def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
     return unique_items
 
 
+def recent_weekly_source_family(provider: str) -> str:
+    value = str(provider or "").strip().lower()
+    if not value:
+        return "출처 미확인"
+    value = sub(r"^https?://", "", value).split("/")[0].split(":")[0].strip(".")
+    if value.startswith("www."):
+        value = value[4:]
+    labels = [label for label in value.split(".") if label]
+    if len(labels) >= 3 and labels[-1] == "kr" and labels[-2] in {"co", "or", "go", "ac", "ne", "re", "pe"}:
+        return ".".join(labels[-3:])
+    if len(labels) >= 3 and all(fullmatch(r"[a-z0-9-]+", label) for label in labels):
+        return ".".join(labels[-2:])
+    return value or "출처 미확인"
+
+
 def recent_weekly_category_group(label: str, key: str, items: list[dict], *, limit: int = 8, note: str = "") -> dict:
     all_items = list(items or [])
     visible_items = all_items[: max(1, limit)]
@@ -14350,6 +14365,7 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
     needs_body_count = 0
     quality_statuses: dict[str, int] = {}
     provider_counts: dict[str, int] = {}
+    source_family_counts: dict[str, int] = {}
     filing_form_counts: dict[str, int] = {}
     reliability_counts: dict[str, int] = {}
     for item in all_items:
@@ -14374,6 +14390,8 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
             provider = str(item.get("source_provider") or "출처 미확인").strip()
             if provider:
                 provider_counts[provider] = provider_counts.get(provider, 0) + 1
+                source_family = recent_weekly_source_family(provider)
+                source_family_counts[source_family] = source_family_counts.get(source_family, 0) + 1
             filing_form = str(item.get("filing_form") or "").strip()
             if filing_form:
                 filing_form_counts[filing_form] = filing_form_counts.get(filing_form, 0) + 1
@@ -14388,6 +14406,7 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         "blocked_or_needs_review": max(0, len(quality_items) - usable_count) if key == "public_ir_sec" else 0,
         "statuses": quality_statuses,
         "providers": dict(sorted(provider_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
+        "source_families": dict(sorted(source_family_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
         "filing_forms": dict(sorted(filing_form_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
         "reliability_labels": dict(sorted(reliability_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
     }
@@ -22746,7 +22765,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                     quality = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
                     usable = int(quality.get("usable_for_recommendation") or 0)
                     blocked = int(quality.get("needs_body_copy") or quality.get("blocked_or_needs_review") or 0)
-                    provider_counts = quality.get("providers") if isinstance(quality.get("providers"), dict) else {}
+                    provider_counts = quality.get("source_families") if isinstance(quality.get("source_families"), dict) else quality.get("providers") if isinstance(quality.get("providers"), dict) else {}
                     provider_text = "/".join(
                         f"{provider} {count}건"
                         for provider, count in list(provider_counts.items())[:2]

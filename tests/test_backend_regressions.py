@@ -2976,6 +2976,13 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(status["coverage_rate"], 0)
         self.assertEqual(status["missing_tickers"], ["003230", "071050"])
 
+    def test_recent_weekly_source_family_collapses_subdomains(self):
+        import research_os_main as main
+
+        self.assertEqual(main.recent_weekly_source_family("ir.jobyaviation.com"), "jobyaviation.com")
+        self.assertEqual(main.recent_weekly_source_family("https://www.example.co.kr/path"), "example.co.kr")
+        self.assertEqual(main.recent_weekly_source_family("SEC EDGAR"), "sec edgar")
+
     def test_recent_weekly_group_quality_summary_uses_all_items_not_visible_sample(self):
         import research_os_main as main
 
@@ -3001,6 +3008,7 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(group["quality_summary"]["blocked_or_needs_review"], 6)
         self.assertEqual(group["quality_summary"]["statuses"]["보강 필요"], 6)
         self.assertEqual(group["quality_summary"]["providers"], {"출처 미확인": 10})
+        self.assertEqual(group["quality_summary"]["source_families"], {"출처 미확인": 10})
 
     def test_recent_weekly_brief_filters_targets_and_dedupes_reports(self):
         import research_os_main as main
@@ -3137,6 +3145,7 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["needs_body_copy"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["blocked_or_needs_review"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["providers"]["SEC EDGAR"], 1)
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["source_families"]["sec edgar"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["filing_forms"]["8-K"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["reliability_labels"]["공식 SEC 8-K"], 1)
         self.assertEqual(groups["customs_exports"]["count"], 1)
