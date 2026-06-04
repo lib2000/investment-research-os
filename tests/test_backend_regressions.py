@@ -827,6 +827,44 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         tickers = {source.ticker for source in COMPANY_IR_SOURCES}
 
         self.assertTrue({"JOBY", "PL", "CHPT", "ABSI", "RXRX", "OTLY", "CPSH", "GOTU"}.issubset(tickers))
+        sec_sources = {source.ticker for source in COMPANY_IR_SOURCES if source.source_scope == "sec_company_submissions"}
+        self.assertTrue({"ABSI", "RXRX", "OTLY", "CPSH"}.issubset(sec_sources))
+
+    def test_company_ir_parser_extracts_sec_submissions(self):
+        from research_os.company_ir_sources import CompanyIrSource, parse_sec_company_submissions
+
+        source = CompanyIrSource(
+            source_key="cpsh_sec_submissions",
+            ticker="CPSH",
+            company_name="CPS Technologies",
+            provider="SEC EDGAR",
+            source_url="https://data.sec.gov/submissions/CIK0000814676.json",
+            source_scope="sec_company_submissions",
+        )
+        payload = {
+            "filings": {
+                "recent": {
+                    "form": ["4", "8-K", "S-8"],
+                    "filingDate": ["2026-05-09", "2026-05-08", "2026-05-07"],
+                    "reportDate": ["2026-05-09", "2026-05-04", "2026-05-07"],
+                    "accessionNumber": ["0000000000-26-000004", "0001437749-26-015161", "0000000000-26-000001"],
+                    "primaryDocument": ["form4.xml", "ex_957048.htm", "ignored.htm"],
+                    "primaryDocDescription": ["FORM 4", "EXHIBIT 99.1 PRESS RELEASE", "Registration statement"],
+                }
+            }
+        }
+
+        items = parse_sec_company_submissions(payload, source=source, limit=10)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["ticker"], "CPSH")
+        self.assertEqual(items[0]["category"], "SEC 공시")
+        self.assertEqual(items[0]["published_at"], "2026-05-08")
+        self.assertIn("CPS Technologies 8-K", items[0]["title"])
+        self.assertEqual(
+            items[0]["detail_url"],
+            "https://www.sec.gov/Archives/edgar/data/814676/000143774926015161/ex_957048.htm",
+        )
 
     def test_company_ir_parser_accepts_common_news_detail_url_shapes(self):
         from research_os.company_ir_sources import CompanyIrSource, parse_company_ir_press_releases

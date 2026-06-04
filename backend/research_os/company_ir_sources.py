@@ -19,6 +19,11 @@ RXRX_IR_PRESS_RELEASES_URL = "https://ir.recursion.com/news-events/press-release
 OTLY_IR_PRESS_RELEASES_URL = "https://investors.oatly.com/news-events/press-releases"
 CPSH_IR_PRESS_RELEASES_URL = "https://cpstechnologysolutions.com/investor-overview/press-releases/"
 GOTU_IR_PRESS_RELEASES_URL = "https://ir.gaotu.cn/home"
+ABSI_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001672688.json"
+RXRX_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001601830.json"
+OTLY_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001843586.json"
+CPSH_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0000814676.json"
+SEC_INTERESTING_FORMS = {"8-K", "10-Q", "10-K", "20-F", "6-K", "SD", "SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A"}
 DATE_PATTERN = re.compile(r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+20\d{2}|20\d{2}[-./]\d{1,2}[-./]\d{1,2}", re.IGNORECASE)
 SKIP_LINK_TEXTS = {
     "",
@@ -119,6 +124,38 @@ COMPANY_IR_SOURCES = [
         company_name="Gaotu Techedu",
         provider="Gaotu IR",
         source_url=GOTU_IR_PRESS_RELEASES_URL,
+    ),
+    CompanyIrSource(
+        source_key="absci_sec_submissions",
+        ticker="ABSI",
+        company_name="Absci Corporation",
+        provider="SEC EDGAR",
+        source_url=ABSI_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
+    ),
+    CompanyIrSource(
+        source_key="recursion_sec_submissions",
+        ticker="RXRX",
+        company_name="Recursion Pharmaceuticals",
+        provider="SEC EDGAR",
+        source_url=RXRX_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
+    ),
+    CompanyIrSource(
+        source_key="oatly_sec_submissions",
+        ticker="OTLY",
+        company_name="Oatly Group",
+        provider="SEC EDGAR",
+        source_url=OTLY_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
+    ),
+    CompanyIrSource(
+        source_key="cpsh_sec_submissions",
+        ticker="CPSH",
+        company_name="CPS Technologies",
+        provider="SEC EDGAR",
+        source_url=CPSH_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
     ),
 ]
 
@@ -299,6 +336,78 @@ def _date_from_nearby_text(tokens: list[dict], index: int) -> str:
     return ""
 
 
+def _sec_cik_from_submissions_url(url: str) -> str:
+    match = re.search(r"CIK0*(\d+)\.json", url or "", re.IGNORECASE)
+    return match.group(1) if match else ""
+
+
+def _sec_archive_url(source: CompanyIrSource, accession_number: str, primary_document: str) -> str:
+    cik = _sec_cik_from_submissions_url(source.source_url)
+    accession = re.sub(r"[^0-9]", "", accession_number or "")
+    document = clean_ir_text(primary_document)
+    if not cik or not accession or not document:
+        return source.source_url
+    return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
+
+
+def parse_sec_company_submissions(
+    payload: dict | str,
+    *,
+    source: CompanyIrSource,
+    limit: int = 30,
+) -> list[dict]:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(payload, dict):
+        return []
+    recent = ((payload.get("filings") or {}).get("recent") or {}) if isinstance(payload.get("filings"), dict) else {}
+    forms = list(recent.get("form") or [])
+    filing_dates = list(recent.get("filingDate") or [])
+    report_dates = list(recent.get("reportDate") or [])
+    accessions = list(recent.get("accessionNumber") or [])
+    documents = list(recent.get("primaryDocument") or [])
+    descriptions = list(recent.get("primaryDocDescription") or [])
+    items: list[CompanyIrItem] = []
+    seen: set[str] = set()
+    for index, form_value in enumerate(forms):
+        form = clean_ir_text(form_value).upper()
+        if form not in SEC_INTERESTING_FORMS:
+            continue
+        filing_date = clean_ir_text(filing_dates[index] if index < len(filing_dates) else "")
+        report_date = clean_ir_text(report_dates[index] if index < len(report_dates) else "")
+        accession = clean_ir_text(accessions[index] if index < len(accessions) else "")
+        document = clean_ir_text(documents[index] if index < len(documents) else "")
+        description = clean_ir_text(descriptions[index] if index < len(descriptions) else "")
+        title_detail = description if description and description.upper() != form else "SEC filing"
+        title = f"{source.company_name} {form} {title_detail}"
+        detail_url = _sec_archive_url(source, accession, document)
+        published_at = normalize_ir_date(filing_date) or filing_date or normalize_ir_date(report_date) or report_date
+        item_id = company_ir_item_id(source, title, published_at, detail_url)
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        items.append(
+            CompanyIrItem(
+                item_id=item_id,
+                ticker=source.ticker,
+                company_name=source.company_name,
+                title=title,
+                source_provider=source.provider,
+                source_scope=source.source_scope,
+                published_at=published_at,
+                detail_url=detail_url,
+                source_url=source.source_url,
+                category="SEC 공시",
+            )
+        )
+        if len(items) >= max(1, limit):
+            break
+    return [asdict(item) for item in items]
+
+
 def parse_company_ir_press_releases(
     html: str,
     *,
@@ -351,14 +460,19 @@ def fetch_company_ir_source(
     with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False) as client:
         response = client.get(source.source_url, headers=headers)
         response.raise_for_status()
+        if source.source_scope == "sec_company_submissions" or "data.sec.gov/submissions/" in source.source_url:
+            items = parse_sec_company_submissions(response.text, source=source, limit=limit)
+        else:
+            items = parse_company_ir_press_releases(response.text, source=source, limit=limit)
         return {
             "source_key": source.source_key,
             "provider": source.provider,
             "source_url": source.source_url,
             "ticker": source.ticker,
             "company_name": source.company_name,
+            "source_scope": source.source_scope,
             "status": "success",
-            "items": parse_company_ir_press_releases(response.text, source=source, limit=limit),
+            "items": items,
         }
 
 
@@ -391,6 +505,7 @@ def fetch_company_ir_sources(
                     "source_url": source.source_url,
                     "ticker": source.ticker,
                     "company_name": source.company_name,
+                    "source_scope": source.source_scope,
                     "status": "failed",
                     "error": str(exc),
                 }
