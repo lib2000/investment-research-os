@@ -62,17 +62,32 @@ def _host_label(source_url: str) -> tuple[str, str, list[str]]:
     return host or "공개 웹", "other", tags
 
 
-def _summary_from_text(title: str, text: str, source_provider: str) -> str:
+def _summary_from_text(
+    title: str,
+    text: str,
+    source_provider: str,
+    *,
+    extracted_body_available: bool = True,
+) -> str:
     compact = " ".join((text or "").split())
-    if compact:
+    if compact and extracted_body_available:
         return f"{source_provider} 공개 자료 `{title}`에서 추출한 본문 {len(compact):,}자를 저장했습니다. {compact[:260]}"
     return f"{source_provider} 공개 자료 `{title}` URL과 메타데이터를 저장했습니다. 본문은 후속 복사/파일 보강이 필요합니다."
 
 
-def _capture_quality(url_info: dict[str, Any], body_text: str) -> dict[str, Any]:
+def _capture_quality(
+    url_info: dict[str, Any],
+    body_text: str,
+    *,
+    extracted_body_available: bool = True,
+) -> dict[str, Any]:
     status = str(url_info.get("status") or "unknown")
-    body_chars = len(body_text or "")
-    if body_chars >= 500:
+    body_chars = len(body_text or "") if extracted_body_available else 0
+    url_unavailable = is_unusable_source_url(url_info) or not extracted_body_available
+    if url_unavailable:
+        quality_status = "보강 필요"
+        action = "본문 추출이 제한되었습니다. URL-only 보관 후 원문 복사 또는 파일 첨부로 보강하세요."
+    elif body_chars >= 500:
         quality_status = "정상"
         action = "추천/리포트/RAG 근거로 바로 활용 가능합니다."
     elif body_chars:
@@ -85,8 +100,8 @@ def _capture_quality(url_info: dict[str, Any], body_text: str) -> dict[str, Any]
         "status": quality_status,
         "source_status": status,
         "body_chars": body_chars,
-        "url_text_unavailable": is_unusable_source_url(url_info),
-        "needs_body_copy": body_chars < 500,
+        "url_text_unavailable": url_unavailable,
+        "needs_body_copy": url_unavailable or body_chars < 500,
         "recommended_action": action,
     }
 
@@ -153,14 +168,21 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         }
 
     url_info = fetch_capture_source_url(source_url)
-    body_text = render_source_url_body(url_info)
+    extracted_body_text = render_source_url_body(url_info)
+    body_text = extracted_body_text
+    extracted_body_available = bool(extracted_body_text) and not is_unusable_source_url(url_info)
     if not body_text and url_info:
         body_text = render_source_url_context(url_info)
     provider, source_type, tags = _host_label(source_url)
     title = _safe_title(url_info.get("title") or url_info.get("original_title"), provider)
-    body_chars = len(body_text or "")
+    body_chars = len(extracted_body_text or "")
+    context_chars = len(body_text or "")
     doc_links = len(set(findall(r"https?://[^\s)\]]+", body_text or "")))
-    quality = _capture_quality(url_info, body_text)
+    quality = _capture_quality(
+        url_info,
+        extracted_body_text,
+        extracted_body_available=extracted_body_available,
+    )
     policy = (
         "공개 http/https 자료만 수집합니다. 자동 로그인, 자동 전송, 웹 채팅창 자동 수집은 하지 않으며 "
         "본문 추출 제한 자료는 URL/메타데이터 중심으로 보관합니다."
@@ -174,15 +196,30 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         "source_provider": provider,
         "source_type": source_type,
         "title": title,
-        "summary": _summary_from_text(title, body_text, provider),
+        "summary": _summary_from_text(
+            title,
+            extracted_body_text,
+            provider,
+            extracted_body_available=extracted_body_available,
+        ),
         "body_chars": body_chars,
+        "context_chars": context_chars,
         "doc_links": doc_links,
         "collected_at": _utc_now_iso(),
         "no_screenshot": request.no_screenshot,
         "copyright_policy": policy,
         "source_url_processing": url_info,
         "capture_quality": quality,
-        "tags": sorted(set([*tags, "rag_candidate", "codex_app_source"])),
+        "tags": sorted(
+            set(
+                [
+                    *tags,
+                    "rag_candidate",
+                    "codex_app_source",
+                    *( ["url_text_unavailable", "needs_body_copy"] if quality.get("needs_body_copy") else [] ),
+                ]
+            )
+        ),
         "storage": None,
         "rag_document": None,
     }
@@ -206,6 +243,7 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         "source_url_processing": url_info,
         "copyright_policy": policy,
         "body_chars": body_chars,
+        "context_chars": context_chars,
         "doc_links": doc_links,
         "collected_at": payload["collected_at"],
     }
@@ -247,6 +285,15 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
     entries.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("file_name") or "")), reverse=True)
     recent = entries[: max(1, min(limit, 50))]
     needs_body = [entry for entry in entries if (entry.get("capture_quality") or {}).get("needs_body_copy")]
+    next_actions = [
+        "공개 IR/SEC URL을 입력해 보유/관심 종목과 연결되는 자료를 수집하세요.",
+        "URL-only 자료는 원문 링크 확인 또는 파일/본문 복사로 보강하세요.",
+        "최근 1주 자료와 오늘 추천 근거에서 공개 IR/SEC 연결 여부를 확인하세요.",
+    ]
+    empty_state = None if entries else {
+        "title": "아직 수집된 공개 IR/SEC 자료가 없습니다.",
+        "message": "공개 SEC/IR URL을 수집하면 저장 데이터, 최근 1주 자료, RAG, 오늘 추천 근거에 순서대로 연결됩니다.",
+    }
     return {
         "status": "success",
         "module": "public_ir_sec_status",
@@ -255,5 +302,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "recent_count": len(recent),
         "needs_body_copy_count": len(needs_body),
         "policy": "공개 IR/SEC 자료만 수집하고 제한 자료는 URL/메타데이터 중심으로 보관합니다.",
+        "empty_state": empty_state,
+        "next_actions": next_actions,
         "recent_entries": recent,
     }

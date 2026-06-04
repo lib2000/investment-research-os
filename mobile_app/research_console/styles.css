@@ -3101,6 +3101,28 @@ label {
   background: #fff8e7;
 }
 
+.daily-recommendation-card.has-public-ir-sec {
+  border-color: #6ee7b7;
+}
+
+.daily-recommendation-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.daily-recommendation-badges em {
+  width: fit-content;
+  padding: 3px 7px;
+  color: #065f46;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .daily-recommendation-card span,
 .daily-recommendation-card small {
   color: var(--muted);

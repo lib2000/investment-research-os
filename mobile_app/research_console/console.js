@@ -7800,6 +7800,7 @@ function dailyRecommendationEvidenceCategories(record) {
   add("가격/밸류", /가격|현재가|목표가|밸류|상승여력|valuation/i);
   add("공시", /공시|DART|filing/i);
   add("리포트", /리포트|증권사|컨센서스|목표주가|report/i);
+  add("공개 IR/SEC", /공개 IR|IR\/SEC|SEC|EDGAR|public IR|public_ir_sec/i);
   add("수급/보유", /보유|포트폴리오|관심|수급|대량보유|institution/i);
   add("저장/RAG", /저장|RAG|자료|문서|스냅샷|시장일지/i);
   add("리스크", /리스크|위험|감점|확인|보강|미확인|quality|penalt/i);
@@ -8126,10 +8127,12 @@ function renderDailyRecommendationCards(payload) {
       const portfolioRisk = record.portfolio_risk_connection || {};
       const milestones = (record.tracking_milestones || []).slice(0, 5);
       const categories = dailyRecommendationEvidenceCategories(record);
+      const publicIrSecLinked = categories.includes("공개 IR/SEC");
       return `
-        <article class="daily-recommendation-card">
+        <article class="daily-recommendation-card${publicIrSecLinked ? " has-public-ir-sec" : ""}">
           <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")} · ${escapeHtml(record.rank || "-")}위</span>
           <strong>${escapeHtml(displayCompanyName(record))}</strong>
+          ${publicIrSecLinked ? `<div class="daily-recommendation-badges"><em>공개 IR/SEC 근거</em></div>` : ""}
           <p>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</p>
           <div class="daily-recommendation-score">
             ${scoreComponents
@@ -14556,17 +14559,21 @@ function formatKoreanResult(value) {
     const entries = Array.isArray(value.recent_entries) ? value.recent_entries : [];
     const entryLines = entries.length
       ? entries.slice(0, 12).map((item, index) => `${index + 1}. ${item.title || item.file_name || "제목 없음"} · ${item.date || "날짜 없음"} · ${item.source_provider || "출처 미확인"} · ${item.capture_quality_status || item.capture_quality?.status || "품질 미확인"}`)
-      : ["최근 공개 IR/SEC 저장 자료가 없습니다."];
+      : [value.empty_state?.title || "아직 수집된 공개 IR/SEC 자료가 없습니다."];
     return [
       `### 공개 IR/SEC 저장 상태`,
       `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
       `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
       `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,
       `정책: ${value.policy || "공개 자료만 수집합니다."}`,
+      value.empty_state?.message ? `상태: ${value.empty_state.message}` : "",
       ``,
       `최근 자료`,
       ...entryLines,
-    ].join("\n");
+      ``,
+      `다음 액션`,
+      ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 160), "공개 IR/SEC 수집 URL을 입력하세요."),
+    ].filter(Boolean).join("\n");
   }
 
   if (value.module === "source_url_preview") {

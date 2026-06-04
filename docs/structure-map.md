@@ -56,6 +56,7 @@
 | `backend\research_os\portfolio_performance.py` | 기간 수익 비교, 가격 갱신 요약, 목표가 통화/이상치/출처 판정 헬퍼 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_store.py` | 포트폴리오 저장 키/정렬 정책 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
+| `backend\research_os\public_ir_sec.py` | 공개 IR/SEC URL 수집, URL-only 보강 필요 판정, 저장 데이터/RAG 색인 연결, 상태 payload 조립 | `check_public_ir_sec_store.py`, `check_backend_module_health.py` |
 | `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
 | `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py` |
 | `backend\research_os\research_memory.py` | 저장 데이터 마크다운/JSON 기록과 manifest 관리 | `check_storage_quality_store.py` |
