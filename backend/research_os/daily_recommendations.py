@@ -374,6 +374,58 @@ def daily_recommendation_weekly_group_evidence_text(group: dict) -> str:
     return text
 
 
+def unique_text_items(values: list | tuple | None, limit: int) -> list[str]:
+    seen: dict[str, None] = {}
+    for value in values or []:
+        text = str(value or "").strip()
+        if text:
+            seen.setdefault(text, None)
+    return list(seen.keys())[:limit]
+
+
+def finalize_daily_recommendation_candidate(candidate: dict) -> dict:
+    """Normalize recommendation reasons, evidence, risks, and score explanation."""
+    if not candidate.get("reasons"):
+        candidate.setdefault("reasons", []).append("보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다.")
+    candidate["reasons"] = unique_text_items(candidate.get("reasons"), 6)
+    candidate["evidence_sources"] = unique_text_items(candidate.get("evidence_sources"), 8)
+    candidate["risk_notes"] = unique_text_items(candidate.get("risk_notes"), 5)
+    candidate["score_penalties"] = unique_text_items(candidate.get("score_penalties"), 6)
+    candidate["quality_flags"] = unique_text_items(candidate.get("quality_flags"), 6)
+    score_components = [
+        component
+        for component in candidate.get("score_components", [])
+        if isinstance(component, dict) and str(component.get("label") or "").strip()
+    ]
+    candidate["score_components"] = score_components
+    positive_points = sum(int(component.get("points") or 0) for component in score_components)
+    penalty_points = sum(
+        int(match.group(1))
+        for item in candidate.get("score_penalties", [])
+        for match in [search(r"\(-(\d+)\)", str(item))]
+        if match
+    )
+    if positive_points:
+        candidate["score_explanation"] = {
+            "positive_points": positive_points,
+            "penalty_points": penalty_points,
+            "final_score": int(candidate.get("score") or 0),
+            "top_component": max(
+                score_components,
+                key=lambda component: int(component.get("points") or 0),
+            ),
+            "component_weights": [
+                {
+                    "label": component.get("label"),
+                    "points": int(component.get("points") or 0),
+                    "weight_pct": round(int(component.get("points") or 0) / positive_points * 100, 1),
+                }
+                for component in score_components[:8]
+            ],
+        }
+    return candidate
+
+
 def build_tracking_milestones(recommendation_date: date) -> list[dict]:
     return [
         {

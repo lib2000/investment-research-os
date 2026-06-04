@@ -13,6 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from research_os.daily_recommendations import (
     daily_recommendation_state_path,
+    finalize_daily_recommendation_candidate,
     parse_daily_recommendations_time,
     summarize_daily_recommendation_store,
     should_run_daily_recommendations,
@@ -25,6 +26,32 @@ from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_finalize_daily_recommendation_candidate_builds_score_explanation(self):
+        candidate = {
+            "score": 22,
+            "reasons": [],
+            "evidence_sources": ["근거 A", "근거 A", "근거 B"],
+            "risk_notes": ["위험 A", "위험 A"],
+            "score_penalties": ["현재가 미확인 (-5)", "현재가 미확인 (-5)"],
+            "quality_flags": ["확인 필요", "확인 필요"],
+            "score_components": [
+                {"label": "보유", "points": 20},
+                {"label": "리포트", "points": 10},
+            ],
+        }
+
+        finalized = finalize_daily_recommendation_candidate(candidate)
+
+        self.assertEqual(finalized["reasons"], ["보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다."])
+        self.assertEqual(finalized["evidence_sources"], ["근거 A", "근거 B"])
+        self.assertEqual(finalized["risk_notes"], ["위험 A"])
+        self.assertEqual(finalized["score_penalties"], ["현재가 미확인 (-5)"])
+        self.assertEqual(finalized["quality_flags"], ["확인 필요"])
+        self.assertEqual(finalized["score_explanation"]["positive_points"], 30)
+        self.assertEqual(finalized["score_explanation"]["penalty_points"], 5)
+        self.assertEqual(finalized["score_explanation"]["top_component"]["label"], "보유")
+        self.assertEqual(finalized["score_explanation"]["component_weights"][0]["weight_pct"], 66.7)
+
     def test_daily_recommendation_schedule_uses_state_file(self):
         with TemporaryDirectory() as temp_dir:
             settings = Settings(

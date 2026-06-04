@@ -35,6 +35,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
+    finalize_daily_recommendation_candidate as _finalize_daily_recommendation_candidate,
     daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
@@ -22627,38 +22628,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 "needs_fx_conversion": False,
             }
 
-        if not candidate["reasons"]:
-            candidate["reasons"].append("보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다.")
-        candidate["reasons"] = list(dict.fromkeys(candidate["reasons"]))[:6]
-        candidate["evidence_sources"] = list(dict.fromkeys(candidate["evidence_sources"]))[:8]
-        candidate["risk_notes"] = list(dict.fromkeys(candidate["risk_notes"]))[:5]
-        candidate["score_penalties"] = list(dict.fromkeys(candidate.get("score_penalties", [])))[:6]
-        candidate["quality_flags"] = list(dict.fromkeys(candidate.get("quality_flags", [])))[:6]
-        positive_points = sum(int(component.get("points") or 0) for component in candidate.get("score_components", []))
-        penalty_points = sum(
-            int(match.group(1))
-            for item in candidate.get("score_penalties", [])
-            for match in [search(r"\(-(\d+)\)", str(item))]
-            if match
-        )
-        if positive_points:
-            candidate["score_explanation"] = {
-                "positive_points": positive_points,
-                "penalty_points": penalty_points,
-                "final_score": int(candidate.get("score") or 0),
-                "top_component": max(
-                    candidate.get("score_components", []),
-                    key=lambda component: int(component.get("points") or 0),
-                ),
-                "component_weights": [
-                    {
-                        "label": component.get("label"),
-                        "points": int(component.get("points") or 0),
-                        "weight_pct": round(int(component.get("points") or 0) / positive_points * 100, 1),
-                    }
-                    for component in candidate.get("score_components", [])[:8]
-                ],
-            }
+        _finalize_daily_recommendation_candidate(candidate)
 
     candidates = sorted(
         candidates_by_ticker.values(),
