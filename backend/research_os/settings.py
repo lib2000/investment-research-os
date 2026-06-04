@@ -123,6 +123,12 @@ class Settings(BaseModel):
     regional_business_sources_timeout_seconds: float = 30.0
     regional_business_sources_max_items: int = 40
     regional_business_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    company_ir_sources_enabled: bool = True
+    company_ir_sources_auto_refresh: bool = True
+    company_ir_sources_refresh_hours: float = 24.0
+    company_ir_sources_timeout_seconds: float = 12.0
+    company_ir_sources_max_items: int = 20
+    company_ir_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     nps_odcloud_enabled: bool = True
     nps_odcloud_api_key: str = Field(default="")
     nps_odcloud_base_url: str = "https://api.odcloud.kr/api"
@@ -355,6 +361,21 @@ class Settings(BaseModel):
             ),
             regional_business_sources_user_agent=os.getenv(
                 "REGIONAL_BUSINESS_SOURCES_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            company_ir_sources_enabled=_read_bool("COMPANY_IR_SOURCES_ENABLED", True),
+            company_ir_sources_auto_refresh=_read_bool("COMPANY_IR_SOURCES_AUTO_REFRESH", True),
+            company_ir_sources_refresh_hours=float(
+                os.getenv("COMPANY_IR_SOURCES_REFRESH_HOURS", "24")
+            ),
+            company_ir_sources_timeout_seconds=float(
+                os.getenv("COMPANY_IR_SOURCES_TIMEOUT_SECONDS", "12")
+            ),
+            company_ir_sources_max_items=int(
+                os.getenv("COMPANY_IR_SOURCES_MAX_ITEMS", "20")
+            ),
+            company_ir_sources_user_agent=os.getenv(
+                "COMPANY_IR_SOURCES_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
             nps_odcloud_enabled=_read_bool("NPS_ODCLOUD_ENABLED", True),

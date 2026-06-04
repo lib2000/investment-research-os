@@ -192,8 +192,13 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
     related_targets: list[str] = []
     matched_ticker = ""
     ticker_names = target_terms.get("ticker_names") or {}
+    entry_ticker = _normalize_ticker(entry.get("ticker"))
+    ticker_set = target_terms.get("ticker_set") or set(target_terms.get("tickers") or [])
+    if entry_ticker and entry_ticker in ticker_set:
+        related_targets.append(ticker_names.get(entry_ticker) or entry_ticker)
+        matched_ticker = entry_ticker
     for ticker in target_terms.get("tickers") or []:
-        if ticker and ticker in text:
+        if ticker and ticker in text and (ticker_names.get(ticker) or ticker) not in related_targets:
             related_targets.append(ticker_names.get(ticker) or ticker)
             matched_ticker = matched_ticker or ticker
     name_to_ticker = {str(name): str(ticker) for ticker, name in ticker_names.items() if name}
@@ -212,6 +217,8 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
         "category": "public_ir_sec",
         "date": entry_date,
         "ticker": matched_ticker,
+        "title": entry.get("title") or entry.get("file_name") or "공개 IR/SEC 자료",
+        "company": ticker_names.get(matched_ticker) or related_targets[0],
         "company_name": ticker_names.get(matched_ticker) or related_targets[0],
         "report_type": "public-ir-sec",
         "source_type": entry.get("source_type") or "public_ir_sec",

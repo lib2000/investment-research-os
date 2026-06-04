@@ -800,6 +800,28 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
         self.assertEqual(matched[0]["target_matches"], [])
 
 
+class CompanyIrSourcesWatchTests(unittest.TestCase):
+    def test_company_ir_parser_extracts_joby_press_release_links(self):
+        from research_os.company_ir_sources import COMPANY_IR_SOURCES, parse_company_ir_press_releases
+
+        html = """
+        <section>
+          <a href="/news-events/press-releases/detail/182/joby-reports-first-quarter-2026-financial-results">
+            Joby Reports First Quarter 2026 Financial Results
+          </a>
+          <time>May 7, 2026</time>
+        </section>
+        """
+
+        items = parse_company_ir_press_releases(html, source=COMPANY_IR_SOURCES[0], limit=5)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["ticker"], "JOBY")
+        self.assertEqual(items[0]["company_name"], "Joby Aviation")
+        self.assertEqual(items[0]["published_at"], "2026-05-07")
+        self.assertIn("joby-reports-first-quarter-2026-financial-results", items[0]["detail_url"])
+
+
 class ExternalSourceScheduleStatusTests(unittest.TestCase):
     def test_regional_source_failure_preserves_cached_provider_items(self):
         import research_os_main as main
@@ -846,6 +868,7 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         with (
             patch.object(main, "read_kcif_reports_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_reports": [{"id": "k"}], "source_status": "cached"}),
             patch.object(main, "read_regional_business_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "r"}], "source_status": "cached"}),
+            patch.object(main, "read_company_ir_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "j", "ticker": "JOBY"}], "source_status": "cached"}),
             patch.object(main, "read_naver_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"a": {}}, "status": "success"}),
             patch.object(main, "read_shinhan_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"b": {}}, "status": "success"}),
             patch.object(main, "read_dart_filing_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "items": [{"id": "d"}], "status": "success"}),
@@ -858,6 +881,10 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["regional_business_sources_watch"]["label"], "EMERiCs/CSF/KIEP 지역·매크로 자료")
         self.assertTrue(by_key["regional_business_sources_watch"]["auto_refresh"])
         self.assertEqual(by_key["regional_business_sources_watch"]["related_count"], 1)
+        self.assertIn("company_ir_sources_watch", by_key)
+        self.assertEqual(by_key["company_ir_sources_watch"]["label"], "Joby IR 보도자료")
+        self.assertEqual(by_key["company_ir_sources_watch"]["related_count"], 1)
+        self.assertEqual(by_key["company_ir_sources_watch"]["policy"], "public_company_ir_capture_and_rag")
         self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
 

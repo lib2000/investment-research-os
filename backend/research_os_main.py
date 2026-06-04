@@ -95,6 +95,11 @@ from research_os.recent_activity import (
     recent_report_display_priority,
     recent_watch_summary,
 )
+from research_os.company_ir_sources import (
+    company_ir_copyright_policy,
+    fetch_company_ir_sources,
+    should_refresh_company_ir_cache,
+)
 from research_os.classification import classification_system_tags, merge_research_tags
 from research_os.models import (
     Broker,
@@ -258,6 +263,7 @@ async def lifespan(app: FastAPI):
     start_shinhan_research_scheduler()
     start_naver_research_scheduler()
     start_regional_macro_sources_scheduler()
+    start_company_ir_sources_scheduler()
     start_daily_recommendations_scheduler()
     yield
 
@@ -4189,6 +4195,44 @@ def start_regional_macro_sources_scheduler() -> None:
         daemon=True,
     )
     thread.start()
+
+
+_COMPANY_IR_SOURCES_SCHEDULER_STARTED = False
+
+
+def company_ir_sources_scheduler_loop() -> None:
+    settings = get_settings()
+    interval_seconds = min(max(settings.company_ir_sources_refresh_hours, 1) * 3600, 15 * 60)
+    while True:
+        try:
+            build_company_ir_sources_watch_payload(
+                settings,
+                limit=settings.company_ir_sources_max_items,
+                force=False,
+                save_result=True,
+            )
+        except Exception:
+            pass
+        threading.Event().wait(interval_seconds)
+
+
+def start_company_ir_sources_scheduler() -> None:
+    global _COMPANY_IR_SOURCES_SCHEDULER_STARTED
+    settings = get_settings()
+    if (
+        _COMPANY_IR_SOURCES_SCHEDULER_STARTED
+        or not settings.company_ir_sources_enabled
+        or not settings.company_ir_sources_auto_refresh
+    ):
+        return
+    _COMPANY_IR_SOURCES_SCHEDULER_STARTED = True
+    thread = threading.Thread(
+        target=company_ir_sources_scheduler_loop,
+        name="company-ir-sources-refresh",
+        daemon=True,
+    )
+    thread.start()
+
 def remember_ticker_lookup_diagnostics(symbol: str, steps: list[dict]) -> None:
     TICKER_LOOKUP_DIAGNOSTICS[normalize_ticker(symbol)] = steps[-8:]
 
@@ -5316,6 +5360,10 @@ def kcif_reports_watch_path(settings: Settings) -> Path:
 
 def regional_business_sources_watch_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "regional_business_sources_watch.json"
+
+
+def company_ir_sources_watch_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "company_ir_sources_watch.json"
 
 
 def research_automation_status_path(settings: Settings) -> Path:
@@ -14090,6 +14138,7 @@ def read_latest_daily_brief(settings: Settings) -> dict:
 def build_external_source_schedule_status(settings: Settings) -> list[dict]:
     kcif_watch = read_kcif_reports_watch(settings)
     regional_watch = read_regional_business_sources_watch(settings)
+    company_ir_watch = read_company_ir_sources_watch(settings)
     naver_cache = read_naver_research_cache(settings)
     shinhan_cache = read_shinhan_research_cache(settings)
     dart_cache = read_dart_filing_cache(settings)
@@ -14117,6 +14166,21 @@ def build_external_source_schedule_status(settings: Settings) -> list[dict]:
             "related_count": len(regional_watch.get("related_items") or []) if isinstance(regional_watch, dict) else 0,
             "source_status": regional_watch.get("source_status") if isinstance(regional_watch, dict) else "not_checked",
             "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "company_ir_sources_watch",
+            "label": "Joby IR 보도자료",
+            "enabled": settings.company_ir_sources_enabled,
+            "auto_refresh": settings.company_ir_sources_auto_refresh,
+            "refresh_hours": settings.company_ir_sources_refresh_hours,
+            "last_checked_at": company_ir_watch.get("updated_at") if isinstance(company_ir_watch, dict) else None,
+            "due": should_refresh_company_ir_cache(
+                company_ir_watch,
+                refresh_hours=settings.company_ir_sources_refresh_hours,
+            ),
+            "related_count": len(company_ir_watch.get("related_items") or []) if isinstance(company_ir_watch, dict) else 0,
+            "source_status": company_ir_watch.get("source_status") if isinstance(company_ir_watch, dict) else "not_checked",
+            "policy": "public_company_ir_capture_and_rag",
         },
         {
             "key": "naver_research",
@@ -16086,6 +16150,154 @@ def refresh_kcif_reports_watch(
     )
 
 
+def read_company_ir_sources_watch(settings: Settings) -> dict:
+    return read_json_store(company_ir_sources_watch_path(settings), {})
+
+
+def write_company_ir_sources_watch(settings: Settings, payload: dict) -> None:
+    write_json_store(company_ir_sources_watch_path(settings), payload)
+
+
+def company_ir_item_matches_targets(item: dict, target_terms: dict) -> bool:
+    ticker = normalize_ticker(str(item.get("ticker") or ""))
+    ticker_set = target_terms.get("ticker_set") or set(target_terms.get("tickers") or [])
+    if ticker and ticker in ticker_set:
+        return True
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ["company_name", "title", "detail_url", "source_provider", "source_scope"]
+    ).lower()
+    for name in target_terms.get("names") or []:
+        cleaned = str(name or "").strip().lower()
+        if cleaned and cleaned in text:
+            return True
+    return False
+
+
+def build_company_ir_sources_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
+    actions = [
+        "Joby IR 보도자료는 보유/관심 종목과 연결되면 공개 IR 저장 데이터와 RAG에 자동 반영됩니다.",
+        "본문 추출이 짧은 항목은 URL-only/본문 보강 필요로 남기고 추천 점수 가산에서 제외합니다.",
+    ]
+    if warnings:
+        actions.append("목록 확인 실패가 있으면 기존 캐시를 기준으로 최근 1주 자료를 유지하고 다음 주기에 재시도하세요.")
+    if related_items:
+        actions.append(f"관련 IR 보도자료 {len(related_items)}건을 최근 1주 자료와 JOBY Dossier 검토에 활용하세요.")
+    return actions
+
+
+def build_company_ir_sources_watch_payload(
+    settings: Settings,
+    *,
+    limit: int = 20,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    cache = read_company_ir_sources_watch(settings)
+    normalized_limit = max(1, min(int(limit or settings.company_ir_sources_max_items or 20), 100))
+    should_fetch = force or should_refresh_company_ir_cache(
+        cache,
+        refresh_hours=settings.company_ir_sources_refresh_hours,
+    )
+    warnings: list[str] = []
+    source_results: list[dict] = []
+    items: list[dict] = []
+    source_status = "cached"
+    if not settings.company_ir_sources_enabled:
+        payload = {
+            "status": "disabled",
+            "module": "company_ir_sources_watch",
+            "updated_at": current_storage_timestamp(),
+            "items": [],
+            "related_items": [],
+            "source_results": [],
+            "warnings": ["COMPANY_IR_SOURCES_ENABLED=false 상태입니다."],
+            "source_status": "disabled",
+            "policy": company_ir_copyright_policy(),
+            "next_actions": ["회사 IR 자동 소스를 사용하려면 COMPANY_IR_SOURCES_ENABLED=true로 설정하세요."],
+        }
+        if save_result:
+            write_company_ir_sources_watch(settings, payload)
+        return payload
+    if should_fetch:
+        try:
+            items, warnings, source_results = fetch_company_ir_sources(
+                limit=normalized_limit,
+                timeout=settings.company_ir_sources_timeout_seconds,
+                user_agent=settings.company_ir_sources_user_agent,
+            )
+            source_status = "success"
+        except Exception as exc:
+            warnings.append(f"회사 IR 목록 확인 실패: {provider_error_message(exc, settings)}")
+            items = cache.get("items") or [] if isinstance(cache, dict) else []
+            source_results = cache.get("source_results") or [] if isinstance(cache, dict) else []
+            source_status = "cache_fallback" if items else "failed"
+    else:
+        items = cache.get("items") or [] if isinstance(cache, dict) else []
+        source_results = cache.get("source_results") or [] if isinstance(cache, dict) else []
+    target_terms = recent_activity_target_terms(settings)
+    related_items = [item for item in items if company_ir_item_matches_targets(item, target_terms)]
+    capture_results: list[dict] = []
+    if save_result and related_items:
+        for item in related_items[:normalized_limit]:
+            detail_url = str(item.get("detail_url") or "").strip()
+            ticker = normalize_ticker(str(item.get("ticker") or ""))
+            if not detail_url or not ticker:
+                continue
+            try:
+                result = collect_public_ir_sec_url(
+                    PublicIrSecCollectRequest(
+                        url=detail_url,
+                        target_key=ticker,
+                        save_result=True,
+                        force=False,
+                        no_screenshot=True,
+                    ),
+                    settings,
+                )
+                capture_results.append(
+                    {
+                        "ticker": ticker,
+                        "title": item.get("title"),
+                        "detail_url": detail_url,
+                        "status": result.get("status"),
+                        "storage": (result.get("storage") or {}).get("relative_path"),
+                        "quality": (result.get("capture_quality") or {}).get("status"),
+                        "needs_body_copy": (result.get("capture_quality") or {}).get("needs_body_copy"),
+                    }
+                )
+            except Exception as exc:
+                capture_results.append(
+                    {
+                        "ticker": ticker,
+                        "title": item.get("title"),
+                        "detail_url": detail_url,
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                )
+    payload = {
+        "status": "success" if source_status in {"success", "cached", "cache_fallback"} else "warning",
+        "module": "company_ir_sources_watch",
+        "updated_at": current_storage_timestamp(),
+        "source_status": source_status,
+        "items": items[:normalized_limit],
+        "item_count": len(items),
+        "related_items": related_items[:normalized_limit],
+        "related_count": len(related_items),
+        "capture_results": capture_results,
+        "captured_count": sum(1 for item in capture_results if item.get("status") in {"success", "skipped_existing", "url_only_saved"}),
+        "source_results": source_results,
+        "warnings": warnings,
+        "policy": company_ir_copyright_policy(),
+        "next_actions": build_company_ir_sources_next_actions(related_items, warnings),
+    }
+    if save_result:
+        payload["storage_path"] = str(company_ir_sources_watch_path(settings))
+        write_company_ir_sources_watch(settings, payload)
+    return payload
+
+
 def read_regional_business_sources_watch(settings: Settings) -> dict:
     return read_json_store(regional_business_sources_watch_path(settings), {})
 
@@ -16230,6 +16442,41 @@ def build_regional_business_sources_watch_payload(
         )
         payload["storage_path"] = str(regional_business_sources_watch_path(settings))
     return payload
+
+
+@app.get(
+    "/api/v1/company-ir-sources/watch",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_company_ir_sources_watch(
+    limit: int = 20,
+    refresh: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_company_ir_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=refresh,
+        save_result=save_result,
+    )
+
+
+@app.post(
+    "/api/v1/company-ir-sources/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_company_ir_sources_watch(
+    limit: int = 20,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_company_ir_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=True,
+        save_result=save_result,
+    )
 
 
 @app.get(
