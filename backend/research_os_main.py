@@ -22774,6 +22774,11 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         ),
         reverse=True,
     )
+    selected_limit = max(1, min(limit, 10))
+    ranked_candidates = [
+        {**candidate, "rank": index}
+        for index, candidate in enumerate(candidates[:selected_limit], start=1)
+    ]
     return {
         "status": "success",
         "module": "daily_recommendation_candidate_ranking",
@@ -22781,7 +22786,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         "universe_count": len(candidates_by_ticker),
         "selected_count": min(limit, len(candidates)),
         "consensus_summary": consensus_scan.get("summary"),
-        "candidates": candidates[: max(1, min(limit, 10))],
+        "candidates": ranked_candidates,
         "warnings": consensus_scan.get("warnings", [])[:10],
     }
 

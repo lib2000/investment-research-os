@@ -315,6 +315,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["selected_count"], 1)
         candidate = result["candidates"][0]
+        self.assertEqual(candidate["rank"], 1)
         self.assertEqual(candidate["company_name"], "삼양식품")
         component_labels = [item["label"] for item in candidate["score_components"]]
         self.assertIn("검증 저장자료 품질", component_labels)
