@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
@@ -61,6 +62,52 @@ COMPANY_IR_SOURCES = [
         source_url=JOBY_IR_PRESS_RELEASES_URL,
     )
 ]
+
+
+def _source_from_mapping(item: dict, index: int) -> CompanyIrSource | None:
+    source_url = clean_ir_text(item.get("source_url") or item.get("url"))
+    ticker = clean_ir_text(item.get("ticker") or item.get("target_key")).upper()
+    company_name = clean_ir_text(item.get("company_name") or item.get("company") or ticker)
+    if not source_url or not ticker or not source_url.startswith(("http://", "https://")):
+        return None
+    source_key = clean_ir_text(item.get("source_key") or item.get("key"))
+    if not source_key:
+        source_key = re.sub(r"[^a-z0-9_]+", "_", f"{ticker.lower()}_ir_{index}").strip("_")
+    provider = clean_ir_text(item.get("provider") or f"{company_name} IR")
+    source_scope = clean_ir_text(item.get("source_scope") or "company_ir_press_releases")
+    return CompanyIrSource(
+        source_key=source_key,
+        ticker=ticker,
+        company_name=company_name,
+        provider=provider,
+        source_url=source_url,
+        source_scope=source_scope,
+    )
+
+
+def configured_company_ir_sources(config_json: str | None = None) -> list[CompanyIrSource]:
+    sources = list(COMPANY_IR_SOURCES)
+    text = clean_ir_text(config_json)
+    if not text:
+        return sources
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return sources
+    if isinstance(payload, dict):
+        payload = payload.get("sources") or []
+    if not isinstance(payload, list):
+        return sources
+    seen = {(source.ticker, source.source_url) for source in sources}
+    for index, item in enumerate(payload, start=1):
+        if not isinstance(item, dict):
+            continue
+        source = _source_from_mapping(item, index)
+        if not source or (source.ticker, source.source_url) in seen:
+            continue
+        seen.add((source.ticker, source.source_url))
+        sources.append(source)
+    return sources
 
 
 class _CompanyIrParser(HTMLParser):
@@ -214,11 +261,12 @@ def fetch_company_ir_sources(
     limit: int = 30,
     timeout: float = 10.0,
     user_agent: str | None = None,
+    sources: list[CompanyIrSource] | None = None,
 ) -> tuple[list[dict], list[str], list[dict]]:
     all_items: list[dict] = []
     warnings: list[str] = []
     source_results: list[dict] = []
-    for source in COMPANY_IR_SOURCES:
+    for source in (sources or COMPANY_IR_SOURCES):
         try:
             result = fetch_company_ir_source(
                 source,

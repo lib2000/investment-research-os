@@ -128,6 +128,7 @@ class Settings(BaseModel):
     company_ir_sources_refresh_hours: float = 24.0
     company_ir_sources_timeout_seconds: float = 12.0
     company_ir_sources_max_items: int = 20
+    company_ir_sources_json: str = ""
     company_ir_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     nps_odcloud_enabled: bool = True
     nps_odcloud_api_key: str = Field(default="")
@@ -374,6 +375,7 @@ class Settings(BaseModel):
             company_ir_sources_max_items=int(
                 os.getenv("COMPANY_IR_SOURCES_MAX_ITEMS", "20")
             ),
+            company_ir_sources_json=os.getenv("COMPANY_IR_SOURCES_JSON", ""),
             company_ir_sources_user_agent=os.getenv(
                 "COMPANY_IR_SOURCES_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",

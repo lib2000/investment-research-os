@@ -97,6 +97,7 @@ from research_os.recent_activity import (
 )
 from research_os.company_ir_sources import (
     company_ir_copyright_policy,
+    configured_company_ir_sources,
     fetch_company_ir_sources,
     should_refresh_company_ir_cache,
 )
@@ -16225,6 +16226,7 @@ def build_company_ir_sources_watch_payload(
                 limit=normalized_limit,
                 timeout=settings.company_ir_sources_timeout_seconds,
                 user_agent=settings.company_ir_sources_user_agent,
+                sources=configured_company_ir_sources(settings.company_ir_sources_json),
             )
             source_status = "success"
         except Exception as exc:
@@ -16288,6 +16290,7 @@ def build_company_ir_sources_watch_payload(
         "capture_results": capture_results,
         "captured_count": sum(1 for item in capture_results if item.get("status") in {"success", "skipped_existing", "url_only_saved"}),
         "source_results": source_results,
+        "source_count": len(source_results),
         "warnings": warnings,
         "policy": company_ir_copyright_policy(),
         "next_actions": build_company_ir_sources_next_actions(related_items, warnings),

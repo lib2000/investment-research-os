@@ -821,6 +821,28 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(items[0]["published_at"], "2026-05-07")
         self.assertIn("joby-reports-first-quarter-2026-financial-results", items[0]["detail_url"])
 
+    def test_company_ir_sources_can_be_extended_from_json_config(self):
+        from research_os.company_ir_sources import configured_company_ir_sources
+
+        config = json.dumps(
+            [
+                {
+                    "ticker": "PL",
+                    "company_name": "Planet Labs PBC",
+                    "provider": "Planet Labs IR",
+                    "source_url": "https://investors.planet.com/news-events/press-releases",
+                }
+            ]
+        )
+
+        sources = configured_company_ir_sources(config)
+        by_ticker = {source.ticker: source for source in sources}
+
+        self.assertIn("JOBY", by_ticker)
+        self.assertIn("PL", by_ticker)
+        self.assertEqual(by_ticker["PL"].company_name, "Planet Labs PBC")
+        self.assertEqual(by_ticker["PL"].source_scope, "company_ir_press_releases")
+
 
 class ExternalSourceScheduleStatusTests(unittest.TestCase):
     def test_regional_source_failure_preserves_cached_provider_items(self):

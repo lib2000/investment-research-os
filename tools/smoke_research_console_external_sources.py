@@ -119,7 +119,7 @@ def run_external_source_smoke(url: str) -> dict:
                     tabKey: "memory",
                     selector: "#researchAutomationStatusButton",
                     label: "자동화 상태",
-                    expected: ["리서치 자동화 적용 상태", "외부 소스 자동 점검", "EMERiCs/CSF/KIEP"],
+                    expected: ["리서치 자동화 적용 상태", "외부 소스 자동 점검", "EMERiCs/CSF/KIEP", "Joby IR"],
                   }));
 
                   return {
