@@ -184,6 +184,18 @@ def build_storage_quality_dashboard_payload(
         for entry in active_entries
         if storage_quality_entry_needs_ocr(entry)
     ]
+    public_ir_sec_entries = [
+        entry
+        for entry in active_entries
+        if str(entry.get("scope") or "") == "public_ir_sec"
+        or str(entry.get("ticker") or "").upper() == "PUBLIC_IR_SEC"
+        or str(entry.get("type") or entry.get("report_type") or "") == "public-ir-sec"
+    ]
+    public_ir_sec_needs_body_entries = [
+        entry
+        for entry in public_ir_sec_entries
+        if (entry.get("capture_quality") or {}).get("needs_body_copy")
+    ]
     body_missing_count = len(body_missing_entries)
     ocr_needed_count = len(ocr_needed_entries)
     normal_count = max(0, len(manifest_entries) - archived_count - body_missing_count - ocr_needed_count)
@@ -192,6 +204,8 @@ def build_storage_quality_dashboard_payload(
         next_actions.append("본문 보강 필요 자료는 원문 링크를 열어 사용자가 직접 요약/메모를 추가하세요.")
     if policy_url_only_entries:
         next_actions.append("저작권 보호 URL-only 뉴스는 정상 보관으로 처리하며, 필요 시 사용자 메모만 추가하세요.")
+    if public_ir_sec_needs_body_entries:
+        next_actions.append("공개 IR/SEC URL-only 자료는 원문 링크 확인 또는 사용자 메모 보강 후 추천 근거로 사용하세요.")
     if news_counts.get("unpromoted"):
         next_actions.append("미승격 뉴스는 투자 논거 반영, 시장일지 반영, 보류, 삭제 중 하나로 분류하세요.")
     if duplicate_count:
@@ -209,6 +223,12 @@ def build_storage_quality_dashboard_payload(
         "body_missing_count": body_missing_count,
         "policy_url_only_count": len(policy_url_only_entries),
         "ocr_needed_count": ocr_needed_count,
+        "public_ir_sec_count": len(public_ir_sec_entries),
+        "public_ir_sec_needs_body_count": len(public_ir_sec_needs_body_entries),
+        "public_ir_sec_items": [
+            compact_storage_quality_entry(entry)
+            for entry in public_ir_sec_entries[:10]
+        ],
         "body_missing_items": [
             compact_storage_quality_entry(entry)
             for entry in body_missing_entries[:10]
@@ -228,7 +248,8 @@ def build_storage_quality_dashboard_payload(
         "news_unpromoted_count": news_payload.get("unpromoted_count", 0),
         "policy": {
             "news_body_storage": "metadata_only",
-            "message": "뉴스/기사 원문 본문은 저장하지 않고 제목, 링크, 출처, 짧은 사용자 메모, 자체 분석만 저장합니다.",
+            "public_ir_sec_storage": "public_only_metadata_first",
+            "message": "뉴스/기사 원문 본문은 저장하지 않고 제목, 링크, 출처, 짧은 사용자 메모, 자체 분석만 저장합니다. 공개 IR/SEC는 공개 URL만 수집하고 제한 자료는 URL-only로 분리합니다.",
         },
         "next_actions": next_actions[:6],
     }

@@ -832,6 +832,45 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   const memoryQualityFilterText = memoryFilterResults
                     .map((item) => `${{item.filter}}: ${{item.preview}}`)
                     .join("\\n---\\n");
+                  document.querySelector("#publicIrSecStatusButton")?.click();
+                  const publicIrSecStatusText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const combined = `${{text}}\n${{feedback}}`;
+                      return (
+                        combined.includes("공개 IR/SEC 저장 상태") ||
+                        combined.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                        combined.includes("공개 IR/SEC 저장 상태를 조회합니다")
+                      ) && (
+                        combined.includes("공개 자료만 수집") ||
+                        combined.includes("저장 manifest 확인") ||
+                        combined.includes("본문 보강 필요 자료 집계")
+                      )
+                        ? combined
+                        : "";
+                    }},
+                    30000,
+                    "public IR SEC status button"
+                  );
+                  const publicIrSecUrlInput = document.querySelector('[name="publicIrSecUrl"]');
+                  if (publicIrSecUrlInput) {{
+                    publicIrSecUrlInput.value = "";
+                  }}
+                  document.querySelector("#publicIrSecCollectButton")?.click();
+                  const publicIrSecEmptyInputText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const combined = `${{text}}\n${{feedback}}`;
+                      return combined.includes("입력 필요") &&
+                        combined.includes("공개 IR/SEC URL")
+                        ? combined
+                        : "";
+                    }},
+                    30000,
+                    "public IR SEC empty input feedback"
+                  );
                   document.querySelector("#codeKnowledgeGraphButton")?.click();
                   const codeKnowledgeGraphText = await waitFor(
                     () => {{
@@ -1097,6 +1136,16 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       researchAutomationStatusText.includes("활용:"),
                     memoryQualityFilterWorks: memoryFilterResults.every((item) => item.ok && item.sawExpectedText),
                     memoryQualityFilterFeedbackWorks: memoryFilterResults.every((item) => item.sawFeedback),
+                    publicIrSecStatusShowsPolicy:
+                      (publicIrSecStatusText.includes("공개 IR/SEC 저장 상태") ||
+                        publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                        publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
+                      (publicIrSecStatusText.includes("공개 자료만 수집") ||
+                        publicIrSecStatusText.includes("저장 manifest 확인") ||
+                        publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                    publicIrSecEmptyInputShowsFeedback:
+                      publicIrSecEmptyInputText.includes("입력 필요") &&
+                      publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
                     codeKnowledgeGraphShowsFlows:
                       codeKnowledgeGraphText.includes("시스템 구조 맵") &&
                       codeKnowledgeGraphText.includes("운영 흐름") &&
@@ -1153,6 +1202,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
+                    publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                    publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
                     codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
                     llmCopyFeedbackPreview: llmCopyFeedbackText.split("\\n").slice(0, 8).join("\\n"),
                     llmStorageStatusPreview: llmStorageStatusText.split("\\n").slice(0, 12).join("\\n"),
@@ -1233,6 +1284,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("저장 데이터 품질 필터가 화면에서 적용되지 않았습니다.")
             if not result["memoryQualityFilterFeedbackWorks"]:
                 raise AssertionError("저장 데이터 품질 필터 변경 시 사용자 피드백이 표시되지 않았습니다.")
+            if not result["publicIrSecStatusShowsPolicy"]:
+                raise AssertionError("공개 IR/SEC 상태 버튼에 저장 정책과 상태가 표시되지 않았습니다.")
+            if not result["publicIrSecEmptyInputShowsFeedback"]:
+                raise AssertionError("공개 IR/SEC 수집 버튼의 빈 URL 피드백이 표시되지 않았습니다.")
             if not result["codeKnowledgeGraphShowsFlows"]:
                 raise AssertionError("시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다.")
             if not (result["naverRepairShowsSoftArchive"] or result["naverRepairShowsProgress"]):

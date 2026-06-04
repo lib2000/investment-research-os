@@ -12938,6 +12938,7 @@ function formatKoreanResult(value) {
   if (value.module === "storage_quality_dashboard") {
     const bodyMissingItems = value.body_missing_items || [];
     const ocrNeededItems = value.ocr_needed_items || [];
+    const publicIrSecItems = value.public_ir_sec_items || [];
     return [
       `### 저장 데이터 품질 대시보드`,
       ``,
@@ -12945,6 +12946,7 @@ function formatKoreanResult(value) {
       `- **정상 문서:** ${formatNumber(value.normal_count || 0)}개`,
       `- **본문 보강 필요:** ${formatNumber(value.body_missing_count || 0)}개`,
       `- **OCR 필요:** ${formatNumber(value.ocr_needed_count || 0)}개`,
+      `- **공개 IR/SEC:** ${formatNumber(value.public_ir_sec_count || 0)}개 · 본문 보강 ${formatNumber(value.public_ir_sec_needs_body_count || 0)}개`,
       `- **보관 문서:** ${formatNumber(value.archived_count || 0)}개`,
       `- **중복/레거시 의심:** ${formatNumber(value.legacy_or_duplicate_count || 0)}개`,
       bodyMissingItems.length ? `` : "",
@@ -12952,6 +12954,12 @@ function formatKoreanResult(value) {
       ...bodyMissingItems.map(
         (item) =>
           `- ${displayCompanyName(item)} · ${item.file_name || item.relative_path || "파일 미확인"} · ${item.quality_status || "본문 보강 필요"}`
+      ),
+      publicIrSecItems.length ? `` : "",
+      publicIrSecItems.length ? `### 공개 IR/SEC 품질` : "",
+      ...publicIrSecItems.map(
+        (item) =>
+          `- ${item.file_name || item.relative_path || "파일 미확인"} · ${item.quality_status || "품질 미확인"}`
       ),
       ocrNeededItems.length ? `` : "",
       ocrNeededItems.length ? `### OCR 보강 대상` : "",
@@ -13167,6 +13175,7 @@ function formatKoreanResult(value) {
       !counts.ownership_filings &&
       !counts.important_filings &&
       !counts.display_reports &&
+      !counts.public_ir_sec &&
       !counts.customs_exports &&
       !counts.market_context;
     return [
@@ -13178,13 +13187,14 @@ function formatKoreanResult(value) {
       `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
       `- **DART 점검 시각:** 최근 ${formatDateTime(dartLastChecked)} · 다음 ${dartNextCheck ? formatDateTime(dartNextCheck) : "미확인"}`,
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
-      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
-      noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·수출입·시장 자료가 없습니다.` : "",
+      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 공개 IR·SEC ${formatNumber(counts.public_ir_sec || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·공개 IR/SEC·수출입·시장 자료가 없습니다.` : "",
       ``,
       `### 핵심 요약`,
       `- **수급/대량보유:** ${formatNumber(counts.ownership_filings || 0)}건 · 상위 ${Math.min((value.ownership_filings || []).length, 3)}건 먼저 확인`,
       `- **중요 공시:** ${formatNumber(counts.important_filings || 0)}건 · DART 일일 점검 ${(daily.coverage_rate === 1 || daily.coverage_rate === 1.0) ? "100%" : daily.status || "확인 필요"}`,
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
+      `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
       ``,
       `### 바로 볼 상위 항목`,
@@ -13192,6 +13202,7 @@ function formatKoreanResult(value) {
         [
           ...(value.ownership_filings || []).slice(0, 3),
           ...(value.display_reports || []).slice(0, 3),
+          ...(value.public_ir_sec_items || []).slice(0, 2),
         ],
         headlineForItem,
         "바로 볼 핵심 항목이 없습니다."
@@ -13205,6 +13216,9 @@ function formatKoreanResult(value) {
       ``,
       `### 핵심 리포트`,
       ...formatBulletList(value.display_reports || value.reports, lineForItem, "최근 1주일 내 보유/관심종목 핵심 리포트가 없습니다."),
+      ``,
+      `### 공개 IR/SEC 자료`,
+      ...formatBulletList(value.public_ir_sec_items, lineForItem, "최근 1주일 내 보유/관심종목과 연결된 공개 IR/SEC 자료가 없습니다."),
       ``,
       `### 수출입/시장 공통 자료`,
       ...formatBulletList([...(value.customs_exports || []), ...(value.market_context || [])], lineForItem, "최근 1주일 내 표시할 수출입/시장 공통 자료가 없습니다."),
