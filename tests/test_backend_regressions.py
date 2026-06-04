@@ -3048,6 +3048,12 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(brief["counts"]["public_ir_sec_usable"], 1)
         self.assertEqual(brief["counts"]["public_ir_sec_blocked"], 1)
         self.assertEqual(brief["counts"]["public_ir_sec_needs_body"], 1)
+        groups = {group["key"]: group for group in brief["category_groups"]}
+        self.assertEqual(groups["ownership_filings"]["count"], 1)
+        self.assertEqual(groups["display_reports"]["count"], 2)
+        self.assertEqual(groups["public_ir_sec"]["count"], 2)
+        self.assertEqual(groups["customs_exports"]["count"], 1)
+        self.assertIn("삼양식품", groups["ownership_filings"]["target_names"])
         self.assertEqual(brief["watch_summary"]["status"], "점검 완료")
         self.assertEqual(brief["important_filings"][0]["summary"], "주식등의대량보유상황보고서")
         self.assertEqual(brief["ownership_filings"][0]["company_name"], "삼양식품")

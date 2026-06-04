@@ -14342,6 +14342,82 @@ def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
     return unique_items
 
 
+def recent_weekly_category_group(label: str, key: str, items: list[dict], *, limit: int = 8, note: str = "") -> dict:
+    visible_items = list(items or [])[: max(1, limit)]
+    target_names: set[str] = set()
+    for item in visible_items:
+        related_targets = item.get("related_targets") if isinstance(item, dict) else []
+        if isinstance(related_targets, list):
+            for target in related_targets[:3]:
+                if target:
+                    target_names.add(str(target))
+        company_name = item.get("company_name") if isinstance(item, dict) else ""
+        if company_name:
+            target_names.add(str(company_name))
+    return {
+        "key": key,
+        "label": label,
+        "count": len(items or []),
+        "visible_count": len(visible_items),
+        "target_count": len(target_names),
+        "target_names": sorted(target_names)[:8],
+        "note": note,
+        "items": visible_items,
+    }
+
+
+def build_recent_weekly_category_groups(
+    *,
+    ownership_filings: list[dict],
+    important_filings: list[dict],
+    display_reports: list[dict],
+    public_ir_sec_items: list[dict],
+    customs_exports: list[dict],
+    market_context: list[dict],
+) -> list[dict]:
+    non_ownership_filings = [
+        item for item in important_filings if item not in ownership_filings
+    ]
+    return [
+        recent_weekly_category_group(
+            "수급/대량보유",
+            "ownership_filings",
+            ownership_filings,
+            note="국민연금, 주요주주, 대량보유 변동처럼 수급 판단에 직접 쓰는 공시입니다.",
+        ),
+        recent_weekly_category_group(
+            "중요 공시",
+            "important_filings",
+            non_ownership_filings or important_filings,
+            note="실적, 주요 계약, 증자, 경영 변화 등 투자 판단에 영향이 큰 공시입니다.",
+        ),
+        recent_weekly_category_group(
+            "핵심 리포트",
+            "display_reports",
+            display_reports,
+            note="보유/관심 종목과 연결된 증권사 및 기관 리포트입니다.",
+        ),
+        recent_weekly_category_group(
+            "공개 IR/SEC",
+            "public_ir_sec",
+            public_ir_sec_items,
+            note="상장사 IR, SEC, 공개 보도자료 중 최근 1주 추천 근거로 연결 가능한 자료입니다.",
+        ),
+        recent_weekly_category_group(
+            "수출입",
+            "customs_exports",
+            customs_exports,
+            note="관세청 등 실제 수치가 확인된 수출입 자료입니다.",
+        ),
+        recent_weekly_category_group(
+            "시장/매크로",
+            "market_context",
+            market_context,
+            note="시장일지와 추천 판단의 배경으로 쓰는 공통 자료입니다.",
+        ),
+    ]
+
+
 def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refresh_if_due: bool = True) -> dict:
     normalized_days = max(1, min(int(days or 7), 30))
     cutoff = recent_activity_cutoff(normalized_days)
@@ -14413,6 +14489,14 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "public_ir_sec_needs_body": sum(1 for item in public_ir_sec_items if item.get("needs_body_copy")),
         "total": len(all_items),
     }
+    category_groups = build_recent_weekly_category_groups(
+        ownership_filings=ownership_filings,
+        important_filings=important_filings,
+        display_reports=display_reports,
+        public_ir_sec_items=public_ir_sec_items,
+        customs_exports=customs_exports,
+        market_context=market_context,
+    )
     daily_watch = {
         "dart": dart_daily_check_status(dart_cache, settings),
         "source_schedule": build_external_source_schedule_status(settings),
@@ -14432,6 +14516,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "daily_watch": daily_watch,
         "watch_summary": recent_watch_summary(daily_watch, counts),
         "counts": counts,
+        "category_groups": category_groups,
         "important_filings": important_filings[:15],
         "ownership_filings": ownership_filings[:10],
         "filings": filings[:30],

@@ -13201,6 +13201,17 @@ function formatKoreanResult(value) {
       const failure = item.last_error ? ` · 오류 ${compactOutputText(item.last_error, 90)}` : "";
       return `${item.label || item.key || "외부 소스"} · ${status} · 자동 ${item.auto_refresh ? "켜짐" : "꺼짐"} · 최근 ${formatDateTime(item.last_checked_at)}${nextCheck}${failure}`;
     });
+    const categoryGroupLines = Array.isArray(value.category_groups)
+      ? value.category_groups
+          .filter((group) => group && (group.count || group.visible_count))
+          .map((group) => {
+            const targets = Array.isArray(group.target_names) && group.target_names.length
+              ? ` · 관련 ${group.target_names.slice(0, 4).join(", ")}`
+              : "";
+            const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
+            return `**${group.label || group.key || "자료"}** · ${formatNumber(group.count || 0)}건${targets}${note}`;
+          })
+      : [];
     const targetDigest = new Map();
     const collectTargetDigest = (items, label) => {
       (items || []).forEach((item) => {
@@ -13270,6 +13281,9 @@ function formatKoreanResult(value) {
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
+      ``,
+      `### 자료 유형별 묶음`,
+      ...formatBulletList(categoryGroupLines, (item) => item, "최근 1주 내 표시할 자료 유형 묶음이 없습니다."),
       ``,
       `### 종목별 자료 묶음`,
       ...formatBulletList(targetDigestLines, (item) => item, "최근 1주 내 보유/관심 대상별로 묶을 자료가 없습니다."),
