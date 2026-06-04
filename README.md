@@ -88,7 +88,7 @@ cd C:\Users\lib20\InvestmentJournalApp
 
 매일 추천종목은 콘솔 첫 화면의 **오늘 추천 1~3위** 또는 저장 데이터 탭의 **오늘 추천 1~3위 / 추천 추적 상태**에서 확인한다. 저장 원본은 `research_vault\_system\daily_recommendations.json`이다.
 
-공개 IR/SEC 자료는 저장 데이터 탭의 **공개 IR/SEC 수집 / 공개 IR/SEC 상태**에서 확인한다. 저장 원본은 `research_vault\PUBLIC_IR_SEC`이며, 보유/관심 종목과 연결된 항목은 최근 1주 자료와 오늘 추천 근거에 반영된다.
+공개 IR/SEC 자료는 저장 데이터 탭의 **공개 IR/SEC 수집 / 공개 IR/SEC 상태**에서 확인한다. 저장 원본은 `research_vault\PUBLIC_IR_SEC`이며, 보유/관심 종목과 연결된 항목은 최근 1주 자료에 표시된다. 단, URL-only 또는 본문 보강 필요 자료는 오늘 추천 점수 가산에서 제외하고 원문/파일 보강 후 근거로 승격한다.
 
 ## 여러 앱 동시 개발 포트
 

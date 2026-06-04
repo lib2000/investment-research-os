@@ -276,6 +276,21 @@ class DailyRecommendationsTests(unittest.TestCase):
             patch.object(main, "build_target_consensus_scan", return_value=consensus_scan),
             patch.object(
                 main,
+                "build_recent_weekly_research_brief",
+                return_value={
+                    "public_ir_sec_items": [
+                        {
+                            "category": "public_ir_sec",
+                            "ticker": "003230",
+                            "summary": "삼양식품 공개 IR URL-only",
+                            "needs_body_copy": True,
+                            "usable_for_recommendation": False,
+                        }
+                    ]
+                },
+            ),
+            patch.object(
+                main,
                 "verify_ticker_symbol_local_cached",
                 return_value=SimpleNamespace(official_symbol="003230", company_name="삼양식품"),
             ),
@@ -288,7 +303,10 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(result["selected_count"], 1)
         candidate = result["candidates"][0]
         self.assertEqual(candidate["company_name"], "삼양식품")
-        self.assertIn("검증 저장자료 품질", [item["label"] for item in candidate["score_components"]])
+        component_labels = [item["label"] for item in candidate["score_components"]]
+        self.assertIn("검증 저장자료 품질", component_labels)
+        self.assertNotIn("최근 공개 IR/SEC 반영", component_labels)
+        self.assertTrue(any("공개 IR/SEC URL-only" in item for item in candidate["risk_notes"]))
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):

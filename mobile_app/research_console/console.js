@@ -12150,7 +12150,26 @@ elements.naverResearchRepairButton?.addEventListener("click", async () => {
     const status = await fetchNaverResearchStatus(token());
     const journal = await fetchMarketCloseJournal(token(), "KR");
     const taskStatus = await fetchNaverMarketCloseTaskStatus(token(), 20);
-    setOutput(`${renderNaverResearchStatusText(status)}\n\n${renderNaverMarketCloseTaskStatusText(taskStatus)}\n\n${renderMarketCloseJournalDigest(journal)}\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``);
+    const duplicateArchive = result?.duplicate_archive || {};
+    const repairSummary = [
+      "## 네이버 리서치 캐시 정리 완료",
+      "",
+      `- 리서치 캐시 정리: 메타데이터 ${formatNumber(result?.metadata_updated_count || 0)}건 / 저장 보강 ${formatNumber(result?.missing_storage_saved_count || 0)}건`,
+      `- PDF 신호 백필: ${formatNumber(result?.pdf_backfilled_count || 0)}건`,
+      `- 중복 리포트/시장일지 후보: ${formatNumber(duplicateArchive.duplicate_candidate_count || 0)}건 · 정책 ${duplicateArchive.policy || "soft_archive"}`,
+      "- 소프트 보관 정책: 중복/레거시 자료는 삭제하지 않고 숨김/보관으로 처리합니다.",
+    ].join("\n");
+    setOutput(`${repairSummary}
+
+${renderNaverResearchStatusText(status)}
+
+${renderNaverMarketCloseTaskStatusText(taskStatus)}
+
+${renderMarketCloseJournalDigest(journal)}
+
+\`\`\`json
+${JSON.stringify(result, null, 2)}
+\`\`\``);
     await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
   } catch (error) {
     setError(error);
@@ -13164,7 +13183,8 @@ function formatKoreanResult(value) {
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
       const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
       const importance = item.importance ? ` · 중요도 ${item.importance}` : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${importance} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      const publicIrSecQuality = item.category === "public_ir_sec" ? ` · ${item.recommendation_guard || item.quality_status || "품질 미확인"}` : "";
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${importance}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13197,7 +13217,7 @@ function formatKoreanResult(value) {
       `- **수급/대량보유:** ${formatNumber(counts.ownership_filings || 0)}건 · 상위 ${Math.min((value.ownership_filings || []).length, 3)}건 먼저 확인`,
       `- **중요 공시:** ${formatNumber(counts.important_filings || 0)}건 · DART 일일 점검 ${(daily.coverage_rate === 1 || daily.coverage_rate === 1.0) ? "100%" : daily.status || "확인 필요"}`,
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
-      `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || 0)}건`,
+      `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
       ``,
       `### 바로 볼 상위 항목`,

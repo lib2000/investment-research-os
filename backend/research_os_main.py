@@ -86,6 +86,10 @@ from research_os.public_ir_sec import (
     collect_public_ir_sec_url,
     public_ir_sec_status_payload,
 )
+from research_os.recent_activity import (
+    compact_recent_public_ir_sec_entry,
+    is_public_ir_sec_manifest_entry,
+)
 from research_os.classification import classification_system_tags, merge_research_tags
 from research_os.models import (
     Broker,
@@ -14211,68 +14215,6 @@ def recent_activity_cutoff(days: int) -> date:
     return current_storage_date() - timedelta(days=max(1, int(days or 7)) - 1)
 
 
-def is_public_ir_sec_manifest_entry(entry: dict) -> bool:
-    return (
-        str(entry.get("scope") or "") == "public_ir_sec"
-        or str(entry.get("ticker") or "").upper() == "PUBLIC_IR_SEC"
-        or str(entry.get("type") or entry.get("report_type") or "") == "public-ir-sec"
-    )
-
-
-def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict | None:
-    entry_date = parse_iso_date(entry.get("date"))
-    if not entry_date:
-        return None
-    tags = [str(tag) for tag in (entry.get("tags") or []) if isinstance(tag, str)]
-    text = " ".join(
-        str(entry.get(key) or "")
-        for key in [
-            "title",
-            "summary",
-            "source_url",
-            "final_url",
-            "file_name",
-            "relative_path",
-            "type",
-            "source_type",
-        ]
-    )
-    text += " " + " ".join(tags)
-    related_targets: list[str] = []
-    matched_ticker = ""
-    ticker_names = target_terms.get("ticker_names") or {}
-    for ticker in target_terms.get("tickers") or []:
-        if ticker and ticker in text:
-            related_targets.append(ticker_names.get(ticker) or ticker)
-            matched_ticker = matched_ticker or ticker
-    name_to_ticker = {str(name): str(ticker) for ticker, name in ticker_names.items() if name}
-    for name in target_terms.get("names") or []:
-        if name and name in text and name not in related_targets:
-            related_targets.append(name)
-            matched_ticker = matched_ticker or normalize_ticker(name_to_ticker.get(name, ""))
-    for sector in target_terms.get("sectors") or []:
-        if sector and sector in text and sector not in related_targets:
-            related_targets.append(sector)
-    if not related_targets:
-        return None
-    quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
-    return {
-        "category": "public_ir_sec",
-        "date": entry_date.isoformat(),
-        "ticker": matched_ticker,
-        "company_name": ticker_names.get(matched_ticker) or related_targets[0],
-        "report_type": "public-ir-sec",
-        "source_type": entry.get("source_type") or "public_ir_sec",
-        "summary": entry.get("summary") or entry.get("title") or entry.get("file_name") or "공개 IR/SEC 자료",
-        "relative_path": entry.get("relative_path"),
-        "source_url": entry.get("source_url") or entry.get("final_url"),
-        "related_targets": related_targets,
-        "tags": tags[:12],
-        "quality_status": quality.get("status") or entry.get("capture_quality_status") or "품질 미확인",
-        "needs_body_copy": bool(quality.get("needs_body_copy")),
-    }
-
-
 def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | None:
     entry_date = parse_iso_date(entry.get("date"))
     if not entry_date:
@@ -14498,6 +14440,8 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
     customs_exports = [item for item in all_items if item.get("category") == "customs_export"]
     market_context = [item for item in all_items if item.get("category") == "market_context"]
     public_ir_sec_items = [item for item in all_items if item.get("category") == "public_ir_sec"]
+    usable_public_ir_sec_items = [item for item in public_ir_sec_items if item.get("usable_for_recommendation")]
+    blocked_public_ir_sec_items = [item for item in public_ir_sec_items if item.get("needs_body_copy") or not item.get("usable_for_recommendation")]
     important_filings = sorted(
         [item for item in filings if recent_filing_priority(item) >= 50],
         key=lambda item: (recent_filing_priority(item), item.get("date") or ""),
@@ -14523,6 +14467,8 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "customs_exports": len(customs_exports),
         "market_context": len(market_context),
         "public_ir_sec": len(public_ir_sec_items),
+        "public_ir_sec_usable": len(usable_public_ir_sec_items),
+        "public_ir_sec_blocked": len(blocked_public_ir_sec_items),
         "public_ir_sec_needs_body": sum(1 for item in public_ir_sec_items if item.get("needs_body_copy")),
         "total": len(all_items),
     }
@@ -14557,7 +14503,8 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "next_actions": [
             "DART 점검 필요 상태이면 공시 재점검을 실행하세요.",
             "최근 리포트는 보유/관심 종목과 연결된 항목만 우선 검토하세요.",
-            "공개 IR/SEC 자료는 보유/관심 종목과 연결된 항목만 추천 근거에 반영하세요.",
+            "공개 IR/SEC 자료는 본문 추출이 정상인 보유/관심 종목 연결 항목만 추천 점수에 반영하세요.",
+            "URL-only 공개 IR/SEC 자료는 최근 1주 화면에 표시하되 본문 보강 전에는 추천 점수 가산에서 제외됩니다.",
             "관세청 수출입 자료는 실제 수치가 있는 경우에만 저장/RAG에 반영됩니다.",
         ],
     }
@@ -22433,7 +22380,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         candidate = candidates_by_ticker[ticker]
         important_count = sum(1 for item in recent_items if item.get("category") == "filing")
         report_count = sum(1 for item in recent_items if item.get("category") == "report")
-        public_ir_sec_count = sum(1 for item in recent_items if item.get("category") == "public_ir_sec")
+        public_ir_sec_items_for_ticker = [item for item in recent_items if item.get("category") == "public_ir_sec"]
+        public_ir_sec_count = len(public_ir_sec_items_for_ticker)
+        usable_public_ir_sec_count = sum(1 for item in public_ir_sec_items_for_ticker if item.get("usable_for_recommendation"))
+        blocked_public_ir_sec_count = public_ir_sec_count - usable_public_ir_sec_count
         if important_count:
             add_candidate_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
             candidate["reasons"].append(f"최근 1주 중요 공시 {important_count}건 확인")
@@ -22441,10 +22391,13 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if report_count:
             add_candidate_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
             candidate["evidence_sources"].append(f"최근 1주 핵심 리포트 {report_count}건")
-        if public_ir_sec_count:
-            add_candidate_score(candidate, min(12, public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
-            candidate["evidence_sources"].append(f"최근 1주 공개 IR/SEC 자료 {public_ir_sec_count}건")
-            candidate["reasons"].append("공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨")
+        if usable_public_ir_sec_count:
+            add_candidate_score(candidate, min(12, usable_public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
+            candidate["evidence_sources"].append(f"최근 1주 공개 IR/SEC 자료 {usable_public_ir_sec_count}건")
+            candidate["reasons"].append("본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨")
+        if blocked_public_ir_sec_count:
+            candidate["risk_notes"].append(f"공개 IR/SEC URL-only 자료 {blocked_public_ir_sec_count}건은 본문 보강 전 추천 점수 가산에서 제외")
+            candidate["quality_flags"].append("공개 IR/SEC 본문 보강 필요")
 
     for ticker, candidate in list(candidates_by_ticker.items()):
         _apply_daily_recommendation_storage_quality(candidate, manifest_quality_by_ticker.get(ticker))

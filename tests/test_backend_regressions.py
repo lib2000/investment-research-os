@@ -2829,6 +2829,28 @@ class DartFilingWatchTests(unittest.TestCase):
                 "tags": ["customs", "export"],
                 "relative_path": "CUSTOMS/export.md",
             },
+            {
+                "date": "2026-05-31",
+                "ticker": "PUBLIC_IR_SEC",
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "source_type": "public_ir_sec",
+                "summary": "삼양식품 공개 IR 본문 추출 완료",
+                "source_url": "https://example.com/samyang-ir",
+                "capture_quality": {"status": "정상", "needs_body_copy": False},
+                "relative_path": "PUBLIC_IR_SEC/samyang.md",
+            },
+            {
+                "date": "2026-05-31",
+                "ticker": "PUBLIC_IR_SEC",
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "source_type": "public_ir_sec",
+                "summary": "RF머트리얼즈 공개 IR URL-only 보관",
+                "source_url": "https://example.com/rf-ir",
+                "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
+                "relative_path": "PUBLIC_IR_SEC/rf.md",
+            },
         ]
         dart_cache = {
             "entries": {
@@ -2865,6 +2887,10 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(brief["counts"]["display_reports"], 2)
         self.assertEqual(brief["counts"]["hidden_low_signal_reports"], 1)
         self.assertEqual(brief["counts"]["customs_exports"], 1)
+        self.assertEqual(brief["counts"]["public_ir_sec"], 2)
+        self.assertEqual(brief["counts"]["public_ir_sec_usable"], 1)
+        self.assertEqual(brief["counts"]["public_ir_sec_blocked"], 1)
+        self.assertEqual(brief["counts"]["public_ir_sec_needs_body"], 1)
         self.assertEqual(brief["watch_summary"]["status"], "점검 완료")
         self.assertEqual(brief["important_filings"][0]["summary"], "주식등의대량보유상황보고서")
         self.assertEqual(brief["ownership_filings"][0]["company_name"], "삼양식품")
@@ -2875,6 +2901,9 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertNotIn("유럽 금리와 환율 점검", summaries)
         display_summaries = [item["summary"] for item in brief["display_reports"]]
         self.assertNotIn("삼양식품 자동 운영 메모", display_summaries)
+        public_guards = {item["summary"]: item["recommendation_guard"] for item in brief["public_ir_sec_items"]}
+        self.assertEqual(public_guards["삼양식품 공개 IR 본문 추출 완료"], "추천 가산 가능")
+        self.assertEqual(public_guards["RF머트리얼즈 공개 IR URL-only 보관"], "본문 보강 전 추천 점수 가산 제외")
 
 
 class CustomsTradeDataQualityTests(unittest.TestCase):
