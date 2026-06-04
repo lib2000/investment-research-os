@@ -14349,6 +14349,9 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
     usable_count = 0
     needs_body_count = 0
     quality_statuses: dict[str, int] = {}
+    provider_counts: dict[str, int] = {}
+    filing_form_counts: dict[str, int] = {}
+    reliability_counts: dict[str, int] = {}
     for item in all_items:
         related_targets = item.get("related_targets") if isinstance(item, dict) else []
         if isinstance(related_targets, list):
@@ -14367,6 +14370,16 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         quality_status = str(item.get("quality_status") or item.get("recommendation_guard") or "").strip()
         if quality_status:
             quality_statuses[quality_status] = quality_statuses.get(quality_status, 0) + 1
+        if key == "public_ir_sec":
+            provider = str(item.get("source_provider") or "출처 미확인").strip()
+            if provider:
+                provider_counts[provider] = provider_counts.get(provider, 0) + 1
+            filing_form = str(item.get("filing_form") or "").strip()
+            if filing_form:
+                filing_form_counts[filing_form] = filing_form_counts.get(filing_form, 0) + 1
+            reliability = str(item.get("source_reliability") or item.get("source_category") or "").strip()
+            if reliability:
+                reliability_counts[reliability] = reliability_counts.get(reliability, 0) + 1
     quality_summary = {
         "total_count": len(quality_items),
         "visible_count": len(visible_items),
@@ -14374,6 +14387,9 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         "needs_body_copy": needs_body_count,
         "blocked_or_needs_review": max(0, len(quality_items) - usable_count) if key == "public_ir_sec" else 0,
         "statuses": quality_statuses,
+        "providers": dict(sorted(provider_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
+        "filing_forms": dict(sorted(filing_form_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
+        "reliability_labels": dict(sorted(reliability_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
     }
     return {
         "key": key,

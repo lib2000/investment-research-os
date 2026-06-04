@@ -13214,8 +13214,14 @@ function formatKoreanResult(value) {
               ? ` · 관련 ${group.target_names.slice(0, 4).join(", ")}`
               : "";
             const quality = group.quality_summary || {};
+            const providerLine = group.key === "public_ir_sec" && quality.providers
+              ? Object.entries(quality.providers)
+                  .slice(0, 3)
+                  .map(([provider, count]) => `${provider} ${formatNumber(count)}건`)
+                  .join(" / ")
+              : "";
             const qualityLine = group.key === "public_ir_sec"
-              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건`
+              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${providerLine ? ` · 출처 ${providerLine}` : ""}`
               : "";
             const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
             return `**${group.label || group.key || "자료"}** · ${formatNumber(group.count || 0)}건${qualityLine}${targets}${note}`;

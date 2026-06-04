@@ -3000,6 +3000,7 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(group["quality_summary"]["needs_body_copy"], 6)
         self.assertEqual(group["quality_summary"]["blocked_or_needs_review"], 6)
         self.assertEqual(group["quality_summary"]["statuses"]["보강 필요"], 6)
+        self.assertEqual(group["quality_summary"]["providers"], {"출처 미확인": 10})
 
     def test_recent_weekly_brief_filters_targets_and_dedupes_reports(self):
         import research_os_main as main
@@ -3135,6 +3136,9 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["usable_for_recommendation"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["needs_body_copy"], 1)
         self.assertEqual(groups["public_ir_sec"]["quality_summary"]["blocked_or_needs_review"], 1)
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["providers"]["SEC EDGAR"], 1)
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["filing_forms"]["8-K"], 1)
+        self.assertEqual(groups["public_ir_sec"]["quality_summary"]["reliability_labels"]["공식 SEC 8-K"], 1)
         self.assertEqual(groups["customs_exports"]["count"], 1)
         self.assertIn("삼양식품", groups["ownership_filings"]["target_names"])
         self.assertEqual(brief["watch_summary"]["status"], "점검 완료")
