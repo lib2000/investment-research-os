@@ -14343,10 +14343,12 @@ def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
 
 
 def recent_weekly_source_family(provider: str) -> str:
-    value = str(provider or "").strip().lower()
-    if not value:
+    original = str(provider or "").strip()
+    if not original:
         return "출처 미확인"
-    value = sub(r"^https?://", "", value).split("/")[0].split(":")[0].strip(".")
+    value = sub(r"^https?://", "", original.strip().lower()).split("/")[0].split(":")[0].strip(".")
+    if "." not in value:
+        return original
     if value.startswith("www."):
         value = value[4:]
     labels = [label for label in value.split(".") if label]
@@ -14354,7 +14356,7 @@ def recent_weekly_source_family(provider: str) -> str:
         return ".".join(labels[-3:])
     if len(labels) >= 3 and all(fullmatch(r"[a-z0-9-]+", label) for label in labels):
         return ".".join(labels[-2:])
-    return value or "출처 미확인"
+    return value or original
 
 
 def recent_weekly_category_group(label: str, key: str, items: list[dict], *, limit: int = 8, note: str = "") -> dict:
