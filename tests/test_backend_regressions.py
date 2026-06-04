@@ -2976,6 +2976,29 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(status["coverage_rate"], 0)
         self.assertEqual(status["missing_tickers"], ["003230", "071050"])
 
+    def test_recent_weekly_group_quality_summary_uses_all_items_not_visible_sample(self):
+        import research_os_main as main
+
+        items = [
+            {
+                "company_name": f"테스트{i}",
+                "usable_for_recommendation": i < 4,
+                "needs_body_copy": i >= 4,
+                "quality_status": "정상" if i < 4 else "보강 필요",
+            }
+            for i in range(10)
+        ]
+
+        group = main.recent_weekly_category_group("공개 IR/SEC", "public_ir_sec", items, limit=2)
+
+        self.assertEqual(group["count"], 10)
+        self.assertEqual(group["visible_count"], 2)
+        self.assertEqual(group["quality_summary"]["total_count"], 10)
+        self.assertEqual(group["quality_summary"]["usable_for_recommendation"], 4)
+        self.assertEqual(group["quality_summary"]["needs_body_copy"], 6)
+        self.assertEqual(group["quality_summary"]["blocked_or_needs_review"], 6)
+        self.assertEqual(group["quality_summary"]["statuses"]["보강 필요"], 6)
+
     def test_recent_weekly_brief_filters_targets_and_dedupes_reports(self):
         import research_os_main as main
         from research_os.settings import Settings

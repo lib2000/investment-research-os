@@ -14343,7 +14343,8 @@ def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
 
 
 def recent_weekly_category_group(label: str, key: str, items: list[dict], *, limit: int = 8, note: str = "") -> dict:
-    visible_items = list(items or [])[: max(1, limit)]
+    all_items = list(items or [])
+    visible_items = all_items[: max(1, limit)]
     target_names: set[str] = set()
     usable_count = 0
     needs_body_count = 0
@@ -14357,6 +14358,8 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         company_name = item.get("company_name") if isinstance(item, dict) else ""
         if company_name:
             target_names.add(str(company_name))
+    quality_items = [item for item in all_items if isinstance(item, dict)]
+    for item in quality_items:
         if item.get("usable_for_recommendation"):
             usable_count += 1
         if item.get("needs_body_copy"):
@@ -14365,15 +14368,17 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         if quality_status:
             quality_statuses[quality_status] = quality_statuses.get(quality_status, 0) + 1
     quality_summary = {
+        "total_count": len(quality_items),
+        "visible_count": len(visible_items),
         "usable_for_recommendation": usable_count,
         "needs_body_copy": needs_body_count,
-        "blocked_or_needs_review": max(0, len(visible_items) - usable_count) if key == "public_ir_sec" else 0,
+        "blocked_or_needs_review": max(0, len(quality_items) - usable_count) if key == "public_ir_sec" else 0,
         "statuses": quality_statuses,
     }
     return {
         "key": key,
         "label": label,
-        "count": len(items or []),
+        "count": len(all_items),
         "visible_count": len(visible_items),
         "target_count": len(target_names),
         "target_names": sorted(target_names)[:8],
