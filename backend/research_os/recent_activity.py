@@ -180,6 +180,8 @@ def is_public_ir_sec_manifest_entry(entry: dict) -> bool:
 def public_ir_sec_entry_is_usable_for_recommendation(entry: dict) -> bool:
     quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
     status = str(quality.get("status") or entry.get("capture_quality_status") or "")
+    if bool(quality.get("body_supplemented")):
+        return True
     return not bool(quality.get("needs_body_copy")) and status != "보강 필요"
 
 
@@ -262,7 +264,7 @@ def compact_recent_public_ir_sec_entry(entry: dict, target_terms: dict) -> dict 
         "related_targets": related_targets,
         "tags": tags[:12],
         "quality_status": quality.get("status") or entry.get("capture_quality_status") or "품질 미확인",
-        "needs_body_copy": bool(quality.get("needs_body_copy")),
+        "needs_body_copy": bool(quality.get("needs_body_copy")) and not usable,
         "usable_for_recommendation": usable,
         "recommendation_guard": "추천 가산 가능" if usable else "본문 보강 전 추천 점수 가산 제외",
     }

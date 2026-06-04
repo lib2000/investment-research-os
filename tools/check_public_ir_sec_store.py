@@ -55,11 +55,12 @@ def main() -> int:
         source_status = str(source.get("status") or quality.get("source_status") or "")
         if quality.get("needs_body_copy"):
             needs_body += 1
+        body_supplemented = bool(quality.get("body_supplemented"))
         if quality.get("url_text_unavailable") or source_status in {"fetch_failed", "invalid", "empty_text"}:
             url_only += 1
-            if quality.get("status") != "보강 필요":
+            if quality.get("status") != "보강 필요" and not body_supplemented:
                 errors.append(f"URL-only 항목 품질 상태가 보강 필요가 아님: {label}")
-            if not quality.get("needs_body_copy"):
+            if not quality.get("needs_body_copy") and not body_supplemented:
                 errors.append(f"URL-only 항목 needs_body_copy 누락: {label}")
         if not entry.get("relative_path") or not (root / entry["relative_path"]).exists():
             errors.append(f"Markdown 파일 누락: {label}")

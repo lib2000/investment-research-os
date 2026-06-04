@@ -3021,6 +3021,38 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(main.recent_weekly_source_family("https://www.example.co.kr/path"), "example.co.kr")
         self.assertEqual(main.recent_weekly_source_family("SEC EDGAR"), "SEC EDGAR")
 
+    def test_public_ir_sec_body_supplemented_url_only_is_usable(self):
+        from research_os.recent_activity import compact_recent_public_ir_sec_entry
+
+        item = compact_recent_public_ir_sec_entry(
+            {
+                "date": "2026-06-05",
+                "ticker": "PL",
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "title": "Planet Labs SEC Exhibit 99.1",
+                "summary": "보강된 SEC 실적 발표",
+                "source_url": "https://www.sec.gov/Archives/planet.htm",
+                "source_provider": "SEC EDGAR",
+                "source_category": "실적 발표",
+                "filing_form": "8-K EX-99.1",
+                "capture_quality": {
+                    "status": "정상",
+                    "source_status": "fetch_failed",
+                    "needs_body_copy": True,
+                    "body_supplemented": True,
+                },
+            },
+            {"tickers": ["PL"], "ticker_set": {"PL"}, "ticker_names": {"PL": "Planet Labs PBC"}},
+        )
+
+        self.assertIsNotNone(item)
+        assert item is not None
+        self.assertTrue(item["usable_for_recommendation"])
+        self.assertFalse(item["needs_body_copy"])
+        self.assertEqual(item["recommendation_guard"], "추천 가산 가능")
+        self.assertEqual(item["source_reliability"], "공식 SEC 8-K EX-99.1")
+
     def test_recent_weekly_group_quality_summary_uses_all_items_not_visible_sample(self):
         import research_os_main as main
 
