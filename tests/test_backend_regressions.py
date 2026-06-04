@@ -26,6 +26,16 @@ def load_console_hash_tool():
 
 
 class WebCaptureRenderingTests(unittest.TestCase):
+    def test_sec_capture_headers_use_public_project_user_agent(self):
+        from research_os.web_capture import capture_url_headers
+
+        headers = capture_url_headers("https://www.sec.gov/Archives/example.htm")
+
+        self.assertIn("investment-research-os", headers["User-Agent"])
+        self.assertIn("github.com/lib2000/investment-research-os", headers["User-Agent"])
+        self.assertEqual(headers["Referer"], "https://www.sec.gov/")
+        self.assertIn("text/html", headers["Accept"])
+
     def test_source_url_context_includes_translation_metadata(self):
         from research_os.web_capture import render_source_url_context
 

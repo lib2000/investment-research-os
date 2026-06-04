@@ -858,6 +858,20 @@ def foreign_text_korean_digest(text: str, title: str = "") -> dict:
 def capture_url_headers(cleaned_url: str) -> dict[str, str]:
     parsed = urlparse(cleaned_url)
     origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else cleaned_url
+    host = (parsed.hostname or "").lower()
+    if host.endswith("sec.gov"):
+        return {
+            "User-Agent": (
+                "investment-research-os/1.0 "
+                "(https://github.com/lib2000/investment-research-os; public investment research assistant)"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en-US,en;q=0.9,ko-KR;q=0.8,ko;q=0.7",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Referer": "https://www.sec.gov/",
+        }
     return {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

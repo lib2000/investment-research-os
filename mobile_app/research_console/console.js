@@ -8123,6 +8123,14 @@ function renderDailyRecommendationCards(payload) {
       const scoreWeights = (record.score_explanation?.component_weights || []).slice(0, 3);
       const penalties = (record.score_penalties || []).slice(0, 3);
       const qualityFlags = (record.quality_flags || []).slice(0, 3);
+      const totalPositivePoints = (record.score_components || []).reduce(
+        (sum, component) => sum + Number(component.points || 0),
+        0
+      );
+      const totalPenaltyCount = (record.score_penalties || []).length + (record.quality_flags || []).length;
+      const topScoreComponent = (record.score_components || [])
+        .slice()
+        .sort((a, b) => Number(b.points || 0) - Number(a.points || 0))[0];
       const overseasTracking = record.overseas_tracking || {};
       const portfolioRisk = record.portfolio_risk_connection || {};
       const milestones = (record.tracking_milestones || []).slice(0, 5);
@@ -8134,6 +8142,7 @@ function renderDailyRecommendationCards(payload) {
           <strong>${escapeHtml(displayCompanyName(record))}</strong>
           ${publicIrSecLinked ? `<div class="daily-recommendation-badges"><em>공개 IR/SEC 근거</em></div>` : ""}
           <p>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</p>
+          <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           <div class="daily-recommendation-score">
             ${scoreComponents
               .map(
@@ -13192,6 +13201,48 @@ function formatKoreanResult(value) {
       const failure = item.last_error ? ` · 오류 ${compactOutputText(item.last_error, 90)}` : "";
       return `${item.label || item.key || "외부 소스"} · ${status} · 자동 ${item.auto_refresh ? "켜짐" : "꺼짐"} · 최근 ${formatDateTime(item.last_checked_at)}${nextCheck}${failure}`;
     });
+    const targetDigest = new Map();
+    const collectTargetDigest = (items, label) => {
+      (items || []).forEach((item) => {
+        const targets = (item.related_targets || []).length
+          ? item.related_targets
+          : [item.company_name || "시장/섹터 공통"];
+        targets.slice(0, 3).forEach((target) => {
+          const key = target || "시장/섹터 공통";
+          const current = targetDigest.get(key) || { filing: 0, report: 0, publicIrSec: 0, customs: 0, market: 0 };
+          current[label] = (current[label] || 0) + 1;
+          targetDigest.set(key, current);
+        });
+      });
+    };
+    collectTargetDigest(value.important_filings || value.filings, "filing");
+    collectTargetDigest(value.display_reports || value.reports, "report");
+    collectTargetDigest(value.public_ir_sec_items, "publicIrSec");
+    collectTargetDigest(value.customs_exports, "customs");
+    collectTargetDigest(value.market_context, "market");
+    const targetDigestLines = Array.from(targetDigest.entries())
+      .map(([target, countsForTarget]) => ({
+        target,
+        total:
+          (countsForTarget.filing || 0) +
+          (countsForTarget.report || 0) +
+          (countsForTarget.publicIrSec || 0) +
+          (countsForTarget.customs || 0) +
+          (countsForTarget.market || 0),
+        countsForTarget,
+      }))
+      .sort((a, b) => b.total - a.total || a.target.localeCompare(b.target, "ko"))
+      .slice(0, 12)
+      .map(({ target, countsForTarget, total }) => {
+        const chips = [
+          countsForTarget.filing ? `공시 ${countsForTarget.filing}` : "",
+          countsForTarget.report ? `리포트 ${countsForTarget.report}` : "",
+          countsForTarget.publicIrSec ? `공개 IR/SEC ${countsForTarget.publicIrSec}` : "",
+          countsForTarget.customs ? `수출입 ${countsForTarget.customs}` : "",
+          countsForTarget.market ? `시장 ${countsForTarget.market}` : "",
+        ].filter(Boolean);
+        return `${target} · 총 ${total}건 · ${chips.join(" / ") || "분류 없음"}`;
+      });
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13219,6 +13270,9 @@ function formatKoreanResult(value) {
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
+      ``,
+      `### 종목별 자료 묶음`,
+      ...formatBulletList(targetDigestLines, (item) => item, "최근 1주 내 보유/관심 대상별로 묶을 자료가 없습니다."),
       ``,
       `### 바로 볼 상위 항목`,
       ...formatBulletList(

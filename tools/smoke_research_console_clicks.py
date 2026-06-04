@@ -159,7 +159,11 @@ class CdpClient:
                 break
             except RuntimeError as error:
                 last_error = error
-                if "Cannot find default execution context" not in str(error):
+                retryable_context_error = (
+                    "Cannot find default execution context" in str(error)
+                    or "Execution context was destroyed" in str(error)
+                )
+                if not retryable_context_error:
                     raise
                 time.sleep(1)
         else:
@@ -429,6 +433,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       return text.includes("최근 1주 자료") &&
                         text.includes("기준 시각") &&
                         (text.includes("DART 점검 시각") || text.includes("공시")) &&
+                        text.includes("종목별 자료 묶음") &&
                         (text.includes("자동 점검 상태") || text.includes("최근 1주일"))
                         ? text
                         : "";
@@ -1088,6 +1093,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       recentWeeklyBriefText.includes("기준 시각") &&
                       (recentWeeklyBriefText.includes("DART 점검 시각") || recentWeeklyBriefText.includes("공시")),
                     recentWeeklyShowsSourceGroups:
+                      recentWeeklyBriefText.includes("종목별 자료 묶음") &&
                       recentWeeklyBriefText.includes("수급/대량보유") &&
                       recentWeeklyBriefText.includes("리포트") &&
                       recentWeeklyBriefText.includes("수출입"),

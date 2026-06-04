@@ -3167,6 +3167,14 @@ label {
   border: 1px solid #99f6e4;
 }
 
+.daily-recommendation-score-summary {
+  color: #134e4a;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .daily-recommendation-score {
   display: flex;
   flex-wrap: wrap;

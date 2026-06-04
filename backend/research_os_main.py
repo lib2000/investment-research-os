@@ -87,8 +87,13 @@ from research_os.public_ir_sec import (
     public_ir_sec_status_payload,
 )
 from research_os.recent_activity import (
+    compact_recent_manifest_entry,
     compact_recent_public_ir_sec_entry,
     is_public_ir_sec_manifest_entry,
+    recent_filing_priority,
+    recent_ownership_filing_items,
+    recent_report_display_priority,
+    recent_watch_summary,
 )
 from research_os.classification import classification_system_tags, merge_research_tags
 from research_os.models import (
@@ -14213,135 +14218,6 @@ def recent_activity_target_terms(settings: Settings) -> dict:
 
 def recent_activity_cutoff(days: int) -> date:
     return current_storage_date() - timedelta(days=max(1, int(days or 7)) - 1)
-
-
-def compact_recent_manifest_entry(entry: dict, target_terms: dict) -> dict | None:
-    entry_date = parse_iso_date(entry.get("date"))
-    if not entry_date:
-        return None
-    ticker = normalize_ticker(str(entry.get("ticker") or ""))
-    tags = [str(tag) for tag in (entry.get("tags") or []) if isinstance(tag, str)]
-    text = " ".join(
-        str(entry.get(key) or "")
-        for key in ["summary", "source_url", "file_name", "relative_path", "type", "source_type"]
-    )
-    text += " " + " ".join(tags)
-    related_targets: list[str] = []
-    ticker_names = target_terms.get("ticker_names") or {}
-    if ticker and ticker in (target_terms.get("ticker_set") or set(target_terms.get("tickers") or [])):
-        related_targets.append(ticker_names.get(ticker) or ticker)
-    for name in target_terms.get("names") or []:
-        if name and name in text and name not in related_targets:
-            related_targets.append(name)
-    for sector in target_terms.get("sectors") or []:
-        if sector and sector in text and sector not in related_targets:
-            related_targets.append(sector)
-    report_type = str(entry.get("type") or entry.get("report_type") or "")
-    source_type = str(entry.get("source_type") or "")
-    is_market_context = (
-        report_type in {"customs-trade-brief", "daily-dossier-brief", "market-close-review"}
-        or any(tag in {"customs", "export"} for tag in tags)
-    )
-    if not related_targets and not is_market_context:
-        return None
-    category = "report"
-    if report_type == "customs-trade-brief" or "customs" in tags:
-        category = "customs_export"
-    elif source_type == "official_filing" or report_type == "dart-filing-watch":
-        category = "filing"
-    elif report_type in {"daily-dossier-brief", "market-close-review"}:
-        category = "market_context"
-    return {
-        "category": category,
-        "date": entry_date.isoformat(),
-        "ticker": ticker,
-        "company_name": ticker_names.get(ticker) or (related_targets[0] if related_targets else "시장/섹터 공통"),
-        "report_type": report_type or "research",
-        "source_type": source_type,
-        "summary": entry.get("summary") or entry.get("file_name") or "요약 없음",
-        "relative_path": entry.get("relative_path"),
-        "source_url": entry.get("source_url"),
-        "related_targets": related_targets or ["시장/섹터 공통"],
-        "tags": tags[:12],
-    }
-
-
-def recent_report_display_priority(item: dict) -> int:
-    report_type = str(item.get("report_type") or "")
-    tags = {str(tag) for tag in (item.get("tags") or [])}
-    if item.get("category") != "report":
-        return 0
-    if tags.intersection({"auto_operational_note", "coverage_backfill_note"}):
-        return 0
-    if report_type in {"research-checklist", "smart-trade-setup"}:
-        return 0
-    if report_type in {"broker-report", "naver-research-report", "shinhan-research-report"}:
-        return 90
-    if report_type in {"earnings-filing-note", "earnings-reaction"}:
-        return 80
-    if report_type in {"collaborative-team-report", "dossier-synthesis"}:
-        return 70
-    if report_type in {"source-url-capture", "research-capture"}:
-        return 60
-    if tags.intersection({"earnings", "filing", "valuation", "growth", "risk", "institution"}):
-        return 55
-    return 30
-
-
-def recent_filing_priority(item: dict) -> int:
-    importance = str(item.get("importance") or "")
-    tags = {str(tag) for tag in (item.get("tags") or [])}
-    summary = str(item.get("summary") or "")
-    score = {"높음": 100, "중간": 70, "보통": 30}.get(importance, 30)
-    if tags.intersection({"ownership", "flows"}) or any(keyword in summary for keyword in ["대량보유", "주요주주", "소유상황"]):
-        score += 20
-    if tags.intersection({"earnings", "financials"}) or any(keyword in summary for keyword in ["사업보고서", "반기보고서", "분기보고서"]):
-        score += 20
-    if tags.intersection({"event", "risk", "financing", "dilution"}):
-        score += 25
-    return score
-
-
-def recent_ownership_filing_items(filings: list[dict]) -> list[dict]:
-    ownership_keywords = ("대량보유", "주요주주", "소유상황", "5%")
-    ownership_items = []
-    for item in filings:
-        tags = {str(tag) for tag in (item.get("tags") or [])}
-        summary = str(item.get("summary") or "")
-        if tags.intersection({"ownership", "flows", "institution"}) or any(
-            keyword in summary for keyword in ownership_keywords
-        ):
-            ownership_items.append({**item, "filing_priority": recent_filing_priority(item)})
-    ownership_items.sort(
-        key=lambda item: (int(item.get("filing_priority") or 0), item.get("date") or ""),
-        reverse=True,
-    )
-    return ownership_items
-
-
-def recent_watch_summary(daily_watch: dict, counts: dict) -> dict:
-    dart = daily_watch.get("dart") if isinstance(daily_watch.get("dart"), dict) else {}
-    schedules = daily_watch.get("source_schedule") if isinstance(daily_watch.get("source_schedule"), list) else []
-    due_sources = [item for item in schedules if isinstance(item, dict) and item.get("due")]
-    failed_sources = [
-        item for item in schedules
-        if isinstance(item, dict) and str(item.get("source_status") or "").lower() in {"error", "failed", "failure"}
-    ]
-    return {
-        "status": "점검 완료" if not dart.get("due") and not due_sources and not failed_sources else "확인 필요",
-        "dart_message": dart.get("reliability_message") or dart.get("status") or "DART 상태 미확인",
-        "dart_coverage_rate": dart.get("coverage_rate"),
-        "due_source_count": len(due_sources),
-        "failed_source_count": len(failed_sources),
-        "recent_signal_count": (
-            int(counts.get("filings") or 0)
-            + int(counts.get("reports") or 0)
-            + int(counts.get("public_ir_sec") or 0)
-            + int(counts.get("customs_exports") or 0)
-        ),
-        "due_sources": [item.get("label") or item.get("key") for item in due_sources[:5]],
-        "failed_sources": [item.get("label") or item.get("key") for item in failed_sources[:5]],
-    }
 
 
 def compact_recent_dart_entry(entry: dict) -> dict | None:
