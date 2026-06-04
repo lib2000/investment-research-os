@@ -120,6 +120,8 @@ def storage_quality_entry_needs_body(entry: dict) -> bool:
     capture_quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
     if storage_quality_entry_is_policy_url_only(entry):
         return False
+    if storage_quality_entry_is_public_ir_sec(entry):
+        return False
     return bool(
         "needs_body_copy" in tags
         or "url_text_unavailable" in tags
@@ -134,6 +136,15 @@ def storage_quality_entry_is_policy_url_only(entry: dict) -> bool:
         "copyright_safe_metadata" in tags
         and "url_only" in tags
         and "needs_body_copy" not in tags
+    )
+
+
+def storage_quality_entry_is_public_ir_sec(entry: dict) -> bool:
+    """Return True for public IR/SEC captures tracked by their own quality counters."""
+    return bool(
+        str(entry.get("scope") or "") == "public_ir_sec"
+        or str(entry.get("ticker") or "").upper() == "PUBLIC_IR_SEC"
+        or str(entry.get("type") or entry.get("report_type") or "") == "public-ir-sec"
     )
 
 
@@ -187,9 +198,7 @@ def build_storage_quality_dashboard_payload(
     public_ir_sec_entries = [
         entry
         for entry in active_entries
-        if str(entry.get("scope") or "") == "public_ir_sec"
-        or str(entry.get("ticker") or "").upper() == "PUBLIC_IR_SEC"
-        or str(entry.get("type") or entry.get("report_type") or "") == "public-ir-sec"
+        if storage_quality_entry_is_public_ir_sec(entry)
     ]
     public_ir_sec_needs_body_entries = [
         entry

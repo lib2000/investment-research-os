@@ -2318,6 +2318,43 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertEqual(result["body_missing_items"][0]["file_name"], "url-only.md")
         self.assertEqual(result["body_missing_items"][0]["quality_status"], "보강 필요")
 
+    def test_storage_quality_tracks_public_ir_sec_body_copy_separately(self):
+        import json
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            vault_dir.mkdir(parents=True)
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "PUBLIC_IR_SEC",
+                            "scope": "public_ir_sec",
+                            "type": "public-ir-sec",
+                            "date": "2026-06-04",
+                            "file_name": "joby-url-only.md",
+                            "summary": "Joby public IR URL-only",
+                            "tags": ["public_ir_sec", "url_text_unavailable", "needs_body_copy"],
+                            "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = main.build_storage_quality_dashboard(Settings(research_vault_dir=str(vault_dir)))
+
+        self.assertEqual(result["body_missing_count"], 0)
+        self.assertEqual(result["public_ir_sec_count"], 1)
+        self.assertEqual(result["public_ir_sec_needs_body_count"], 1)
+        self.assertEqual(result["public_ir_sec_items"][0]["file_name"], "joby-url-only.md")
+
     def test_deduped_dossier_candidates_skip_system_keys(self):
         import json
         import research_os_main as main
