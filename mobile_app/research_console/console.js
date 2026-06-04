@@ -13227,8 +13227,14 @@ function formatKoreanResult(value) {
                   .map(([provider, count]) => `${provider} ${formatNumber(count)}건`)
                   .join(" / ")
               : "";
+            const reliabilityLine = group.key === "public_ir_sec" && quality.reliability_labels
+              ? Object.entries(quality.reliability_labels)
+                  .slice(0, 3)
+                  .map(([label, count]) => `${label} ${formatNumber(count)}건`)
+                  .join(" / ")
+              : "";
             const qualityLine = group.key === "public_ir_sec"
-              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${providerLine ? ` · 출처 ${providerLine}` : ""}`
+              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${providerLine ? ` · 출처 ${providerLine}` : ""}${reliabilityLine ? ` · 품질 ${reliabilityLine}` : ""}`
               : "";
             const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
             return `**${group.label || group.key || "자료"}** · 전체 ${formatNumber(groupCount)}건${visibilityLine}${tickerLine}${qualityLine}${targets}${note}`;
@@ -13404,8 +13410,14 @@ function formatKoreanResult(value) {
           const visibleText = Number(group.visible_count || 0) && Number(group.count || 0) > Number(group.visible_count || 0)
             ? ` · 표시 ${formatNumber(group.visible_count)}/${formatNumber(group.count)}건`
             : "";
+          const reliabilityText = group.key === "public_ir_sec" && quality.reliability_labels
+            ? Object.entries(quality.reliability_labels)
+                .slice(0, 2)
+                .map(([label, count]) => `${label} ${formatNumber(count)}건`)
+                .join(" / ")
+            : "";
           const qualityText = group.key === "public_ir_sec"
-            ? ` (추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)} / 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}${providerText ? ` / 출처 ${providerText}` : ""})`
+            ? ` (추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)} / 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}${providerText ? ` / 출처 ${providerText}` : ""}${reliabilityText ? ` / 품질 ${reliabilityText}` : ""})`
             : "";
           return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${qualityText}`;
         })

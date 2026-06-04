@@ -22793,9 +22793,17 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                         for provider, count in list(provider_counts.items())[:2]
                         if provider
                     )
+                    reliability_counts = quality.get("reliability_labels") if isinstance(quality.get("reliability_labels"), dict) else {}
+                    reliability_text = "/".join(
+                        f"{label} {count}건"
+                        for label, count in list(reliability_counts.items())[:2]
+                        if label
+                    )
                     text += f"(추천 가능 {usable}건/본문 보강 {blocked}건"
                     if provider_text:
                         text += f"/출처 {provider_text}"
+                    if reliability_text:
+                        text += f"/품질 {reliability_text}"
                     text += ")"
                 return text
 
