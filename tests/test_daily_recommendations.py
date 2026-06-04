@@ -296,6 +296,7 @@ class DailyRecommendationsTests(unittest.TestCase):
                                 "usable_for_recommendation": 0,
                                 "needs_body_copy": 1,
                                 "blocked_or_needs_review": 1,
+                                "providers": {"SEC EDGAR": 1},
                             },
                             "items": [
                                 {
@@ -329,7 +330,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(candidate["weekly_evidence_groups"][0]["label"], "공개 IR/SEC")
         self.assertEqual(candidate["weekly_evidence_groups"][0]["quality_summary"]["needs_body_copy"], 1)
         weekly_evidence = next(item for item in candidate["evidence_sources"] if "최근 1주 자료 묶음" in item)
-        self.assertIn("추천 가능 0건/본문 보강 1건", weekly_evidence)
+        self.assertIn("추천 가능 0건/본문 보강 1건/출처 SEC EDGAR 1건", weekly_evidence)
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):

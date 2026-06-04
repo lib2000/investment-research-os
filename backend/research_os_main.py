@@ -22746,7 +22746,16 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                     quality = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
                     usable = int(quality.get("usable_for_recommendation") or 0)
                     blocked = int(quality.get("needs_body_copy") or quality.get("blocked_or_needs_review") or 0)
-                    text += f"(추천 가능 {usable}건/본문 보강 {blocked}건)"
+                    provider_counts = quality.get("providers") if isinstance(quality.get("providers"), dict) else {}
+                    provider_text = "/".join(
+                        f"{provider} {count}건"
+                        for provider, count in list(provider_counts.items())[:2]
+                        if provider
+                    )
+                    text += f"(추천 가능 {usable}건/본문 보강 {blocked}건"
+                    if provider_text:
+                        text += f"/출처 {provider_text}"
+                    text += ")"
                 return text
 
             weekly_group_text = ", ".join(
