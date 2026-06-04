@@ -14440,6 +14440,41 @@ def build_recent_weekly_category_groups(
     ]
 
 
+def build_recent_weekly_target_digest(*, sources: list[tuple[str, list[dict]]], limit: int = 20) -> list[dict]:
+    digest: dict[str, dict] = {}
+    for bucket, items in sources:
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            raw_targets = item.get("related_targets") if isinstance(item.get("related_targets"), list) else []
+            targets = [str(target).strip() for target in raw_targets if str(target or "").strip()]
+            company_name = str(item.get("company_name") or "").strip()
+            if not targets and company_name:
+                targets = [company_name]
+            if not targets:
+                targets = ["시장/섹터 공통"]
+            for target in targets[:3]:
+                current = digest.setdefault(
+                    target,
+                    {
+                        "target": target,
+                        "filing": 0,
+                        "report": 0,
+                        "public_ir_sec": 0,
+                        "customs": 0,
+                        "market": 0,
+                        "total": 0,
+                    },
+                )
+                if bucket in current:
+                    current[bucket] += 1
+                current["total"] += 1
+    return sorted(
+        digest.values(),
+        key=lambda item: (-int(item.get("total") or 0), str(item.get("target") or "")),
+    )[: max(1, limit)]
+
+
 def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refresh_if_due: bool = True) -> dict:
     normalized_days = max(1, min(int(days or 7), 30))
     cutoff = recent_activity_cutoff(normalized_days)
@@ -14519,6 +14554,15 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         customs_exports=customs_exports,
         market_context=market_context,
     )
+    target_digest = build_recent_weekly_target_digest(
+        sources=[
+            ("filing", important_filings),
+            ("report", display_reports),
+            ("public_ir_sec", public_ir_sec_items),
+            ("customs", customs_exports),
+            ("market", market_context),
+        ]
+    )
     daily_watch = {
         "dart": dart_daily_check_status(dart_cache, settings),
         "source_schedule": build_external_source_schedule_status(settings),
@@ -14539,6 +14583,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "watch_summary": recent_watch_summary(daily_watch, counts),
         "counts": counts,
         "category_groups": category_groups,
+        "target_digest": target_digest,
         "important_filings": important_filings[:15],
         "ownership_filings": ownership_filings[:10],
         "filings": filings[:30],

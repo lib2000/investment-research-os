@@ -13235,19 +13235,32 @@ function formatKoreanResult(value) {
     collectTargetDigest(value.public_ir_sec_items, "publicIrSec");
     collectTargetDigest(value.customs_exports, "customs");
     collectTargetDigest(value.market_context, "market");
-    const targetDigestLines = Array.from(targetDigest.entries())
-      .map(([target, countsForTarget]) => ({
-        target,
-        total:
-          (countsForTarget.filing || 0) +
-          (countsForTarget.report || 0) +
-          (countsForTarget.publicIrSec || 0) +
-          (countsForTarget.customs || 0) +
-          (countsForTarget.market || 0),
-        countsForTarget,
-      }))
-      .sort((a, b) => b.total - a.total || a.target.localeCompare(b.target, "ko"))
-      .slice(0, 12)
+    const targetDigestSource = Array.isArray(value.target_digest) && value.target_digest.length
+      ? value.target_digest.slice(0, 12).map((item) => ({
+          target: item.target || "시장/섹터 공통",
+          total: item.total || 0,
+          countsForTarget: {
+            filing: item.filing || 0,
+            report: item.report || 0,
+            publicIrSec: item.public_ir_sec || 0,
+            customs: item.customs || 0,
+            market: item.market || 0,
+          },
+        }))
+      : Array.from(targetDigest.entries())
+          .map(([target, countsForTarget]) => ({
+            target,
+            total:
+              (countsForTarget.filing || 0) +
+              (countsForTarget.report || 0) +
+              (countsForTarget.publicIrSec || 0) +
+              (countsForTarget.customs || 0) +
+              (countsForTarget.market || 0),
+            countsForTarget,
+          }))
+          .sort((a, b) => b.total - a.total || a.target.localeCompare(b.target, "ko"))
+          .slice(0, 12);
+    const targetDigestLines = targetDigestSource
       .map(({ target, countsForTarget, total }) => {
         const chips = [
           countsForTarget.filing ? `공시 ${countsForTarget.filing}` : "",
