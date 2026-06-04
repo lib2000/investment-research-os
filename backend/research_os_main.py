@@ -14143,6 +14143,13 @@ def build_external_source_schedule_status(settings: Settings) -> list[dict]:
     naver_cache = read_naver_research_cache(settings)
     shinhan_cache = read_shinhan_research_cache(settings)
     dart_cache = read_dart_filing_cache(settings)
+    dart_daily = dart_daily_check_status(dart_cache, settings)
+    dart_related_count = (
+        int(dart_daily.get("checked_count") or 0)
+        or int(dart_daily.get("current_target_count") or dart_daily.get("target_count") or 0)
+        or (len(dart_cache.get("items") or []) if isinstance(dart_cache, dict) else 0)
+        or (len(dart_cache.get("entries") or {}) if isinstance(dart_cache, dict) else 0)
+    )
     return [
         {
             "key": "kcif_reports_watch",
@@ -14214,8 +14221,8 @@ def build_external_source_schedule_status(settings: Settings) -> list[dict]:
             "auto_refresh": settings.dart_filing_auto_refresh,
             "refresh_hours": settings.dart_filing_refresh_hours,
             "last_checked_at": dart_cache.get("updated_at") if isinstance(dart_cache, dict) else None,
-            "due": bool(dart_daily_check_status(dart_cache, settings).get("due")),
-            "related_count": len(dart_cache.get("items") or []) if isinstance(dart_cache, dict) else 0,
+            "due": bool(dart_daily.get("due")),
+            "related_count": dart_related_count,
             "source_status": dart_cache.get("status") if isinstance(dart_cache, dict) else "not_checked",
             "policy": "official_filings_metadata_and_links",
         },

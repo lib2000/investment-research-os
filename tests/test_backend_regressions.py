@@ -1042,8 +1042,8 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
             patch.object(main, "read_company_ir_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "j", "ticker": "JOBY"}], "source_status": "cached"}),
             patch.object(main, "read_naver_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"a": {}}, "status": "success"}),
             patch.object(main, "read_shinhan_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"b": {}}, "status": "success"}),
-            patch.object(main, "read_dart_filing_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "items": [{"id": "d"}], "status": "success"}),
-            patch.object(main, "dart_daily_check_status", return_value={"due": False}),
+            patch.object(main, "read_dart_filing_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"d1": {}, "d2": {}}, "status": "success"}),
+            patch.object(main, "dart_daily_check_status", return_value={"due": False, "checked_count": 2, "current_target_count": 2}),
         ):
             status = main.build_external_source_schedule_status(settings)
 
@@ -1056,6 +1056,7 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["company_ir_sources_watch"]["label"], "Joby IR 보도자료")
         self.assertEqual(by_key["company_ir_sources_watch"]["related_count"], 1)
         self.assertEqual(by_key["company_ir_sources_watch"]["policy"], "public_company_ir_capture_and_rag")
+        self.assertEqual(by_key["dart_filing_watch"]["related_count"], 2)
         self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
 
