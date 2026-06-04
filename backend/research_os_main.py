@@ -22710,6 +22710,8 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         group_key = str(group.get("key") or "").strip()
         group_label = str(group.get("label") or group_key or "최근 자료").strip()
         group_count = int(group.get("count") or 0)
+        group_visible_count = int(group.get("visible_count") or 0)
+        group_ticker_count = int(group.get("ticker_count") or 0)
         quality_summary = group.get("quality_summary") if isinstance(group.get("quality_summary"), dict) else {}
         visible_items = [item for item in group.get("items") or [] if isinstance(item, dict)]
         linked_tickers = {
@@ -22735,6 +22737,8 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                     "key": group_key,
                     "label": group_label,
                     "count": group_count,
+                    "visible_count": group_visible_count,
+                    "ticker_count": group_ticker_count,
                     "quality_summary": quality_summary,
                     "summary": group_summary,
                 }

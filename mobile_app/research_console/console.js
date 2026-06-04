@@ -13214,6 +13214,13 @@ function formatKoreanResult(value) {
               ? ` · 관련 ${group.target_names.slice(0, 4).join(", ")}`
               : "";
             const quality = group.quality_summary || {};
+            const groupCount = Number(group.count || 0);
+            const visibleCount = Number(group.visible_count || 0);
+            const tickerCount = Number(group.ticker_count || 0);
+            const visibilityLine = visibleCount && groupCount > visibleCount
+              ? ` · 표시 ${formatNumber(visibleCount)}/${formatNumber(groupCount)}건`
+              : "";
+            const tickerLine = tickerCount ? ` · 종목 ${formatNumber(tickerCount)}개` : "";
             const providerLine = group.key === "public_ir_sec" && (quality.source_families || quality.providers)
               ? Object.entries(quality.source_families || quality.providers)
                   .slice(0, 3)
@@ -13224,7 +13231,7 @@ function formatKoreanResult(value) {
               ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${providerLine ? ` · 출처 ${providerLine}` : ""}`
               : "";
             const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
-            return `**${group.label || group.key || "자료"}** · ${formatNumber(group.count || 0)}건${qualityLine}${targets}${note}`;
+            return `**${group.label || group.key || "자료"}** · 전체 ${formatNumber(groupCount)}건${visibilityLine}${tickerLine}${qualityLine}${targets}${note}`;
           })
       : [];
     const targetDigest = new Map();
@@ -13393,10 +13400,14 @@ function formatKoreanResult(value) {
                 .map(([provider, count]) => `${provider} ${formatNumber(count)}건`)
                 .join(" / ")
             : "";
+          const tickerText = Number(group.ticker_count || 0) ? ` · 종목 ${formatNumber(group.ticker_count)}개` : "";
+          const visibleText = Number(group.visible_count || 0) && Number(group.count || 0) > Number(group.visible_count || 0)
+            ? ` · 표시 ${formatNumber(group.visible_count)}/${formatNumber(group.count)}건`
+            : "";
           const qualityText = group.key === "public_ir_sec"
             ? ` (추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)} / 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}${providerText ? ` / 출처 ${providerText}` : ""})`
             : "";
-          return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${qualityText}`;
+          return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${qualityText}`;
         })
         .join(" / ");
       const overseas = item.overseas_tracking?.needs_fx_conversion

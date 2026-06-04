@@ -325,6 +325,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertNotIn("최근 공개 IR/SEC 반영", component_labels)
         self.assertTrue(any("공개 IR/SEC URL-only" in item for item in candidate["risk_notes"]))
         self.assertEqual(candidate["weekly_evidence_groups"][0]["label"], "공개 IR/SEC")
+        self.assertEqual(candidate["weekly_evidence_groups"][0]["ticker_count"], 1)
         self.assertEqual(candidate["weekly_evidence_groups"][0]["quality_summary"]["needs_body_copy"], 1)
         weekly_evidence = next(item for item in candidate["evidence_sources"] if "최근 1주 자료 묶음" in item)
         self.assertIn("추천 가능 0건/본문 보강 1건/출처 SEC EDGAR 1건", weekly_evidence)
