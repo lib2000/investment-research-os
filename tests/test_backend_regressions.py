@@ -801,6 +801,45 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
 
 
 class CompanyIrSourcesWatchTests(unittest.TestCase):
+    def test_public_ir_sec_request_preserves_company_ir_metadata(self):
+        from research_os.public_ir_sec import PublicIrSecCollectRequest, collect_public_ir_sec_url
+
+        settings = SimpleNamespace(research_vault_dir="unused")
+        request = PublicIrSecCollectRequest(
+            url="https://www.sec.gov/Archives/edgar/data/814676/000143774926015161/ex_957048.htm",
+            target_key="CPSH",
+            save_result=False,
+            source_title="CPS Technologies 8-K EXHIBIT 99.1 PRESS RELEASE",
+            source_provider="SEC EDGAR",
+            source_type="sec_company_submissions",
+            source_category="SEC 실적/보도자료",
+            filing_form="8-K",
+            filing_group="financial_release",
+            published_at="2026-05-08",
+        )
+
+        with patch(
+            "research_os.public_ir_sec.fetch_capture_source_url",
+            return_value={
+                "status": "success",
+                "title": "Generic SEC Page",
+                "final_url": str(request.url),
+            },
+        ), patch(
+            "research_os.public_ir_sec.render_source_url_body",
+            return_value="CPS Technologies financial results " * 30,
+        ):
+            result = collect_public_ir_sec_url(request, settings)
+
+        self.assertEqual(result["title"], "CPS Technologies 8-K EXHIBIT 99.1 PRESS RELEASE")
+        self.assertEqual(result["source_provider"], "SEC EDGAR")
+        self.assertEqual(result["source_type"], "sec_company_submissions")
+        self.assertEqual(result["source_category"], "SEC 실적/보도자료")
+        self.assertEqual(result["filing_form"], "8-K")
+        self.assertEqual(result["filing_group"], "financial_release")
+        self.assertIn("financial_release", result["tags"])
+        self.assertIn("8-K", result["tags"])
+
     def test_company_ir_parser_extracts_joby_press_release_links(self):
         from research_os.company_ir_sources import COMPANY_IR_SOURCES, parse_company_ir_press_releases
 
@@ -858,13 +897,25 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
 
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["ticker"], "CPSH")
-        self.assertEqual(items[0]["category"], "SEC 공시")
+        self.assertEqual(items[0]["category"], "SEC 실적/보도자료")
+        self.assertEqual(items[0]["filing_form"], "8-K")
+        self.assertEqual(items[0]["filing_group"], "financial_release")
         self.assertEqual(items[0]["published_at"], "2026-05-08")
         self.assertIn("CPS Technologies 8-K", items[0]["title"])
         self.assertEqual(
             items[0]["detail_url"],
             "https://www.sec.gov/Archives/edgar/data/814676/000143774926015161/ex_957048.htm",
         )
+
+    def test_sec_filing_classifier_labels_financial_and_ownership_forms(self):
+        from research_os.company_ir_sources import classify_sec_filing
+
+        self.assertEqual(classify_sec_filing("10-Q"), ("SEC 실적 공시", "financial_report"))
+        self.assertEqual(
+            classify_sec_filing("8-K", "EXHIBIT 99.1 PRESS RELEASE"),
+            ("SEC 실적/보도자료", "financial_release"),
+        )
+        self.assertEqual(classify_sec_filing("SC 13G/A"), ("SEC 지분 공시", "ownership_filing"))
 
     def test_company_ir_parser_accepts_common_news_detail_url_shapes(self):
         from research_os.company_ir_sources import CompanyIrSource, parse_company_ir_press_releases

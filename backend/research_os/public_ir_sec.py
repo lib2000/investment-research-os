@@ -34,6 +34,13 @@ class PublicIrSecCollectRequest(BaseModel):
     save_result: bool = True
     force: bool = False
     no_screenshot: bool = True
+    source_title: str | None = None
+    source_provider: str | None = None
+    source_type: str | None = None
+    source_category: str | None = None
+    filing_form: str | None = None
+    filing_group: str | None = None
+    published_at: str | None = None
 
 
 def _utc_now_iso() -> str:
@@ -174,7 +181,23 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
     if not body_text and url_info:
         body_text = render_source_url_context(url_info)
     provider, source_type, tags = _host_label(source_url)
-    title = _safe_title(url_info.get("title") or url_info.get("original_title"), provider)
+    provider = _safe_title(request.source_provider, provider)
+    source_type = _safe_key(request.source_type, source_type).lower()
+    title = _safe_title(request.source_title or url_info.get("title") or url_info.get("original_title"), provider)
+    source_category = _safe_title(request.source_category, "공개 IR/SEC 자료")
+    filing_form = _safe_title(request.filing_form, "")
+    filing_group = _safe_key(request.filing_group, "").lower()
+    published_at = _safe_title(request.published_at, "")
+    metadata_tags = [
+        value
+        for value in [
+            source_category,
+            filing_form,
+            filing_group,
+            published_at,
+        ]
+        if value
+    ]
     body_chars = len(extracted_body_text or "")
     context_chars = len(body_text or "")
     doc_links = len(set(findall(r"https?://[^\s)\]]+", body_text or "")))
@@ -195,6 +218,10 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         "final_url": url_info.get("final_url") or source_url,
         "source_provider": provider,
         "source_type": source_type,
+        "source_category": source_category,
+        "filing_form": filing_form,
+        "filing_group": filing_group,
+        "published_at": published_at,
         "title": title,
         "summary": _summary_from_text(
             title,
@@ -216,6 +243,7 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
                     *tags,
                     "rag_candidate",
                     "codex_app_source",
+                    *metadata_tags,
                     *( ["url_text_unavailable", "needs_body_copy"] if quality.get("needs_body_copy") else [] ),
                 ]
             )
@@ -235,6 +263,10 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         "source_url": source_url,
         "final_url": payload["final_url"],
         "source_provider": provider,
+        "source_category": source_category,
+        "filing_form": filing_form,
+        "filing_group": filing_group,
+        "published_at": published_at,
         "confidence": 0.84 if body_chars >= 500 else 0.62,
         "source_confidence": 0.84 if body_chars >= 500 else 0.62,
         "tags": payload["tags"],

@@ -66,6 +66,8 @@ class CompanyIrItem:
     detail_url: str
     source_url: str
     category: str = "IR 보도자료"
+    filing_form: str = ""
+    filing_group: str = ""
 
 
 COMPANY_IR_SOURCES = [
@@ -350,6 +352,25 @@ def _sec_archive_url(source: CompanyIrSource, accession_number: str, primary_doc
     return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
 
 
+def classify_sec_filing(form: str, description: str = "") -> tuple[str, str]:
+    form_key = clean_ir_text(form).upper()
+    description_key = clean_ir_text(description).lower()
+    if form_key in {"10-Q", "10-K", "20-F"}:
+        return "SEC 실적 공시", "financial_report"
+    if form_key == "8-K" and any(
+        keyword in description_key
+        for keyword in ["financial result", "earnings", "press release", "exhibit 99.1", "results"]
+    ):
+        return "SEC 실적/보도자료", "financial_release"
+    if form_key in {"SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A"}:
+        return "SEC 지분 공시", "ownership_filing"
+    if form_key == "6-K":
+        return "SEC 해외발행사 공시", "foreign_issuer_filing"
+    if form_key == "SD":
+        return "SEC 공급망/지속가능 공시", "specialized_disclosure"
+    return "SEC 중요 공시", "material_filing"
+
+
 def parse_sec_company_submissions(
     payload: dict | str,
     *,
@@ -383,6 +404,7 @@ def parse_sec_company_submissions(
         description = clean_ir_text(descriptions[index] if index < len(descriptions) else "")
         title_detail = description if description and description.upper() != form else "SEC filing"
         title = f"{source.company_name} {form} {title_detail}"
+        filing_category, filing_group = classify_sec_filing(form, title_detail)
         detail_url = _sec_archive_url(source, accession, document)
         published_at = normalize_ir_date(filing_date) or filing_date or normalize_ir_date(report_date) or report_date
         item_id = company_ir_item_id(source, title, published_at, detail_url)
@@ -400,7 +422,9 @@ def parse_sec_company_submissions(
                 published_at=published_at,
                 detail_url=detail_url,
                 source_url=source.source_url,
-                category="SEC 공시",
+                category=filing_category,
+                filing_form=form,
+                filing_group=filing_group,
             )
         )
         if len(items) >= max(1, limit):

@@ -16339,6 +16339,13 @@ def build_company_ir_sources_watch_payload(
                         save_result=True,
                         force=False,
                         no_screenshot=True,
+                        source_title=str(item.get("title") or ""),
+                        source_provider=str(item.get("source_provider") or ""),
+                        source_type=str(item.get("source_scope") or ""),
+                        source_category=str(item.get("category") or ""),
+                        filing_form=str(item.get("filing_form") or ""),
+                        filing_group=str(item.get("filing_group") or ""),
+                        published_at=str(item.get("published_at") or ""),
                     ),
                     settings,
                 )
