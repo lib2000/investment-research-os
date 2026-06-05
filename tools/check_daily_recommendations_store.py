@@ -21,7 +21,7 @@ EXPECTED_STATE_STATUSES = {"success", "skipped_existing", "tracked", "no_candida
 EXPECTED_PENDING_SITUATION = "아직 추적 예정일 전입니다."
 REQUIRED_EVIDENCE_CATEGORIES = {
     "저장 품질": ("저장 품질", "활용 가능", "보강 필요"),
-    "목표가/리포트": ("목표가/리포트", "리포트 근거", "목표가"),
+    "목표가/리포트": ("목표가/리포트", "리포트 근거", "목표가", "핵심 리포트", "최근 1주 핵심 리포트"),
     "최근 저장/RAG": ("최근 근거 파일", "최근 저장 자료", "RAG 연결"),
     "보유/관심 범위": ("대상 범위", "보유:", "관심:"),
 }

@@ -88,6 +88,27 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("sec_urllib: success 200", attempts)
         self.assertIn(b"ChargePoint revenue", response.content)
 
+    def test_webpage_text_extracts_plain_ir_paragraphs(self):
+        from research_os.web_capture import extract_webpage_text
+
+        html = """
+        <html><head><title>Joby Reports First Quarter 2026 Financial Results :: Joby Aero, Inc. (JOBY)</title></head>
+        <body>
+          <header><nav>Press Subscribe Contact</nav></header>
+          <p>SANTA CRUZ, Calif.--(BUSINESS WIRE)-- Joby Aviation, Inc. (NYSE:JOBY), a company developing electric air taxis for commercial passenger service, today issued its First Quarter 2026 Shareholder Letter detailing the company’s operational and financial results for the quarter ended March 31, 2026.</p>
+          <ul class="bwlistdisc"><li><b>Initial operations expected to begin in 2026:</b> Joby was named a partner in multiple winning applications under the White House-backed eVTOL Integration Pilot Program.</li></ul>
+          <p><b>About Joby</b></p>
+          <p>Joby Aviation, Inc. is developing an all-electric, vertical take-off and landing air taxi.</p>
+        </body></html>
+        """
+
+        title, text = extract_webpage_text(html)
+
+        self.assertEqual(title, "Joby Reports First Quarter 2026 Financial Results")
+        self.assertIn("Joby Aviation, Inc. (NYSE:JOBY)", text)
+        self.assertIn("Initial operations expected to begin in 2026", text)
+        self.assertGreater(len(text), 300)
+
     def test_source_url_context_includes_translation_metadata(self):
         from research_os.web_capture import render_source_url_context
 

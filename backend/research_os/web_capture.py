@@ -235,6 +235,20 @@ def extract_meta_article_title(html_text: str) -> str:
     return ""
 
 
+def extract_html_paragraph_list_text(html_text: str) -> str:
+    parts: list[str] = []
+    for match in finditer(r"<(?:p|li)\b[^>]*>(.*?)</(?:p|li)>", html_text or "", DOTALL | IGNORECASE):
+        fragment = match.group(1) or ""
+        fragment = sub(r"<script\b.*?</script>", " ", fragment, flags=DOTALL | IGNORECASE)
+        fragment = sub(r"<style\b.*?</style>", " ", fragment, flags=DOTALL | IGNORECASE)
+        fragment = sub(r"<br\s*/?>", "\n", fragment, flags=IGNORECASE)
+        fragment = sub(r"<[^>]+>", " ", fragment)
+        cleaned = " ".join(unescape(fragment).split())
+        if cleaned:
+            parts.append(cleaned)
+    return clean_web_article_text("\n".join(parts))
+
+
 def web_article_text_score(text: str) -> float:
     cleaned = clean_web_article_text(text)
     if not cleaned:
@@ -261,11 +275,12 @@ def extract_webpage_text(html_text: str) -> tuple[str, str]:
         return "", ""
     json_title, json_text = extract_json_ld_article_text(html_text)
     candidate_text = clean_web_article_text(extractor.candidate_text)
+    paragraph_text = extract_html_paragraph_list_text(html_text)
     fallback_text = clean_web_article_text(extractor.text)
     title = clean_web_article_title(
         json_title or extractor.title or extract_meta_article_title(html_text)
     )
-    candidates = [json_text, candidate_text, fallback_text]
+    candidates = [json_text, candidate_text, paragraph_text, fallback_text]
     best_text = max(candidates, key=web_article_text_score)
     return title[:160], clean_web_article_text(best_text)[:30000]
 
