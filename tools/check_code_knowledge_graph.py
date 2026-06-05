@@ -39,9 +39,17 @@ REQUIRED_NODE_IDS = {
 def load_or_refresh(root: Path, output: Path, refresh: bool) -> dict:
     if refresh or not output.exists():
         graph = build_graph(root)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
-        return graph
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
+            return graph
+        except OSError as exc:
+            if not output.exists():
+                raise
+            print(
+                f"주의: 그래프 새로 쓰기 실패({exc}); 기존 그래프를 읽어 엄격 검증을 계속합니다.",
+                file=sys.stderr,
+            )
     return json.loads(output.read_text(encoding="utf-8"))
 
 

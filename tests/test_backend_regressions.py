@@ -25,6 +25,18 @@ def load_console_hash_tool():
     return module
 
 
+def load_code_knowledge_graph_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_code_knowledge_graph.py"
+    spec = spec_from_file_location("check_code_knowledge_graph", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 class WebCaptureRenderingTests(unittest.TestCase):
     def test_sec_capture_headers_use_public_project_user_agent(self):
         from research_os.web_capture import capture_url_headers
@@ -225,6 +237,21 @@ class WebCaptureRenderingTests(unittest.TestCase):
 
 
 class BackendModuleBoundaryTests(unittest.TestCase):
+    def test_code_knowledge_graph_check_uses_existing_graph_when_refresh_write_is_blocked(self):
+        tool = load_code_knowledge_graph_check_tool()
+
+        with TemporaryDirectory() as tmp:
+            graph_path = Path(tmp) / "code_knowledge_graph.json"
+            graph_path.write_text(json.dumps({"schema_version": 1, "existing": True}), encoding="utf-8")
+            with patch.object(tool, "build_graph", return_value={"schema_version": 1, "existing": False}), patch.object(
+                Path,
+                "write_text",
+                side_effect=OSError("Read-only file system"),
+            ):
+                graph = tool.load_or_refresh(Path(tmp), graph_path, refresh=True)
+
+        self.assertTrue(graph["existing"])
+
     def test_system_health_payload_builder_is_in_backend_module(self):
         from research_os.settings import Settings
         from research_os.system_health import build_system_health_payload
