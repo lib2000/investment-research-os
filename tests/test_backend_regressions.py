@@ -371,6 +371,15 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertNotIn("api_key", json.dumps(payload).lower())
         self.assertNotIn("token", json.dumps(payload).lower())
 
+        for alias in ("/health", "/api/v1/health"):
+            alias_response = TestClient(main.app).get(alias)
+            self.assertEqual(alias_response.status_code, 200)
+            alias_payload = alias_response.json()
+            self.assertEqual(alias_payload["module"], "system_health")
+            self.assertTrue(alias_payload["onedrive_excluded"])
+            self.assertNotIn("api_key", json.dumps(alias_payload).lower())
+            self.assertNotIn("token", json.dumps(alias_payload).lower())
+
     def test_safety_config_route_masks_configured_secrets(self):
         import research_os_main as main
         from fastapi.testclient import TestClient

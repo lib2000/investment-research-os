@@ -17829,6 +17829,12 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
 
 
+@app.get("/health")
+@app.get("/api/v1/health")
+def read_system_health_alias(settings: Settings = Depends(get_settings)) -> dict:
+    return read_system_health(settings)
+
+
 @app.get(
     "/api/v1/system/code-knowledge-graph",
     dependencies=[Depends(verify_user_token)],
