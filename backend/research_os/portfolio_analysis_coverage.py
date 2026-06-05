@@ -5,19 +5,41 @@ from __future__ import annotations
 from typing import Any
 
 REQUIRED_PORTFOLIO_ANALYSIS_MODULES = [
-    ("team_report", "기준 리포트", {"collaborative-team-report", "institutional-stock-breakdown"}),
-    ("trade_setup", "매매 전략", {"smart-trade-setup"}),
-    ("earnings_reaction", "실적 분석", {"earnings-reaction"}),
-    ("model_update_note", "모델 업데이트 노트", {"earnings-filing-note"}),
-    ("checklist", "체크리스트", {"research-checklist"}),
-    ("recent_capture", "최근 정보 입력", {"research-capture"}),
+    ("team_report", "기준 리포트", {"collaborative-team-report", "institutional-stock-breakdown", "dossier-synthesis"}),
+    ("trade_setup", "매매 전략", {"smart-trade-setup", "trade-setup", "strategy"}),
+    ("earnings_reaction", "실적 분석", {"earnings-reaction", "earnings-release", "earnings", "public-ir-sec"}),
+    ("model_update_note", "모델 업데이트 노트", {"earnings-filing-note", "model-update", "dossier-synthesis"}),
+    ("checklist", "체크리스트", {"research-checklist", "checklist"}),
+    ("recent_capture", "최근 정보 입력", {"research-capture", "public-ir-sec", "dart-filing-watch", "chart-analysis"}),
 ]
 
 
+def portfolio_analysis_entry_markers(entry: dict[str, Any]) -> set[str]:
+    markers: set[str] = set()
+    for key in ("type", "category", "analysis_type", "document_type", "source_type", "scope", "file_name", "title"):
+        value = str(entry.get(key) or "").strip().lower().replace("_", "-")
+        if value:
+            markers.add(value)
+    for tag in entry.get("tags") or []:
+        value = str(tag or "").strip().lower().replace("_", "-")
+        if value:
+            markers.add(value)
+    file_name = str(entry.get("file_name") or "").strip().lower().replace("_", "-")
+    if file_name:
+        markers.add(file_name)
+        if file_name.endswith(".json") or file_name.endswith(".md"):
+            markers.add(file_name.rsplit(".", 1)[0])
+    return markers
+
+
 def portfolio_analysis_module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
-    types = {str(entry.get("type") or "") for entry in entries}
+    markers = set().union(*(portfolio_analysis_entry_markers(entry) for entry in entries)) if entries else set()
     return {
-        key: bool(types & expected_types)
+        key: any(
+            expected in marker or marker in expected
+            for expected in expected_types
+            for marker in markers
+        )
         for key, _label, expected_types in REQUIRED_PORTFOLIO_ANALYSIS_MODULES
     }
 

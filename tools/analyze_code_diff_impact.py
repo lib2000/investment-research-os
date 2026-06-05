@@ -54,6 +54,8 @@ def file_nodes(graph: dict) -> set[str]:
 def fallback_flow_ids(path: str) -> set[str]:
     if path == "backend/research_os_main.py":
         return {"daily_recommendations", "research_storage_rag", "portfolio_realtime", "source_automation", "classification_quality", "backend_module_health"}
+    if path == "backend/main.py":
+        return {"portfolio_realtime", "backend_module_health"}
     if path.startswith("backend/research_os/"):
         lower = path.lower()
         ids: set[str] = {"backend_module_health"}
@@ -126,7 +128,7 @@ def main() -> int:
     files = changed_files(root, args.base)
     known_files = file_nodes(graph)
     relevant = [path for path in files if path == "README.md" or path.startswith(("backend/", "mobile_app/", "tools/", "scripts/", "docs/"))]
-    unmapped = [path for path in relevant if path not in known_files]
+    unmapped = [path for path in relevant if path not in known_files and not fallback_flow_ids(path)]
     flow_hits: dict[str, dict] = {}
     file_impacts: list[tuple[str, list[dict]]] = []
     for path in relevant:

@@ -22,6 +22,7 @@ from typing import Iterable
 GRAPH_VERSION = 1
 DEFAULT_OUTPUT = Path("research_vault/_system/code_knowledge_graph.json")
 SCAN_GLOBS = [
+    "backend/main.py",
     "backend/research_os_main.py",
     "backend/research_os/*.py",
     "backend/requirements.txt",

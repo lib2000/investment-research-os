@@ -37,6 +37,18 @@ def load_code_knowledge_graph_check_tool():
     return module
 
 
+def load_code_diff_impact_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "analyze_code_diff_impact.py"
+    spec = spec_from_file_location("analyze_code_diff_impact", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 class WebCaptureRenderingTests(unittest.TestCase):
     def test_sec_capture_headers_use_public_project_user_agent(self):
         from research_os.web_capture import capture_url_headers
@@ -237,6 +249,28 @@ class WebCaptureRenderingTests(unittest.TestCase):
 
 
 class BackendModuleBoundaryTests(unittest.TestCase):
+    def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
+        from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state
+
+        state = portfolio_analysis_module_state(
+            [
+                {"file_name": "003230-collaborative-team-report-2026-06-01.json"},
+                {"file_name": "003230-smart-trade-setup-2026-06-01.json"},
+                {"file_name": "003230-public-ir-sec-2026-06-05-sec-exhibit-99.1.json", "tags": ["earnings_release"]},
+                {"file_name": "003230-dossier-synthesis-2026-06-01.json"},
+                {"file_name": "003230-research-checklist-2026-06-01.json"},
+                {"file_name": "003230-dart-filing-watch-2026-06-01.json"},
+            ]
+        )
+
+        self.assertTrue(all(state.values()))
+
+    def test_code_diff_impact_maps_legacy_api_gateway(self):
+        tool = load_code_diff_impact_tool()
+
+        self.assertEqual(tool.fallback_flow_ids("docs/new-note.md"), {"backend_module_health"})
+        self.assertEqual(tool.fallback_flow_ids("backend/main.py"), {"portfolio_realtime", "backend_module_health"})
+
     def test_code_knowledge_graph_check_uses_existing_graph_when_refresh_write_is_blocked(self):
         tool = load_code_knowledge_graph_check_tool()
 

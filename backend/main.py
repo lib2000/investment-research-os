@@ -175,7 +175,14 @@ app.add_middleware(
         "http://127.0.0.1:8081",
         "http://localhost:8081",
     ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$",
+    allow_origin_regex=(
+        r"^https?://("
+        r"localhost|127\.0\.0\.1|"
+        r"10\.\d+\.\d+\.\d+|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|"
+        r"192\.168\.\d+\.\d+"
+        r"):\d+$"
+    ),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

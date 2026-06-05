@@ -56,6 +56,57 @@ def next_action(missing: list[str]) -> str:
     return portfolio_analysis_next_action(missing)
 
 
+def vault_entries_for_holdings(vault: Path, holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for holding in holdings:
+        ticker = normalize_ticker(holding.get("ticker"))
+        if not ticker or ticker in {"CASH", "UNKNOWN"}:
+            continue
+        folder = vault / ticker
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            key = (ticker, path.name)
+            if key in seen:
+                continue
+            seen.add(key)
+            payload = load_json(path, {})
+            item = payload if isinstance(payload, dict) else {}
+            entries.append(
+                {
+                    "ticker": ticker,
+                    "file_name": path.name,
+                    "date": item.get("date") or item.get("created_at") or item.get("saved_at"),
+                    "type": item.get("type"),
+                    "category": item.get("category"),
+                    "analysis_type": item.get("analysis_type"),
+                    "document_type": item.get("document_type"),
+                    "source_type": item.get("source_type"),
+                    "scope": item.get("scope"),
+                    "title": item.get("title") or item.get("summary"),
+                    "tags": item.get("tags") or [],
+                }
+            )
+    return entries
+
+
+def merge_manifest_entries(manifest: list[dict[str, Any]], extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in [*manifest, *extra]:
+        if not isinstance(entry, dict):
+            continue
+        ticker = normalize_ticker(entry.get("ticker"))
+        file_name = str(entry.get("file_name") or entry.get("storage_path") or entry.get("path") or "")
+        key = (ticker, file_name)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
+    return merged
+
+
 def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], manifest: list[dict[str, Any]]) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for holding in holdings:
@@ -153,6 +204,7 @@ def main() -> int:
     portfolios = store.get("portfolios") if isinstance(store.get("portfolios"), dict) else {}
     if args.all_portfolios:
         holdings = unique_holdings_from_portfolios(portfolios)
+        manifest = merge_manifest_entries(manifest, vault_entries_for_holdings(vault, holdings))
         result = coverage_for_portfolio("전체 포트폴리오", holdings, manifest)
         result["portfolio_names"] = sorted(portfolios)
     else:
@@ -164,6 +216,7 @@ def main() -> int:
             if isinstance(selected.get("holdings"), list)
             else []
         )
+        manifest = merge_manifest_entries(manifest, vault_entries_for_holdings(vault, holdings))
         result = coverage_for_portfolio(args.portfolio, holdings, manifest)
     result["module"] = "portfolio_analysis_coverage"
     result["generated_at"] = datetime.now(ZoneInfo("Asia/Seoul")).replace(microsecond=0).isoformat()
