@@ -4093,6 +4093,16 @@ def repair_mojibake_log_line(value: str) -> str:
     return repaired if hangul_count > original_hangul_count else text
 
 
+def repair_mojibake_payload(value):
+    if isinstance(value, str):
+        return repair_mojibake_log_line(value)
+    if isinstance(value, list):
+        return [repair_mojibake_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: repair_mojibake_payload(item) for key, item in value.items()}
+    return value
+
+
 def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20) -> dict:
     state = read_json_store(naver_market_close_journal_state_path(settings), {})
     log = read_naver_market_close_task_log(settings, limit=log_limit)
@@ -14451,7 +14461,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "dart": dart_daily_check_status(dart_cache, settings),
         "source_schedule": build_external_source_schedule_status(settings),
     }
-    return {
+    payload = {
         "status": "success",
         "module": "recent_weekly_research_brief",
         "as_of": current_storage_timestamp(),
@@ -14485,6 +14495,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
             "관세청 수출입 자료는 실제 수치가 있는 경우에만 저장/RAG에 반영됩니다.",
         ],
     }
+    return repair_mojibake_payload(payload)
 
 
 def safe_rag_memory_status(vault_dir: Path) -> dict:

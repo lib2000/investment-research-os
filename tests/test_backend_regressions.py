@@ -1537,6 +1537,26 @@ class NaverResearchIngestTests(unittest.TestCase):
 
         self.assertIn("국내 주식 마감 시황", repaired)
 
+    def test_recent_weekly_payload_repairs_mojibake(self):
+        import research_os_main as main
+
+        payload = {
+            "target_digest": [
+                {"target": "RFë¨¸í¸ë¦¬ì¼ì¦", "total": 1},
+                {"target": "ì¼ììí", "total": 1},
+            ],
+            "category_groups": [
+                {"label": "ìê¸/ëëë³´ì ", "target_names": ["ì±í¸ì ì"]}
+            ],
+        }
+
+        repaired = main.repair_mojibake_payload(payload)
+
+        self.assertEqual(repaired["target_digest"][0]["target"], "RF머트리얼즈")
+        self.assertEqual(repaired["target_digest"][1]["target"], "삼양식품")
+        self.assertEqual(repaired["category_groups"][0]["label"], "수급/대량보유")
+        self.assertEqual(repaired["category_groups"][0]["target_names"], ["성호전자"])
+
     def test_market_close_task_status_flags_missing_log(self):
         import research_os_main as main
         from research_os.settings import Settings
