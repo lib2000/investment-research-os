@@ -32,9 +32,61 @@ class WebCaptureRenderingTests(unittest.TestCase):
         headers = capture_url_headers("https://www.sec.gov/Archives/example.htm")
 
         self.assertIn("investment-research-os", headers["User-Agent"])
-        self.assertIn("github.com/lib2000/investment-research-os", headers["User-Agent"])
+        self.assertIn("lib2000@gmail.com", headers["User-Agent"])
         self.assertEqual(headers["Referer"], "https://www.sec.gov/")
         self.assertIn("text/html", headers["Accept"])
+
+    def test_sec_fetch_falls_back_to_urllib_after_httpx_failure(self):
+        from research_os import web_capture
+
+        class FailingClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url):
+                raise RuntimeError("403 Forbidden")
+
+        class FakeHeaders(dict):
+            def items(self):
+                return [("content-type", "text/html")]
+
+        class FakeUrlopenResponse:
+            status = 200
+            headers = FakeHeaders()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def getcode(self):
+                return 200
+
+            def geturl(self):
+                return "https://www.sec.gov/Archives/example.htm"
+
+            def read(self, limit):
+                return b"<html><title>SEC fallback</title><body>ChargePoint revenue 101.8 million</body></html>"
+
+        with patch.object(web_capture.httpx, "Client", FailingClient), patch.object(
+            web_capture.urllib.request,
+            "urlopen",
+            return_value=FakeUrlopenResponse(),
+        ):
+            response, attempts = web_capture.fetch_url_with_retry("https://www.sec.gov/Archives/example.htm")
+
+        self.assertIsNotNone(response)
+        assert response is not None
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("sec_urllib: success 200", attempts)
+        self.assertIn(b"ChargePoint revenue", response.content)
 
     def test_source_url_context_includes_translation_metadata(self):
         from research_os.web_capture import render_source_url_context

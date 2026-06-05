@@ -7,6 +7,7 @@ from html import unescape
 from html.parser import HTMLParser
 from re import DOTALL, IGNORECASE, escape, findall, finditer, search, split, sub
 from urllib.parse import urlparse
+import urllib.request
 
 
 class WebCaptureTextExtractor(HTMLParser):
@@ -861,12 +862,8 @@ def capture_url_headers(cleaned_url: str) -> dict[str, str]:
     host = (parsed.hostname or "").lower()
     if host.endswith("sec.gov"):
         return {
-            "User-Agent": (
-                "investment-research-os/1.0 "
-                "(https://github.com/lib2000/investment-research-os; public investment research assistant)"
-            ),
+            "User-Agent": "investment-research-os/1.0 contact lib2000@gmail.com",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain,*/*;q=0.8",
-            "Accept-Encoding": "gzip, deflate",
             "Accept-Language": "en-US,en;q=0.9,ko-KR;q=0.8,ko;q=0.7",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
@@ -884,6 +881,30 @@ def capture_url_headers(cleaned_url: str) -> dict[str, str]:
         "Pragma": "no-cache",
         "Referer": origin,
     }
+
+
+def fetch_sec_url_with_urllib(cleaned_url: str, headers: dict[str, str], attempts: list[str]) -> httpx.Response | None:
+    parsed = urlparse(cleaned_url)
+    host = (parsed.hostname or "").lower()
+    if not host.endswith("sec.gov"):
+        return None
+    try:
+        request = urllib.request.Request(cleaned_url, headers=headers)
+        with urllib.request.urlopen(request, timeout=18.0) as source:
+            status_code = int(getattr(source, "status", 0) or source.getcode() or 200)
+            final_url = source.geturl() or cleaned_url
+            content = source.read(4_000_000)
+            response_headers = dict(source.headers.items())
+        attempts.append(f"sec_urllib: success {status_code}")
+        return httpx.Response(
+            status_code=status_code,
+            headers=response_headers,
+            content=content,
+            request=httpx.Request("GET", final_url, headers=headers),
+        )
+    except Exception as error:
+        attempts.append(f"sec_urllib: {error}")
+        return None
 
 
 def fetch_url_with_retry(cleaned_url: str) -> tuple[httpx.Response | None, list[str]]:
@@ -904,6 +925,9 @@ def fetch_url_with_retry(cleaned_url: str) -> tuple[httpx.Response | None, list[
                 return response, attempts
         except Exception as error:
             attempts.append(f"{mode}: {error}")
+    sec_response = fetch_sec_url_with_urllib(cleaned_url, headers, attempts)
+    if sec_response is not None:
+        return sec_response, attempts
     return None, attempts
 
 
