@@ -109,6 +109,50 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("Initial operations expected to begin in 2026", text)
         self.assertGreater(len(text), 300)
 
+    def test_webpage_text_extracts_ir_sec_listing_rows(self):
+        from research_os.web_capture import extract_webpage_text
+
+        html = """
+        <html><head><title>Quarterly Reports :: Joby Aero, Inc. (JOBY)</title></head>
+        <body>
+          <table class="content-table spr-ir-sec-filings">
+            <tr><th>Date</th><th>Form</th><th>Description</th><th>PDF</th><th>XBRL</th><th>Pages</th></tr>
+            <tr><td>05/06/26</td><td><a href="/sec-filings/all-sec-filings/content/0001819848-26-000324/joby-20260331.htm">10-Q</a></td><td><a>Quarterly report [Sections 13 or 15(d)]</a></td><td><a>PDF</a></td><td><a>XBRL</a></td><td>143</td></tr>
+            <tr><td>02/27/26</td><td><a>10-K</a></td><td><a>Annual report [Section 13 and 15(d)]</a></td><td><a>PDF</a></td><td></td><td>121</td></tr>
+          </table>
+        </body></html>
+        """
+
+        title, text = extract_webpage_text(html)
+
+        self.assertEqual(title, "Quarterly Reports")
+        self.assertIn("05/06/26 | 10-Q | Quarterly report", text)
+        self.assertIn("02/27/26 | 10-K | Annual report", text)
+        self.assertIn("Date | Form | Description | PDF | XBRL | Pages", text)
+        self.assertGreater(len(text), 120)
+
+    def test_webpage_text_extracts_ir_result_lines(self):
+        from research_os.web_capture import extract_webpage_text
+
+        html = """
+        <html><head><title>Financial Results :: Joby Aero, Inc. (JOBY)</title></head>
+        <body>
+          <h2>2026</h2><h3>Q1 2026</h3>
+          <div class="result-line"><a href="/news-events/press-releases/detail/182/joby-reports-first-quarter-2026-financial-results">Financial Results Release</a><div><a>PDF</a><a>HTML</a></div></div>
+          <div class="result-line"><a>Financial Results Webcast</a><div><a>Audio</a></div></div>
+          <div class="result-line"><a>Shareholder Letter</a><div><a>PDF</a></div></div>
+          <div class="result-line"><a>10-Q Filing</a><div><a>PDF</a><a>HTML</a><a>XBRL</a></div></div>
+        </body></html>
+        """
+
+        title, text = extract_webpage_text(html)
+
+        self.assertEqual(title, "Financial Results")
+        self.assertIn("Financial Results Release", text)
+        self.assertIn("10-Q Filing", text)
+        self.assertIn("Q1 2026 | Financial Results Release", text)
+        self.assertGreater(len(text), 120)
+
     def test_source_url_context_includes_translation_metadata(self):
         from research_os.web_capture import render_source_url_context
 

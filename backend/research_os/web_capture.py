@@ -249,6 +249,51 @@ def extract_html_paragraph_list_text(html_text: str) -> str:
     return clean_web_article_text("\n".join(parts))
 
 
+def extract_html_table_row_text(html_text: str) -> str:
+    parts: list[str] = []
+    for match in finditer(r"<tr\b[^>]*>(.*?)</tr>", html_text or "", DOTALL | IGNORECASE):
+        row_html = match.group(1) or ""
+        cells: list[str] = []
+        for cell_match in finditer(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", row_html, DOTALL | IGNORECASE):
+            fragment = cell_match.group(1) or ""
+            fragment = sub(r"<script\b.*?</script>", " ", fragment, flags=DOTALL | IGNORECASE)
+            fragment = sub(r"<style\b.*?</style>", " ", fragment, flags=DOTALL | IGNORECASE)
+            fragment = sub(r"<br\s*/?>", " / ", fragment, flags=IGNORECASE)
+            fragment = sub(r"<[^>]+>", " ", fragment)
+            cleaned = " ".join(unescape(fragment).split())
+            if cleaned:
+                cells.append(cleaned)
+        row_text = " | ".join(cells)
+        if row_text and search(r"\d{2}/\d{2}/\d{2}|\b(?:10-K|10-Q|8-K|ARS|PDF|HTML|XBRL|Annual|Quarterly|Financial)\b", row_text, IGNORECASE):
+            parts.append(row_text)
+    return clean_web_article_text("\n".join(parts))
+
+
+def extract_html_result_line_text(html_text: str) -> str:
+    parts: list[str] = []
+    current_period = ""
+    for match in finditer(r"<(h[23]|div)\b([^>]*)>(.*?)</\1>", html_text or "", DOTALL | IGNORECASE):
+        tag = (match.group(1) or "").lower()
+        attrs = match.group(2) or ""
+        fragment = match.group(3) or ""
+        plain = sub(r"<script\b.*?</script>", " ", fragment, flags=DOTALL | IGNORECASE)
+        plain = sub(r"<style\b.*?</style>", " ", plain, flags=DOTALL | IGNORECASE)
+        plain = sub(r"<br\s*/?>", " / ", plain, flags=IGNORECASE)
+        plain = sub(r"<[^>]+>", " ", plain)
+        cleaned = " ".join(unescape(plain).split())
+        if not cleaned:
+            continue
+        if tag in {"h2", "h3"} and search(r"\b(?:Q[1-4]|20\d{2})\b", cleaned, IGNORECASE):
+            current_period = cleaned
+            continue
+        if "result-line" not in attrs:
+            continue
+        if not search(r"\b(?:Financial Results|Shareholder Letter|Webcast|10-K|10-Q|PDF|HTML|Audio|Filing)\b", cleaned, IGNORECASE):
+            continue
+        parts.append(f"{current_period} | {cleaned}" if current_period else cleaned)
+    return clean_web_article_text("\n".join(parts))
+
+
 def web_article_text_score(text: str) -> float:
     cleaned = clean_web_article_text(text)
     if not cleaned:
@@ -257,6 +302,14 @@ def web_article_text_score(text: str) -> float:
     length = len(cleaned)
     sentence_count = len(findall(r"[.!?。！？]|[다요]\.", cleaned))
     number_count = len(findall(r"\d", cleaned))
+    structured_separator_count = len(findall(r"\s\|\s", cleaned))
+    filing_or_result_rows = len(
+        findall(
+            r"(?:\d{2}/\d{2}/\d{2}|Q[1-4]\s+20\d{2}).{0,120}(?:10-K|10-Q|8-K|PDF|HTML|XBRL|Financial Results|Shareholder Letter|Webcast|Filing)",
+            cleaned,
+            IGNORECASE,
+        )
+    )
     noise_hits = len(
         findall(
             r"(로그인|회원가입|구독|관련기사|많이 본|추천기사|ADVERTISEMENT|Subscribe|Sign in|Copyright)",
@@ -264,7 +317,15 @@ def web_article_text_score(text: str) -> float:
             IGNORECASE,
         )
     )
-    return length + len(lines) * 35 + sentence_count * 25 + number_count * 0.5 - noise_hits * 500
+    return (
+        length
+        + len(lines) * 35
+        + sentence_count * 25
+        + number_count * 0.5
+        + structured_separator_count * 80
+        + filing_or_result_rows * 180
+        - noise_hits * 500
+    )
 
 
 def extract_webpage_text(html_text: str) -> tuple[str, str]:
@@ -276,11 +337,13 @@ def extract_webpage_text(html_text: str) -> tuple[str, str]:
     json_title, json_text = extract_json_ld_article_text(html_text)
     candidate_text = clean_web_article_text(extractor.candidate_text)
     paragraph_text = extract_html_paragraph_list_text(html_text)
+    table_text = extract_html_table_row_text(html_text)
+    result_line_text = extract_html_result_line_text(html_text)
     fallback_text = clean_web_article_text(extractor.text)
     title = clean_web_article_title(
         json_title or extractor.title or extract_meta_article_title(html_text)
     )
-    candidates = [json_text, candidate_text, paragraph_text, fallback_text]
+    candidates = [json_text, candidate_text, paragraph_text, table_text, result_line_text, fallback_text]
     best_text = max(candidates, key=web_article_text_score)
     return title[:160], clean_web_article_text(best_text)[:30000]
 
@@ -791,6 +854,10 @@ def foreign_line_korean_signal(line: str, language: str, index: int) -> str:
         line,
         IGNORECASE,
     )
+    if search(r"\d{2}/\d{2}/\d{2}|\b(?:10-K|10-Q|8-K|ARS|PDF|HTML|XBRL|Shareholder Letter|Financial Results|Webcast|Filing)\b", line, IGNORECASE):
+        translated_row = local_glossary_translate_line(line, language)
+        row_label = "자료 행" if "|" in line else "자료 항목"
+        return f"{row_label} {index}: {translated_row}"
     translated = local_glossary_translate_line(line, language)
     hangul_count = len(findall(r"[가-힣]", translated))
     foreign_count = len(findall(r"[\u3040-\u30ff\u4e00-\u9fffA-Za-z]", translated))
@@ -816,7 +883,9 @@ def foreign_text_korean_digest(text: str, title: str = "") -> dict:
             "text": original,
             "note": "원문이 한국어라 변환하지 않았습니다." if original else "변환할 본문이 없습니다.",
     }
-    if language == "en":
+    if language == "en" and search(r"\d{2}/\d{2}/\d{2}|\b(?:10-K|10-Q|8-K|ARS|PDF|HTML|XBRL|Shareholder Letter|Financial Results|Webcast|Filing)\b", original, IGNORECASE):
+        lines = [line.strip() for line in original.splitlines() if line.strip()]
+    elif language == "en":
         lines = [
             sentence.strip()
             for sentence in findall(r".+?(?:[.!?](?=\s+[A-Z가-힣])|$)", original, DOTALL)

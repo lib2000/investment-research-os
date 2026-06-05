@@ -1,6 +1,6 @@
 # 투자 리서치 OS 운영 점검 노트
 
-최종 갱신: 2026-06-01
+최종 갱신: 2026-06-05
 
 ## 매일 추천 1~3위
 
@@ -30,7 +30,7 @@
 - 네이버 리서치/시장일지: 저작권 안전 정책에 맞춰 요약/메타데이터 중심으로 저장하고, URL·본문 해시·제목 유사도로 중복을 제외한다.
 - KIEP/KCIF: 매크로 보고서 제목, 발행일, 링크, 요약 메타데이터를 시장일지와 리스크 메모에 연결한다.
 - EMERiCs/CSF: 지역·중국·신흥국 자료를 제목/링크/발행기관/요약 기준으로 활용한다.
-- 공개 IR/SEC: 공개 URL만 수집하고 로그인/전송/우회는 하지 않는다. URL-only 자료는 본문 보강 필요로 남기며, 보유/관심 종목과 연결된 항목은 최근 1주 자료에 표시한다. 오늘 추천 점수에는 본문 추출이 정상인 항목만 반영하고, 보강 필요 자료는 경고/다음 액션으로만 노출한다.
+- 공개 IR/SEC: 공개 URL만 수집하고 로그인/전송/우회는 하지 않는다. 본문 추출이 가능한 SEC/IR 페이지, 표 형태 공시 목록, IR 실적발표 목록은 RAG와 최근 1주 자료에 연결한다. 본문 보강이 완료된 항목은 stale `needs_body_copy` 태그를 추천 품질 결함으로 보지 않고, 403/404 중복 범용 항목은 삭제하지 않고 소프트 보관한다. 오늘 추천 점수에는 본문 추출이 정상인 항목만 반영하고, 보강 필요 자료는 경고/다음 액션으로만 노출한다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 네이버 리서치, 신한 리서치, 마감 시황 시장일지, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다. 이 점검은 마감 시황 자동 수집 시도 상태와 리서치 자동화 Dossier 갱신 상태도 함께 확인하며, 네이버 리서치 저장경로 누락은 기본 허용 0건으로 본다.
 - 네이버 리서치 캐시에 메타데이터와 PDF 링크는 있으나 저장경로만 비어 있으면 삭제하지 않고 `repair_naver_research_cache(..., save_result=True)` 경로로 Markdown/JSON 저장을 보강한다. 복구 후 `python tools\check_research_source_store.py --strict`에서 `저장경로 누락 0개`, `파일 누락 0개`가 나와야 한다.
 - 중복 Dossier 큐 갱신은 `dossier_refresh_queue_status.json`뿐 아니라 `research_automation_status.json`의 상위 `updated_at`과 `last_deduped_dossier_refresh.updated_at`도 함께 갱신해야 한다. 소스 자동화 점검은 저장 성공, 실패 0건, RAG 연결, 뉴스 미승격 0건까지 같이 확인한다.
@@ -60,6 +60,7 @@ python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
+python tools\check_public_ir_sec_store.py --require-any
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict

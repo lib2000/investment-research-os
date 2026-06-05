@@ -3199,6 +3199,24 @@ label {
   font-size: 12px;
 }
 
+.daily-recommendation-evidence {
+  display: grid;
+  gap: 5px;
+  padding: 8px 0 8px 9px;
+  border-left: 3px solid #99d5cb;
+}
+
+.daily-recommendation-evidence b {
+  color: #134e4a;
+  font-size: 12px;
+}
+
+.daily-recommendation-evidence span {
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .daily-recommendation-milestones {
   display: flex;
   flex-wrap: wrap;

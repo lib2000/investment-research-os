@@ -7810,6 +7810,37 @@ function dailyRecommendationEvidenceCategories(record) {
   return categories.slice(0, 6);
 }
 
+function dailyRecommendationWeeklyEvidenceRows(record) {
+  return (record?.weekly_evidence_groups || [])
+    .slice(0, 4)
+    .map((group) => {
+      const quality = group.quality_summary || {};
+      const visibleText =
+        Number(group.visible_count || 0) && Number(group.count || 0) > Number(group.visible_count || 0)
+          ? ` · 표시 ${formatNumber(group.visible_count)}/${formatNumber(group.count)}건`
+          : "";
+      const tickerText = Number(group.ticker_count || 0) ? ` · 종목 ${formatNumber(group.ticker_count)}개` : "";
+      const recommendationText =
+        group.key === "public_ir_sec"
+          ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 · 본문 보강 ${formatNumber(
+              quality.needs_body_copy || quality.blocked_or_needs_review || 0
+            )}건`
+          : "";
+      return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${recommendationText}`;
+    })
+    .filter(Boolean);
+}
+
+function dailyRecommendationEvidenceRows(record) {
+  return [
+    ...(record?.evidence_sources || []).slice(0, 3),
+    ...(record?.reasons || []).slice(0, 2),
+  ]
+    .map((item) => compactOutputText(item, 120))
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 function dailyRecommendationChangeText(milestone, currency = "KRW") {
   if (!milestone || milestone.price === null || milestone.price === undefined) {
     return "가격 대기";
@@ -8135,6 +8166,8 @@ function renderDailyRecommendationCards(payload) {
       const portfolioRisk = record.portfolio_risk_connection || {};
       const milestones = (record.tracking_milestones || []).slice(0, 5);
       const categories = dailyRecommendationEvidenceCategories(record);
+      const weeklyEvidenceRows = dailyRecommendationWeeklyEvidenceRows(record);
+      const evidenceRows = dailyRecommendationEvidenceRows(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
       return `
         <article class="daily-recommendation-card${publicIrSecLinked ? " has-public-ir-sec" : ""}">
@@ -8159,6 +8192,16 @@ function renderDailyRecommendationCards(payload) {
               : "점수 비중은 다음 추천 생성부터 표시됩니다."
           )}</small>
           <small>${escapeHtml(`근거 분류: ${categories.join(" · ")}`)}</small>
+          <div class="daily-recommendation-evidence">
+            <b>최근 1주 자료 묶음</b>
+            ${weeklyEvidenceRows.length
+              ? weeklyEvidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+              : "<span>최근 1주 자료 묶음은 다음 추천 갱신부터 표시됩니다.</span>"}
+            <b>주요 근거</b>
+            ${evidenceRows.length
+              ? evidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+              : "<span>저장 근거 없음</span>"}
+          </div>
           ${
             penalties.length || qualityFlags.length
               ? `<p class="daily-recommendation-warning">확인/감점: ${escapeHtml(

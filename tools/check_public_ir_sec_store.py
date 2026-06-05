@@ -32,6 +32,21 @@ def is_public_ir_sec(entry: dict) -> bool:
     )
 
 
+def is_archived_entry(entry: dict) -> bool:
+    return bool(
+        entry.get("is_deleted")
+        or str(entry.get("status") or "").lower() == "archived"
+        or "archived" in {str(tag).lower() for tag in (entry.get("tags") or [])}
+    )
+
+
+def public_ir_entry_body_supplemented(entry: dict, quality: dict) -> bool:
+    return bool(
+        quality.get("body_supplemented")
+        or "body_supplemented" in {str(tag).strip() for tag in (entry.get("tags") or [])}
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="공개 IR/SEC 저장 품질을 백엔드 없이 점검합니다.")
     parser.add_argument("--require-any", action="store_true", help="최소 1건 이상 저장되어 있어야 함")
@@ -39,7 +54,9 @@ def main() -> int:
 
     root = project_root(Path.cwd())
     vault_dir = root / "research_vault"
-    entries = [entry for entry in load_manifest(vault_dir) if is_public_ir_sec(entry)]
+    all_entries = [entry for entry in load_manifest(vault_dir) if is_public_ir_sec(entry)]
+    archived_count = sum(1 for entry in all_entries if is_archived_entry(entry))
+    entries = [entry for entry in all_entries if not is_archived_entry(entry)]
     if args.require_any and not entries:
         raise SystemExit("공개 IR/SEC 저장 자료가 없습니다.")
 
@@ -53,9 +70,9 @@ def main() -> int:
         quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
         source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
         source_status = str(source.get("status") or quality.get("source_status") or "")
-        if quality.get("needs_body_copy"):
+        body_supplemented = public_ir_entry_body_supplemented(entry, quality)
+        if quality.get("needs_body_copy") and not body_supplemented:
             needs_body += 1
-        body_supplemented = bool(quality.get("body_supplemented"))
         if quality.get("url_text_unavailable") or source_status in {"fetch_failed", "invalid", "empty_text"}:
             url_only += 1
             if quality.get("status") != "보강 필요" and not body_supplemented:
@@ -73,7 +90,7 @@ def main() -> int:
             print(f"오류: {error}")
         raise SystemExit(1)
 
-    print(f"공개 IR/SEC 저장 자료: {len(entries)}개")
+    print(f"공개 IR/SEC 저장 자료: {len(entries)}개" + (f" / 보관 {archived_count}개" if archived_count else ""))
     print(f"URL-only/본문 보강: {url_only}개 / needs_body_copy {needs_body}개")
     for entry in entries[:10]:
         quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
