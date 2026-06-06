@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
   [string]$HostName = "localhost",
-  [int]$Port = 8082,
+  [int]$Port = 8085,
   [string]$ApiBaseUrl = "http://127.0.0.1:8010",
   [switch]$StopExistingPortProcess,
   [switch]$ForceExistingPortProcess,

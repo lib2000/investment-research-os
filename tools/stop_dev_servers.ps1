@@ -1,8 +1,8 @@
 param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
-  [int[]]$Ports = @(8010, 8082),
+  [int[]]$Ports = @(8010, 8085),
   [switch]$DryRun,
-  [int[]]$DefaultDevPorts = @(8010, 8082),
+  [int[]]$DefaultDevPorts = @(8010, 8085),
   [string[]]$AllowedProcessNames = @("python", "pythonw", "node", "pwsh", "powershell"),
   [switch]$ForceAnyProcess
 )
