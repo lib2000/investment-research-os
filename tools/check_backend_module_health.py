@@ -13,6 +13,7 @@ EXPECTED_MODULES = {
     "customs_trade.py",
     "daily_recommendations.py",
     "data_providers.py",
+    "export_routes.py",
     "export_utils.py",
     "file_extraction.py",
     "kcif_reports.py",
@@ -46,6 +47,7 @@ EXPECTED_MAIN_IMPORTS = {
     "research_os.customs_trade",
     "research_os.daily_recommendations",
     "research_os.data_providers",
+    "research_os.export_routes",
     "research_os.export_utils",
     "research_os.file_extraction",
     "research_os.kcif_reports",
@@ -100,6 +102,23 @@ def imported_modules(tree: ast.Module) -> set[str]:
     return imports
 
 
+def reachable_research_os_imports(entry_tree: ast.Module, module_dir: Path) -> set[str]:
+    reachable = {name for name in imported_modules(entry_tree) if name.startswith("research_os.")}
+    pending = list(reachable)
+    while pending:
+        module_name = pending.pop()
+        relative = module_name.removeprefix("research_os.").replace(".", "/")
+        module_path = module_dir / f"{relative}.py"
+        if not module_path.exists():
+            continue
+        for imported in imported_modules(parse_python(module_path)):
+            if not imported.startswith("research_os.") or imported in reachable:
+                continue
+            reachable.add(imported)
+            pending.append(imported)
+    return reachable
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="백엔드 모듈 분리/문법/금지 소스 잔존 여부를 점검합니다.")
     parser.add_argument("--strict", action="store_true")
@@ -135,10 +154,10 @@ def main() -> int:
 
     main_path = backend / "research_os_main.py"
     main_tree = parse_python(main_path)
-    main_imports = imported_modules(main_tree)
-    missing_imports = sorted(EXPECTED_MAIN_IMPORTS - main_imports)
+    reachable_imports = reachable_research_os_imports(main_tree, module_dir)
+    missing_imports = sorted(EXPECTED_MAIN_IMPORTS - reachable_imports)
     if missing_imports:
-        errors.append("research_os_main.py 분리 모듈 import 누락: " + ", ".join(missing_imports))
+        errors.append("research_os_main.py 연결 모듈 import 누락: " + ", ".join(missing_imports))
 
     main_lines = len(main_path.read_text(encoding="utf-8-sig").splitlines())
     if main_lines > args.main_max_lines:

@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import io
 import json
 import math
 import os
@@ -16,7 +15,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
@@ -48,7 +46,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os.export_utils import build_simple_xlsx, collect_result_export_sheets
+from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
     extract_pdf_text,
@@ -280,6 +278,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Investment Journal API Gateway", lifespan=lifespan)
+app.include_router(export_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -5328,24 +5327,6 @@ def current_storage_timestamp() -> str:
         korea_timezone = timezone(timedelta(hours=9))
 
     return datetime.now(korea_timezone).isoformat(timespec="seconds")
-
-
-@app.post("/api/v1/export/result-xlsx", dependencies=[Depends(verify_user_token)])
-def export_result_xlsx(payload: dict = Body(...)) -> StreamingResponse:
-    result_text = str(payload.get("result_text") or "").strip()
-    if not result_text or result_text == "대기 중입니다.":
-        raise HTTPException(status_code=422, detail="엑셀로 변환할 화면 결과가 없습니다.")
-
-    workbook_bytes = build_simple_xlsx(
-        collect_result_export_sheets(payload, generated_at_fallback=current_storage_timestamp())
-    )
-    timestamp = current_storage_timestamp().replace(":", "").replace("-", "")[:15]
-    filename = f"research-os-result-{timestamp}.xlsx"
-    return StreamingResponse(
-        io.BytesIO(workbook_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 def user_state_dir(settings: Settings) -> Path:
