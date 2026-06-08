@@ -639,6 +639,8 @@ $contracts = @(
       'portfolio_analysis_coverage.py',
       'research_os.rag_memory',
       'research_os.research_memory',
+      'research_os.state_store',
+      'state_store.py',
       'BANNED_TERMS',
       'DEFAULT_MAIN_MAX_LINES',
       'DEFAULT_MIN_MODULE_COUNT',
@@ -657,7 +659,8 @@ $contracts = @(
       "regional_sources.py",
       "source_url_preview.py",
       "ticker_registry.py",
-      "system_health.py"
+      "system_health.py",
+      "state_store.py"
     )
   },
   @{

@@ -37,6 +37,7 @@
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
 - `security.py`: 개발 토큰과 사용자 토큰 검증
 - `settings.py`: 환경변수 기반 운영 설정
+- `state_store.py`: `_system` 상태 파일 경로, KST 기준 저장 시각, JSON/JSONL 상태 저장 헬퍼
 - `source_url_preview.py`: 웹 본문 미리보기 응답 조립
 - `storage_quality.py`: 소프트 보관 정책, 저장 데이터 품질/OCR/본문 보강 판정
 - `system_health.py`: 연구 콘솔/데이터 프로바이더 상태 점검 payload 조립, OneDrive/OCR/라우트 안전 확인
