@@ -232,6 +232,7 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     ['#dashboard .dashboard-command-bar [data-workflow-action="memory"]', '저장 데이터 보기', 30000, false],
                     ['#dashboard .dashboard-command-bar [data-workflow-action="system-check"]', '시스템 점검', 120000, false],
                     ['#dashboard .dashboard-command-bar [data-workflow-action="run-team"]', '리포트 실행', 120000, true],
+                    ['#recentWeeklyEvidenceSynthesisButton', '추천 근거 요약', 120000, true],
                   ];
                   await setDashboardTicker();
                   const initialDashboardCommandLayout = dashboardCommandLayout();

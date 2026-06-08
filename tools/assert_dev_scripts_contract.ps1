@@ -341,7 +341,9 @@ $contracts = @(
       '--only-system-check',
       'system check completion',
       '전체 시스템 점검 완료',
-      '네이버 리서치/시장일지 상태'
+      '네이버 리서치/시장일지 상태',
+      'recentWeeklyEvidenceSynthesisButton',
+      'recentWeeklyEvidenceButtonVisible'
     )
   },
 
@@ -357,7 +359,9 @@ $contracts = @(
       "clippedDashboardCommands",
       "menuResults",
       "shortcutResults",
-      "runtimeErrors"
+      "runtimeErrors",
+      "#recentWeeklyEvidenceSynthesisButton",
+      "추천 근거 요약"
     )
   },
   @{

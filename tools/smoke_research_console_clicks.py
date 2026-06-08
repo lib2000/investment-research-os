@@ -442,6 +442,14 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     "recent weekly research brief"
                   );
 
+                  const recentWeeklyEvidenceButton = document.querySelector("#recentWeeklyEvidenceSynthesisButton");
+                  const recentWeeklyEvidenceButtonVisible =
+                    visible(recentWeeklyEvidenceButton) &&
+                    recentWeeklyEvidenceButton.textContent.includes("추천 근거 요약");
+                  if (!recentWeeklyEvidenceButtonVisible) {{
+                    throw new Error("recent weekly evidence synthesis button missing or hidden");
+                  }}
+
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
                     await waitFor(() => document.querySelector(`#${{tab}}`)?.classList.contains("active"), 5000, `${{tab}} active`);
@@ -1106,6 +1114,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
                         recentWeeklyBriefText.includes("품질") &&
                         recentWeeklyBriefText.includes("본문 보강")),
+                    recentWeeklyEvidenceButtonVisible,
                     investmentCalendarShowsMarkets:
                       investmentCalendarText.includes("한국") && investmentCalendarText.includes("미국"),
                     investmentCalendarShowsEarningsTitle:
