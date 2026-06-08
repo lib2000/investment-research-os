@@ -64,8 +64,12 @@ def _host_label(source_url: str) -> tuple[str, str, list[str]]:
     tags = ["public_ir_sec"]
     if host.endswith("sec.gov"):
         return "SEC EDGAR", "official_filing", [*tags, "sec", "edgar", "official_filing"]
-    if "investor" in host or "/ir" in path or "investors" in path:
-        return "공개 IR", "ir_presentation", [*tags, "ir", "investor_relations"]
+    if host.startswith("ir.") or "investor" in host or "/ir" in path or "investors" in path:
+        if "press-release" in path or "news-events" in path or "newsroom" in path:
+            return host or "공개 IR", "ir_press_release", [*tags, "ir", "investor_relations", "press_release"]
+        return host or "공개 IR", "ir_presentation", [*tags, "ir", "investor_relations"]
+    if "benzinga.com" in host:
+        return "Benzinga", "earnings_data", [*tags, "earnings_data", "market_data"]
     return host or "공개 웹", "other", tags
 
 

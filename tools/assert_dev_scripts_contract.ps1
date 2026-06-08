@@ -712,6 +712,13 @@ $contracts = @(
     Snippets = @(
       'is_public_ir_sec',
       'source_url_processing',
+      'load_rag_paths',
+      'expected_source_type',
+      'is_recommendation_usable',
+      'source_provider 누락',
+      'source_type 분류 확인 필요',
+      'RAG 색인 누락',
+      '추천 가산 가능',
       '--require-any',
       'URL-only 항목 needs_body_copy 누락',
       '공개 IR/SEC 저장 품질 상태 정상'
