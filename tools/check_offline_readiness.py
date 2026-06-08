@@ -60,6 +60,7 @@ CHECKS = [
     ),
     ("투자 캘린더/실적 일정", ["tools/check_investment_calendar_store.py", "--strict"]),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
+    ("최근 1주 자료/추천 근거", ["tools/check_recent_weekly_brief.py", "--strict"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
     ("자동 분류 태그/RAG 품질", ["tools/check_classification_quality.py", "--strict"]),

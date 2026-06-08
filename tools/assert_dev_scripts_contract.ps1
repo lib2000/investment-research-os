@@ -816,6 +816,20 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\check_recent_weekly_brief.py"
+    Snippets = @(
+      'DEFAULT_MANIFEST',
+      'DEFAULT_PORTFOLIOS',
+      'DEFAULT_INTERESTS',
+      'DEFAULT_RECOMMENDATIONS',
+      'build_target_terms',
+      'latest_recommendation_records',
+      'recommendation_path_index',
+      '--min-linked-recent-items',
+      '최근 1주 자료/추천 근거 연결 상태 정상'
+    )
+  },
+  @{
     Path = "tools\check_daily_recommendation_citations.py"
     Snippets = @(
       'DEFAULT_STORE',
