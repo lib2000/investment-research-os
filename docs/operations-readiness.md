@@ -19,6 +19,7 @@
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
 
 - LLM/RAG 저장 상태: `python tools\check_llm_bridge_store.py --require-active-rag`로 LLM 연동 응답의 원 프롬프트, 응답 본문, Markdown/JSON 저장 파일, RAG 색인 연결을 백엔드 없이 확인한다.
+- 저장/RAG 실패 진단: `python tools\check_rag_failure_diagnostics.py --strict`로 활성 리서치 문서의 저장 파일, RAG 색인, 검색 가능 본문 길이, 자동 분류 근거를 한 번에 확인한다.
 
 - UI 회귀 가드: `python tools\check_console_static_contract.py --strict`는 추천 결과 화면의 `오늘의 추천 결과`, `일자별 추천 목록`, `경과 그래프` 렌더링 계약과 관련 CSS 클래스를 확인한다.
 
@@ -61,6 +62,7 @@ python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
 python tools\check_public_ir_sec_store.py --require-any
+python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict

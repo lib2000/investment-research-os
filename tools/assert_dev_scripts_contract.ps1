@@ -382,8 +382,10 @@ $contracts = @(
       'check_console_static_contract.py',
       'check_console_asset_and_js.py',
       'check_storage_quality_store.py',
+      'check_rag_failure_diagnostics.py',
       'check_llm_bridge_store.py',
       'check_daily_recommendations_store.py',
+      '저장/RAG 실패 진단',
       'LLM/RAG 저장 상태',
       '오프라인 운영 점검 통과'
     )
@@ -447,6 +449,8 @@ $contracts = @(
       'user_portfolios.json',
       'research_automation_status.json',
       '투자 캘린더/실적 일정',
+      '저장/RAG 실패 진단',
+      'rag_diagnostics_signal',
       '운영 완성도 점검 정상'
     )
   },
@@ -653,6 +657,21 @@ $contracts = @(
       'RAG 연결 누락',
       '원 프롬프트 누락',
       'LLM 응답 누락'
+    )
+  },
+  @{
+    Path = "tools\check_rag_failure_diagnostics.py"
+    Snippets = @(
+      'DEFAULT_MANIFEST',
+      'DEFAULT_RAG_DB',
+      'MIN_SEARCHABLE_CHARS',
+      'missing_rag_document',
+      'low_search_text',
+      'missing_classification_reason',
+      '--max-errors',
+      '--strict',
+      '저장/RAG 진단 점수',
+      '저장/RAG 실패 진단 정상'
     )
   },
   @{

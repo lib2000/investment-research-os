@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
@@ -130,6 +131,45 @@ def storage_signal(vault_dir: Path) -> dict[str, Any]:
     )
 
 
+
+def rag_diagnostics_signal(vault_dir: Path) -> dict[str, Any]:
+    manifest = load_json(vault_dir / "manifest.json", [])
+    active: list[dict[str, Any]] = []
+    if isinstance(manifest, list):
+        for entry in manifest:
+            if not isinstance(entry, dict):
+                continue
+            tags = {str(tag).lower() for tag in entry.get("tags", [])} if isinstance(entry.get("tags"), list) else set()
+            archived = bool(entry.get("archived") or entry.get("status") == "archived" or "archived" in tags)
+            research_entry = bool(
+                entry.get("type") == "research-capture"
+                or entry.get("module") == "research_quick_capture"
+                or entry.get("rag_document")
+                or entry.get("storage")
+            )
+            if research_entry and not archived:
+                active.append(entry)
+
+    db_path = vault_dir / "_system" / "research_memory.sqlite3"
+    rag_paths: set[str] = set()
+    if db_path.exists():
+        try:
+            with sqlite3.connect(db_path) as connection:
+                rows = connection.execute("SELECT source_relative_path FROM research_memory_documents").fetchall()
+            rag_paths = {str(row[0] or "") for row in rows}
+        except sqlite3.Error:
+            rag_paths = set()
+
+    linked = sum(1 for entry in active if str(entry.get("relative_path") or "") in rag_paths)
+    score = 0.0 if not active else linked / len(active) * 100.0
+    return signal(
+        "rag_failure_diagnostics",
+        "저장/RAG 실패 진단",
+        score,
+        f"활성 리서치 {len(active)}개, RAG 연결 {linked}개",
+        r"python tools\check_rag_failure_diagnostics.py --strict",
+    )
+
 def source_signal(system_dir: Path) -> dict[str, Any]:
     state = load_json(system_dir / "research_automation_status.json", {})
     failures = int(state.get("failed_count") or state.get("failure_count") or 0)
@@ -241,6 +281,7 @@ def main() -> int:
         graph_signal(system_dir),
         recommendation_signal(system_dir, args.daily_time),
         storage_signal(vault_dir),
+        rag_diagnostics_signal(vault_dir),
         source_signal(system_dir),
         investment_calendar_signal(vault_dir),
         portfolio_signal(system_dir),
