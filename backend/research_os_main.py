@@ -207,6 +207,7 @@ from research_os.portfolio_analysis_coverage import (
     portfolio_analysis_next_action,
 )
 from research_os.portfolio_store import (
+    infer_holding_fx_rate,
     portfolio_name_sort_key,
     portfolio_store_key,
     read_portfolio_store,
@@ -5481,32 +5482,6 @@ def latest_provider_price(
                 return price, source
     return None, None
 
-
-def infer_holding_fx_rate(holding: PortfolioHolding) -> float:
-    if holding.currency.upper() != "USD":
-        return 1.0
-    if (
-        holding.cost_basis
-        and holding.quantity
-        and holding.average_cost
-        and holding.quantity > 0
-        and holding.average_cost > 0
-    ):
-        inferred = holding.cost_basis / (holding.quantity * holding.average_cost)
-        if inferred > 0:
-            return inferred
-    if (
-        holding.market_value
-        and holding.quantity
-        and holding.average_cost
-        and holding.quantity > 0
-        and holding.average_cost > 0
-        and holding.current_price is None
-    ):
-        inferred = holding.market_value / (holding.quantity * holding.average_cost)
-        if inferred > 0:
-            return inferred
-    return 1.0
 
 
 def enrich_portfolio_holding(
