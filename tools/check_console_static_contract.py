@@ -140,6 +140,8 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_status_recommendation": "추천 반영",
     "recent_weekly_status_reference": "참고만",
     "recent_weekly_status_body_needed": "본문 보강 필요",
+    "recent_weekly_status_latest_recommendation_evidence": "오늘 추천 근거",
+    "recent_weekly_recommendation_link_summary": "추천 근거 연결",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {

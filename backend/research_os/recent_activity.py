@@ -293,6 +293,8 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
     target_names: set[str] = set()
     usable_count = 0
     needs_body_count = 0
+    recommendation_link_count = 0
+    latest_recommendation_link_count = 0
     quality_statuses: dict[str, int] = {}
     provider_counts: dict[str, int] = {}
     source_family_counts: dict[str, int] = {}
@@ -317,6 +319,10 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
             usable_count += 1
         if item.get("needs_body_copy"):
             needs_body_count += 1
+        if item.get("used_in_recommendation"):
+            recommendation_link_count += 1
+        if item.get("used_in_latest_recommendation"):
+            latest_recommendation_link_count += 1
         quality_status = str(item.get("quality_status") or item.get("recommendation_guard") or "").strip()
         if quality_status:
             quality_statuses[quality_status] = quality_statuses.get(quality_status, 0) + 1
@@ -338,6 +344,8 @@ def recent_weekly_category_group(label: str, key: str, items: list[dict], *, lim
         "usable_for_recommendation": usable_count,
         "needs_body_copy": needs_body_count,
         "blocked_or_needs_review": max(0, len(quality_items) - usable_count) if key == "public_ir_sec" else 0,
+        "recommendation_evidence_linked": recommendation_link_count,
+        "latest_recommendation_evidence_linked": latest_recommendation_link_count,
         "statuses": quality_statuses,
         "providers": dict(sorted(provider_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
         "source_families": dict(sorted(source_family_counts.items(), key=lambda item: (-item[1], item[0]))[:8]),
@@ -434,11 +442,17 @@ def build_recent_weekly_target_digest(*, sources: list[tuple[str, list[dict]]], 
                         "public_ir_sec": 0,
                         "customs": 0,
                         "market": 0,
+                        "recommendation_evidence_linked": 0,
+                        "latest_recommendation_evidence_linked": 0,
                         "total": 0,
                     },
                 )
                 if bucket in current:
                     current[bucket] += 1
+                if item.get("used_in_recommendation"):
+                    current["recommendation_evidence_linked"] += 1
+                if item.get("used_in_latest_recommendation"):
+                    current["latest_recommendation_evidence_linked"] += 1
                 current["total"] += 1
     return sorted(
         digest.values(),

@@ -13255,6 +13255,12 @@ function formatKoreanResult(value) {
       if (!item || typeof item !== "object") {
         return "참고만";
       }
+      if (item.used_in_latest_recommendation) {
+        return "오늘 추천 근거";
+      }
+      if (item.used_in_recommendation) {
+        return "추천 이력 근거";
+      }
       if (item.category === "public_ir_sec") {
         if (item.usable_for_recommendation) {
           return "추천 반영";
@@ -13272,13 +13278,16 @@ function formatKoreanResult(value) {
       const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
       const importance = item.importance ? ` · 중요도 ${item.importance}` : "";
       const usageStatus = ` · 상태 ${usageStatusForItem(item)}`;
+      const recommendationUsage = item.recommendation_usage_summary
+        ? ` · 추천 연결 ${compactOutputText(item.recommendation_usage_summary, 110)}`
+        : "";
       const publicIrSecSource = item.category === "public_ir_sec"
         ? [item.source_provider, item.filing_form, item.source_reliability].filter(Boolean).join(" · ")
         : "";
       const publicIrSecQuality = item.category === "public_ir_sec"
         ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
         : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${recommendationUsage}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13313,9 +13322,12 @@ function formatKoreanResult(value) {
                   .map(([label, count]) => `${label} ${formatNumber(count)}건`)
                   .join(" / ")
               : "";
-            const qualityLine = group.key === "public_ir_sec"
-              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${providerLine ? ` · 출처 ${providerLine}` : ""}${reliabilityLine ? ` · 품질 ${reliabilityLine}` : ""}`
+            const recommendationLinkLine = quality.recommendation_evidence_linked
+              ? ` · 추천 근거 연결 ${formatNumber(quality.latest_recommendation_evidence_linked || 0)}/${formatNumber(quality.recommendation_evidence_linked || 0)}건`
               : "";
+            const qualityLine = group.key === "public_ir_sec"
+              ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 / 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}건${recommendationLinkLine}${providerLine ? ` · 출처 ${providerLine}` : ""}${reliabilityLine ? ` · 품질 ${reliabilityLine}` : ""}`
+              : recommendationLinkLine;
             const note = group.note ? ` · ${compactOutputText(group.note, 80)}` : "";
             return `**${group.label || group.key || "자료"}** · 전체 ${formatNumber(groupCount)}건${visibilityLine}${tickerLine}${qualityLine}${targets}${note}`;
           })
@@ -13328,8 +13340,14 @@ function formatKoreanResult(value) {
           : [item.company_name || "시장/섹터 공통"];
         targets.slice(0, 3).forEach((target) => {
           const key = target || "시장/섹터 공통";
-          const current = targetDigest.get(key) || { filing: 0, report: 0, publicIrSec: 0, customs: 0, market: 0 };
+          const current = targetDigest.get(key) || { filing: 0, report: 0, publicIrSec: 0, customs: 0, market: 0, recommendationEvidenceLinked: 0, latestRecommendationEvidenceLinked: 0 };
           current[label] = (current[label] || 0) + 1;
+          if (item.used_in_recommendation) {
+            current.recommendationEvidenceLinked = (current.recommendationEvidenceLinked || 0) + 1;
+          }
+          if (item.used_in_latest_recommendation) {
+            current.latestRecommendationEvidenceLinked = (current.latestRecommendationEvidenceLinked || 0) + 1;
+          }
           targetDigest.set(key, current);
         });
       });
@@ -13372,6 +13390,7 @@ function formatKoreanResult(value) {
           countsForTarget.publicIrSec ? `공개 IR/SEC ${countsForTarget.publicIrSec}` : "",
           countsForTarget.customs ? `수출입 ${countsForTarget.customs}` : "",
           countsForTarget.market ? `시장 ${countsForTarget.market}` : "",
+          countsForTarget.recommendationEvidenceLinked ? `추천근거 ${countsForTarget.latestRecommendationEvidenceLinked || 0}/${countsForTarget.recommendationEvidenceLinked}` : "",
         ].filter(Boolean);
         return `${target} · 총 ${total}건 · ${chips.join(" / ") || "분류 없음"}`;
       });
@@ -13393,7 +13412,7 @@ function formatKoreanResult(value) {
       `- **DART 일일 점검:** ${daily.reliability_message || daily.status || "상태 미확인"}`,
       `- **DART 점검 시각:** 최근 ${formatDateTime(dartLastChecked)} · 다음 ${dartNextCheck ? formatDateTime(dartNextCheck) : "미확인"}`,
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
-      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 공개 IR·SEC ${formatNumber(counts.public_ir_sec || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건`,
+      `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 공개 IR·SEC ${formatNumber(counts.public_ir_sec || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건 / 추천 근거 연결 ${formatNumber(counts.latest_recommendation_evidence_linked || 0)}/${formatNumber(counts.recommendation_evidence_linked || 0)}건`,
       noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·공개 IR/SEC·수출입·시장 자료가 없습니다.` : "",
       ``,
       `### 핵심 요약`,
@@ -13402,7 +13421,7 @@ function formatKoreanResult(value) {
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
-      `- **상태 기준:** 추천 반영 = 오늘 추천 근거/가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
+      `- **상태 기준:** 오늘 추천 근거 = 최신 추천 1~3위의 RAG 근거 문서와 직접 연결, 추천 이력 근거 = 과거 추천 근거 문서와 연결, 추천 반영 = 오늘 추천 가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
       ``,
       `### 자료 유형별 묶음`,
       ...formatBulletList(categoryGroupLines, (item) => item, "최근 1주 내 표시할 자료 유형 묶음이 없습니다."),

@@ -35,6 +35,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
+    daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
     ensure_daily_recommendation_candidate as _ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate as _finalize_daily_recommendation_candidate,
@@ -14339,6 +14340,55 @@ def recent_activity_item_key(item: dict) -> tuple:
     )
 
 
+
+
+def _recent_weekly_evidence_path_key(value: object) -> str:
+    return str(value or "").strip().replace("\\", "/").lstrip("./").lower()
+
+
+def annotate_recent_weekly_recommendation_links(items: list[dict], evidence_index: dict) -> None:
+    """Attach daily recommendation evidence usage metadata to recent weekly items."""
+    by_path = evidence_index.get("by_relative_path") if isinstance(evidence_index, dict) else {}
+    if not isinstance(by_path, dict):
+        by_path = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        keys = {
+            _recent_weekly_evidence_path_key(item.get("relative_path")),
+            _recent_weekly_evidence_path_key(item.get("json_relative_path")),
+            _recent_weekly_evidence_path_key(item.get("source_relative_path")),
+        }
+        links: list[dict] = []
+        seen_records: set[str] = set()
+        for key in sorted(key for key in keys if key):
+            for link in by_path.get(key, []) or []:
+                if not isinstance(link, dict):
+                    continue
+                record_key = str(link.get("record_id") or "") or f"{link.get('recommendation_date')}:{link.get('rank')}:{link.get('ticker')}"
+                if record_key in seen_records:
+                    continue
+                seen_records.add(record_key)
+                links.append({
+                    "record_id": link.get("record_id"),
+                    "recommendation_date": link.get("recommendation_date"),
+                    "rank": link.get("rank"),
+                    "ticker": link.get("ticker"),
+                    "company_name": link.get("company_name"),
+                    "is_latest": bool(link.get("is_latest")),
+                })
+        latest_links = [link for link in links if link.get("is_latest")]
+        if links:
+            item["recommendation_links"] = links[:5]
+            item["recommendation_link_count"] = len(links)
+            item["used_in_recommendation"] = True
+            item["used_in_latest_recommendation"] = bool(latest_links)
+            item["recommendation_usage_label"] = "오늘 추천 근거" if latest_links else "추천 이력 근거"
+            item["recommendation_usage_summary"] = ", ".join(
+                f"{link.get('recommendation_date') or '추천일 미확인'} {link.get('rank') or '-'}위 {link.get('company_name') or link.get('ticker') or '종목 미확인'}"
+                for link in links[:3]
+            )
+
 def dedupe_recent_activity_items(items: list[dict]) -> list[dict]:
     unique_items: list[dict] = []
     seen: set[tuple] = set()
@@ -14385,6 +14435,8 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
             manifest_items.append(item)
     all_items = dedupe_recent_activity_items(dart_items + manifest_items)
     all_items.sort(key=lambda item: (item.get("date") or "", item.get("category") or ""), reverse=True)
+    recommendation_evidence_index = _daily_recommendation_evidence_link_index(settings)
+    annotate_recent_weekly_recommendation_links(all_items, recommendation_evidence_index)
     filings = [item for item in all_items if item.get("category") == "filing"]
     reports = [item for item in all_items if item.get("category") == "report"]
     customs_exports = [item for item in all_items if item.get("category") == "customs_export"]
@@ -14420,6 +14472,8 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "public_ir_sec_usable": len(usable_public_ir_sec_items),
         "public_ir_sec_blocked": len(blocked_public_ir_sec_items),
         "public_ir_sec_needs_body": sum(1 for item in public_ir_sec_items if item.get("needs_body_copy")),
+        "recommendation_evidence_linked": sum(1 for item in all_items if item.get("used_in_recommendation")),
+        "latest_recommendation_evidence_linked": sum(1 for item in all_items if item.get("used_in_latest_recommendation")),
         "total": len(all_items),
     }
     category_groups = build_recent_weekly_category_groups(
@@ -14457,6 +14511,13 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         },
         "daily_watch": daily_watch,
         "watch_summary": recent_watch_summary(daily_watch, counts),
+        "recommendation_evidence_summary": {
+            "latest_recommendation_date": recommendation_evidence_index.get("latest_recommendation_date"),
+            "linked_record_count": recommendation_evidence_index.get("linked_record_count"),
+            "latest_linked_record_count": recommendation_evidence_index.get("latest_linked_record_count"),
+            "recent_weekly_linked_item_count": counts.get("recommendation_evidence_linked"),
+            "latest_recent_weekly_linked_item_count": counts.get("latest_recommendation_evidence_linked"),
+        },
         "counts": counts,
         "category_groups": category_groups,
         "target_digest": target_digest,

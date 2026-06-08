@@ -117,6 +117,51 @@ def recommendation_record_id(recommendation_date: date, rank: int, ticker: str) 
     return f"{recommendation_date.isoformat()}-{rank:02d}-{str(ticker or '').upper()}"
 
 
+
+
+def _normalize_evidence_relative_path(value: object) -> str:
+    return str(value or "").strip().replace("\\", "/").lstrip("./").lower()
+
+
+def daily_recommendation_evidence_link_index(settings: Settings, *, limit: int = 120) -> dict[str, Any]:
+    """Index recommendation records by RAG evidence document path."""
+    store = read_daily_recommendation_store(settings)
+    records = [item for item in store.get("records", []) if isinstance(item, dict)]
+    latest_date = str(store.get("latest_recommendation_date") or "")
+    index: dict[str, list[dict[str, Any]]] = {}
+    linked_record_ids: set[str] = set()
+    linked_latest_record_ids: set[str] = set()
+    for record in records[: max(1, limit)]:
+        record_id = str(record.get("record_id") or "").strip()
+        link = {
+            "record_id": record_id,
+            "recommendation_date": str(record.get("recommendation_date") or ""),
+            "rank": record.get("rank"),
+            "ticker": str(record.get("ticker") or "").strip(),
+            "company_name": str(record.get("company_name") or "").strip(),
+            "is_latest": bool(latest_date and record.get("recommendation_date") == latest_date),
+        }
+        for document in record.get("evidence_documents") or []:
+            if not isinstance(document, dict):
+                continue
+            for field in ("source_relative_path", "json_relative_path"):
+                key = _normalize_evidence_relative_path(document.get(field))
+                if not key:
+                    continue
+                bucket = index.setdefault(key, [])
+                if not any(existing.get("record_id") == record_id for existing in bucket):
+                    bucket.append(link)
+                if record_id:
+                    linked_record_ids.add(record_id)
+                    if link["is_latest"]:
+                        linked_latest_record_ids.add(record_id)
+    return {
+        "latest_recommendation_date": latest_date,
+        "by_relative_path": index,
+        "linked_record_count": len(linked_record_ids),
+        "latest_linked_record_count": len(linked_latest_record_ids),
+    }
+
 def normalize_evidence_documents(value: object, limit: int = 5) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
