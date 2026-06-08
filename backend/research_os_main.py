@@ -206,7 +206,11 @@ from research_os.portfolio_analysis_coverage import (
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
 )
-from research_os.portfolio_store import portfolio_name_sort_key, portfolio_store_key
+from research_os.portfolio_store import (
+    portfolio_name_sort_key,
+    portfolio_store_key,
+    read_portfolio_store,
+)
 from research_os.portfolio_sync import (
     append_portfolio_sync_history,
     apply_kiwoom_domestic_balance_to_portfolio,
@@ -5342,9 +5346,6 @@ def resolve_research_memory_key(value: str, settings: Settings) -> str:
         return key
     return ensure_verified_ticker(key, settings)
 
-
-def read_portfolio_store(settings: Settings) -> dict:
-    return read_json_store(portfolio_store_path(settings), {"portfolios": {}})
 
 
 def parse_float_or_none(value: object) -> float | None:

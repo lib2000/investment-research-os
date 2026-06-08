@@ -30,7 +30,7 @@
 - `portfolio_analysis_coverage.py`: 포트폴리오별 보유 종목 분석 커버리지와 보강 큐 생성
 - `portfolio_import.py`: CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론
 - `portfolio_performance.py`: 기간 수익 비교, 가격 갱신 요약, 목표가 통화/이상치/출처 판정 헬퍼
-- `portfolio_store.py`: 포트폴리오 저장 키와 정렬 정책
+- `portfolio_store.py`: 포트폴리오 저장 JSON 읽기, 저장 키와 정렬 정책
 - `portfolio_sync.py`: 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약
 - `rag_memory.py`: RAG 문서와 thesis snapshot 색인/검색
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집

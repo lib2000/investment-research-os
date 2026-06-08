@@ -637,6 +637,8 @@ $contracts = @(
       'research_os.market_journal',
       'research_os.portfolio_analysis_coverage',
       'portfolio_analysis_coverage.py',
+      'research_os.portfolio_store',
+      'portfolio_store.py',
       'research_os.rag_memory',
       'research_os.research_memory',
       'research_os.state_store',
@@ -660,7 +662,8 @@ $contracts = @(
       "source_url_preview.py",
       "ticker_registry.py",
       "system_health.py",
-      "state_store.py"
+      "state_store.py",
+      "포트폴리오 저장 JSON 읽기"
     )
   },
   @{
