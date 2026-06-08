@@ -221,6 +221,7 @@ const elements = {
   dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
   dailyRecommendationsQuickButton: document.querySelector("#dailyRecommendationsQuickButton"),
   recentWeeklyBriefButton: document.querySelector("#recentWeeklyBriefButton"),
+  recentWeeklyEvidenceSynthesisButton: document.querySelector("#recentWeeklyEvidenceSynthesisButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
@@ -11888,6 +11889,61 @@ async function runRecentWeeklyBriefFlow() {
   }
 }
 
+function buildRecentWeeklyEvidenceSynthesisQuery(brief) {
+  const linkedItems = Array.isArray(brief?.recommendation_linked_items)
+    ? brief.recommendation_linked_items.filter((item) => item && item.used_in_recommendation)
+    : [];
+  if (!linkedItems.length) {
+    return "";
+  }
+  const itemLines = linkedItems.slice(0, 8).map((item) => {
+    const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
+    const usage = item.recommendation_usage_summary || item.recommendation_usage_label || "추천 근거 연결";
+    const title = item.title || item.summary || item.memory_file_name || "자료 제목 미확인";
+    return `${item.date || "날짜 미확인"} ${target} ${usage} ${title}`;
+  });
+  return [
+    `최근 1주 추천 근거 연결 자료 요약`,
+    `추천일 ${brief?.recommendation_evidence_summary?.latest_recommendation_date || brief?.period_end || "미확인"}`,
+    ...itemLines,
+    "투자 논거 강화/약화, 핵심 리스크, 다음 확인 액션 중심으로 요약",
+  ].join(" / ").slice(0, 700);
+}
+
+async function runRecentWeeklyEvidenceSynthesisFlow() {
+  syncApiBaseUrl();
+  activateTab("dashboard");
+  startOutputLoading("추천 근거 연결 자료 RAG 요약 중", [
+    "최근 1주 자료 중 추천 근거 연결 항목 추출",
+    "RAG 검색어 구성",
+    "저장 데이터 재검색",
+    "투자 논거 영향 요약 생성",
+  ]);
+  try {
+    const brief = await fetchRecentWeeklyResearchBrief(token(), { days: 7, refreshIfDue: false });
+    const query = buildRecentWeeklyEvidenceSynthesisQuery(brief);
+    if (!query) {
+      setOutput([
+        "### 추천 근거 연결 자료 요약",
+        "",
+        "최근 1주 자료 중 오늘/과거 추천 근거 문서와 직접 연결된 항목이 없습니다.",
+        "먼저 `최근 1주 자료`를 확인하거나 오늘 추천을 갱신하세요.",
+      ].join("\n"), { skipCompletion: true });
+      return;
+    }
+    const result = await synthesizeRagSearchResults(token(), {
+      query,
+      limit: 10,
+      includeLowQuality: false,
+      saveResult: true,
+    });
+    setOutput(result || "추천 근거 연결 자료 RAG 요약 결과를 확인하지 못했습니다.");
+    await runSecondaryRefresh("저장/RAG 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
 [elements.dailyRecommendationsButton, elements.dailyRecommendationsQuickButton]
   .filter(Boolean)
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsFlow));
@@ -11897,6 +11953,7 @@ async function runRecentWeeklyBriefFlow() {
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
+elements.recentWeeklyEvidenceSynthesisButton?.addEventListener("click", runRecentWeeklyEvidenceSynthesisFlow);
 
 elements.publicIrSecCollectButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
