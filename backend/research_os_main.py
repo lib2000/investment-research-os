@@ -14480,6 +14480,11 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         key=lambda item: (int(item.get("display_priority") or 0), item.get("date") or ""),
         reverse=True,
     )
+    recommendation_linked_items = sorted(
+        [item for item in all_items if item.get("used_in_recommendation")],
+        key=lambda item: (1 if item.get("used_in_latest_recommendation") else 0, item.get("date") or "", item.get("ticker") or ""),
+        reverse=True,
+    )
     counts = {
         "filings": len(filings),
         "important_filings": len(important_filings),
@@ -14542,6 +14547,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
         "counts": counts,
         "category_groups": category_groups,
         "target_digest": target_digest,
+        "recommendation_linked_items": recommendation_linked_items[:12],
         "important_filings": important_filings[:15],
         "ownership_filings": ownership_filings[:10],
         "filings": filings[:30],

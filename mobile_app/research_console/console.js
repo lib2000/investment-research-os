@@ -13402,6 +13402,9 @@ function formatKoreanResult(value) {
         ].filter(Boolean);
         return `${target} · 총 ${total}건 · ${chips.join(" / ") || "분류 없음"}`;
       });
+    const recommendationLinkedLines = Array.isArray(value.recommendation_linked_items)
+      ? value.recommendation_linked_items.slice(0, 8).map(lineForItem)
+      : [];
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13430,6 +13433,9 @@ function formatKoreanResult(value) {
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
       `- **상태 기준:** 오늘 추천 근거 = 최신 추천 1~3위의 RAG 근거 문서와 직접 연결, 추천 이력 근거 = 과거 추천 근거 문서와 연결, 추천 반영 = 오늘 추천 가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
+      ``,
+      `### 추천 근거 연결 자료`,
+      ...formatBulletList(recommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘/과거 추천 근거 문서와 직접 연결된 항목이 없습니다."),
       ``,
       `### 자료 유형별 묶음`,
       ...formatBulletList(categoryGroupLines, (item) => item, "최근 1주 내 표시할 자료 유형 묶음이 없습니다."),
