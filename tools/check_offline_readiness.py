@@ -61,6 +61,7 @@ CHECKS = [
     ("저장/RAG 실패 진단", ["tools/check_rag_failure_diagnostics.py", "--strict"]),
     ("LLM/RAG 저장 상태", ["tools/check_llm_bridge_store.py", "--require-active-rag"]),
     ("매일 추천 저장/추적", ["tools/check_daily_recommendations_store.py", "--require-milestones", "--require-quality"]),
+    ("매일 추천 RAG 근거 문서", ["tools/check_daily_recommendation_citations.py", "--strict"]),
 ]
 
 

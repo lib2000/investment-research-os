@@ -115,6 +115,7 @@ REQUIRED_CSS_SNIPPETS = {
     "daily_recommendation_progress_grid": ".daily-recommendation-progress-grid",
     "daily_recommendation_timeline_steps": ".daily-recommendation-timeline-steps",
     "daily_recommendation_evidence": ".daily-recommendation-evidence",
+    "daily_recommendation_citation": "daily-recommendation-citation",
     "investment_calendar_grid": ".investment-calendar-grid",
     "investment_calendar_weekly": ".investment-calendar-weekly",
 }
@@ -127,6 +128,8 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_tone_helper": "dailyRecommendationMilestoneTone",
     "daily_recommendation_weekly_evidence_helper": "dailyRecommendationWeeklyEvidenceRows",
     "daily_recommendation_evidence_rows_helper": "dailyRecommendationEvidenceRows",
+    "daily_recommendation_citation_rows_helper": "dailyRecommendationCitationRows",
+    "daily_recommendation_citation_label": "근거 문서",
     "portfolio_store_freshness_summary": "portfolioStoreFreshnessSummary",
     "portfolio_store_stale_warning": "갱신 권고",
     "code_knowledge_readiness_output": "운영 준비도",

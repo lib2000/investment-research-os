@@ -33,6 +33,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
     add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
+    build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
     ensure_daily_recommendation_candidate as _ensure_daily_recommendation_candidate,
@@ -22579,6 +22580,12 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 "needs_fx_conversion": False,
             }
 
+        candidate["evidence_documents"] = _build_daily_recommendation_evidence_documents(
+            vault_dir,
+            ticker,
+            candidate.get("evidence_sources") or [],
+            candidate.get("reasons") or [],
+        )
         _finalize_daily_recommendation_candidate(candidate)
 
     candidates = sorted(

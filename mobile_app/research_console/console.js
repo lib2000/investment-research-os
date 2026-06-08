@@ -7841,6 +7841,22 @@ function dailyRecommendationEvidenceRows(record) {
     .slice(0, 5);
 }
 
+function dailyRecommendationCitationRows(record) {
+  return (record?.evidence_documents || [])
+    .slice(0, 4)
+    .map((item) => {
+      const title = item.title || item.source_relative_path || "근거 문서";
+      const date = item.source_date ? `${item.source_date} · ` : "";
+      const reportType = item.report_type ? `${item.report_type} · ` : "";
+      const claims = Array.isArray(item.matched_claims) && item.matched_claims.length
+        ? ` · 연결 근거 ${item.matched_claims.slice(0, 2).map((claim) => compactOutputText(claim, 44)).join(" / ")}`
+        : "";
+      const path = item.source_relative_path ? ` · ${item.source_relative_path}` : "";
+      return `${date}${reportType}${title}${claims}${path}`;
+    })
+    .filter(Boolean);
+}
+
 function dailyRecommendationChangeText(milestone, currency = "KRW") {
   if (!milestone || milestone.price === null || milestone.price === undefined) {
     return "가격 대기";
@@ -8168,6 +8184,7 @@ function renderDailyRecommendationCards(payload) {
       const categories = dailyRecommendationEvidenceCategories(record);
       const weeklyEvidenceRows = dailyRecommendationWeeklyEvidenceRows(record);
       const evidenceRows = dailyRecommendationEvidenceRows(record);
+      const citationRows = dailyRecommendationCitationRows(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
       return `
         <article class="daily-recommendation-card${publicIrSecLinked ? " has-public-ir-sec" : ""}">
@@ -8201,6 +8218,10 @@ function renderDailyRecommendationCards(payload) {
             ${evidenceRows.length
               ? evidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
               : "<span>저장 근거 없음</span>"}
+            <b>근거 문서</b>
+            ${citationRows.length
+              ? citationRows.map((item) => `<span class="daily-recommendation-citation">${escapeHtml(item)}</span>`).join("")
+              : "<span>연결된 RAG 근거 문서는 다음 추천 갱신부터 표시됩니다.</span>"}
           </div>
           ${
             penalties.length || qualityFlags.length
@@ -13456,6 +13477,10 @@ function formatKoreanResult(value) {
         .map((component) => `${component.label} ${component.weight_pct}%`)
         .join(" / ");
       const penalties = (item.score_penalties || []).slice(0, 2).join(" / ");
+      const citationDocs = (item.evidence_documents || [])
+        .slice(0, 3)
+        .map((doc) => `${doc.source_date || "날짜 미확인"} ${doc.report_type || "문서"} ${doc.title || doc.source_relative_path || "근거 문서"}`)
+        .join(" / ");
       const weeklyGroups = (item.weekly_evidence_groups || [])
         .slice(0, 3)
         .map((group) => {

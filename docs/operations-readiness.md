@@ -14,6 +14,7 @@
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
 - 최신성/이력 가드: 추천 저장 점검은 `Asia/Seoul` 날짜 기준으로 최신 추천일이 허용 범위 안에 있고, 해당 일자 추천이 정확히 3개인지 확인한다. 또한 저장된 전체 추천 이력도 날짜별 1·2·3위가 빠짐없이 있고 같은 날짜 안에 회사명/티커/순위가 중복되지 않는지 확인한다. 각 후보의 기준가 조회 시각이 24시간을 넘으면 추천 품질 점검에서 실패한다.
 - 근거 분산 가드: 추천 후보별 근거가 `저장 품질`, `목표가/리포트`, `최근 저장/RAG`, `보유/관심 범위` 범주를 모두 포함하는지 오프라인 점검에서 확인한다. 저장 품질 대시보드 연결이 없는 후보도 `저장 품질:` 근거와 확인 플래그를 남겨 품질 공백을 숨기지 않는다. 한 범주에만 기대는 추천은 실패로 처리한다.
+- 근거 문서 가드: 추천 기록은 `evidence_sources` 텍스트뿐 아니라 실제 RAG 저장 문서 경로를 담은 `evidence_documents`를 함께 보관한다. `python tools\check_daily_recommendation_citations.py --strict`로 모든 추천 기록의 대표 근거 문서가 실제 파일로 열리는지 확인한다.
 - 추적 주기: 추천 후 1주일, 15일, 1달, 3달, 6달
 - 추적 점검: 오프라인 가드는 각 마일스톤의 목표일이 추천일 기준 7/15/30/90/180일 뒤인지, 추적 완료 항목에 가격·확인시각·수익률이 있는지 확인한다.
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
@@ -82,6 +83,7 @@ python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/consol
 python tools\smoke_research_console_menus.py
 python tools\smoke_research_console_external_sources.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
+python tools\check_daily_recommendation_citations.py --strict
 ```
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 둔다.

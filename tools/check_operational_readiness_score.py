@@ -104,6 +104,38 @@ def is_active(item: dict[str, Any]) -> bool:
     return bool(item.get("storage") or item.get("rag_document"))
 
 
+def recommendation_citations_signal(root: Path, system_dir: Path) -> dict[str, Any]:
+    store = load_json(system_dir / "daily_recommendations.json", {"records": []})
+    records = store.get("records") if isinstance(store.get("records"), list) else []
+    if not records:
+        return signal(
+            "daily_recommendation_citations",
+            "추천 근거 문서 연결",
+            0.0,
+            "추천 기록 없음",
+            "python tools\\check_daily_recommendation_citations.py --strict",
+        )
+    usable = 0
+    for record in records:
+        rows = record.get("evidence_documents") if isinstance(record, dict) else []
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            relative = str(row.get("source_relative_path") or "").strip()
+            if relative and (root / relative).exists():
+                usable += 1
+                break
+    score = usable / len(records) * 100.0
+    return signal(
+        "daily_recommendation_citations",
+        "추천 근거 문서 연결",
+        score,
+        f"추천 기록 {len(records)}개 중 근거 문서 연결 {usable}개",
+        "python tools\\check_daily_recommendation_citations.py --strict",
+    )
+
 def storage_signal(vault_dir: Path) -> dict[str, Any]:
     body_missing = 0
     ocr_needed = 0
@@ -280,6 +312,7 @@ def main() -> int:
     signals = [
         graph_signal(system_dir),
         recommendation_signal(system_dir, args.daily_time),
+        recommendation_citations_signal(root, system_dir),
         storage_signal(vault_dir),
         rag_diagnostics_signal(vault_dir),
         source_signal(system_dir),

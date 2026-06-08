@@ -385,7 +385,9 @@ $contracts = @(
       'check_rag_failure_diagnostics.py',
       'check_llm_bridge_store.py',
       'check_daily_recommendations_store.py',
+      'check_daily_recommendation_citations.py',
       '저장/RAG 실패 진단',
+      '매일 추천 RAG 근거 문서',
       'LLM/RAG 저장 상태',
       '오프라인 운영 점검 통과'
     )
@@ -449,6 +451,8 @@ $contracts = @(
       'user_portfolios.json',
       'research_automation_status.json',
       '투자 캘린더/실적 일정',
+      '추천 근거 문서 연결',
+      'recommendation_citations_signal',
       '저장/RAG 실패 진단',
       'rag_diagnostics_signal',
       '운영 완성도 점검 정상'
@@ -602,6 +606,9 @@ $contracts = @(
       'handled_workflow_actions',
       'today-research-update',
       'dashboard-refresh',
+      'dailyRecommendationCitationRows',
+      'daily-recommendation-citation',
+      '근거 문서',
       '워크플로우 핸들러 누락',
       '필수 워크플로우 버튼 누락',
       '메뉴/버튼 레이아웃 CSS 계약 누락',
@@ -778,6 +785,17 @@ $contracts = @(
       '마감 시황 시장일지',
       'CSF=',
       '리서치 소스 저장 상태 정상'
+    )
+  },
+  @{
+    Path = "tools\check_daily_recommendation_citations.py"
+    Snippets = @(
+      'DEFAULT_STORE',
+      'RAG_REPORT_TYPE_PRIORITY',
+      '--write-back',
+      '--strict',
+      'evidence_documents',
+      '매일 추천 RAG 근거 문서 연결 정상'
     )
   },
   @{
