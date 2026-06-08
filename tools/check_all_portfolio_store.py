@@ -81,6 +81,8 @@ def validate_portfolio(
     allow_cash: bool,
     require_price_fields: bool,
     require_overseas_protection: bool,
+    max_price_age_hours: float,
+    max_sync_age_hours: float,
     max_portfolio_age_hours: float,
     stale_warning_age_hours: float,
 ) -> tuple[list[str], dict[str, Any]]:
@@ -143,9 +145,22 @@ def validate_portfolio(
                 errors.append(f"{label}: {ticker_or_name} 해외/수동 수량 보호 상태 누락: {sync_status or '없음'}")
 
         if require_price_fields:
-            for field in ("average_cost", "current_price", "market_value", "cost_basis", "currency"):
+            for field in ("average_cost", "current_price", "market_value", "cost_basis", "currency", "price_checked_at"):
                 if item.get(field) in (None, ""):
                     errors.append(f"{label}: {ticker_or_name} {field} 누락")
+            checked_age = age_hours(item.get("price_checked_at"))
+            if checked_age is None or checked_age > max_price_age_hours:
+                errors.append(
+                    f"{label}: {ticker_or_name} 가격 확인 시각 오래됨/누락 "
+                    f"{item.get('price_checked_at')}"
+                )
+            if sync_status in {"manual", "manual_or_overseas_protected"}:
+                sync_age = age_hours(item.get("sync_checked_at"))
+                if sync_age is None or sync_age > max_sync_age_hours:
+                    errors.append(
+                        f"{label}: {ticker_or_name} 수량 동기화 확인 시각 오래됨/누락 "
+                        f"{item.get('sync_checked_at')}"
+                    )
             if number(item.get("market_value")) is None:
                 errors.append(f"{label}: {ticker_or_name} 평가금액 숫자 변환 실패")
             if number(item.get("cost_basis")) is None:
@@ -175,6 +190,8 @@ def main() -> int:
     parser.add_argument("--allow-cash", action="store_true", help="CASH/예수금 항목을 허용합니다")
     parser.add_argument("--require-price-fields", action="store_true", default=True, help="가격/평가 필드를 강제합니다")
     parser.add_argument("--require-overseas-protection", action="store_true", default=True, help="해외 통화 보유 종목의 manual_or_overseas_protected 상태를 강제합니다")
+    parser.add_argument("--max-price-age-hours", type=float, default=96.0, help="종목 가격 확인 시각 실패 기준")
+    parser.add_argument("--max-sync-age-hours", type=float, default=168.0, help="수동/해외 수량 동기화 확인 시각 실패 기준")
     parser.add_argument("--max-portfolio-age-hours", type=float, default=240.0, help="포트폴리오 updated_at 실패 기준")
     parser.add_argument("--stale-warning-age-hours", type=float, default=24.0, help="포트폴리오 갱신 권고를 표시할 기준")
     args = parser.parse_args()
@@ -199,6 +216,8 @@ def main() -> int:
             allow_cash=args.allow_cash,
             require_price_fields=args.require_price_fields,
             require_overseas_protection=args.require_overseas_protection,
+            max_price_age_hours=args.max_price_age_hours,
+            max_sync_age_hours=args.max_sync_age_hours,
             max_portfolio_age_hours=args.max_portfolio_age_hours,
             stale_warning_age_hours=args.stale_warning_age_hours,
         )
