@@ -13230,18 +13230,34 @@ function formatKoreanResult(value) {
       const summary = compactOutputText(item.summary || item.action || item.title || "요약 없음", 90);
       return `${item.date || "날짜 미확인"} · ${target} · ${type}${importance} · ${summary}`;
     };
+    const usageStatusForItem = (item) => {
+      if (!item || typeof item !== "object") {
+        return "참고만";
+      }
+      if (item.category === "public_ir_sec") {
+        if (item.usable_for_recommendation) {
+          return "추천 반영";
+        }
+        return "본문 보강 필요";
+      }
+      if (["filing", "report", "customs_export"].includes(item.category)) {
+        return "추천 반영";
+      }
+      return "참고만";
+    };
     const lineForItem = (item) => {
       const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
       const storage = item.relative_path ? ` · 저장 ${item.relative_path}` : "";
       const importance = item.importance ? ` · 중요도 ${item.importance}` : "";
+      const usageStatus = ` · 상태 ${usageStatusForItem(item)}`;
       const publicIrSecSource = item.category === "public_ir_sec"
         ? [item.source_provider, item.filing_form, item.source_reliability].filter(Boolean).join(" · ")
         : "";
       const publicIrSecQuality = item.category === "public_ir_sec"
         ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
         : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${importance}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13365,6 +13381,7 @@ function formatKoreanResult(value) {
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
+      `- **상태 기준:** 추천 반영 = 오늘 추천 근거/가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
       ``,
       `### 자료 유형별 묶음`,
       ...formatBulletList(categoryGroupLines, (item) => item, "최근 1주 내 표시할 자료 유형 묶음이 없습니다."),

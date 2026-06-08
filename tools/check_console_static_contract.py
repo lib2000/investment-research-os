@@ -132,6 +132,11 @@ REQUIRED_JS_SNIPPETS = {
     "code_knowledge_readiness_output": "운영 준비도",
     "code_knowledge_signal_output": "운영 주의 신호",
     "investment_calendar_renderer": "renderInvestmentCalendar",
+    "recent_weekly_usage_status_helper": "usageStatusForItem",
+    "recent_weekly_status_legend": "상태 기준",
+    "recent_weekly_status_recommendation": "추천 반영",
+    "recent_weekly_status_reference": "참고만",
+    "recent_weekly_status_body_needed": "본문 보강 필요",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
