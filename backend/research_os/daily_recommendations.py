@@ -212,7 +212,7 @@ def normalize_candidate(candidate: dict) -> dict:
         "ticker": ticker,
         "company_name": company_name,
         "score": int(candidate.get("score") or 0),
-        "score_components": score_components[:10],
+        "score_components": score_components,
         "reasons": reasons[:6],
         "evidence_sources": evidence[:8],
         "evidence_documents": normalize_evidence_documents(candidate.get("evidence_documents")),

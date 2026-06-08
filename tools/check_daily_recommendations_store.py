@@ -253,6 +253,61 @@ def nearest_milestone_label(record: dict[str, Any]) -> str:
     return f"{label} {target_date.isoformat()}"
 
 
+def component_labels(record: dict[str, Any]) -> set[str]:
+    components = record.get("score_components") if isinstance(record.get("score_components"), list) else []
+    return {str(component.get("label") or "").strip() for component in components if isinstance(component, dict)}
+
+
+def component_points_sum(record: dict[str, Any]) -> int:
+    total = 0
+    components = record.get("score_components") if isinstance(record.get("score_components"), list) else []
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        points = component.get("points", component.get("score", component.get("value")))
+        if isinstance(points, (int, float)):
+            total += int(points)
+    return total
+
+
+def validate_score_evidence_alignment(record: dict[str, Any], errors: list[str]) -> None:
+    label = record.get("company_name") or record.get("ticker") or record.get("record_id")
+    evidence = "\n".join(non_empty_strings(record.get("evidence_sources")))
+    reasons = "\n".join(non_empty_strings(record.get("reasons")))
+    risk_notes = "\n".join(non_empty_strings(record.get("risk_notes")))
+    quality_flags = "\n".join(non_empty_strings(record.get("quality_flags")))
+    labels = component_labels(record)
+    score = record.get("score")
+    explanation = record.get("score_explanation") if isinstance(record.get("score_explanation"), dict) else {}
+    positive_points = component_points_sum(record)
+    penalty_points = int(explanation.get("penalty_points") or 0) if isinstance(explanation.get("penalty_points"), (int, float)) else 0
+    expected_score = positive_points - penalty_points
+    if isinstance(score, (int, float)) and expected_score != int(score):
+        errors.append(f"{label} 점수 합계 불일치: 구성 {positive_points} - 벌점 {penalty_points} = {expected_score} / 저장 {score}")
+    if explanation:
+        if explanation.get("positive_points") != positive_points:
+            errors.append(f"{label} 점수 설명 positive_points 불일치: {explanation.get('positive_points')} / 기대 {positive_points}")
+        if explanation.get("final_score") != score:
+            errors.append(f"{label} 점수 설명 final_score 불일치: {explanation.get('final_score')} / 저장 {score}")
+        weights = explanation.get("component_weights")
+        if not isinstance(weights, list) or not weights:
+            errors.append(f"{label} 점수 구성 비중 누락")
+
+    if "최근 중요 공시 반영" in labels and "최근 1주 공시" not in evidence:
+        errors.append(f"{label} 최근 공시 점수와 근거 문구 불일치")
+    if "최근 핵심 리포트 반영" in labels and "최근 1주 핵심 리포트" not in evidence:
+        errors.append(f"{label} 최근 리포트 점수와 근거 문구 불일치")
+    if "최근 공개 IR/SEC 반영" in labels:
+        if "최근 1주 공개 IR/SEC" not in evidence:
+            errors.append(f"{label} 공개 IR/SEC 점수와 근거 문구 불일치")
+        if "공개 IR/SEC" not in reasons:
+            errors.append(f"{label} 공개 IR/SEC 점수의 추천 사유 누락")
+        if "본문 보강 필요" in quality_flags and "본문 보강" not in risk_notes:
+            errors.append(f"{label} 공개 IR/SEC 본문 보강 플래그와 리스크 문구 불일치")
+    if "최근 1주 자료 묶음:" in evidence and not any(component.startswith("최근 ") for component in labels):
+        errors.append(f"{label} 최근 1주 자료 묶음 근거가 있으나 최근 자료 점수 구성 누락")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="매일 추천 저장 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="daily_recommendations.json 경로")
@@ -416,6 +471,7 @@ def main() -> int:
                     errors.append(f"{label} 해외 종목 환율/원화 확인 문구 누락")
             if isinstance(portfolio_risk, dict) and portfolio_risk.get("linked") is True and not portfolio_risk.get("message"):
                 errors.append(f"{label} 포트폴리오 연결 설명 누락")
+            validate_score_evidence_alignment(record, errors)
             validate_tracking_milestones(record, errors)
 
         latest_sample = latest[: args.min_latest]
