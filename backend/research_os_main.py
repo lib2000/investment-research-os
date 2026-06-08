@@ -14346,6 +14346,26 @@ def _recent_weekly_evidence_path_key(value: object) -> str:
     return str(value or "").strip().replace("\\", "/").lstrip("./").lower()
 
 
+
+
+def annotate_recent_weekly_navigation_hints(items: list[dict]) -> None:
+    """Attach console navigation hints for stored material and RAG search."""
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("ticker") or "").strip().upper()
+        relative_path = str(item.get("relative_path") or item.get("source_relative_path") or "").strip().replace("\\", "/")
+        file_name = relative_path.rsplit("/", 1)[-1] if relative_path else ""
+        title = str(item.get("title") or item.get("summary") or "").strip()
+        company = str(item.get("company_name") or item.get("company") or "").strip()
+        query_parts = [part for part in [ticker, company, title, item.get("recommendation_usage_summary")] if str(part or "").strip()]
+        if ticker and file_name:
+            item["memory_lookup_key"] = ticker
+            item["memory_file_name"] = file_name
+            item["memory_navigation_hint"] = f"저장 데이터 탭에서 {ticker} 조회 후 {file_name} 열기"
+        if query_parts:
+            item["rag_search_query"] = " ".join(str(part).strip() for part in query_parts)[:180]
+
 def annotate_recent_weekly_recommendation_links(items: list[dict], evidence_index: dict) -> None:
     """Attach daily recommendation evidence usage metadata to recent weekly items."""
     by_path = evidence_index.get("by_relative_path") if isinstance(evidence_index, dict) else {}
@@ -14437,6 +14457,7 @@ def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refres
     all_items.sort(key=lambda item: (item.get("date") or "", item.get("category") or ""), reverse=True)
     recommendation_evidence_index = _daily_recommendation_evidence_link_index(settings)
     annotate_recent_weekly_recommendation_links(all_items, recommendation_evidence_index)
+    annotate_recent_weekly_navigation_hints(all_items)
     filings = [item for item in all_items if item.get("category") == "filing"]
     reports = [item for item in all_items if item.get("category") == "report"]
     customs_exports = [item for item in all_items if item.get("category") == "customs_export"]

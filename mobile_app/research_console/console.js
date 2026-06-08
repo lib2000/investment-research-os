@@ -13281,13 +13281,19 @@ function formatKoreanResult(value) {
       const recommendationUsage = item.recommendation_usage_summary
         ? ` · 추천 연결 ${compactOutputText(item.recommendation_usage_summary, 110)}`
         : "";
+      const navigationHint = item.memory_navigation_hint
+        ? ` · 탐색 ${compactOutputText(item.memory_navigation_hint, 120)}`
+        : "";
+      const ragHint = item.rag_search_query
+        ? ` · RAG 검색어 ${compactOutputText(item.rag_search_query, 100)}`
+        : "";
       const publicIrSecSource = item.category === "public_ir_sec"
         ? [item.source_provider, item.filing_form, item.source_reliability].filter(Boolean).join(" · ")
         : "";
       const publicIrSecQuality = item.category === "public_ir_sec"
         ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
         : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${recommendationUsage}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${recommendationUsage}${navigationHint}${ragHint}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13367,6 +13373,8 @@ function formatKoreanResult(value) {
             publicIrSec: item.public_ir_sec || 0,
             customs: item.customs || 0,
             market: item.market || 0,
+            recommendationEvidenceLinked: item.recommendation_evidence_linked || 0,
+            latestRecommendationEvidenceLinked: item.latest_recommendation_evidence_linked || 0,
           },
         }))
       : Array.from(targetDigest.entries())
