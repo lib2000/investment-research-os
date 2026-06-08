@@ -7811,6 +7811,15 @@ function dailyRecommendationEvidenceCategories(record) {
   return categories.slice(0, 6);
 }
 
+function weeklyEvidenceRecommendationLinkText(quality = {}) {
+  const totalLinked = Number(quality.recommendation_evidence_linked || 0);
+  const latestLinked = Number(quality.latest_recommendation_evidence_linked || 0);
+  if (!totalLinked) {
+    return "";
+  }
+  return ` · 추천근거 최신 ${formatNumber(latestLinked)}/${formatNumber(totalLinked)}건`;
+}
+
 function dailyRecommendationWeeklyEvidenceRows(record) {
   return (record?.weekly_evidence_groups || [])
     .slice(0, 4)
@@ -7821,13 +7830,14 @@ function dailyRecommendationWeeklyEvidenceRows(record) {
           ? ` · 표시 ${formatNumber(group.visible_count)}/${formatNumber(group.count)}건`
           : "";
       const tickerText = Number(group.ticker_count || 0) ? ` · 종목 ${formatNumber(group.ticker_count)}개` : "";
+      const recommendationLinkText = weeklyEvidenceRecommendationLinkText(quality);
       const recommendationText =
         group.key === "public_ir_sec"
           ? ` · 추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)}건 · 본문 보강 ${formatNumber(
               quality.needs_body_copy || quality.blocked_or_needs_review || 0
             )}건`
           : "";
-      return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${recommendationText}`;
+      return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${recommendationLinkText}${recommendationText}`;
     })
     .filter(Boolean);
 }
@@ -11896,12 +11906,17 @@ function buildRecentWeeklyEvidenceSynthesisQuery(brief) {
   if (!linkedItems.length) {
     return "";
   }
-  const itemLines = linkedItems.slice(0, 8).map((item) => {
-    const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
-    const usage = item.recommendation_usage_summary || item.recommendation_usage_label || "추천 근거 연결";
-    const title = item.title || item.summary || item.memory_file_name || "자료 제목 미확인";
-    return `${item.date || "날짜 미확인"} ${target} ${usage} ${title}`;
-  });
+  const itemLines = linkedItems
+    .slice()
+    .sort((a, b) => Number(Boolean(b.used_in_latest_recommendation)) - Number(Boolean(a.used_in_latest_recommendation)))
+    .slice(0, 8)
+    .map((item) => {
+      const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
+      const usage = item.recommendation_usage_summary || item.recommendation_usage_label || "추천 근거 연결";
+      const scope = item.used_in_latest_recommendation ? "오늘추천" : "추천이력";
+      const title = item.title || item.summary || item.memory_file_name || "자료 제목 미확인";
+      return `[${scope}] ${item.date || "날짜 미확인"} ${target} ${usage} ${title}`;
+    });
   return [
     `최근 1주 추천 근거 연결 자료 요약`,
     `추천일 ${brief?.recommendation_evidence_summary?.latest_recommendation_date || brief?.period_end || "미확인"}`,
@@ -13459,9 +13474,18 @@ function formatKoreanResult(value) {
         ].filter(Boolean);
         return `${target} · 총 ${total}건 · ${chips.join(" / ") || "분류 없음"}`;
       });
-    const recommendationLinkedLines = Array.isArray(value.recommendation_linked_items)
-      ? value.recommendation_linked_items.slice(0, 8).map(lineForItem)
+    const recommendationLinkedItems = Array.isArray(value.recommendation_linked_items)
+      ? value.recommendation_linked_items
       : [];
+    const latestRecommendationLinkedLines = recommendationLinkedItems
+      .filter((item) => item && item.used_in_latest_recommendation)
+      .slice(0, 8)
+      .map(lineForItem);
+    const historicalRecommendationLinkedLines = recommendationLinkedItems
+      .filter((item) => item && item.used_in_recommendation && !item.used_in_latest_recommendation)
+      .slice(0, 8)
+      .map(lineForItem);
+    const recommendationLinkedLines = recommendationLinkedItems.slice(0, 8).map(lineForItem);
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13481,6 +13505,7 @@ function formatKoreanResult(value) {
       `- **DART 점검 시각:** 최근 ${formatDateTime(dartLastChecked)} · 다음 ${dartNextCheck ? formatDateTime(dartNextCheck) : "미확인"}`,
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
       `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 공개 IR·SEC ${formatNumber(counts.public_ir_sec || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건 / 추천 근거 연결 ${formatNumber(counts.latest_recommendation_evidence_linked || 0)}/${formatNumber(counts.recommendation_evidence_linked || 0)}건`,
+      `- **추천 근거 연결:** 오늘 추천 직접 연결 ${formatNumber(latestRecommendationLinkedLines.length)}건 / 추천 이력 전체 연결 ${formatNumber(recommendationLinkedLines.length)}건`,
       noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·공개 IR/SEC·수출입·시장 자료가 없습니다.` : "",
       ``,
       `### 핵심 요약`,
@@ -13492,7 +13517,14 @@ function formatKoreanResult(value) {
       `- **상태 기준:** 오늘 추천 근거 = 최신 추천 1~3위의 RAG 근거 문서와 직접 연결, 추천 이력 근거 = 과거 추천 근거 문서와 연결, 추천 반영 = 오늘 추천 가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
       ``,
       `### 추천 근거 연결 자료`,
-      ...formatBulletList(recommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘/과거 추천 근거 문서와 직접 연결된 항목이 없습니다."),
+      `- **오늘 추천 직접 연결:** ${formatNumber(latestRecommendationLinkedLines.length)}건`,
+      `- **추천 이력 전체 연결:** ${formatNumber(recommendationLinkedLines.length)}건`,
+      ``,
+      `#### 오늘 추천 근거 연결 자료`,
+      ...formatBulletList(latestRecommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘 추천 1~3위 근거 문서와 직접 연결된 항목이 없습니다."),
+      ``,
+      `#### 추천 이력 근거 연결 자료`,
+      ...formatBulletList(historicalRecommendationLinkedLines, (item) => item, "오늘 추천 외 과거 추천 근거로만 연결된 항목은 없습니다."),
       ``,
       `### 자료 유형별 묶음`,
       ...formatBulletList(categoryGroupLines, (item) => item, "최근 1주 내 표시할 자료 유형 묶음이 없습니다."),
@@ -13591,10 +13623,11 @@ function formatKoreanResult(value) {
                 .map(([label, count]) => `${label} ${formatNumber(count)}건`)
                 .join(" / ")
             : "";
+          const recommendationLinkText = weeklyEvidenceRecommendationLinkText(quality);
           const qualityText = group.key === "public_ir_sec"
             ? ` (추천 가능 ${formatNumber(quality.usable_for_recommendation || 0)} / 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review || 0)}${providerText ? ` / 출처 ${providerText}` : ""}${reliabilityText ? ` / 품질 ${reliabilityText}` : ""})`
             : "";
-          return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${qualityText}`;
+          return `${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${visibleText}${tickerText}${recommendationLinkText}${qualityText}`;
         })
         .join(" / ");
       const overseas = item.overseas_tracking?.needs_fx_conversion

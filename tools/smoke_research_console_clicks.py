@@ -1109,6 +1109,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       recentWeeklyBriefText.includes("전체") &&
                       recentWeeklyBriefText.includes("표시") &&
                       recentWeeklyBriefText.includes("종목"),
+                    recentWeeklyShowsRecommendationLinkedSections:
+                      recentWeeklyBriefText.includes("추천 근거 연결 자료") &&
+                      recentWeeklyBriefText.includes("오늘 추천 직접 연결") &&
+                      recentWeeklyBriefText.includes("오늘 추천 근거 연결 자료") &&
+                      recentWeeklyBriefText.includes("추천 이력 근거 연결 자료"),
                     recentWeeklyShowsPublicIrQuality:
                       !recentWeeklyBriefText.includes("공개 IR/SEC") ||
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
@@ -1248,6 +1253,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("최근 1주 자료 화면에 공시/리포트/수출입 자료 그룹이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsVisibilityCounts"]:
                 raise AssertionError("최근 1주 자료 화면에 전체/표시/종목 수 메타데이터가 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsRecommendationLinkedSections"]:
+                raise AssertionError("최근 1주 자료 화면에 오늘 추천/추천 이력 근거 연결 섹션이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsPublicIrQuality"]:
                 raise AssertionError("최근 1주 공개 IR/SEC 묶음에 품질/본문 보강 상태가 표시되지 않았습니다.")
             if not result["investmentCalendarShowsMarkets"]:
