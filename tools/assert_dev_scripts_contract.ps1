@@ -376,6 +376,8 @@ $contracts = @(
       '전체 포트폴리오 저장 구조',
       '--expected-holdings-count',
       'check_research_source_store.py',
+      'check_public_ir_sec_store.py',
+      '공개 IR/SEC 저장 품질',
       'check_backend_module_health.py',
       'check_operational_readiness_score.py',
       '운영 완성도 95%',
@@ -691,6 +693,16 @@ $contracts = @(
       'target_price_context_source_type',
       'target_price_result',
       'filter_target_price_outliers'
+    )
+  },
+  @{
+    Path = "tools\check_public_ir_sec_store.py"
+    Snippets = @(
+      'is_public_ir_sec',
+      'source_url_processing',
+      '--require-any',
+      'URL-only 항목 needs_body_copy 누락',
+      '공개 IR/SEC 저장 품질 상태 정상'
     )
   },
   @{
