@@ -25,6 +25,7 @@ RECENT_ACTIVITY_IMPORTS = (
     "recent_ownership_filing_items",
     "recent_report_display_priority",
     "build_recent_weekly_category_groups",
+    "build_recent_weekly_target_digest",
 )
 
 
@@ -153,6 +154,26 @@ def recommendation_path_index(records: list[dict[str, Any]]) -> set[str]:
     return paths
 
 
+def annotate_navigation_hints(items: list[dict[str, Any]]) -> None:
+    for item in items:
+        ticker = str(item.get("ticker") or "").strip().upper()
+        relative_path = str(item.get("relative_path") or item.get("source_relative_path") or "").strip().replace("\\", "/")
+        file_name = relative_path.rsplit("/", 1)[-1] if relative_path else ""
+        title = str(item.get("title") or item.get("summary") or "").strip()
+        company = str(item.get("company_name") or item.get("company") or "").strip()
+        query_parts = [
+            part
+            for part in [ticker, company, title, item.get("recommendation_usage_summary")]
+            if str(part or "").strip()
+        ]
+        if ticker and file_name:
+            item["memory_lookup_key"] = ticker
+            item["memory_file_name"] = file_name
+            item["memory_navigation_hint"] = f"저장 데이터 탭에서 {ticker} 조회 후 {file_name} 열기"
+        if query_parts:
+            item["rag_search_query"] = " ".join(str(part).strip() for part in query_parts)[:180]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="최근 1주 자료와 오늘 추천 근거 연결을 오프라인으로 점검합니다.")
     parser.add_argument("--days", type=int, default=7, help="최근 자료 기준 일수")
@@ -160,6 +181,7 @@ def main() -> int:
     parser.add_argument("--min-category-groups", type=int, default=4, help="표시 가능한 자료 묶음 최소 수")
     parser.add_argument("--min-recommendation-documents", type=int, default=3, help="최신 추천 근거 문서 최소 수")
     parser.add_argument("--min-linked-recent-items", type=int, default=1, help="최근 1주 자료와 추천 근거 경로가 직접 만나는 최소 건수")
+    parser.add_argument("--min-target-digest", type=int, default=1, help="종목별 자료 묶음 최소 수")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
     args = parser.parse_args()
 
@@ -183,6 +205,7 @@ def main() -> int:
             item = recent_activity.compact_recent_manifest_entry(entry, target_terms)
         if item:
             recent_items.append(item)
+    annotate_navigation_hints(recent_items)
 
     filings = [item for item in recent_items if item.get("category") == "filing"]
     reports = [item for item in recent_items if item.get("category") == "report"]
@@ -209,6 +232,15 @@ def main() -> int:
         market_context=market,
     )
     visible_groups = [group for group in groups if int(group.get("count") or 0) > 0]
+    target_digest = recent_activity.build_recent_weekly_target_digest(
+        sources=[
+            ("filing", important_filings),
+            ("report", display_reports),
+            ("public_ir_sec", public_ir),
+            ("customs", customs),
+            ("market", market),
+        ]
+    )
 
     latest_records = latest_recommendation_records(load_json(root / DEFAULT_RECOMMENDATIONS, {"records": []}))
     evidence_paths = recommendation_path_index(latest_records)
@@ -219,6 +251,20 @@ def main() -> int:
         item
         for item in recent_items
         if path_key(item.get("relative_path")) in evidence_paths
+    ]
+    linked_items_missing_rag = [item for item in linked_recent_items if not item.get("rag_search_query")]
+    linked_items_missing_navigation = [
+        item
+        for item in linked_recent_items
+        if item.get("ticker") and item.get("relative_path") and not item.get("memory_navigation_hint")
+    ]
+    quality_ready_groups = [
+        group
+        for group in visible_groups
+        if isinstance(group.get("quality_summary"), dict)
+        and "total_count" in group["quality_summary"]
+        and "visible_count" in group["quality_summary"]
+        and "recommendation_evidence_linked" in group["quality_summary"]
     ]
     impact_counts = Counter(
         "강화" if path_key(item.get("relative_path")) in evidence_paths else "후보"
@@ -232,12 +278,20 @@ def main() -> int:
         issues.append(f"최근 {args.days}일 자료 부족: {len(recent_items)}개 / 최소 {args.min_total}개")
     if len(visible_groups) < args.min_category_groups:
         issues.append(f"최근 1주 자료 묶음 부족: {len(visible_groups)}개 / 최소 {args.min_category_groups}개")
+    if len(quality_ready_groups) != len(visible_groups):
+        issues.append(f"자료 묶음 품질 요약 누락: {len(quality_ready_groups)}/{len(visible_groups)}개")
+    if len(target_digest) < args.min_target_digest:
+        issues.append(f"종목별 자료 묶음 부족: {len(target_digest)}개 / 최소 {args.min_target_digest}개")
     if len(existing_evidence) < args.min_recommendation_documents:
         issues.append(f"최신 추천 근거 문서 부족: {len(existing_evidence)}개 / 최소 {args.min_recommendation_documents}개")
     if len(linked_recent_paths) == 0:
         warnings.append("최근 1주 자료와 오늘 추천 근거 직접 연결 0건")
     elif len(linked_recent_paths) < args.min_linked_recent_items:
         warnings.append(f"최근 1주 자료와 최신 추천 근거 직접 연결 적음: {len(linked_recent_paths)}개 / 기준 {args.min_linked_recent_items}개")
+    if linked_items_missing_rag:
+        issues.append(f"추천 연결 자료 RAG 검색어 누락: {len(linked_items_missing_rag)}개")
+    if linked_items_missing_navigation:
+        issues.append(f"추천 연결 자료 저장 데이터 탐색 힌트 누락: {len(linked_items_missing_navigation)}개")
     if public_ir and not any(item.get("usable_for_recommendation") for item in public_ir):
         warnings.append("최근 공개 IR/SEC 자료가 있으나 추천 가산 가능한 본문 추출 항목이 없습니다.")
 
@@ -251,9 +305,15 @@ def main() -> int:
         f"공개 IR/SEC {len(public_ir)}개 | 수출입 {len(customs)}개 | 시장자료 {len(market)}개"
     )
     print(f"표시 자료 묶음: {len(visible_groups)}개 | " + ", ".join(f"{group.get('label')}={group.get('count')}" for group in visible_groups))
+    print(f"자료 묶음 품질 요약: {len(quality_ready_groups)}/{len(visible_groups)}개 | 종목별 자료 묶음 {len(target_digest)}개")
     latest_date = latest_records[0].get("recommendation_date") if latest_records else "미확인"
     print(f"최신 추천일: {latest_date} | 추천 {len(latest_records)}개 | 근거 문서 {len(existing_evidence)}/{len(evidence_paths)}개")
     print(f"최근 1주-추천 근거 직접 연결: {len(linked_recent_paths)}개")
+    print(
+        "추천 연결 표시 보강: "
+        f"RAG 검색어 누락 {len(linked_items_missing_rag)}개 | "
+        f"탐색 힌트 누락 {len(linked_items_missing_navigation)}개"
+    )
     print(
         "추천 영향 요약: "
         f"강화 {impact_counts.get('강화', 0)}개 | "
