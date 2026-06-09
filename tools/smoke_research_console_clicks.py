@@ -449,6 +449,20 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   if (!recentWeeklyEvidenceButtonVisible) {{
                     throw new Error("recent weekly evidence synthesis button missing or hidden");
                   }}
+                  recentWeeklyEvidenceButton.click();
+                  const recentWeeklyEvidenceText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      return text.includes("추천 근거 요약") &&
+                        text.includes("오늘 추천 직접 연결") &&
+                        text.includes("RAG 검색어") &&
+                        text.includes("다음 행동")
+                        ? text
+                        : "";
+                    }},
+                    120000,
+                    "recent weekly evidence synthesis"
+                  );
 
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
@@ -1119,6 +1133,15 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       recentWeeklyBriefText.includes("영향 판정") &&
                       recentWeeklyBriefText.includes("오늘 추천 영향 요약") &&
                       recentWeeklyBriefText.includes("종목별 추천 영향"),
+                    recentWeeklyShowsActionGuidance:
+                      recentWeeklyBriefText.includes("다음 행동") &&
+                      recentWeeklyBriefText.includes("탐색") &&
+                      recentWeeklyBriefText.includes("RAG 검색어"),
+                    recentWeeklyEvidenceShowsSynthesis:
+                      recentWeeklyEvidenceText.includes("추천 근거 요약") &&
+                      recentWeeklyEvidenceText.includes("오늘 추천 직접 연결") &&
+                      recentWeeklyEvidenceText.includes("RAG 검색어") &&
+                      recentWeeklyEvidenceText.includes("저장 데이터 검색 합성 보고서"),
                     recentWeeklyShowsPublicIrQuality:
                       !recentWeeklyBriefText.includes("공개 IR/SEC") ||
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
@@ -1269,6 +1292,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("최근 1주 자료 화면에 오늘 추천/추천 이력 근거 연결 섹션이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsImpactSummary"]:
                 raise AssertionError("최근 1주 자료 화면에 추천 영향 요약/영향 판정이 표시되지 않았습니다.")
+            if not result["recentWeeklyShowsActionGuidance"]:
+                raise AssertionError("최근 1주 자료 화면에 다음 행동/탐색/RAG 검색어 안내가 표시되지 않았습니다.")
+            if not result["recentWeeklyEvidenceShowsSynthesis"]:
+                raise AssertionError("추천 근거 요약 버튼 결과에 오늘 추천 연결/RAG 합성 결과가 표시되지 않았습니다.")
             if not result["recentWeeklyShowsPublicIrQuality"]:
                 raise AssertionError("최근 1주 공개 IR/SEC 묶음에 품질/본문 보강 상태가 표시되지 않았습니다.")
             if not result["investmentCalendarShowsMarkets"]:

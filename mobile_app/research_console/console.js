@@ -12088,7 +12088,18 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
       includeLowQuality: false,
       saveResult: true,
     });
-    setOutput(result || "추천 근거 연결 자료 RAG 요약 결과를 확인하지 못했습니다.");
+    const linkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_recommendation).length;
+    const latestLinkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_latest_recommendation).length;
+    const synthesisHeader = [
+      "### 추천 근거 요약",
+      "",
+      `- **대상:** 최근 1주 자료 중 추천 근거 연결 ${formatNumber(linkedCount)}건`,
+      `- **오늘 추천 직접 연결:** ${formatNumber(latestLinkedCount)}건`,
+      `- **RAG 검색어:** ${compactOutputText(query, 220)}`,
+      "- **다음 행동:** 강화/확인 필요/후보 자료를 오늘 추천 논거와 비교",
+      "",
+    ].join("\n");
+    setOutput(`${synthesisHeader}${formatKoreanResult(result || "추천 근거 연결 자료 RAG 요약 결과를 확인하지 못했습니다.")}`, { skipCompletion: true });
     await runSecondaryRefresh("저장/RAG 상태 새로고침", () => refreshStatus(false));
   } catch (error) {
     setError(error);
@@ -13480,6 +13491,22 @@ function formatKoreanResult(value) {
       }
       return "참고만";
     };
+    const actionForItem = (item) => {
+      const status = usageStatusForItem(item);
+      if (status === "오늘 추천 근거") {
+        return "오늘 추천 1~3위 논거에서 핵심 변화 여부 확인";
+      }
+      if (status === "추천 이력 근거") {
+        return "기존 추천 논거가 유지되는지 재검토";
+      }
+      if (status === "본문 보강 필요") {
+        return "원문 본문 보강 후 추천 점수 반영 여부 재확인";
+      }
+      if (status === "추천 반영") {
+        return "다음 추천 후보 가산 가능 자료로 검토";
+      }
+      return "시장 배경 자료로 참고";
+    };
     const lineForItem = (item) => {
       const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || "관련 대상";
       const source = item.source_url ? ` · 원문 ${item.source_url}` : "";
@@ -13502,7 +13529,8 @@ function formatKoreanResult(value) {
         ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
         : "";
       const impact = ` · 영향 ${recommendationImpactForItem(item)}`;
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${impact}${importance}${recommendationUsage}${navigationHint}${ragHint}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      const nextAction = ` · 다음 행동 ${actionForItem(item)}`;
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${impact}${nextAction}${importance}${recommendationUsage}${navigationHint}${ragHint}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";

@@ -159,8 +159,11 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_recommendation_link_badge": "추천근거 최신",
     "recent_weekly_navigation_hint": "탐색",
     "recent_weekly_rag_query_hint": "RAG 검색어",
+    "recent_weekly_next_action_hint": "다음 행동",
+    "recent_weekly_action_helper": "actionForItem",
     "recent_weekly_evidence_synthesis_flow": "runRecentWeeklyEvidenceSynthesisFlow",
     "recent_weekly_evidence_synthesis_query": "최근 1주 추천 근거 연결 자료 요약",
+    "recent_weekly_evidence_synthesis_title": "추천 근거 요약",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
