@@ -13671,6 +13671,13 @@ function formatKoreanResult(value) {
         return `${target} · 영향 ${recommendationImpactForItem(item)} · ${compactOutputText(item.recommendation_usage_summary || item.summary || item.title || "요약 없음", 130)}`;
       });
     const impactByTargetLines = recentWeeklyImpactByTargetLines(recommendationLinkedItems);
+    const priorityReviewLines = [
+      `오늘 추천 근거: 직접 연결 ${formatNumber(latestRecommendationLinkedLines.length)}건 · 영향 강화 ${formatNumber(impactCounts["강화"] || 0)}건`,
+      `추천 근거 RAG 합성: 상단의 추천 근거 요약 버튼으로 저장 보고서와 RAG 연결 상태 확인`,
+      `IR/SEC 자동 활용: 공개 IR/SEC ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
+      `운영 검증 경로: Codex에서 브라우저가 막히면 Windows PowerShell의 verify_research_console.ps1로 콘솔 검증`,
+      `다음 행동: 오늘 추천 영향 요약 → 종목별 추천 영향 → 오늘 추천 근거 연결 자료 순서로 확인`,
+    ];
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13693,6 +13700,9 @@ function formatKoreanResult(value) {
       `- **추천 근거 연결:** 오늘 추천 직접 연결 ${formatNumber(latestRecommendationLinkedLines.length)}건 / 추천 이력 전체 연결 ${formatNumber(recommendationLinkedLines.length)}건`,
       `- **추천 영향 요약:** 강화 ${formatNumber(impactCounts["강화"] || 0)}건 / 확인 필요 ${formatNumber(impactCounts["확인 필요"] || 0)}건 / 후보 ${formatNumber(impactCounts["후보"] || 0)}건 / 참고 ${formatNumber(impactCounts["참고"] || 0)}건`,
       noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·공개 IR/SEC·수출입·시장 자료가 없습니다.` : "",
+      ``,
+      `### 우선 확인 요약`,
+      ...formatBulletList(priorityReviewLines, (item) => item, "우선 확인할 항목이 없습니다."),
       ``,
       `### 핵심 요약`,
       `- **수급/대량보유:** ${formatNumber(counts.ownership_filings || 0)}건 · 상위 ${Math.min((value.ownership_filings || []).length, 3)}건 먼저 확인`,
@@ -13838,7 +13848,7 @@ function formatKoreanResult(value) {
         weights ? `\n  비중: ${weights}` : ""
       }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyImpactRows ? `\n  최근 1주 영향: ${weeklyImpactRows}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
         reasons || "근거 요약 없음"
-      }\n  출처: ${evidence || "저장 근거 없음"}`;
+      }${citationDocs ? `\n  근거 문서: ${citationDocs}` : ""}\n  출처: ${evidence || "저장 근거 없음"}`;
     });
     const milestones = [];
     records.forEach((record) => {
