@@ -459,6 +459,41 @@ def daily_recommendation_recent_weekly_index(recent_weekly: dict) -> dict[str, d
     return {"items_by_ticker": items_by_ticker, "groups_by_ticker": groups_by_ticker}
 
 
+def daily_recommendation_recent_item_evidence_document(item: dict) -> dict | None:
+    """Convert a recent-weekly item into a stable recommendation evidence document."""
+    if not isinstance(item, dict):
+        return None
+    relative_path = str(
+        item.get("relative_path")
+        or item.get("source_relative_path")
+        or item.get("json_relative_path")
+        or ""
+    ).strip()
+    if not relative_path:
+        return None
+    title = str(item.get("title") or item.get("summary") or item.get("action") or relative_path).strip()
+    category = str(item.get("category") or item.get("report_type") or "recent_weekly").strip()
+    claims = [
+        str(value).strip()
+        for value in (
+            item.get("recommendation_usage_summary"),
+            item.get("summary"),
+            item.get("action"),
+        )
+        if str(value or "").strip()
+    ][:3]
+    return {
+        "title": compact_recommendation_text(title, 140),
+        "source_relative_path": relative_path,
+        "source_date": str(item.get("date") or item.get("source_date") or "").strip(),
+        "report_type": category,
+        "source_type": category,
+        "confidence": item.get("confidence"),
+        "citation_label": "최근 1주 추천 영향 자료",
+        "matched_claims": claims,
+    }
+
+
 def daily_recommendation_weekly_group_evidence_text(group: dict) -> str:
     label = str(group.get("label") or group.get("key") or "자료").strip()
     if not label:

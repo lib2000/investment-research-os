@@ -43,6 +43,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
     daily_recommendation_weekly_group_evidence_text as _daily_recommendation_weekly_group_evidence_text,
+    daily_recommendation_recent_item_evidence_document as _daily_recommendation_recent_item_evidence_document,
     should_run_daily_recommendations,
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
@@ -22487,6 +22488,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if blocked_public_ir_sec_count:
             candidate["risk_notes"].append(f"공개 IR/SEC URL-only 자료 {blocked_public_ir_sec_count}건은 본문 보강 전 추천 점수 가산에서 제외")
             candidate["quality_flags"].append("공개 IR/SEC 본문 보강 필요")
+        for recent_item in recent_items[:8]:
+            document = _daily_recommendation_recent_item_evidence_document(recent_item)
+            if document:
+                candidate.setdefault("evidence_documents", []).append(document)
         weekly_groups = []
         seen_group_keys = set()
         for group in weekly_groups_by_ticker.get(ticker, []):
@@ -22560,12 +22565,14 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 "needs_fx_conversion": False,
             }
 
-        candidate["evidence_documents"] = _build_daily_recommendation_evidence_documents(
+        recent_evidence_documents = list(candidate.get("evidence_documents") or [])
+        rag_evidence_documents = _build_daily_recommendation_evidence_documents(
             vault_dir,
             ticker,
             candidate.get("evidence_sources") or [],
             candidate.get("reasons") or [],
         )
+        candidate["evidence_documents"] = [*recent_evidence_documents, *rag_evidence_documents]
         _finalize_daily_recommendation_candidate(candidate)
 
     candidates = sorted(

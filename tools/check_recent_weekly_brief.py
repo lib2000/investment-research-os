@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -214,6 +215,16 @@ def main() -> int:
     existing_evidence = [path for path in evidence_paths if (root / path).exists()]
     recent_paths = {path_key(item.get("relative_path")) for item in recent_items if path_key(item.get("relative_path"))}
     linked_recent_paths = sorted(recent_paths & evidence_paths)
+    linked_recent_items = [
+        item
+        for item in recent_items
+        if path_key(item.get("relative_path")) in evidence_paths
+    ]
+    impact_counts = Counter(
+        "강화" if path_key(item.get("relative_path")) in evidence_paths else "후보"
+        for item in recent_items
+        if item.get("category") in {"filing", "report", "public_ir_sec", "customs_export"}
+    )
 
     issues: list[str] = []
     warnings: list[str] = []
@@ -223,7 +234,9 @@ def main() -> int:
         issues.append(f"최근 1주 자료 묶음 부족: {len(visible_groups)}개 / 최소 {args.min_category_groups}개")
     if len(existing_evidence) < args.min_recommendation_documents:
         issues.append(f"최신 추천 근거 문서 부족: {len(existing_evidence)}개 / 최소 {args.min_recommendation_documents}개")
-    if len(linked_recent_paths) < args.min_linked_recent_items:
+    if len(linked_recent_paths) == 0:
+        warnings.append("최근 1주 자료와 오늘 추천 근거 직접 연결 0건")
+    elif len(linked_recent_paths) < args.min_linked_recent_items:
         warnings.append(f"최근 1주 자료와 최신 추천 근거 직접 연결 적음: {len(linked_recent_paths)}개 / 기준 {args.min_linked_recent_items}개")
     if public_ir and not any(item.get("usable_for_recommendation") for item in public_ir):
         warnings.append("최근 공개 IR/SEC 자료가 있으나 추천 가산 가능한 본문 추출 항목이 없습니다.")
@@ -241,6 +254,12 @@ def main() -> int:
     latest_date = latest_records[0].get("recommendation_date") if latest_records else "미확인"
     print(f"최신 추천일: {latest_date} | 추천 {len(latest_records)}개 | 근거 문서 {len(existing_evidence)}/{len(evidence_paths)}개")
     print(f"최근 1주-추천 근거 직접 연결: {len(linked_recent_paths)}개")
+    print(
+        "추천 영향 요약: "
+        f"강화 {impact_counts.get('강화', 0)}개 | "
+        f"후보 {impact_counts.get('후보', 0)}개 | "
+        f"연결 항목 {len(linked_recent_items)}개"
+    )
 
     for warning in warnings:
         print(f"경고: {warning}")

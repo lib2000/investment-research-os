@@ -7820,6 +7820,61 @@ function weeklyEvidenceRecommendationLinkText(quality = {}) {
   return ` · 추천근거 최신 ${formatNumber(latestLinked)}/${formatNumber(totalLinked)}건`;
 }
 
+function weeklyEvidenceImpactTone(group = {}) {
+  const quality = group.quality_summary || {};
+  const latestLinked = Number(quality.latest_recommendation_evidence_linked || 0);
+  const totalLinked = Number(quality.recommendation_evidence_linked || 0);
+  const needsBody = Number(quality.needs_body_copy || quality.blocked_or_needs_review || 0);
+  const usable = Number(quality.usable_for_recommendation || 0);
+  const count = Number(group.count || 0);
+  if (latestLinked > 0) {
+    return "강화";
+  }
+  if (totalLinked > 0 || needsBody > 0) {
+    return "확인 필요";
+  }
+  if (group.key === "public_ir_sec" && count > 0 && usable <= 0) {
+    return "확인 필요";
+  }
+  if (count > 0) {
+    return "참고";
+  }
+  return "대기";
+}
+
+function recommendationImpactForItem(item = {}) {
+  if (item.used_in_latest_recommendation) {
+    return "강화";
+  }
+  if (item.used_in_recommendation) {
+    return "확인 필요";
+  }
+  if (item.category === "public_ir_sec" && item.usable_for_recommendation === false) {
+    return "확인 필요";
+  }
+  if (["filing", "report", "public_ir_sec", "customs_export"].includes(item.category)) {
+    return "후보";
+  }
+  return "참고";
+}
+
+function dailyRecommendationWeeklyImpactRows(record) {
+  return (record?.weekly_evidence_groups || [])
+    .slice(0, 4)
+    .map((group) => {
+      const quality = group.quality_summary || {};
+      const tone = weeklyEvidenceImpactTone(group);
+      const latestLinked = Number(quality.latest_recommendation_evidence_linked || 0);
+      const totalLinked = Number(quality.recommendation_evidence_linked || 0);
+      const linkedText = totalLinked ? ` · 연결 ${formatNumber(latestLinked)}/${formatNumber(totalLinked)}건` : "";
+      const bodyText = Number(quality.needs_body_copy || quality.blocked_or_needs_review || 0)
+        ? ` · 본문 보강 ${formatNumber(quality.needs_body_copy || quality.blocked_or_needs_review)}건`
+        : "";
+      return `${tone}: ${group.label || group.key || "자료"} ${formatNumber(group.count || 0)}건${linkedText}${bodyText}`;
+    })
+    .filter(Boolean);
+}
+
 function dailyRecommendationWeeklyEvidenceRows(record) {
   return (record?.weekly_evidence_groups || [])
     .slice(0, 4)
@@ -11914,8 +11969,9 @@ function buildRecentWeeklyEvidenceSynthesisQuery(brief) {
       const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
       const usage = item.recommendation_usage_summary || item.recommendation_usage_label || "추천 근거 연결";
       const scope = item.used_in_latest_recommendation ? "오늘추천" : "추천이력";
+      const impact = recommendationImpactForItem(item);
       const title = item.title || item.summary || item.memory_file_name || "자료 제목 미확인";
-      return `[${scope}] ${item.date || "날짜 미확인"} ${target} ${usage} ${title}`;
+      return `[${scope}/영향 ${impact}] ${item.date || "날짜 미확인"} ${target} ${usage} ${title}`;
     });
   return [
     `최근 1주 추천 근거 연결 자료 요약`,
@@ -13365,7 +13421,8 @@ function formatKoreanResult(value) {
       const publicIrSecQuality = item.category === "public_ir_sec"
         ? ` · ${publicIrSecSource || "출처 미확인"} · ${item.recommendation_guard || item.quality_status || "품질 미확인"}`
         : "";
-      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${importance}${recommendationUsage}${navigationHint}${ragHint}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
+      const impact = ` · 영향 ${recommendationImpactForItem(item)}`;
+      return `${item.date || "날짜 미확인"} · ${target} · ${translateReportType(item.report_type || item.category)}${usageStatus}${impact}${importance}${recommendationUsage}${navigationHint}${ragHint}${publicIrSecQuality} · ${compactOutputText(item.summary || item.action || "요약 없음", 180)}${storage}${source}`;
     };
     const sourceLines = (value.daily_watch?.source_schedule || []).map((item) => {
       const status = item.due ? "점검 필요" : "최신";
@@ -13486,6 +13543,18 @@ function formatKoreanResult(value) {
       .slice(0, 8)
       .map(lineForItem);
     const recommendationLinkedLines = recommendationLinkedItems.slice(0, 8).map(lineForItem);
+    const impactCounts = recommendationLinkedItems.reduce((acc, item) => {
+      const tone = recommendationImpactForItem(item);
+      acc[tone] = (acc[tone] || 0) + 1;
+      return acc;
+    }, {});
+    const latestImpactLines = recommendationLinkedItems
+      .filter((item) => item && item.used_in_latest_recommendation)
+      .slice(0, 6)
+      .map((item) => {
+        const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
+        return `${target} · 영향 ${recommendationImpactForItem(item)} · ${compactOutputText(item.recommendation_usage_summary || item.summary || item.title || "요약 없음", 130)}`;
+      });
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13506,6 +13575,7 @@ function formatKoreanResult(value) {
       `- **자동 점검:** ${watch.status || "상태 미확인"} · 점검 필요 소스 ${formatNumber(watch.due_source_count || 0)}개 · 실패 소스 ${formatNumber(watch.failed_source_count || 0)}개`,
       `- **집계:** 공시 ${formatNumber(counts.filings || 0)}건(중요 ${formatNumber(counts.important_filings || 0)}건, 수급/대량보유 ${formatNumber(counts.ownership_filings || 0)}건) / 핵심 리포트 ${formatNumber(counts.display_reports || 0)}건 / 공개 IR·SEC ${formatNumber(counts.public_ir_sec || 0)}건 / 숨김 ${formatNumber(counts.hidden_low_signal_reports || 0)}건 / 수출입 ${formatNumber(counts.customs_exports || 0)}건 / 시장자료 ${formatNumber(counts.market_context || 0)}건 / 추천 근거 연결 ${formatNumber(counts.latest_recommendation_evidence_linked || 0)}/${formatNumber(counts.recommendation_evidence_linked || 0)}건`,
       `- **추천 근거 연결:** 오늘 추천 직접 연결 ${formatNumber(latestRecommendationLinkedLines.length)}건 / 추천 이력 전체 연결 ${formatNumber(recommendationLinkedLines.length)}건`,
+      `- **추천 영향 요약:** 강화 ${formatNumber(impactCounts["강화"] || 0)}건 / 확인 필요 ${formatNumber(impactCounts["확인 필요"] || 0)}건 / 후보 ${formatNumber(impactCounts["후보"] || 0)}건 / 참고 ${formatNumber(impactCounts["참고"] || 0)}건`,
       noRecentSignal ? `- **자료 없음 판정:** 최근 점검은 완료됐지만 보유/관심종목과 직접 연결된 공시·리포트·공개 IR/SEC·수출입·시장 자료가 없습니다.` : "",
       ``,
       `### 핵심 요약`,
@@ -13519,6 +13589,10 @@ function formatKoreanResult(value) {
       `### 추천 근거 연결 자료`,
       `- **오늘 추천 직접 연결:** ${formatNumber(latestRecommendationLinkedLines.length)}건`,
       `- **추천 이력 전체 연결:** ${formatNumber(recommendationLinkedLines.length)}건`,
+      `- **영향 판정:** 강화는 오늘 추천 점수 근거로 직접 반영, 확인 필요는 과거 근거 또는 보강 신호, 후보는 다음 추천 가산 가능 자료입니다.`,
+      ``,
+      `#### 오늘 추천 영향 요약`,
+      ...formatBulletList(latestImpactLines, (item) => item, "오늘 추천 점수에 직접 연결된 최근 1주 자료 영향 요약이 없습니다."),
       ``,
       `#### 오늘 추천 근거 연결 자료`,
       ...formatBulletList(latestRecommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘 추천 1~3위 근거 문서와 직접 연결된 항목이 없습니다."),
@@ -13603,6 +13677,7 @@ function formatKoreanResult(value) {
         .slice(0, 3)
         .map((doc) => `${doc.source_date || "날짜 미확인"} ${doc.report_type || "문서"} ${doc.title || doc.source_relative_path || "근거 문서"}`)
         .join(" / ");
+      const weeklyImpactRows = dailyRecommendationWeeklyImpactRows(item).slice(0, 3).join(" / ");
       const weeklyGroups = (item.weekly_evidence_groups || [])
         .slice(0, 3)
         .map((group) => {
@@ -13641,7 +13716,7 @@ function formatKoreanResult(value) {
         item.score ?? "n/a"
       }\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
         weights ? `\n  비중: ${weights}` : ""
-      }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
+      }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyImpactRows ? `\n  최근 1주 영향: ${weeklyImpactRows}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
         reasons || "근거 요약 없음"
       }\n  출처: ${evidence || "저장 근거 없음"}`;
     });
