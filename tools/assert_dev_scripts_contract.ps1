@@ -501,6 +501,18 @@ $contracts = @(
 
 
   @{
+    Path = "backend\research_os\rag_synthesis.py"
+    Snippets = @(
+      'REPORT_TYPE = "rag-query-synthesis"',
+      'build_rag_query_synthesis_payload',
+      'render_rag_query_synthesis_markdown',
+      'rag_synthesis_storage_key',
+      'build_rag_query_synthesis_thesis'
+    )
+  },
+
+
+  @{
     Path = "backend\research_os\rag_memory.py"
     Snippets = @(
       'refresh_index: bool = True',
