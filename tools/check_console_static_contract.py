@@ -132,6 +132,8 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_recommendation_impact_helper": "recommendationImpactForItem",
     "recent_weekly_impact_summary": "추천 영향 요약",
     "recent_weekly_today_impact_section": "오늘 추천 영향 요약",
+    "recent_weekly_target_impact_section": "종목별 추천 영향",
+    "recent_weekly_target_impact_helper": "recentWeeklyImpactByTargetLines",
     "recent_weekly_impact_decision": "영향 판정",
     "daily_recommendation_evidence_rows_helper": "dailyRecommendationEvidenceRows",
     "daily_recommendation_citation_rows_helper": "dailyRecommendationCitationRows",

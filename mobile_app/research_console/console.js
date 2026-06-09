@@ -7858,6 +7858,43 @@ function recommendationImpactForItem(item = {}) {
   return "참고";
 }
 
+function recentWeeklyImpactByTargetLines(items = []) {
+  const byTarget = new Map();
+  (items || []).forEach((item) => {
+    const targets = Array.isArray(item.related_targets) && item.related_targets.length
+      ? item.related_targets
+      : [item.company_name || item.ticker || "대상 미확인"];
+    targets.slice(0, 3).forEach((rawTarget) => {
+      const target = String(rawTarget || "").trim() || "대상 미확인";
+      if (!byTarget.has(target)) {
+        byTarget.set(target, { total: 0, tones: {}, samples: [] });
+      }
+      const entry = byTarget.get(target);
+      const tone = recommendationImpactForItem(item);
+      entry.total += 1;
+      entry.tones[tone] = (entry.tones[tone] || 0) + 1;
+      if (entry.samples.length < 2) {
+        entry.samples.push(compactOutputText(item.recommendation_usage_summary || item.summary || item.title || "요약 없음", 90));
+      }
+    });
+  });
+  return Array.from(byTarget.entries())
+    .sort(([, left], [, right]) => {
+      const leftStrength = (left.tones["강화"] || 0) * 10 + left.total;
+      const rightStrength = (right.tones["강화"] || 0) * 10 + right.total;
+      return rightStrength - leftStrength;
+    })
+    .slice(0, 8)
+    .map(([target, entry]) => {
+      const toneText = ["강화", "확인 필요", "후보", "참고"]
+        .filter((tone) => entry.tones[tone])
+        .map((tone) => `${tone} ${formatNumber(entry.tones[tone])}건`)
+        .join(" / ");
+      const samples = entry.samples.filter(Boolean).join(" · ");
+      return `${target} · ${toneText || "영향 미분류"} · 자료 ${formatNumber(entry.total)}건${samples ? ` · ${samples}` : ""}`;
+    });
+}
+
 function dailyRecommendationWeeklyImpactRows(record) {
   return (record?.weekly_evidence_groups || [])
     .slice(0, 4)
@@ -13555,6 +13592,7 @@ function formatKoreanResult(value) {
         const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
         return `${target} · 영향 ${recommendationImpactForItem(item)} · ${compactOutputText(item.recommendation_usage_summary || item.summary || item.title || "요약 없음", 130)}`;
       });
+    const impactByTargetLines = recentWeeklyImpactByTargetLines(recommendationLinkedItems);
     const dartLastChecked = daily.last_checked_at || daily.checked_at || daily.updated_at;
     const dartNextCheck = daily.next_check_after;
     const noRecentSignal =
@@ -13593,6 +13631,9 @@ function formatKoreanResult(value) {
       ``,
       `#### 오늘 추천 영향 요약`,
       ...formatBulletList(latestImpactLines, (item) => item, "오늘 추천 점수에 직접 연결된 최근 1주 자료 영향 요약이 없습니다."),
+      ``,
+      `#### 종목별 추천 영향`,
+      ...formatBulletList(impactByTargetLines, (item) => item, "최근 1주 자료와 추천 종목을 연결한 종목별 영향 요약이 없습니다."),
       ``,
       `#### 오늘 추천 근거 연결 자료`,
       ...formatBulletList(latestRecommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘 추천 1~3위 근거 문서와 직접 연결된 항목이 없습니다."),

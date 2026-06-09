@@ -1117,7 +1117,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     recentWeeklyShowsImpactSummary:
                       recentWeeklyBriefText.includes("추천 영향 요약") &&
                       recentWeeklyBriefText.includes("영향 판정") &&
-                      recentWeeklyBriefText.includes("오늘 추천 영향 요약"),
+                      recentWeeklyBriefText.includes("오늘 추천 영향 요약") &&
+                      recentWeeklyBriefText.includes("종목별 추천 영향"),
                     recentWeeklyShowsPublicIrQuality:
                       !recentWeeklyBriefText.includes("공개 IR/SEC") ||
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
