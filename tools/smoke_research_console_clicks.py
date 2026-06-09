@@ -1207,6 +1207,13 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       (dailyRecommendationsText.includes("오늘의 추천 결과") ||
                         dailyRecommendationsText.includes("매일 추천 후보 1~3위")) &&
                       dailyRecommendationsText.includes("추천 후보"),
+                    dailyRecommendationsShowsExposure:
+                      dailyRecommendationsText.includes("추천 연결:") &&
+                      (dailyRecommendationsText.includes("보유 노출") ||
+                        dailyRecommendationsText.includes("관심/감시 대상") ||
+                        dailyRecommendationsText.includes("최근자료 영향") ||
+                        dailyRecommendationsText.includes("환율 확인") ||
+                        dailyRecommendationsText.includes("보유/관심 연결 정보 없음")),
                     dailyRecommendationsShowsTracking:
                       (dailyRecommendationsStatusText.includes("경과 그래프") ||
                         dailyRecommendationsStatusText.includes("사후 추적")) &&
@@ -1340,6 +1347,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsTopThree"]:
                 raise AssertionError("오늘 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
+            if not result["dailyRecommendationsShowsExposure"]:
+                raise AssertionError(
+                    "오늘 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."
+                )
             if not result["dailyRecommendationsShowsTracking"]:
                 raise AssertionError("추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:
