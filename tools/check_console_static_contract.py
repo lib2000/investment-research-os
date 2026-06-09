@@ -164,6 +164,8 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_evidence_synthesis_flow": "runRecentWeeklyEvidenceSynthesisFlow",
     "recent_weekly_evidence_synthesis_query": "최근 1주 추천 근거 연결 자료 요약",
     "recent_weekly_evidence_synthesis_title": "추천 근거 요약",
+    "recent_weekly_evidence_synthesis_rag_status": "추천 근거 RAG 합성",
+    "recent_weekly_evidence_synthesis_storage": "저장된 합성 보고서",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {

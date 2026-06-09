@@ -455,6 +455,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       const text = document.querySelector("#output")?.innerText || "";
                       return text.includes("추천 근거 요약") &&
                         text.includes("오늘 추천 직접 연결") &&
+                        text.includes("추천 근거 RAG 합성") &&
+                        text.includes("저장된 합성 보고서") &&
                         text.includes("RAG 검색어") &&
                         text.includes("다음 행동")
                         ? text
@@ -1140,6 +1142,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     recentWeeklyEvidenceShowsSynthesis:
                       recentWeeklyEvidenceText.includes("추천 근거 요약") &&
                       recentWeeklyEvidenceText.includes("오늘 추천 직접 연결") &&
+                      recentWeeklyEvidenceText.includes("추천 근거 RAG 합성") &&
+                      recentWeeklyEvidenceText.includes("저장된 합성 보고서") &&
                       recentWeeklyEvidenceText.includes("RAG 검색어") &&
                       recentWeeklyEvidenceText.includes("저장 데이터 검색 합성 보고서"),
                     recentWeeklyShowsPublicIrQuality:

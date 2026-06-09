@@ -12090,13 +12090,20 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
     });
     const linkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_recommendation).length;
     const latestLinkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_latest_recommendation).length;
+    const synthesisPayload = result?.payload || {};
+    const synthesisSourceCount = Number(synthesisPayload.source_count || 0);
+    const synthesisCandidateCount = Number(synthesisPayload.candidate_count || 0);
+    const synthesisStoragePath = result?.storage?.relative_path || "저장 위치 미확인";
+    const synthesisRagStatus = result?.rag_document ? "RAG 연결 완료" : "RAG 연결 확인 필요";
     const synthesisHeader = [
       "### 추천 근거 요약",
       "",
       `- **대상:** 최근 1주 자료 중 추천 근거 연결 ${formatNumber(linkedCount)}건`,
       `- **오늘 추천 직접 연결:** ${formatNumber(latestLinkedCount)}건`,
+      `- **추천 근거 RAG 합성:** 원천 ${formatNumber(synthesisSourceCount)}개 / 후보 ${formatNumber(synthesisCandidateCount)}개 / ${synthesisRagStatus}`,
+      `- **저장된 합성 보고서:** ${synthesisStoragePath}`,
       `- **RAG 검색어:** ${compactOutputText(query, 220)}`,
-      "- **다음 행동:** 강화/확인 필요/후보 자료를 오늘 추천 논거와 비교",
+      "- **다음 행동:** 강화/확인 필요/후보 자료를 오늘 추천 논거와 비교하고, 저장된 합성 보고서를 오늘 추천 근거에 재사용",
       "",
     ].join("\n");
     setOutput(`${synthesisHeader}${formatKoreanResult(result || "추천 근거 연결 자료 RAG 요약 결과를 확인하지 못했습니다.")}`, { skipCompletion: true });
