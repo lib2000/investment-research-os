@@ -129,6 +129,8 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_tone_helper": "dailyRecommendationMilestoneTone",
     "daily_recommendation_weekly_evidence_helper": "dailyRecommendationWeeklyEvidenceRows",
     "daily_recommendation_weekly_impact_helper": "dailyRecommendationWeeklyImpactRows",
+    "daily_recommendation_exposure_helper": "dailyRecommendationExposureSummary",
+    "daily_recommendation_exposure_line": "추천 연결:",
     "recent_weekly_recommendation_impact_helper": "recommendationImpactForItem",
     "recent_weekly_impact_summary": "추천 영향 요약",
     "recent_weekly_today_impact_section": "오늘 추천 영향 요약",

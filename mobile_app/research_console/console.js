@@ -7934,6 +7934,47 @@ function dailyRecommendationWeeklyEvidenceRows(record) {
     .filter(Boolean);
 }
 
+function dailyRecommendationExposureSummary(record = {}) {
+  const portfolioRisk = record.portfolio_risk_connection || {};
+  const overseasTracking = record.overseas_tracking || {};
+  const scoreLabels = (record.score_components || []).map((component) => String(component.label || ""));
+  const hasHoldingScore = scoreLabels.some((label) => label.includes("실제 보유") || label.includes("포트폴리오 비중"));
+  const hasInterestScore = scoreLabels.some((label) => label.includes("관심종목") || label.includes("보유/관심"));
+  const weeklyImpactRows = dailyRecommendationWeeklyImpactRows(record);
+  const context = Array.isArray(record.portfolio_context) ? record.portfolio_context : [];
+  const chips = [];
+  if (portfolioRisk.linked && portfolioRisk.market_value_krw) {
+    chips.push(`보유 노출 ${formatMoney(portfolioRisk.market_value_krw, "KRW", "n/a")}`);
+  } else if (portfolioRisk.linked && hasInterestScore) {
+    chips.push("관심/감시 대상");
+  } else if (portfolioRisk.linked) {
+    chips.push("포트폴리오 연결");
+  } else if (hasInterestScore) {
+    chips.push("관심 우선순위 반영");
+  }
+  if (hasHoldingScore && !chips.some((chip) => chip.includes("보유"))) {
+    chips.push("보유 비중 반영");
+  }
+  context.slice(0, 2).forEach((item) => {
+    const text = compactOutputText(item, 54);
+    if (text && !chips.includes(text)) {
+      chips.push(text);
+    }
+  });
+  if (weeklyImpactRows.length) {
+    chips.push(`최근자료 영향 ${formatNumber(weeklyImpactRows.length)}묶음`);
+  }
+  if (overseasTracking.needs_fx_conversion) {
+    chips.push(`${overseasTracking.currency || record.currency || "USD"}·환율 확인`);
+  }
+  if (portfolioRisk.priority === "high") {
+    chips.push("노출 상위 확인");
+  } else if (portfolioRisk.priority === "watch") {
+    chips.push("편입 전 조건 확인");
+  }
+  return chips.filter(Boolean).slice(0, 6).join(" · ");
+}
+
 function dailyRecommendationEvidenceRows(record) {
   return [
     ...(record?.evidence_sources || []).slice(0, 3),
@@ -8288,6 +8329,7 @@ function renderDailyRecommendationCards(payload) {
       const weeklyEvidenceRows = dailyRecommendationWeeklyEvidenceRows(record);
       const evidenceRows = dailyRecommendationEvidenceRows(record);
       const citationRows = dailyRecommendationCitationRows(record);
+      const exposureSummary = dailyRecommendationExposureSummary(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
       return `
         <article class="daily-recommendation-card${publicIrSecLinked ? " has-public-ir-sec" : ""}">
@@ -8295,6 +8337,7 @@ function renderDailyRecommendationCards(payload) {
           <strong>${escapeHtml(displayCompanyName(record))}</strong>
           ${publicIrSecLinked ? `<div class="daily-recommendation-badges"><em>공개 IR/SEC 근거</em></div>` : ""}
           <p>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</p>
+          ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           <div class="daily-recommendation-score">
             ${scoreComponents
@@ -13719,6 +13762,7 @@ function formatKoreanResult(value) {
         .map((doc) => `${doc.source_date || "날짜 미확인"} ${doc.report_type || "문서"} ${doc.title || doc.source_relative_path || "근거 문서"}`)
         .join(" / ");
       const weeklyImpactRows = dailyRecommendationWeeklyImpactRows(item).slice(0, 3).join(" / ");
+      const exposureSummary = dailyRecommendationExposureSummary(item);
       const weeklyGroups = (item.weekly_evidence_groups || [])
         .slice(0, 3)
         .map((group) => {
@@ -13755,7 +13799,7 @@ function formatKoreanResult(value) {
       const baseline = formatSmartPrice(item.baseline_price, item.currency || "KRW", "기준가 미확인");
       return `${item.rank || "-"}위. ${displayCompanyName(item)} · 기준가 ${baseline} · 점수 ${
         item.score ?? "n/a"
-      }\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
+      }\n  추천 연결: ${exposureSummary || "보유/관심 연결 정보 없음"}\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
         weights ? `\n  비중: ${weights}` : ""
       }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyImpactRows ? `\n  최근 1주 영향: ${weeklyImpactRows}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
         reasons || "근거 요약 없음"
