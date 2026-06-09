@@ -392,11 +392,13 @@ $contracts = @(
       'check_storage_quality_store.py',
       'check_rag_failure_diagnostics.py',
       'check_llm_bridge_store.py',
+      'check_rag_synthesis_store.py',
       'check_daily_recommendations_store.py',
       'check_daily_recommendation_citations.py',
       '저장/RAG 실패 진단',
       '매일 추천 RAG 근거 문서',
       'LLM/RAG 저장 상태',
+      'RAG 합성 저장 상태',
       '오프라인 운영 점검 통과'
     )
   },
@@ -678,6 +680,18 @@ $contracts = @(
       'RAG 연결 누락',
       '원 프롬프트 누락',
       'LLM 응답 누락'
+    )
+  },
+  @{
+    Path = "tools\check_rag_synthesis_store.py"
+    Snippets = @(
+      'DEFAULT_MANIFEST',
+      'DEFAULT_RAG_DB',
+      'REPORT_TYPE',
+      '--require-latest-rag',
+      'RAG 합성 저장 상태 정상',
+      'RAG 연결 누락',
+      '다음 액션 누락'
     )
   },
   @{
