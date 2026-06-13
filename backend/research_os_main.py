@@ -76,7 +76,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_risk_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
+from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -14831,6 +14831,21 @@ def reprocess_research_memory_ocr_endpoint(
     )
 
 
+def _rag_query_synthesis_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        build_rag_query_synthesis_thesis=build_rag_query_synthesis_thesis,
+        current_storage_date=current_storage_date,
+        rag_synthesis_storage_key=rag_synthesis_storage_key,
+        read_manifest=read_manifest,
+        render_rag_query_synthesis_markdown=render_rag_query_synthesis_markdown,
+        save_research_markdown=save_research_markdown,
+        ticker_company_name=ticker_company_name,
+        ticker_watch_kpis=ticker_watch_kpis,
+        upsert_research_memory_document=upsert_research_memory_document,
+        upsert_ticker_thesis_snapshot=upsert_ticker_thesis_snapshot,
+    )
+
+
 @app.post(
     "/api/v1/rag/memory/synthesize",
     dependencies=[Depends(verify_user_token)],
@@ -14865,70 +14880,15 @@ def synthesize_rag_memory_search_results(
     rag_document = None
     thesis_snapshot = None
     if save_result:
-        storage_key = rag_synthesis_storage_key(payload["source_documents"])
-        thesis = None
-        watch_items: list[WatchItem] = []
-        manifest_extra = {
-            "summary": payload["summary"],
-            "query": query,
-            "source_count": payload["source_count"],
-            "candidate_count": payload["candidate_count"],
-            "grouped_count": payload["grouped_count"],
-            "source_confidence": payload["confidence"],
-            "tags": ["rag_query_synthesis", "search", "synthesis", *payload["tags"][:10]],
-            "tickers": payload["tickers"],
-            "consensus_facts": payload["consensus_facts"],
-            "bull_thesis": payload["bull_thesis"],
-            "bear_thesis": payload["bear_thesis"],
-            "cruxes": payload["cruxes"],
-            "observables": payload["observables"],
-        }
-        if storage_key not in {"SEARCH", "MARKET", "GENERAL", "UNKNOWN"}:
-            thesis, watch_items = build_rag_query_synthesis_thesis(storage_key, payload, watch_kpis=ticker_watch_kpis(storage_key))
-            manifest_extra["investment_thesis"] = thesis.model_dump(mode="json")
-            manifest_extra["watch_items"] = [
-                item.model_dump(mode="json") for item in watch_items
-            ]
-        storage = save_research_markdown(
+        saved_result = rag_query_synthesis_storage.save_rag_query_synthesis_result(
+            _rag_query_synthesis_storage_runtime(),
             vault_dir=vault_dir,
-            ticker=storage_key,
-            report_type="rag-query-synthesis",
-            markdown=render_rag_query_synthesis_markdown(payload),
-            structured_payload=payload,
-            manifest_entry=manifest_extra,
-            report_date=current_storage_date(),
-            file_suffix=query,
+            query=query,
+            payload=payload,
         )
-        if storage:
-            saved_entry = next(
-                (
-                    entry
-                    for entry in read_manifest(vault_dir)
-                    if entry.get("file_name") == storage.file_name
-                    and str(entry.get("ticker") or "").upper() == storage_key
-                ),
-                None,
-            )
-            if saved_entry:
-                rag_document = upsert_research_memory_document(
-                    vault_dir=vault_dir,
-                    entry=saved_entry,
-                )
-        if thesis is not None and storage is not None:
-            thesis_snapshot = upsert_ticker_thesis_snapshot(
-                vault_dir=vault_dir,
-                ticker=storage_key,
-                company_name=ticker_company_name(storage_key),
-                investment_thesis=thesis,
-                watch_items=watch_items,
-                source_entry={
-                    "type": "rag-query-synthesis",
-                    "date": payload["date"],
-                    "file_name": storage.file_name,
-                    "relative_path": storage.relative_path,
-                },
-                confidence=payload["confidence"],
-            )
+        storage = saved_result["storage"]
+        rag_document = saved_result["rag_document"]
+        thesis_snapshot = saved_result["thesis_snapshot"]
 
     return {
         "status": "success",

@@ -5075,6 +5075,98 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertEqual(pending, [])
 
 
+class RagQuerySynthesisStorageTests(unittest.TestCase):
+    def test_rag_query_synthesis_storage_persists_manifest_rag_and_thesis(self):
+        from research_os import rag_query_synthesis_storage
+        from research_os.research_memory import ResearchStorageInfo
+
+        class DumpItem(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
+        save_calls = []
+        rag_calls = []
+        thesis_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        thesis = DumpItem(title="AI 메모리 투자 논거", confidence=0.88)
+        watch_item = DumpItem(metric="HBM 매출", direction="상승")
+        runtime = SimpleNamespace(
+            build_rag_query_synthesis_thesis=lambda storage_key, payload, watch_kpis: (thesis, [watch_item]),
+            current_storage_date=lambda: date(2026, 6, 13),
+            rag_synthesis_storage_key=lambda documents: "005930",
+            read_manifest=lambda vault_dir: [
+                {
+                    "file_name": "005930-rag-query-synthesis.md",
+                    "ticker": "005930",
+                    "summary": "저장된 RAG 합성",
+                }
+            ],
+            render_rag_query_synthesis_markdown=lambda payload: "# RAG 합성\n005930",
+            save_research_markdown=fake_save_research_markdown,
+            ticker_company_name=lambda ticker: "삼성전자",
+            ticker_watch_kpis=lambda ticker: ["HBM 매출", "DRAM 가격"],
+            upsert_research_memory_document=lambda **kwargs: rag_calls.append(kwargs) or {"status": "upserted"},
+            upsert_ticker_thesis_snapshot=lambda **kwargs: thesis_calls.append(kwargs) or {"status": "snapshot_saved"},
+        )
+        payload = {
+            "date": "2026-06-13",
+            "summary": "AI 메모리 관련 근거 합성",
+            "source_documents": [{"ticker": "005930"}],
+            "source_count": 2,
+            "candidate_count": 3,
+            "grouped_count": 1,
+            "confidence": 0.86,
+            "tags": ["ai", "memory", "semiconductor"],
+            "tickers": ["005930"],
+            "consensus_facts": ["HBM 수요 증가"],
+            "bull_thesis": ["메모리 업황 회복"],
+            "bear_thesis": ["밸류에이션 부담"],
+            "cruxes": ["AI 서버 수요 지속 여부"],
+            "observables": ["HBM 계약 공시"],
+        }
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "rag_query_synthesis_storage_vault"
+
+        result = rag_query_synthesis_storage.save_rag_query_synthesis_result(
+            runtime,
+            vault_dir=vault_dir,
+            query="AI 메모리",
+            payload=payload,
+        )
+
+        self.assertEqual(result["storage_key"], "005930")
+        self.assertEqual(result["rag_document"], {"status": "upserted"})
+        self.assertEqual(result["thesis_snapshot"], {"status": "snapshot_saved"})
+        self.assertEqual(len(save_calls), 1)
+        saved = save_calls[0]
+        self.assertEqual(saved["vault_dir"], vault_dir)
+        self.assertEqual(saved["ticker"], "005930")
+        self.assertEqual(saved["report_type"], "rag-query-synthesis")
+        self.assertEqual(saved["report_date"], date(2026, 6, 13))
+        self.assertEqual(saved["file_suffix"], "AI 메모리")
+        self.assertEqual(saved["structured_payload"], payload)
+        self.assertEqual(saved["manifest_entry"]["query"], "AI 메모리")
+        self.assertEqual(saved["manifest_entry"]["source_confidence"], 0.86)
+        self.assertEqual(saved["manifest_entry"]["investment_thesis"], {"title": "AI 메모리 투자 논거", "confidence": 0.88})
+        self.assertEqual(saved["manifest_entry"]["watch_items"], [{"metric": "HBM 매출", "direction": "상승"}])
+        self.assertEqual(rag_calls[0]["vault_dir"], vault_dir)
+        self.assertEqual(rag_calls[0]["entry"]["file_name"], "005930-rag-query-synthesis.md")
+        self.assertEqual(thesis_calls[0]["ticker"], "005930")
+        self.assertEqual(thesis_calls[0]["company_name"], "삼성전자")
+        self.assertEqual(thesis_calls[0]["investment_thesis"], thesis)
+        self.assertEqual(thesis_calls[0]["watch_items"], [watch_item])
+        self.assertEqual(thesis_calls[0]["source_entry"]["type"], "rag-query-synthesis")
+        self.assertEqual(thesis_calls[0]["source_entry"]["date"], "2026-06-13")
+        self.assertEqual(thesis_calls[0]["confidence"], 0.86)
+
+
 class DartFilingStorageTests(unittest.TestCase):
     def test_dart_filing_storage_persists_manifest_and_rag(self):
         from research_os import dart_filing_storage
