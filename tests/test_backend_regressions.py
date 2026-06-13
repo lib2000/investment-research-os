@@ -6288,6 +6288,48 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
 
 
 class PortfolioPerformanceTests(unittest.TestCase):
+    def test_portfolio_period_accumulators_finalize_coverage_and_leaders(self):
+        from research_os.portfolio_performance import (
+            build_period_accumulators,
+            finalize_period_accumulators,
+        )
+
+        definitions = [("1w", "최근 1주일", 7)]
+        accumulators = build_period_accumulators(definitions)
+        period = accumulators["1w"]
+        period["target_dates"].extend(["2026-06-05", "2026-06-06"])
+        period["price_as_of_dates"].extend(["2026-06-12", "2026-06-13"])
+        period["current_value"] = 1200.123
+        period["base_value"] = 1000.0
+        period["net_profit"] = 200.123
+        period["included_count"] = 2
+        period["covered_market_value"] = 1200.123
+        period["top_gainers"].extend([
+            {"ticker": "A", "net_profit": 10},
+            {"ticker": "B", "net_profit": 50},
+            {"ticker": "C", "net_profit": 20},
+            {"ticker": "D", "net_profit": 40},
+        ])
+        period["top_losers"].extend([
+            {"ticker": "A", "net_profit": -10},
+            {"ticker": "B", "net_profit": -50},
+            {"ticker": "C", "net_profit": -20},
+            {"ticker": "D", "net_profit": -40},
+        ])
+
+        finalized = finalize_period_accumulators(definitions, accumulators, current_portfolio_value=2400)
+
+        self.assertEqual(len(finalized), 1)
+        self.assertEqual(finalized[0]["current_value"], 1200.12)
+        self.assertEqual(finalized[0]["base_value"], 1000.0)
+        self.assertEqual(finalized[0]["net_profit"], 200.12)
+        self.assertEqual(finalized[0]["return_rate"], 0.2001)
+        self.assertEqual(finalized[0]["target_date"], "2026-06-06")
+        self.assertEqual(finalized[0]["price_as_of"], "2026-06-13")
+        self.assertEqual(finalized[0]["coverage_rate"], 0.5001)
+        self.assertEqual([item["ticker"] for item in finalized[0]["top_gainers"]], ["B", "D", "C"])
+        self.assertEqual([item["ticker"] for item in finalized[0]["top_losers"]], ["B", "D", "C"])
+
     def test_portfolio_performance_helpers_select_history_and_current_value(self):
         from research_os.models import PortfolioHolding
         from research_os.portfolio_performance import (

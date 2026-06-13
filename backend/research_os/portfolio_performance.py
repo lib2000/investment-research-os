@@ -175,3 +175,62 @@ def portfolio_holding_current_value(
     if holding.quantity is None or holding.quantity <= 0 or current_price is None:
         return None
     return holding.quantity * current_price * infer_fx_rate(holding)
+
+
+def build_period_accumulators(period_definitions: list[tuple[str, str, int]]) -> dict:
+    return {
+        key: {
+            "key": key,
+            "label": label,
+            "days": days,
+            "target_date": None,
+            "price_as_of": None,
+            "target_dates": [],
+            "price_as_of_dates": [],
+            "current_value": 0.0,
+            "base_value": 0.0,
+            "net_profit": 0.0,
+            "return_rate": None,
+            "included_count": 0,
+            "covered_market_value": 0.0,
+            "top_gainers": [],
+            "top_losers": [],
+        }
+        for key, label, days in period_definitions
+    }
+
+
+def finalize_period_accumulators(
+    period_definitions: list[tuple[str, str, int]],
+    period_accumulators: dict,
+    current_portfolio_value: float,
+) -> list[dict]:
+    periods = []
+    for key, _label, _days in period_definitions:
+        period = period_accumulators[key]
+        base_value = period["base_value"]
+        return_rate = period["net_profit"] / base_value if base_value > 0 else None
+        period["current_value"] = round(period["current_value"], 2)
+        period["base_value"] = round(period["base_value"], 2)
+        period["net_profit"] = round(period["net_profit"], 2)
+        period["return_rate"] = round(return_rate, 4) if return_rate is not None else None
+        target_dates = sorted(date_text for date_text in period.pop("target_dates", []) if date_text)
+        price_as_of_period_dates = sorted(date_text for date_text in period.pop("price_as_of_dates", []) if date_text)
+        period["target_date"] = target_dates[-1] if target_dates else None
+        period["price_as_of"] = price_as_of_period_dates[-1] if price_as_of_period_dates else None
+        period["coverage_rate"] = (
+            round(period["covered_market_value"] / current_portfolio_value, 4)
+            if current_portfolio_value > 0
+            else None
+        )
+        period["top_gainers"] = sorted(
+            period["top_gainers"],
+            key=lambda item: item.get("net_profit") or 0,
+            reverse=True,
+        )[:3]
+        period["top_losers"] = sorted(
+            period["top_losers"],
+            key=lambda item: item.get("net_profit") or 0,
+        )[:3]
+        periods.append(period)
+    return periods

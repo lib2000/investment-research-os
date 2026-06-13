@@ -227,8 +227,10 @@ from research_os.models import (
     WatchItemSignal,
 )
 from research_os.portfolio_performance import (
+    build_period_accumulators as _build_period_accumulators,
     build_price_refresh_summary,
     filter_target_price_outliers,
+    finalize_period_accumulators as _finalize_period_accumulators,
     historical_close_on_or_before as _historical_close_on_or_before,
     is_plausible_target_price,
     is_probable_year_or_metadata_number,
@@ -16238,26 +16240,7 @@ def build_portfolio_performance(
         ),
     )
     as_of = current_storage_date()
-    period_accumulators = {
-        key: {
-            "key": key,
-            "label": label,
-            "days": days,
-            "target_date": None,
-            "price_as_of": None,
-            "target_dates": [],
-            "price_as_of_dates": [],
-            "current_value": 0.0,
-            "base_value": 0.0,
-            "net_profit": 0.0,
-            "return_rate": None,
-            "included_count": 0,
-            "covered_market_value": 0.0,
-            "top_gainers": [],
-            "top_losers": [],
-        }
-        for key, label, days in PORTFOLIO_PERFORMANCE_PERIODS
-    }
+    period_accumulators = _build_period_accumulators(PORTFOLIO_PERFORMANCE_PERIODS)
     holding_rows: list[dict] = []
     skipped: list[dict] = []
     current_portfolio_value = 0.0
@@ -16506,34 +16489,11 @@ def build_portfolio_performance(
             "periods": row_periods,
         })
 
-    periods = []
-    for key, label, days in PORTFOLIO_PERFORMANCE_PERIODS:
-        period = period_accumulators[key]
-        base_value = period["base_value"]
-        return_rate = period["net_profit"] / base_value if base_value > 0 else None
-        period["current_value"] = round(period["current_value"], 2)
-        period["base_value"] = round(period["base_value"], 2)
-        period["net_profit"] = round(period["net_profit"], 2)
-        period["return_rate"] = round(return_rate, 4) if return_rate is not None else None
-        target_dates = sorted(date_text for date_text in period.pop("target_dates", []) if date_text)
-        price_as_of_period_dates = sorted(date_text for date_text in period.pop("price_as_of_dates", []) if date_text)
-        period["target_date"] = target_dates[-1] if target_dates else None
-        period["price_as_of"] = price_as_of_period_dates[-1] if price_as_of_period_dates else None
-        period["coverage_rate"] = (
-            round(period["covered_market_value"] / current_portfolio_value, 4)
-            if current_portfolio_value > 0
-            else None
-        )
-        period["top_gainers"] = sorted(
-            period["top_gainers"],
-            key=lambda item: item.get("net_profit") or 0,
-            reverse=True,
-        )[:3]
-        period["top_losers"] = sorted(
-            period["top_losers"],
-            key=lambda item: item.get("net_profit") or 0,
-        )[:3]
-        periods.append(period)
+    periods = _finalize_period_accumulators(
+        PORTFOLIO_PERFORMANCE_PERIODS,
+        period_accumulators,
+        current_portfolio_value,
+    )
 
     current_unrealized_return = (
         current_unrealized_gain / current_cost_basis
