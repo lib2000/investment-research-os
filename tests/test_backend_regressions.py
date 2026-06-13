@@ -2356,6 +2356,43 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class NewsActionModuleTests(unittest.TestCase):
+    def test_news_action_module_marks_market_journal_candidate(self):
+        from research_os import news_actions
+
+        runtime = SimpleNamespace(
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            news_scope_label=lambda scope: {"MARKET": "시장 흐름"}.get(scope, scope),
+            http_exception=RuntimeError,
+        )
+        item = {"id": "n1", "tags": ["macro"]}
+
+        result = news_actions.update_news_inbox_item_action(runtime, item, "시장일지")
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["item"]["scope"], "MARKET")
+        self.assertEqual(result["item"]["scope_label"], "시장 흐름")
+        self.assertEqual(result["item"]["review_status"], "시장일지 후보")
+        self.assertIn("market_journal_candidate", result["item"]["tags"])
+
+    def test_news_action_module_infers_market_from_text_and_scope(self):
+        from research_os import news_actions
+
+        self.assertEqual(
+            news_actions.infer_market_from_news_item({"title": "코스피와 원화 흐름", "tags": []}),
+            "KR",
+        )
+        self.assertEqual(
+            news_actions.infer_market_from_news_item({"summary": "FOMC and NASDAQ rallied", "tags": []}),
+            "US",
+        )
+        self.assertEqual(
+            news_actions.infer_market_from_news_item({"scope": "MARKET-US", "tags": []}),
+            "US",
+        )
+        self.assertEqual(news_actions.infer_market_from_news_item({"tags": []}), "GLOBAL")
+
+
 class NewsInboxModuleTests(unittest.TestCase):
     def test_news_inbox_module_fingerprint_uses_runtime_callback(self):
         from research_os import news_inbox
