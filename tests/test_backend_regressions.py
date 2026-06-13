@@ -1248,6 +1248,42 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
 
+class PortfolioIntelligentTableHelperTests(unittest.TestCase):
+    def test_readiness_summary_prioritizes_target_proximity_action(self):
+        from research_os import portfolio_intelligent_table
+
+        summary = portfolio_intelligent_table.build_readiness_summary(
+            verified=True,
+            current_price=100,
+            memory_count=4,
+            thesis_connected=True,
+            target_price=104,
+            week52_high=120,
+            target_upside=0.04,
+            week52_proximity=0.83,
+        )
+
+        self.assertEqual(summary["data_readiness_score"], 1.0)
+        self.assertEqual(summary["next_action"], "목표가 근접: 일부 이익실현 또는 목표 재점검")
+
+    def test_readiness_summary_requires_thesis_before_memory_depth(self):
+        from research_os import portfolio_intelligent_table
+
+        summary = portfolio_intelligent_table.build_readiness_summary(
+            verified=True,
+            current_price=100,
+            memory_count=1,
+            thesis_connected=False,
+            target_price=130,
+            week52_high=150,
+            target_upside=0.3,
+            week52_proximity=0.67,
+        )
+
+        self.assertEqual(summary["data_readiness_score"], 0.8)
+        self.assertEqual(summary["next_action"], "팀 리포트로 기준 투자 논거 생성")
+
+
 class TargetPriceMemoryHelperTests(unittest.TestCase):
     def test_target_price_memory_extracts_explicit_and_consensus_prices(self):
         from research_os import target_price_memory
