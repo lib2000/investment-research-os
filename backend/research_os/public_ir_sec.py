@@ -73,6 +73,14 @@ def _host_label(source_url: str) -> tuple[str, str, list[str]]:
     return host or "공개 웹", "other", tags
 
 
+def _normalize_public_ir_source_type(source_url: str, value: str) -> str:
+    host = (urlparse(source_url).hostname or "").lower()
+    normalized = _safe_key(value, "other").lower()
+    if host.endswith("sec.gov") and normalized in {"sec_company_submissions", "sec", "sec_edgar", "official_filing"}:
+        return "official_filing"
+    return normalized
+
+
 def _summary_from_text(
     title: str,
     text: str,
@@ -186,7 +194,7 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         body_text = render_source_url_context(url_info)
     provider, source_type, tags = _host_label(source_url)
     provider = _safe_title(request.source_provider, provider)
-    source_type = _safe_key(request.source_type, source_type).lower()
+    source_type = _normalize_public_ir_source_type(source_url, request.source_type or source_type)
     title = _safe_title(request.source_title or url_info.get("title") or url_info.get("original_title"), provider)
     source_category = _safe_title(request.source_category, "공개 IR/SEC 자료")
     filing_form = _safe_title(request.filing_form, "")

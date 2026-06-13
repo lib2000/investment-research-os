@@ -849,6 +849,16 @@ $contracts = @(
     )
   },
   @{
+    Path = "backend\research_os\recent_activity.py"
+    Snippets = @(
+      'compact_recent_dart_entry',
+      'dedupe_recent_activity_items',
+      'annotate_recent_weekly_navigation_hints',
+      'annotate_recent_weekly_recommendation_links',
+      'build_recent_weekly_category_groups'
+    )
+  },
+  @{
     Path = "tools\check_recent_weekly_brief.py"
     Snippets = @(
       'DEFAULT_MANIFEST',
