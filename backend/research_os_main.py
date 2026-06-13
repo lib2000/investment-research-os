@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import automation_status, capture_attachment, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch
+from research_os import automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -16159,192 +16159,41 @@ def auto_capture_research_item(
     텍스트/파일 내용을 받아 티커, 제목, 출처 유형, 신뢰도를 자동 추론한 뒤 저장합니다.
     티커를 확정하지 못하면 INBOX에 저장해 후속 재분류가 가능하도록 보존합니다.
     """
-    raw_content = (request.raw_content or "").strip()
-    original_user_raw_content = raw_content
-    source_url = (request.source_url or "").strip()
-    raw_translation_info = (
-        foreign_text_korean_digest(raw_content, "")
-        if raw_content
-        else {"status": "empty", "text": "", "language": "unknown", "note": ""}
-    )
-    if raw_translation_info.get("status") == "local_digest" and raw_translation_info.get("text"):
-        raw_content = str(raw_translation_info["text"]).strip()
-    url_info = fetch_capture_source_url(source_url) if source_url else {}
-    url_body_context = render_source_url_body(url_info)
-    url_title_context = (
-        f"웹사이트 제목: {url_info.get('title')}"
-        if source_url and url_info.get("title")
-        else ""
-    )
-    original_input_preview = "\n".join(
-        value
-        for value in [
-            raw_content,
-            f"웹사이트 주소: {source_url}" if source_url else "",
-        ]
-        if value
-    )
-    if original_user_raw_content != raw_content:
-        original_input_preview = "\n\n".join(
-            value
-            for value in [
-                original_user_raw_content,
-                "[한국어 분석용 변환본]",
-                raw_content,
-                f"웹사이트 주소: {source_url}" if source_url else "",
-            ]
-            if value
-        )
-    if not raw_content and not request.file_content_base64 and not source_url:
-        raise HTTPException(
-            status_code=422,
-            detail="저장할 텍스트, 웹사이트 주소 또는 파일 내용이 비어 있습니다.",
-        )
-    url_text_unavailable = (
-        source_url
-        and is_unusable_source_url(url_info)
-        and not raw_content
-        and not request.file_content_base64
-    )
-    if url_text_unavailable:
-        raw_content = render_url_only_capture_context(source_url, url_info)
-        original_input_preview = raw_content
-
-    inference_content = "\n\n".join(
-        value for value in [raw_content, url_title_context, url_body_context] if value
-    )
-    attachment_signal_context = render_attachment_signal_context(
-        request.file_name,
-        request.file_mime_type,
-    )
-    if attachment_signal_context:
-        inference_content = "\n\n".join(
-            value for value in [inference_content, attachment_signal_context] if value
-        )
-    if request.file_name:
-        inference_content = "\n".join(
-            value for value in [inference_content, f"첨부 파일명: {request.file_name}"] if value
-        )
-    if is_pdf_attachment(request.file_name, request.file_mime_type) and request.file_content_base64:
-        pdf_bytes = decode_attachment_base64(request.file_content_base64)
-        if pdf_bytes:
-            pdf_text, pdf_note = extract_pdf_text(pdf_bytes)
-            pdf_inference_context = "\n".join(
-                value
-                for value in [
-                    f"첨부 PDF 텍스트 추출 상태: {pdf_note}",
-                    f"첨부 PDF 본문:\n{pdf_text[:20000]}" if pdf_text else "",
-                ]
-                if value
-            )
-            inference_content = "\n\n".join(
-                value for value in [inference_content, pdf_inference_context] if value
-            )
-
-    inferred_ticker, ticker_inference = infer_capture_ticker(inference_content, settings)
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    attachment_info = (
-        save_capture_attachment(
-            vault_dir,
-            inferred_ticker,
-            current_storage_date(),
-            request,
-            settings,
-        )
-        if request.save_result
-        else None
-    )
-    attachment_context = render_attachment_context(request, attachment_info)
-    if attachment_context and attachment_context not in raw_content:
-        raw_content = "\n\n".join(value for value in [raw_content, attachment_context] if value)
-    if url_body_context and url_body_context not in raw_content:
-        raw_content = "\n\n".join(value for value in [raw_content, url_body_context] if value)
-    inferred_investment_scope = infer_capture_investment_scope(
-        "\n\n".join(
-            value
-            for value in [
-                raw_content,
-                attachment_signal_context,
-                (attachment_info or {}).get("extracted_text"),
-            ]
-            if value
-        ),
+    return capture_auto.auto_capture_research_item(
+        _capture_auto_runtime(),
+        request,
         settings,
     )
-    investment_scope_context = render_investment_scope_context(inferred_investment_scope)
-    if investment_scope_context and investment_scope_context not in raw_content:
-        raw_content = "\n\n".join(value for value in [raw_content, investment_scope_context] if value)
-    if attachment_info is not None:
-        attachment_info["inferred_investment_scope"] = inferred_investment_scope
-    source_type = (
-        ticker_inference
-        if inferred_ticker in SPECIAL_RESEARCH_KEYS - {"INBOX"}
-        else infer_capture_source_type(raw_content, request.file_name)
+
+
+def _capture_auto_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        classification_system_tags=classification_system_tags,
+        current_storage_date=current_storage_date,
+        decode_attachment_base64=decode_attachment_base64,
+        extract_pdf_text=extract_pdf_text,
+        fetch_capture_source_url=fetch_capture_source_url,
+        foreign_text_korean_digest=foreign_text_korean_digest,
+        infer_capture_confidence=infer_capture_confidence,
+        infer_capture_investment_scope=infer_capture_investment_scope,
+        infer_capture_source_type=infer_capture_source_type,
+        infer_capture_tags=infer_capture_tags,
+        infer_capture_ticker=infer_capture_ticker,
+        infer_capture_title=infer_capture_title,
+        is_pdf_attachment=is_pdf_attachment,
+        is_unusable_source_url=is_unusable_source_url,
+        merge_research_tags=merge_research_tags,
+        prefix_capture_title=prefix_capture_title,
+        render_attachment_context=render_attachment_context,
+        render_attachment_signal_context=render_attachment_signal_context,
+        render_investment_scope_context=render_investment_scope_context,
+        render_source_url_body=render_source_url_body,
+        render_url_only_capture_context=render_url_only_capture_context,
+        resolve_vault_dir=resolve_vault_dir,
+        save_capture_attachment=save_capture_attachment,
+        save_capture_request=save_capture_request,
+        special_research_keys=SPECIAL_RESEARCH_KEYS,
     )
-    tags = [f"auto_ticker:{ticker_inference}", "auto_classified"]
-    tags = merge_research_tags(tags, classification_system_tags(inferred_ticker, source_type, ticker_inference))
-    tags = infer_capture_tags(raw_content, tags)
-    tags.extend(inferred_investment_scope.get("tags") or [])
-    if request.file_name:
-        tags.append("file_input")
-    if source_url:
-        tags.append("url_input")
-        tags.append("web_capture")
-    if url_text_unavailable:
-        tags.append("url_text_unavailable")
-        tags.append("needs_body_copy")
-    if raw_translation_info.get("status") == "local_digest":
-        tags.append("foreign_text_converted")
-    inferred_title = (
-        (url_info.get("title") or "").strip()
-        if source_url and not request.file_name
-        else ""
-    ) or infer_capture_title(raw_content, request.file_name)
-    title = prefix_capture_title(inferred_title, inferred_ticker, ticker_inference)
-    source_url_for_storage = (
-        url_info.get("final_url")
-        or url_info.get("source_url")
-        or source_url
-        or None
-    )
-    auto_request = ResearchCaptureRequest(
-        ticker=inferred_ticker,
-        title=title,
-        raw_content=raw_content,
-        source_type=source_type,
-        source_url=source_url_for_storage,
-        confidence=infer_capture_confidence(
-            source_type,
-            bool(request.file_name) or bool(url_info.get("text")),
-        ),
-        tags=tags,
-        run_thesis_impact=request.run_thesis_impact
-        and inferred_ticker not in SPECIAL_RESEARCH_KEYS,
-        save_result=request.save_result,
-    )
-    response = save_capture_request(
-        auto_request,
-        settings,
-        attachment_info=attachment_info,
-        source_url_processing=url_info if source_url else None,
-        input_preview_override=original_input_preview,
-        document_preview_override=(
-            (attachment_info or {}).get("extracted_text")
-            or url_info.get("text")
-            or (render_url_only_capture_context(source_url, url_info) if url_text_unavailable else "")
-            or url_info.get("note")
-        ),
-    )
-    response.captured_item.tags = sorted(set(response.captured_item.tags + tags))
-    if inferred_ticker == "INBOX":
-        response.captured_item.summary = (
-            f"[티커 미확정: INBOX 저장] {response.captured_item.summary}"
-        )
-    elif inferred_ticker in SPECIAL_RESEARCH_KEYS - {"INBOX"}:
-        response.captured_item.summary = (
-            f"[{inferred_ticker} 자동 분류] {response.captured_item.summary}"
-        )
-    return response
 
 
 @app.get(

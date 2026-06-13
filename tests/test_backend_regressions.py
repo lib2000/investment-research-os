@@ -2019,6 +2019,114 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class CaptureAutoModuleTests(unittest.TestCase):
+    def test_capture_auto_module_builds_url_based_special_scope_request(self):
+        from research_os import capture_auto
+        from research_os.models import AutoResearchCaptureRequest, CapturedResearchItem, ResearchCaptureResponse
+
+        captured = {}
+
+        def merge_tags(*groups):
+            merged = []
+            for group in groups:
+                for tag in group or []:
+                    if tag not in merged:
+                        merged.append(tag)
+            return merged
+
+        def save_capture_request(auto_request, _settings, **kwargs):
+            captured["request"] = auto_request
+            captured["kwargs"] = kwargs
+            return ResearchCaptureResponse(
+                captured_item=CapturedResearchItem(
+                    ticker=auto_request.ticker,
+                    title=auto_request.title,
+                    summary="요약",
+                    source_type=auto_request.source_type,
+                    source_url=auto_request.source_url,
+                    confidence=auto_request.confidence,
+                    tags=list(auto_request.tags),
+                ),
+                saved_to_research_memory=auto_request.save_result,
+            )
+
+        runtime = SimpleNamespace(
+            foreign_text_korean_digest=lambda _raw, _note: {"status": "original", "text": ""},
+            fetch_capture_source_url=lambda _url: {
+                "title": "Rates Report",
+                "final_url": "https://example.com/final",
+                "text": "rates body",
+                "note": "ok",
+            },
+            render_source_url_body=lambda info: f"본문: {info.get('text')}",
+            is_unusable_source_url=lambda _info: False,
+            render_url_only_capture_context=lambda url, _info: f"URL only: {url}",
+            render_attachment_signal_context=lambda _file_name, _mime_type: "",
+            is_pdf_attachment=lambda _file_name, _mime_type: False,
+            decode_attachment_base64=lambda _value: b"",
+            extract_pdf_text=lambda _payload: ("", ""),
+            infer_capture_ticker=lambda _content, _settings: ("RATES", "rates_research"),
+            resolve_vault_dir=lambda value: Path(value),
+            current_storage_date=lambda: date(2026, 6, 13),
+            save_capture_attachment=lambda *_args, **_kwargs: None,
+            render_attachment_context=lambda _request, _attachment_info: "",
+            infer_capture_investment_scope=lambda _content, _settings: {"tags": ["theme:rates"]},
+            render_investment_scope_context=lambda _scope: "관심 범위 후보: rates",
+            infer_capture_source_type=lambda _content, _file_name: "user_memo",
+            merge_research_tags=merge_tags,
+            classification_system_tags=lambda _ticker, source_type, reason: [
+                f"source_type:{source_type}",
+                f"auto_scope:{reason}",
+            ],
+            infer_capture_tags=lambda _content, tags: [*tags, "macro"],
+            infer_capture_title=lambda _content, _file_name: "Fallback Title",
+            prefix_capture_title=lambda title, ticker, reason: f"[{ticker}/{reason}] {title}",
+            infer_capture_confidence=lambda _source_type, has_file: 0.91 if has_file else 0.8,
+            save_capture_request=save_capture_request,
+            special_research_keys={"INBOX", "MARKET", "MACRO", "POLICY", "RATES", "FLOWS", "SECTOR"},
+        )
+        request = AutoResearchCaptureRequest(
+            raw_content="rate cut memo",
+            source_url="https://example.com/report",
+            run_thesis_impact=True,
+            save_result=False,
+        )
+
+        response = capture_auto.auto_capture_research_item(
+            runtime,
+            request,
+            SimpleNamespace(research_vault_dir=str(PROJECT_ROOT / ".test-tmp" / "capture-auto")),
+        )
+
+        auto_request = captured["request"]
+        self.assertEqual(auto_request.ticker, "RATES")
+        self.assertEqual(auto_request.title, "[RATES/rates_research] Rates Report")
+        self.assertEqual(auto_request.source_type, "rates_research")
+        self.assertEqual(auto_request.source_url, "https://example.com/final")
+        self.assertFalse(auto_request.run_thesis_impact)
+        self.assertIn("url_input", auto_request.tags)
+        self.assertIn("web_capture", auto_request.tags)
+        self.assertIn("theme:rates", auto_request.tags)
+        self.assertEqual(captured["kwargs"]["source_url_processing"]["title"], "Rates Report")
+        self.assertEqual(captured["kwargs"]["input_preview_override"], "rate cut memo\n웹사이트 주소: https://example.com/report")
+        self.assertEqual(captured["kwargs"]["document_preview_override"], "rates body")
+        self.assertIn("[RATES 자동 분류]", response.captured_item.summary)
+
+    def test_capture_auto_module_rejects_empty_input(self):
+        from fastapi import HTTPException
+        from research_os import capture_auto
+        from research_os.models import AutoResearchCaptureRequest
+
+        with self.assertRaises(HTTPException) as raised:
+            capture_auto.auto_capture_research_item(
+                SimpleNamespace(render_source_url_body=lambda _info: ""),
+                AutoResearchCaptureRequest(raw_content=""),
+                SimpleNamespace(research_vault_dir="unused"),
+            )
+
+        self.assertEqual(raised.exception.status_code, 422)
+
+
 class CaptureStorageModuleTests(unittest.TestCase):
     def test_capture_storage_module_builds_unsaved_response_with_previews(self):
         from research_os import capture_storage
