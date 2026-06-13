@@ -2059,6 +2059,129 @@ class ResearchCaptureClassificationTagTests(unittest.TestCase):
         self.assertTrue(response.rag_document)
 
 
+class CaptureAttachmentModuleTests(unittest.TestCase):
+    def test_capture_attachment_module_renders_signal_and_attachment_context(self):
+        from research_os import capture_attachment
+
+        signal_context = capture_attachment.render_attachment_signal_context(
+            "코스닥 중견중소_코스닥 활성화 정책.pdf",
+            "application/pdf",
+            "PDF OCR unavailable",
+        )
+        attachment_context = capture_attachment.render_attachment_context(
+            SimpleNamespace(file_name="report.pdf", file_mime_type="application/pdf", file_size=123),
+            {
+                "file_name": "report.pdf",
+                "mime_type": "application/pdf",
+                "size": 123,
+                "relative_path": "018260/_attachments/report.pdf",
+                "document_type": "PDF",
+                "extraction_quality": "partial",
+                "text_extraction": "본문 텍스트 추출 포함",
+                "extraction_profile": {
+                    "analysis_readiness": "medium",
+                    "char_count": 50,
+                    "line_count": 2,
+                    "numeric_token_count": 1,
+                    "next_action": "원문 확인",
+                },
+                "fallback_analysis_context": signal_context,
+                "inferred_investment_scope": {
+                    "theme_candidates": [{"label": "코스닥"}],
+                    "matched_interest_tickers": [{"company_name": "동성화인텍"}],
+                    "matched_interest_sectors": [],
+                    "matched_portfolio_holdings": [],
+                    "next_action": "비교",
+                },
+                "extraction_warnings": ["OCR 제한"],
+                "extracted_text": "코스닥 활성화 정책 본문",
+            },
+        )
+
+        self.assertIn("첨부 신호 컨텍스트", signal_context)
+        self.assertIn("코스닥", signal_context)
+        self.assertIn("분석 활용도: medium", attachment_context)
+        self.assertIn("관심종목 매칭: 동성화인텍", attachment_context)
+        self.assertIn("추출 경고: OCR 제한", attachment_context)
+        self.assertIn("코스닥 활성화 정책 본문", attachment_context)
+
+    def test_capture_attachment_module_saves_file_and_extraction_metadata(self):
+        from research_os import capture_attachment
+
+        captured_contexts = []
+        runtime = SimpleNamespace(
+            decode_attachment_base64=lambda _value: b"hello attachment",
+            extract_uploaded_file_text=lambda _bytes, _name, _mime, source_path=None: {
+                "extracted_text": "코스닥 정책 자료",
+                "text_extraction": "본문 텍스트 추출 포함",
+                "document_type": "텍스트",
+                "extraction_quality": "ready",
+                "extraction_char_count": 8,
+                "extraction_preview": "코스닥 정책",
+                "extraction_warnings": [],
+                "extraction_profile": {"analysis_readiness": "high"},
+            },
+            infer_capture_investment_scope=lambda context, _settings: captured_contexts.append(context) or {
+                "tags": ["theme:kosdaq"]
+            },
+            normalize_ticker=lambda value: str(value or "").upper(),
+            safe_attachment_file_name=lambda value: str(value or "upload.txt"),
+        )
+        request = SimpleNamespace(
+            file_content_base64="aGVsbG8=",
+            file_name="memo.txt",
+            file_mime_type="text/plain",
+            file_size=15,
+            raw_content="코스닥 활성화 메모",
+        )
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            result = capture_attachment.save_capture_attachment(
+                runtime,
+                vault_dir,
+                "policy",
+                date(2026, 6, 13),
+                request,
+                SimpleNamespace(),
+            )
+            saved_path = vault_dir / result["relative_path"]
+
+        self.assertEqual(result["file_name"], "memo.txt")
+        self.assertEqual(result["mime_type"], "text/plain")
+        self.assertEqual(result["extracted_text"], "코스닥 정책 자료")
+        self.assertEqual(result["inferred_investment_scope"], {"tags": ["theme:kosdaq"]})
+        self.assertIn("코스닥 활성화 메모", captured_contexts[0])
+        self.assertTrue(str(saved_path).endswith("memo.txt"))
+
+    def test_capture_attachment_module_renders_markdown_and_preview(self):
+        from research_os import capture_attachment
+
+        captured_item = SimpleNamespace(
+            ticker="MARKET",
+            title="시장 메모",
+            summary="요약",
+            source_type="market_research",
+            source_url="https://example.com",
+            as_of=None,
+            confidence=0.76,
+            tags=["market", "manual"],
+        )
+        markdown = capture_attachment.render_research_capture_markdown(
+            captured_item,
+            "원문 본문",
+            date(2026, 6, 13),
+            {"file_name": "memo.txt", "mime_type": "text/plain", "size": 10, "relative_path": "MARKET/a.txt"},
+        )
+        preview = capture_attachment.capture_preview_text("abcdef", max_chars=3)
+
+        self.assertIn("ticker: MARKET", markdown)
+        self.assertIn("source_type: market_research", markdown)
+        self.assertIn("## 첨부 파일", markdown)
+        self.assertIn("앞부분 3자", preview)
+
+
 class CaptureInferenceModuleTests(unittest.TestCase):
     def test_capture_inference_module_summarizes_and_tags_research_text(self):
         from research_os import capture_inference
