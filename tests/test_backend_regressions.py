@@ -2356,6 +2356,89 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class CompanyIrWatchModuleTests(unittest.TestCase):
+    def test_company_ir_watch_module_disabled_payload_is_written(self):
+        from research_os import company_ir_watch
+
+        writes = []
+        settings = SimpleNamespace(company_ir_sources_enabled=False)
+        runtime = SimpleNamespace(
+            company_ir_copyright_policy=lambda: {"mode": "metadata_only"},
+            company_ir_sources_watch_path=lambda _settings: Path("company_ir.json"),
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            read_json_store=lambda _path, _default=None: {},
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = company_ir_watch.build_company_ir_sources_watch_payload(runtime, settings, save_result=True)
+
+        self.assertEqual(result["status"], "disabled")
+        self.assertEqual(result["source_status"], "disabled")
+        self.assertEqual(result["policy"], {"mode": "metadata_only"})
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0][0], Path("company_ir.json"))
+
+    def test_company_ir_watch_module_collects_related_public_ir_items(self):
+        from research_os import company_ir_watch
+
+        writes = []
+        collect_requests = []
+
+        class FakeRequest:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        settings = SimpleNamespace(
+            company_ir_sources_enabled=True,
+            company_ir_sources_max_items=20,
+            company_ir_sources_refresh_hours=6,
+            company_ir_sources_timeout_seconds=3,
+            company_ir_sources_user_agent="agent",
+            company_ir_sources_json="[]",
+        )
+        fetched_items = [
+            {
+                "ticker": "JOBY",
+                "company_name": "Joby Aviation",
+                "title": "Joby shareholder letter",
+                "detail_url": "https://ir.jobyaviation.com/news",
+                "source_provider": "Joby IR",
+                "source_scope": "press_release",
+                "category": "IR",
+                "published_at": "2026-06-13",
+            }
+        ]
+        runtime = SimpleNamespace(
+            PublicIrSecCollectRequest=FakeRequest,
+            collect_public_ir_sec_url=lambda request, _settings: collect_requests.append(request) or {
+                "status": "success",
+                "storage": {"relative_path": "research_vault/JOBY/a.md"},
+                "capture_quality": {"status": "정상", "needs_body_copy": False},
+            },
+            company_ir_copyright_policy=lambda: {"mode": "metadata_only"},
+            company_ir_sources_watch_path=lambda _settings: Path("company_ir.json"),
+            configured_company_ir_sources=lambda _json: ["joby"],
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            fetch_company_ir_sources=lambda **_kwargs: (fetched_items, [], [{"provider": "Joby IR", "status": "success"}]),
+            normalize_ticker=lambda value: str(value or "").upper(),
+            provider_error_message=lambda exc, _settings: str(exc),
+            read_json_store=lambda _path, _default=None: {},
+            recent_activity_target_terms=lambda _settings: {"ticker_set": {"JOBY"}, "names": ["Joby"]},
+            should_refresh_company_ir_cache=lambda _cache, refresh_hours=6: True,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = company_ir_watch.build_company_ir_sources_watch_payload(runtime, settings, limit=5, save_result=True)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "success")
+        self.assertEqual(result["related_count"], 1)
+        self.assertEqual(result["captured_count"], 1)
+        self.assertEqual(result["capture_results"][0]["storage"], "research_vault/JOBY/a.md")
+        self.assertEqual(collect_requests[0].target_key, "JOBY")
+        self.assertEqual(len(writes), 1)
+
+
 class KcifWatchModuleTests(unittest.TestCase):
     def test_kcif_watch_module_next_actions_preserve_copyright_policy(self):
         from research_os import kcif_watch

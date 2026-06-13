@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import automation_status, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal
+from research_os import automation_status, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -13492,40 +13492,38 @@ def refresh_kcif_reports_watch(
     )
 
 
+def _company_ir_watch_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        PublicIrSecCollectRequest=PublicIrSecCollectRequest,
+        collect_public_ir_sec_url=collect_public_ir_sec_url,
+        company_ir_copyright_policy=company_ir_copyright_policy,
+        company_ir_sources_watch_path=company_ir_sources_watch_path,
+        configured_company_ir_sources=configured_company_ir_sources,
+        current_storage_timestamp=current_storage_timestamp,
+        fetch_company_ir_sources=fetch_company_ir_sources,
+        normalize_ticker=normalize_ticker,
+        provider_error_message=provider_error_message,
+        read_json_store=read_json_store,
+        recent_activity_target_terms=recent_activity_target_terms,
+        should_refresh_company_ir_cache=should_refresh_company_ir_cache,
+        write_json_store=write_json_store,
+    )
+
+
 def read_company_ir_sources_watch(settings: Settings) -> dict:
-    return read_json_store(company_ir_sources_watch_path(settings), {})
+    return company_ir_watch.read_company_ir_sources_watch(_company_ir_watch_runtime(), settings)
 
 
 def write_company_ir_sources_watch(settings: Settings, payload: dict) -> None:
-    write_json_store(company_ir_sources_watch_path(settings), payload)
+    return company_ir_watch.write_company_ir_sources_watch(_company_ir_watch_runtime(), settings, payload)
 
 
 def company_ir_item_matches_targets(item: dict, target_terms: dict) -> bool:
-    ticker = normalize_ticker(str(item.get("ticker") or ""))
-    ticker_set = target_terms.get("ticker_set") or set(target_terms.get("tickers") or [])
-    if ticker and ticker in ticker_set:
-        return True
-    text = " ".join(
-        str(item.get(key) or "")
-        for key in ["company_name", "title", "detail_url", "source_provider", "source_scope"]
-    ).lower()
-    for name in target_terms.get("names") or []:
-        cleaned = str(name or "").strip().lower()
-        if cleaned and cleaned in text:
-            return True
-    return False
+    return company_ir_watch.company_ir_item_matches_targets(_company_ir_watch_runtime(), item, target_terms)
 
 
 def build_company_ir_sources_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
-    actions = [
-        "Joby IR 보도자료는 보유/관심 종목과 연결되면 공개 IR 저장 데이터와 RAG에 자동 반영됩니다.",
-        "본문 추출이 짧은 항목은 URL-only/본문 보강 필요로 남기고 추천 점수 가산에서 제외합니다.",
-    ]
-    if warnings:
-        actions.append("목록 확인 실패가 있으면 기존 캐시를 기준으로 최근 1주 자료를 유지하고 다음 주기에 재시도하세요.")
-    if related_items:
-        actions.append(f"관련 IR 보도자료 {len(related_items)}건을 최근 1주 자료와 JOBY Dossier 검토에 활용하세요.")
-    return actions
+    return company_ir_watch.build_company_ir_sources_next_actions(related_items, warnings)
 
 
 def build_company_ir_sources_watch_payload(
@@ -13535,118 +13533,13 @@ def build_company_ir_sources_watch_payload(
     force: bool = False,
     save_result: bool = True,
 ) -> dict:
-    cache = read_company_ir_sources_watch(settings)
-    normalized_limit = max(1, min(int(limit or settings.company_ir_sources_max_items or 20), 100))
-    should_fetch = force or should_refresh_company_ir_cache(
-        cache,
-        refresh_hours=settings.company_ir_sources_refresh_hours,
+    return company_ir_watch.build_company_ir_sources_watch_payload(
+        _company_ir_watch_runtime(),
+        settings,
+        limit=limit,
+        force=force,
+        save_result=save_result,
     )
-    warnings: list[str] = []
-    source_results: list[dict] = []
-    items: list[dict] = []
-    source_status = "cached"
-    if not settings.company_ir_sources_enabled:
-        payload = {
-            "status": "disabled",
-            "module": "company_ir_sources_watch",
-            "updated_at": current_storage_timestamp(),
-            "items": [],
-            "related_items": [],
-            "source_results": [],
-            "warnings": ["COMPANY_IR_SOURCES_ENABLED=false 상태입니다."],
-            "source_status": "disabled",
-            "policy": company_ir_copyright_policy(),
-            "next_actions": ["회사 IR 자동 소스를 사용하려면 COMPANY_IR_SOURCES_ENABLED=true로 설정하세요."],
-        }
-        if save_result:
-            write_company_ir_sources_watch(settings, payload)
-        return payload
-    if should_fetch:
-        try:
-            items, warnings, source_results = fetch_company_ir_sources(
-                limit=normalized_limit,
-                timeout=settings.company_ir_sources_timeout_seconds,
-                user_agent=settings.company_ir_sources_user_agent,
-                sources=configured_company_ir_sources(settings.company_ir_sources_json),
-            )
-            source_status = "success"
-        except Exception as exc:
-            warnings.append(f"회사 IR 목록 확인 실패: {provider_error_message(exc, settings)}")
-            items = cache.get("items") or [] if isinstance(cache, dict) else []
-            source_results = cache.get("source_results") or [] if isinstance(cache, dict) else []
-            source_status = "cache_fallback" if items else "failed"
-    else:
-        items = cache.get("items") or [] if isinstance(cache, dict) else []
-        source_results = cache.get("source_results") or [] if isinstance(cache, dict) else []
-    target_terms = recent_activity_target_terms(settings)
-    related_items = [item for item in items if company_ir_item_matches_targets(item, target_terms)]
-    capture_results: list[dict] = []
-    if save_result and related_items:
-        for item in related_items[:normalized_limit]:
-            detail_url = str(item.get("detail_url") or "").strip()
-            ticker = normalize_ticker(str(item.get("ticker") or ""))
-            if not detail_url or not ticker:
-                continue
-            try:
-                result = collect_public_ir_sec_url(
-                    PublicIrSecCollectRequest(
-                        url=detail_url,
-                        target_key=ticker,
-                        save_result=True,
-                        force=False,
-                        no_screenshot=True,
-                        source_title=str(item.get("title") or ""),
-                        source_provider=str(item.get("source_provider") or ""),
-                        source_type=str(item.get("source_scope") or ""),
-                        source_category=str(item.get("category") or ""),
-                        filing_form=str(item.get("filing_form") or ""),
-                        filing_group=str(item.get("filing_group") or ""),
-                        published_at=str(item.get("published_at") or ""),
-                    ),
-                    settings,
-                )
-                capture_results.append(
-                    {
-                        "ticker": ticker,
-                        "title": item.get("title"),
-                        "detail_url": detail_url,
-                        "status": result.get("status"),
-                        "storage": (result.get("storage") or {}).get("relative_path"),
-                        "quality": (result.get("capture_quality") or {}).get("status"),
-                        "needs_body_copy": (result.get("capture_quality") or {}).get("needs_body_copy"),
-                    }
-                )
-            except Exception as exc:
-                capture_results.append(
-                    {
-                        "ticker": ticker,
-                        "title": item.get("title"),
-                        "detail_url": detail_url,
-                        "status": "failed",
-                        "error": str(exc),
-                    }
-                )
-    payload = {
-        "status": "success" if source_status in {"success", "cached", "cache_fallback"} else "warning",
-        "module": "company_ir_sources_watch",
-        "updated_at": current_storage_timestamp(),
-        "source_status": source_status,
-        "items": items[:normalized_limit],
-        "item_count": len(items),
-        "related_items": related_items[:normalized_limit],
-        "related_count": len(related_items),
-        "capture_results": capture_results,
-        "captured_count": sum(1 for item in capture_results if item.get("status") in {"success", "skipped_existing", "url_only_saved"}),
-        "source_results": source_results,
-        "source_count": len(source_results),
-        "warnings": warnings,
-        "policy": company_ir_copyright_policy(),
-        "next_actions": build_company_ir_sources_next_actions(related_items, warnings),
-    }
-    if save_result:
-        payload["storage_path"] = str(company_ir_sources_watch_path(settings))
-        write_company_ir_sources_watch(settings, payload)
-    return payload
 
 
 def read_regional_business_sources_watch(settings: Settings) -> dict:
