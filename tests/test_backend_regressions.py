@@ -2356,6 +2356,72 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class KcifWatchModuleTests(unittest.TestCase):
+    def test_kcif_watch_module_next_actions_preserve_copyright_policy(self):
+        from research_os import kcif_watch
+
+        actions = kcif_watch.build_kcif_watch_next_actions(
+            [{"title": "Global Rates", "matched_themes": ["금리", "환율"]}],
+            ["warning"],
+        )
+
+        self.assertIn("KCIF 목록 확인이 지연되면", actions[0])
+        self.assertIn("Global Rates", actions[1])
+        self.assertIn("KCIF 원문/PDF는 자동 저장하지 않고", actions[-1])
+
+    def test_kcif_watch_module_builds_payload_and_writes_cache(self):
+        from research_os import kcif_watch
+
+        writes = []
+        settings = SimpleNamespace(
+            kcif_report_list_url="https://kcif.example/reports",
+            kcif_timeout_seconds=3,
+            kcif_username="",
+            kcif_password="",
+            kcif_use_login=False,
+            kcif_login_proc_url="https://kcif.example/login",
+        )
+        runtime = SimpleNamespace(
+            build_kcif_watch_targets=lambda _portfolio, _interest: {"themes": ["금리"]},
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            fetch_kcif_detail_analyses=lambda reports, **_kwargs: {
+                "detail_status": "success",
+                "analyses": {
+                    "r1": {"matched_themes": ["환율"], "source_summary_available": True},
+                },
+            },
+            fetch_kcif_report_list_with_status=lambda **_kwargs: {
+                "reports": [{"report_id": "r1", "title": "Rates report"}],
+                "auth_status": "anonymous",
+                "connection_mode": "public",
+            },
+            kcif_copyright_policy=lambda: {"mode": "metadata_only"},
+            kcif_report_list_url_default="https://default.example/reports",
+            kcif_reports_watch_path=lambda _settings: Path("kcif_watch.json"),
+            match_kcif_reports_to_targets=lambda reports, _targets: [
+                {**reports[0], "relevance_score": 80, "matched_themes": ["금리"]}
+            ],
+            portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
+            provider_error_message=lambda exc, _settings: str(exc),
+            read_interest_list=lambda _settings: {},
+            read_json_store=lambda _path, _default=None: {},
+            should_refresh_kcif_cache=lambda _cache: True,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = kcif_watch.build_kcif_reports_watch_payload(runtime, settings, limit=5, force=False, save_result=True)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "refreshed")
+        self.assertEqual(result["detail_status"], "success")
+        self.assertEqual(result["related_count"], 1)
+        self.assertEqual(result["related_reports"][0]["matched_themes"], ["금리", "환율"])
+        self.assertEqual(result["related_reports"][0]["relevance_score"], 86)
+        self.assertEqual(result["policy"], {"mode": "metadata_only"})
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0][0], Path("kcif_watch.json"))
+
+
 class InterestAutomationModuleTests(unittest.TestCase):
     def test_interest_automation_module_dedupes_keyword_candidates(self):
         from research_os import interest_automation
