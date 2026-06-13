@@ -3,7 +3,126 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Protocol
+
+
+QUALITY_REBUILD_MARKER = "## 품질 재점검/투자 반영 추론"
+QUALITY_REBUILD_TAGS = {
+    "interest_ticker_matched",
+    "interest_sector_matched",
+    "portfolio_holding_matched",
+}
+
+
+def strip_quality_rebuild_tags(tags: object) -> list[str]:
+    if not isinstance(tags, list):
+        return []
+    cleaned_tags: list[str] = []
+    for tag in tags:
+        cleaned = str(tag or "").strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith("theme:") or cleaned in QUALITY_REBUILD_TAGS:
+            continue
+        if cleaned not in cleaned_tags:
+            cleaned_tags.append(cleaned)
+    return cleaned_tags
+
+
+def strip_quality_scope_from_summary(summary: object) -> str:
+    text = str(summary or "").strip()
+    if not text:
+        return ""
+    markers = [
+        " [투자 반영 추론]",
+        "[투자 반영 추론]",
+        " 관심 범위 후보:",
+        " 관심종목 매칭:",
+        " 관심섹터 매칭:",
+        " 보유종목 매칭:",
+        " 다음 조치:",
+    ]
+    cut_at = len(text)
+    for marker in markers:
+        found = text.find(marker)
+        if found >= 0:
+            cut_at = min(cut_at, found)
+    return text[:cut_at].strip()
+
+
+def strip_quality_rebuild_section_text(markdown_text: str) -> str:
+    if QUALITY_REBUILD_MARKER not in markdown_text:
+        return markdown_text
+    return markdown_text.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
+
+
+def build_quality_rebuild_context(
+    runtime: ResearchMemoryQualityRebuildRuntime,
+    entry: dict,
+    payload: dict,
+    markdown_text: str,
+) -> tuple[str, dict | None, str]:
+    attachment = (
+        entry.get("attachment")
+        if isinstance(entry.get("attachment"), dict)
+        else payload.get("attachment")
+        if isinstance(payload.get("attachment"), dict)
+        else None
+    )
+    attachment_context = ""
+    if attachment:
+        attachment_context = runtime.render_attachment_signal_context(
+            attachment.get("file_name") or entry.get("file_name"),
+            attachment.get("mime_type"),
+            attachment.get("text_extraction"),
+        )
+    captured_item = payload.get("captured_item") if isinstance(payload.get("captured_item"), dict) else {}
+    cleaned_markdown_text = strip_quality_rebuild_section_text(markdown_text)
+    pieces = [
+        str(entry.get("title") or ""),
+        strip_quality_scope_from_summary(entry.get("summary")),
+        str(entry.get("source_type") or ""),
+        str(entry.get("type") or ""),
+        str(entry.get("file_name") or ""),
+        " ".join(str(tag) for tag in strip_quality_rebuild_tags(entry.get("tags"))),
+        strip_quality_scope_from_summary(captured_item.get("summary")),
+        " ".join(str(tag) for tag in strip_quality_rebuild_tags(captured_item.get("tags"))),
+        str(payload.get("raw_content") or ""),
+        str(attachment.get("file_name") or "") if attachment else "",
+        str(attachment.get("extracted_text") or "")[:12000] if attachment else "",
+        attachment_context,
+        "\n".join(runtime.plain_research_lines(cleaned_markdown_text, limit=80))[:12000],
+    ]
+    return "\n\n".join(piece for piece in pieces if piece), attachment, attachment_context
+
+
+def upsert_quality_rebuild_section(markdown_path: Path | None, section_text: str) -> bool:
+    if not markdown_path:
+        return False
+    try:
+        current = markdown_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    cleaned_section = section_text.strip()
+    if QUALITY_REBUILD_MARKER in current:
+        prefix = current.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
+        next_text = (
+            f"{prefix}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n"
+            if cleaned_section
+            else f"{prefix}\n"
+        )
+        if next_text == current:
+            return False
+        markdown_path.write_text(next_text, encoding="utf-8")
+        return True
+    if not cleaned_section:
+        return False
+    markdown_path.write_text(
+        f"{current.rstrip()}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n",
+        encoding="utf-8",
+    )
+    return True
 
 
 class ResearchMemoryQualityRebuildRuntime(Protocol):
@@ -43,12 +162,12 @@ def rebuild_research_memory_quality_metadata(
         checked_count += 1
         payload = runtime.read_manifest_entry_payload(entry, vault_dir)
         markdown_text = runtime.read_manifest_entry_text(vault_dir, entry)
-        context, attachment, attachment_context = runtime.build_quality_rebuild_context(entry, payload, markdown_text)
+        context, attachment, attachment_context = build_quality_rebuild_context(runtime, entry, payload, markdown_text)
         markdown_path = runtime.manifest_entry_markdown_path(entry, vault_dir)
         has_previous_quality = bool(
             entry.get("quality_rebuild_version")
             or (isinstance(payload, dict) and payload.get("quality_rebuild_version"))
-            or (runtime.quality_rebuild_marker in markdown_text)
+            or (QUALITY_REBUILD_MARKER in markdown_text)
         )
         scope = runtime.infer_capture_investment_scope(context, settings)
         scope_context = runtime.render_investment_scope_context(scope)
@@ -83,10 +202,10 @@ def rebuild_research_memory_quality_metadata(
         updated_entry["quality_rebuilt_at"] = rebuilt_at
         updated_entry["quality_rebuild_version"] = "attachment-scope-v1"
         updated_entry["tags"] = runtime.merge_research_tags(
-            runtime.strip_quality_rebuild_tags(entry.get("tags")),
+            strip_quality_rebuild_tags(entry.get("tags")),
             scope_tags,
         )
-        base_summary = runtime.strip_quality_scope_from_summary(entry.get("summary"))
+        base_summary = strip_quality_scope_from_summary(entry.get("summary"))
         if has_scope:
             updated_entry["summary"] = runtime.compact_representative_sentence(
                 " ".join(
@@ -123,10 +242,10 @@ def rebuild_research_memory_quality_metadata(
             if isinstance(captured_item, dict):
                 captured_item = {**captured_item}
                 captured_item["tags"] = runtime.merge_research_tags(
-                    runtime.strip_quality_rebuild_tags(captured_item.get("tags")),
+                    strip_quality_rebuild_tags(captured_item.get("tags")),
                     scope_tags,
                 )
-                captured_summary = runtime.strip_quality_scope_from_summary(captured_item.get("summary"))
+                captured_summary = strip_quality_scope_from_summary(captured_item.get("summary"))
                 if has_scope and captured_item.get("summary"):
                     captured_item["summary"] = runtime.compact_representative_sentence(
                         f"{captured_summary} {scope_context.replace(chr(10), ' ')}",
@@ -161,7 +280,7 @@ def rebuild_research_memory_quality_metadata(
                 ]
                 if value
             )
-            section_changed = runtime.upsert_quality_rebuild_section(
+            section_changed = upsert_quality_rebuild_section(
                 markdown_path,
                 section_body,
             )

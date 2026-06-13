@@ -8106,55 +8106,28 @@ def manifest_entry_markdown_path(entry: dict | None, vault_dir: Path) -> Path | 
     return None
 
 
-QUALITY_REBUILD_MARKER = "## 품질 재점검/투자 반영 추론"
+QUALITY_REBUILD_MARKER = research_memory_quality_rebuild.QUALITY_REBUILD_MARKER
 OCR_REPROCESS_MARKER = "## OCR 재처리 결과"
-QUALITY_REBUILD_TAGS = {
-    "interest_ticker_matched",
-    "interest_sector_matched",
-    "portfolio_holding_matched",
-}
+QUALITY_REBUILD_TAGS = research_memory_quality_rebuild.QUALITY_REBUILD_TAGS
 
 
 def strip_quality_rebuild_tags(tags: object) -> list[str]:
-    if not isinstance(tags, list):
-        return []
-    cleaned_tags: list[str] = []
-    for tag in tags:
-        cleaned = str(tag or "").strip()
-        if not cleaned:
-            continue
-        if cleaned.startswith("theme:") or cleaned in QUALITY_REBUILD_TAGS:
-            continue
-        if cleaned not in cleaned_tags:
-            cleaned_tags.append(cleaned)
-    return cleaned_tags
+    return research_memory_quality_rebuild.strip_quality_rebuild_tags(tags)
 
 
 def strip_quality_scope_from_summary(summary: object) -> str:
-    text = str(summary or "").strip()
-    if not text:
-        return ""
-    markers = [
-        " [투자 반영 추론]",
-        "[투자 반영 추론]",
-        " 관심 범위 후보:",
-        " 관심종목 매칭:",
-        " 관심섹터 매칭:",
-        " 보유종목 매칭:",
-        " 다음 조치:",
-    ]
-    cut_at = len(text)
-    for marker in markers:
-        found = text.find(marker)
-        if found >= 0:
-            cut_at = min(cut_at, found)
-    return text[:cut_at].strip()
+    return research_memory_quality_rebuild.strip_quality_scope_from_summary(summary)
 
 
 def strip_quality_rebuild_section_text(markdown_text: str) -> str:
-    if QUALITY_REBUILD_MARKER not in markdown_text:
-        return markdown_text
-    return markdown_text.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
+    return research_memory_quality_rebuild.strip_quality_rebuild_section_text(markdown_text)
+
+
+def _quality_rebuild_helper_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        plain_research_lines=plain_research_lines,
+        render_attachment_signal_context=render_attachment_signal_context,
+    )
 
 
 def build_quality_rebuild_context(
@@ -8162,66 +8135,16 @@ def build_quality_rebuild_context(
     payload: dict,
     markdown_text: str,
 ) -> tuple[str, dict | None, str]:
-    attachment = (
-        entry.get("attachment")
-        if isinstance(entry.get("attachment"), dict)
-        else payload.get("attachment")
-        if isinstance(payload.get("attachment"), dict)
-        else None
+    return research_memory_quality_rebuild.build_quality_rebuild_context(
+        _quality_rebuild_helper_runtime(),
+        entry,
+        payload,
+        markdown_text,
     )
-    attachment_context = ""
-    if attachment:
-        attachment_context = render_attachment_signal_context(
-            attachment.get("file_name") or entry.get("file_name"),
-            attachment.get("mime_type"),
-            attachment.get("text_extraction"),
-        )
-    captured_item = payload.get("captured_item") if isinstance(payload.get("captured_item"), dict) else {}
-    cleaned_markdown_text = strip_quality_rebuild_section_text(markdown_text)
-    pieces = [
-        str(entry.get("title") or ""),
-        strip_quality_scope_from_summary(entry.get("summary")),
-        str(entry.get("source_type") or ""),
-        str(entry.get("type") or ""),
-        str(entry.get("file_name") or ""),
-        " ".join(str(tag) for tag in strip_quality_rebuild_tags(entry.get("tags"))),
-        strip_quality_scope_from_summary(captured_item.get("summary")),
-        " ".join(str(tag) for tag in strip_quality_rebuild_tags(captured_item.get("tags"))),
-        str(payload.get("raw_content") or ""),
-        str(attachment.get("file_name") or "") if attachment else "",
-        str(attachment.get("extracted_text") or "")[:12000] if attachment else "",
-        attachment_context,
-        "\n".join(plain_research_lines(cleaned_markdown_text, limit=80))[:12000],
-    ]
-    return "\n\n".join(piece for piece in pieces if piece), attachment, attachment_context
 
 
 def upsert_quality_rebuild_section(markdown_path: Path | None, section_text: str) -> bool:
-    if not markdown_path:
-        return False
-    try:
-        current = markdown_path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return False
-    cleaned_section = section_text.strip()
-    if QUALITY_REBUILD_MARKER in current:
-        prefix = current.split(QUALITY_REBUILD_MARKER, 1)[0].rstrip()
-        next_text = (
-            f"{prefix}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n"
-            if cleaned_section
-            else f"{prefix}\n"
-        )
-        if next_text == current:
-            return False
-        markdown_path.write_text(next_text, encoding="utf-8")
-        return True
-    if not cleaned_section:
-        return False
-    markdown_path.write_text(
-        f"{current.rstrip()}\n\n{QUALITY_REBUILD_MARKER}\n\n{cleaned_section}\n",
-        encoding="utf-8",
-    )
-    return True
+    return research_memory_quality_rebuild.upsert_quality_rebuild_section(markdown_path, section_text)
 
 
 def upsert_markdown_tail_section(
@@ -8350,7 +8273,6 @@ def _research_memory_quality_rebuild_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         backfill_research_memory_documents_from_manifest=backfill_research_memory_documents_from_manifest,
         backfill_thesis_snapshots_from_manifest=backfill_thesis_snapshots_from_manifest,
-        build_quality_rebuild_context=build_quality_rebuild_context,
         compact_representative_sentence=compact_representative_sentence,
         current_storage_timestamp=current_storage_timestamp,
         infer_capture_investment_scope=infer_capture_investment_scope,
@@ -8358,16 +8280,14 @@ def _research_memory_quality_rebuild_runtime() -> SimpleNamespace:
         manifest_entry_json_path=manifest_entry_json_path,
         manifest_entry_markdown_path=manifest_entry_markdown_path,
         merge_research_tags=merge_research_tags,
-        quality_rebuild_marker=QUALITY_REBUILD_MARKER,
         read_manifest=read_manifest,
         read_manifest_entry_payload=read_manifest_entry_payload,
         read_manifest_entry_text=read_manifest_entry_text,
+        plain_research_lines=plain_research_lines,
+        render_attachment_signal_context=render_attachment_signal_context,
         render_investment_scope_context=render_investment_scope_context,
         resolve_vault_dir=resolve_vault_dir,
-        strip_quality_rebuild_tags=strip_quality_rebuild_tags,
-        strip_quality_scope_from_summary=strip_quality_scope_from_summary,
         update_manifest=update_manifest,
-        upsert_quality_rebuild_section=upsert_quality_rebuild_section,
         upsert_research_memory_document=upsert_research_memory_document,
     )
 
