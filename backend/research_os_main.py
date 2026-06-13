@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
+from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -18873,6 +18873,15 @@ def render_lp_report_staging_markdown(response: dict, storage_date: date) -> str
     return research_workflow_files.render_lp_report_staging_markdown(response, storage_date)
 
 
+def _analysis_module_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        current_storage_date=current_storage_date,
+        render_long_term_compounder_markdown=render_long_term_compounder_markdown,
+        render_sector_opportunity_markdown=render_sector_opportunity_markdown,
+        save_research_markdown=save_research_markdown,
+    )
+
+
 def build_gp_lp_staging_response(payload: dict, settings: Settings) -> dict:
     return research_workflow_files.build_gp_lp_staging_response(
         _research_workflow_files_runtime(),
@@ -18944,36 +18953,11 @@ def run_sector_opportunity_finder(
     report = build_sector_opportunity_report(request, injected_data, settings, vault_dir)
 
     if request.save_result:
-        storage_date = current_storage_date()
-        report.storage = save_research_markdown(
+        report = analysis_module_storage.save_sector_opportunity_report(
+            _analysis_module_storage_runtime(),
+            report=report,
+            research_key=research_key,
             vault_dir=vault_dir,
-            ticker=research_key,
-            report_type="sector-opportunity",
-            markdown=render_sector_opportunity_markdown(report, storage_date),
-            structured_payload=report.model_dump(mode="json"),
-            manifest_entry={
-                "summary": report.macro_summary,
-                "period": report.period,
-                "region": report.region,
-                "style": report.style,
-                "top_sectors": [
-                    item.model_dump(mode="json") for item in report.ranked_sectors[:3]
-                ],
-                "recommended_companies": [
-                    item.model_dump(mode="json")
-                    for item in report.recommended_companies
-                ],
-                "sector_trends": [
-                    item.model_dump(mode="json") for item in report.sector_trends
-                ],
-                "sector_leaders": [
-                    item.model_dump(mode="json") for item in report.sector_leaders[:10]
-                ],
-                "analyst_report": report.analyst_report,
-                "watch_items": report.watch_items,
-                "key_risks": report.key_risks,
-            },
-            report_date=storage_date,
         )
 
     return report.model_dump(mode="json")
@@ -19011,27 +18995,11 @@ def run_long_term_compounder_finder(
     report = build_long_term_compounder_report(request, injected_data)
 
     if request.save_result:
-        storage_date = current_storage_date()
-        report.storage = save_research_markdown(
+        report = analysis_module_storage.save_long_term_compounder_report(
+            _analysis_module_storage_runtime(),
+            report=report,
+            research_key=research_key,
             vault_dir=vault_dir,
-            ticker=research_key,
-            report_type="long-term-compounder",
-            markdown=render_long_term_compounder_markdown(report, storage_date),
-            structured_payload=report.model_dump(mode="json"),
-            manifest_entry={
-                "summary": report.summary,
-                "screening_criteria": report.screening_criteria,
-                "region": report.region,
-                "sector": report.sector,
-                "style": report.style,
-                "min_market_cap": report.min_market_cap,
-                "max_market_cap": report.max_market_cap,
-                "candidates": [
-                    item.model_dump(mode="json") for item in report.candidates
-                ],
-                "next_actions": report.next_actions,
-            },
-            report_date=storage_date,
         )
 
     return report

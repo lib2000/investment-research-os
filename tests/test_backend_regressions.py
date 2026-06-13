@@ -1845,6 +1845,90 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("삼양식품", impact["affected"])
 
 
+class AnalysisModuleStorageTests(unittest.TestCase):
+    def test_analysis_module_storage_saves_sector_and_compounder_manifest_payloads(self):
+        from research_os import analysis_module_storage
+        from research_os.research_memory import ResearchStorageInfo
+
+        class DumpItem:
+            def __init__(self, **payload):
+                self.payload = payload
+
+            def model_dump(self, mode=None):
+                return dict(self.payload)
+
+        class FakeReport(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
+        save_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        runtime = SimpleNamespace(
+            current_storage_date=lambda: date(2026, 6, 13),
+            render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
+            render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
+            save_research_markdown=fake_save_research_markdown,
+        )
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "analysis_storage_vault"
+        sector_report = FakeReport(
+            macro_summary="반도체 중심",
+            period="3개월",
+            region="KR",
+            style="균형형",
+            ranked_sectors=[DumpItem(sector="AI", score=90) for _ in range(4)],
+            recommended_companies=[DumpItem(company_name="삼성전자")],
+            sector_trends=[DumpItem(sector="AI", trend_label="강세")],
+            sector_leaders=[DumpItem(company_name=f"리더{i}") for i in range(12)],
+            analyst_report=["리포트"],
+            watch_items=["실적"],
+            key_risks=["변동성"],
+            storage=None,
+        )
+        compounder_report = FakeReport(
+            summary="복리 후보",
+            screening_criteria="매출 성장",
+            region="KR",
+            sector="전체",
+            style="퀄리티 성장",
+            min_market_cap=3000,
+            max_market_cap=None,
+            candidates=[DumpItem(company_name="SK하이닉스")],
+            next_actions=["추적"],
+            storage=None,
+        )
+
+        saved_sector = analysis_module_storage.save_sector_opportunity_report(
+            runtime,
+            report=sector_report,
+            research_key="SECTOR-KR-BALANCED",
+            vault_dir=vault_dir,
+        )
+        saved_compounder = analysis_module_storage.save_long_term_compounder_report(
+            runtime,
+            report=compounder_report,
+            research_key="COMPOUNDER-KR-ALL-QUALITY",
+            vault_dir=vault_dir,
+        )
+
+        self.assertEqual(saved_sector.storage.file_name, "SECTOR-KR-BALANCED-sector-opportunity.md")
+        self.assertEqual(saved_compounder.storage.file_name, "COMPOUNDER-KR-ALL-QUALITY-long-term-compounder.md")
+        self.assertEqual(save_calls[0]["report_type"], "sector-opportunity")
+        self.assertEqual(save_calls[0]["manifest_entry"]["summary"], "반도체 중심")
+        self.assertEqual(len(save_calls[0]["manifest_entry"]["top_sectors"]), 3)
+        self.assertEqual(len(save_calls[0]["manifest_entry"]["sector_leaders"]), 10)
+        self.assertEqual(save_calls[1]["report_type"], "long-term-compounder")
+        self.assertEqual(save_calls[1]["manifest_entry"]["screening_criteria"], "매출 성장")
+        self.assertEqual(save_calls[1]["manifest_entry"]["candidates"][0]["company_name"], "SK하이닉스")
+
+
 class CompounderPresentationTests(unittest.TestCase):
     def test_compounder_report_uses_company_names_in_human_output(self):
         import research_os_main as main
