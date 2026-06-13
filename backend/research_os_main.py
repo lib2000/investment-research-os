@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import automation_status, capture_attachment, capture_inference, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch
+from research_os import automation_status, capture_attachment, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -16097,6 +16097,36 @@ def capture_research_item(
     return save_capture_request(request, settings)
 
 
+def _capture_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        append_jsonl=append_jsonl,
+        capture_preview_text=capture_preview_text,
+        capture_quality_status=capture_quality_status,
+        classification_system_tags=classification_system_tags,
+        content_fingerprint=content_fingerprint,
+        current_storage_date=current_storage_date,
+        current_storage_timestamp=current_storage_timestamp,
+        detect_capture_duplicate=detect_capture_duplicate,
+        ensure_verified_ticker=ensure_verified_ticker,
+        enum_or_str_value=enum_or_str_value,
+        evaluate_thesis_impact=evaluate_thesis_impact,
+        extract_manifest_theses_and_watch_items=extract_manifest_theses_and_watch_items,
+        infer_capture_tags=infer_capture_tags,
+        manifest_with_ticker_verification=manifest_with_ticker_verification,
+        merge_research_tags=merge_research_tags,
+        read_manifest=read_manifest,
+        render_research_capture_markdown=render_research_capture_markdown,
+        render_thesis_impact_markdown=render_thesis_impact_markdown,
+        resolve_vault_dir=resolve_vault_dir,
+        save_research_markdown=save_research_markdown,
+        special_research_keys=SPECIAL_RESEARCH_KEYS,
+        summarize_capture=summarize_capture,
+        synthesize_and_save_dossier=synthesize_and_save_dossier,
+        upsert_research_memory_document=upsert_research_memory_document,
+        user_state_dir=user_state_dir,
+    )
+
+
 def save_capture_request(
     request: ResearchCaptureRequest,
     settings: Settings,
@@ -16105,170 +16135,15 @@ def save_capture_request(
     input_preview_override: str | None = None,
     document_preview_override: str | None = None,
 ) -> ResearchCaptureResponse:
-    ticker = ensure_verified_ticker(request.ticker, settings)
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    storage_date = current_storage_date()
-    tags = merge_research_tags(
-        infer_capture_tags(request.raw_content, request.tags),
-        classification_system_tags(request.ticker, request.source_type),
-    )
-    raw_content_hash = content_fingerprint(request.raw_content)
-    duplicate_check = detect_capture_duplicate(
-        vault_dir=vault_dir,
-        ticker=ticker,
-        title=request.title,
-        raw_content=request.raw_content,
-        source_url=request.source_url,
-        content_hash=raw_content_hash,
-    )
-    captured_item = CapturedResearchItem(
-        ticker=ticker,
-        title=request.title,
-        summary=summarize_capture(request.raw_content),
-        source_type=request.source_type,
-        source_url=request.source_url,
-        as_of=request.as_of,
-        confidence=request.confidence,
-        tags=tags,
-    )
-
-    linked_impact = None
-    if request.run_thesis_impact:
-        impact_data = [
-            InjectedDataPoint(
-                source_type=request.source_type,
-                label=request.title,
-                value=request.raw_content,
-                as_of=request.as_of,
-                source_url=request.source_url,
-                confidence=request.confidence,
-            )
-        ]
-        theses, watch_items = extract_manifest_theses_and_watch_items(ticker, vault_dir)
-        linked_impact = evaluate_thesis_impact(ticker, impact_data, theses, watch_items)
-        linked_impact.saved_to_research_memory = request.save_result
-
-    quality_status = capture_quality_status(
-        raw_content=request.raw_content,
+    return capture_storage.save_capture_request(
+        _capture_storage_runtime(),
+        request,
+        settings,
         attachment_info=attachment_info,
         source_url_processing=source_url_processing,
+        input_preview_override=input_preview_override,
+        document_preview_override=document_preview_override,
     )
-
-    response = ResearchCaptureResponse(
-        captured_item=captured_item,
-        linked_impact=linked_impact,
-        saved_to_research_memory=request.save_result,
-        attachment=attachment_info,
-        source_url_processing=source_url_processing,
-        capture_quality=quality_status,
-        duplicate_check=duplicate_check,
-        input_preview=capture_preview_text(
-            request.raw_content if input_preview_override is None else input_preview_override
-        ),
-        document_preview=capture_preview_text(
-            (attachment_info or {}).get("extracted_text")
-            if document_preview_override is None
-            else document_preview_override
-        ),
-    )
-
-    if request.save_result:
-        manifest_extra = {
-            "summary": captured_item.summary,
-            "source_type": enum_or_str_value(captured_item.source_type),
-            "source_url": captured_item.source_url,
-            "confidence": captured_item.confidence,
-            "tags": captured_item.tags,
-            "attachment": attachment_info,
-            "source_url_processing": source_url_processing,
-            "capture_quality": quality_status,
-            "capture_quality_status": quality_status["status"],
-            "content_hash": raw_content_hash,
-            "duplicate_check": duplicate_check,
-            "linked_impact": linked_impact.model_dump(mode="json")
-            if linked_impact
-            else None,
-        }
-        if duplicate_check.get("is_duplicate_suspected"):
-            manifest_extra["duplicate_reason"] = duplicate_check.get("reason")
-            manifest_extra["duplicate_of"] = duplicate_check.get("matched_relative_path")
-        response.storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=ticker,
-            report_type="research-capture",
-            markdown=render_research_capture_markdown(
-                captured_item,
-                request.raw_content,
-                storage_date,
-                attachment_info,
-            ),
-            structured_payload={
-                **response.model_dump(mode="json"),
-                "raw_content": request.raw_content,
-                "attachment": attachment_info,
-            },
-            manifest_entry=manifest_with_ticker_verification(ticker, manifest_extra),
-            report_date=storage_date,
-            file_suffix=request.title,
-        )
-        if response.storage:
-            saved_entry = next(
-                (
-                    entry
-                    for entry in read_manifest(vault_dir)
-                    if entry.get("file_name") == response.storage.file_name
-                    and str(entry.get("ticker") or "").upper() == ticker
-                ),
-                None,
-            )
-            if saved_entry:
-                response.rag_document = upsert_research_memory_document(
-                    vault_dir=vault_dir,
-                    entry=saved_entry,
-                )
-
-        if linked_impact is not None:
-            linked_impact.storage = save_research_markdown(
-                vault_dir=vault_dir,
-                ticker=ticker,
-                report_type="thesis-impact-review",
-                markdown=render_thesis_impact_markdown(linked_impact, storage_date),
-                structured_payload=linked_impact.model_dump(mode="json"),
-                manifest_entry=manifest_with_ticker_verification(ticker, {
-                    "summary": linked_impact.summary,
-                    "overall_impact": linked_impact.overall_impact.value,
-                    "source_count": linked_impact.source_count,
-                    "findings": [
-                        item.model_dump(mode="json")
-                        for item in linked_impact.findings
-                    ],
-                    "watch_item_signals": [
-                        item.model_dump(mode="json")
-                        for item in linked_impact.watch_item_signals
-                    ],
-                    "next_actions": linked_impact.next_actions,
-                    "linked_capture_file": response.storage.file_name
-                    if response.storage
-                    else None,
-                }),
-                report_date=storage_date,
-            )
-
-        if ticker not in SPECIAL_RESEARCH_KEYS:
-            try:
-                synthesize_and_save_dossier(ticker, settings, save_result=True)
-            except Exception as exc:
-                append_jsonl(
-                    user_state_dir(settings) / "dossier_refresh_errors.jsonl",
-                    {
-                        "ticker": ticker,
-                        "at": current_storage_timestamp(),
-                        "source": "research_capture",
-                        "error": str(exc),
-                    },
-                )
-
-    return response
 
 
 @app.post(

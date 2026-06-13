@@ -2019,6 +2019,63 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class CaptureStorageModuleTests(unittest.TestCase):
+    def test_capture_storage_module_builds_unsaved_response_with_previews(self):
+        from research_os import capture_storage
+        from research_os.models import ResearchCaptureRequest
+
+        def merge_tags(*groups):
+            merged = []
+            for group in groups:
+                for tag in group or []:
+                    if tag not in merged:
+                        merged.append(tag)
+            return merged
+
+        runtime = SimpleNamespace(
+            ensure_verified_ticker=lambda ticker, _settings: str(ticker).upper(),
+            resolve_vault_dir=lambda value: Path(value),
+            current_storage_date=lambda: date(2026, 6, 13),
+            merge_research_tags=merge_tags,
+            infer_capture_tags=lambda _raw_content, tags: [*tags, "ai"],
+            classification_system_tags=lambda _ticker, source_type: [f"source_type:{source_type}"],
+            content_fingerprint=lambda raw_content: f"fp:{len(raw_content)}",
+            detect_capture_duplicate=lambda **_kwargs: {"is_duplicate_suspected": False},
+            summarize_capture=lambda _raw_content: "요약",
+            capture_quality_status=lambda **_kwargs: {"status": "정상", "readiness": "usable"},
+            capture_preview_text=lambda value: None if value is None else str(value)[:12],
+        )
+        request = ResearchCaptureRequest(
+            ticker="msft",
+            title="AI capex memo",
+            raw_content="AI capex demand and margin expansion",
+            source_type="user_memo",
+            confidence=0.82,
+            tags=["manual"],
+            run_thesis_impact=False,
+            save_result=False,
+        )
+
+        response = capture_storage.save_capture_request(
+            runtime,
+            request,
+            SimpleNamespace(research_vault_dir=str(PROJECT_ROOT / ".test-tmp" / "capture-storage")),
+            attachment_info={"extracted_text": "attached document text"},
+        )
+
+        self.assertEqual(response.captured_item.ticker, "MSFT")
+        self.assertEqual(response.captured_item.summary, "요약")
+        self.assertFalse(response.saved_to_research_memory)
+        self.assertIsNone(response.storage)
+        self.assertEqual(response.capture_quality["status"], "정상")
+        self.assertEqual(response.duplicate_check, {"is_duplicate_suspected": False})
+        self.assertEqual(response.input_preview, "AI capex dem")
+        self.assertEqual(response.document_preview, "attached doc")
+        self.assertIn("manual", response.captured_item.tags)
+        self.assertIn("ai", response.captured_item.tags)
+        self.assertIn("source_type:user_memo", response.captured_item.tags)
+
+
 class ResearchCaptureClassificationTagTests(unittest.TestCase):
     def test_classification_system_tags_include_scope_source_and_reason(self):
         import research_os_main as main
