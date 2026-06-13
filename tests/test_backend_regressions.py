@@ -2356,6 +2356,66 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class NewsBuilderModuleTests(unittest.TestCase):
+    def test_news_builder_module_builds_url_only_item_with_body_warning(self):
+        from research_os import news_builder
+
+        runtime = SimpleNamespace(
+            capture_preview_text=lambda text: str(text or "")[:80],
+            capture_quality_status=lambda **_kwargs: {"status": "실패", "warnings": ["웹사이트 본문 추출 실패"]},
+            compact_news_safe_text=lambda value, max_length=900: str(value or "")[:max_length],
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            data_source_type_news="news",
+            enum_or_str_value=lambda value: str(value),
+            fetch_capture_source_url=lambda _url: {
+                "status": "empty_text",
+                "title": "FOMC recap",
+                "final_url": "https://example.com/fomc-final",
+                "note": "본문 텍스트를 충분히 추출하지 못했습니다.",
+            },
+            http_exception=lambda status_code, detail: ValueError(detail),
+            infer_capture_source_type=lambda _content, _attachment: "news",
+            infer_capture_tags=lambda _content, tags: list(tags),
+            infer_capture_ticker=lambda _content, _settings: ("MARKET", "market_keyword"),
+            infer_capture_title=lambda _content, _attachment: "Fallback title",
+            is_unusable_source_url=lambda info: info.get("status") == "empty_text",
+            news_item_fingerprint=lambda title, content, source_url=None: "abcdef1234567890",
+            news_safe_preview_limit=120,
+            news_scope_label=lambda scope: {"MARKET": "시장 흐름"}.get(scope, scope),
+            sanitize_news_source_url_processing=lambda info: {k: v for k, v in info.items() if k != "text"},
+            summarize_capture=lambda content: content[:60],
+        )
+
+        item = news_builder.build_news_item_from_payload(
+            runtime,
+            {"source_url": "https://example.com/fomc", "confidence": 0.81},
+            SimpleNamespace(),
+        )
+
+        self.assertEqual(item["id"], "abcdef1234567890")
+        self.assertEqual(item["source_url"], "https://example.com/fomc-final")
+        self.assertTrue(item["needs_body_copy"])
+        self.assertTrue(item["url_text_unavailable"])
+        self.assertEqual(item["capture_quality"]["status"], "보강 필요")
+        self.assertIn("URL-only 저장", item["capture_quality"]["warnings"])
+        self.assertIn("copyright_safe_metadata", item["tags"])
+
+    def test_news_builder_module_rejects_empty_input(self):
+        from research_os import news_builder
+
+        runtime = SimpleNamespace(
+            fetch_capture_source_url=lambda _url: {},
+            sanitize_news_source_url_processing=lambda _info: {},
+            is_unusable_source_url=lambda _info: False,
+            compact_news_safe_text=lambda value, max_length=900: str(value or "")[:max_length],
+            news_safe_preview_limit=120,
+            http_exception=lambda status_code, detail: ValueError(detail),
+        )
+
+        with self.assertRaises(ValueError):
+            news_builder.build_news_item_from_payload(runtime, {}, SimpleNamespace())
+
+
 class NewsMarketJournalModuleTests(unittest.TestCase):
     def test_news_market_journal_module_reads_existing_summary(self):
         from research_os import news_market_journal
