@@ -15423,24 +15423,11 @@ def run_thesis_impact_review(
     impact.saved_to_research_memory = request.save_result
 
     if request.save_result:
-        storage_date = current_storage_date()
-        impact.storage = save_research_markdown(
-            vault_dir=vault_dir,
+        impact = capture_storage.save_thesis_impact_report(
+            _capture_storage_runtime(),
+            impact=impact,
             ticker=ticker,
-            report_type="thesis-impact-review",
-            markdown=render_thesis_impact_markdown(impact, storage_date),
-            structured_payload=impact.model_dump(mode="json"),
-            manifest_entry=manifest_with_ticker_verification(ticker, {
-                "summary": impact.summary,
-                "overall_impact": impact.overall_impact.value,
-                "source_count": impact.source_count,
-                "findings": [item.model_dump(mode="json") for item in impact.findings],
-                "watch_item_signals": [
-                    item.model_dump(mode="json") for item in impact.watch_item_signals
-                ],
-                "next_actions": impact.next_actions,
-            }),
-            report_date=storage_date,
+            vault_dir=vault_dir,
         )
 
     return impact

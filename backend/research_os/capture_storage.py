@@ -11,6 +11,39 @@ class CaptureStorageRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while capture storage is split out."""
 
 
+def save_thesis_impact_report(
+    runtime: CaptureStorageRuntime,
+    *,
+    impact,
+    ticker: str,
+    vault_dir,
+    linked_capture_file: str | None = None,
+):
+    storage_date = runtime.current_storage_date()
+    manifest_extra = {
+        "summary": impact.summary,
+        "overall_impact": impact.overall_impact.value,
+        "source_count": impact.source_count,
+        "findings": [item.model_dump(mode="json") for item in impact.findings],
+        "watch_item_signals": [
+            item.model_dump(mode="json") for item in impact.watch_item_signals
+        ],
+        "next_actions": impact.next_actions,
+    }
+    if linked_capture_file is not None:
+        manifest_extra["linked_capture_file"] = linked_capture_file
+    impact.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="thesis-impact-review",
+        markdown=runtime.render_thesis_impact_markdown(impact, storage_date),
+        structured_payload=impact.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, manifest_extra),
+        report_date=storage_date,
+    )
+    return impact
+
+
 def save_capture_request(
     runtime: CaptureStorageRuntime,
     request: ResearchCaptureRequest,
@@ -143,33 +176,12 @@ def save_capture_request(
                 )
 
         if linked_impact is not None:
-            linked_impact.storage = runtime.save_research_markdown(
-                vault_dir=vault_dir,
+            linked_impact = save_thesis_impact_report(
+                runtime,
+                impact=linked_impact,
                 ticker=ticker,
-                report_type="thesis-impact-review",
-                markdown=runtime.render_thesis_impact_markdown(linked_impact, storage_date),
-                structured_payload=linked_impact.model_dump(mode="json"),
-                manifest_entry=runtime.manifest_with_ticker_verification(
-                    ticker,
-                    {
-                        "summary": linked_impact.summary,
-                        "overall_impact": linked_impact.overall_impact.value,
-                        "source_count": linked_impact.source_count,
-                        "findings": [
-                            item.model_dump(mode="json")
-                            for item in linked_impact.findings
-                        ],
-                        "watch_item_signals": [
-                            item.model_dump(mode="json")
-                            for item in linked_impact.watch_item_signals
-                        ],
-                        "next_actions": linked_impact.next_actions,
-                        "linked_capture_file": response.storage.file_name
-                        if response.storage
-                        else None,
-                    },
-                ),
-                report_date=storage_date,
+                vault_dir=vault_dir,
+                linked_capture_file=response.storage.file_name if response.storage else None,
             )
 
         if ticker not in runtime.special_research_keys:

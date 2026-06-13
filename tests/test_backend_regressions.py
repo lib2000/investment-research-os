@@ -3093,6 +3093,63 @@ class CaptureStorageModuleTests(unittest.TestCase):
         self.assertIn("ai", response.captured_item.tags)
         self.assertIn("source_type:user_memo", response.captured_item.tags)
 
+    def test_capture_storage_saves_thesis_impact_manifest_payload(self):
+        from research_os import capture_storage
+        from research_os.research_memory import ResearchStorageInfo
+
+        class DumpItem(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
+        class FakeImpact(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
+        save_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        runtime = SimpleNamespace(
+            current_storage_date=lambda: date(2026, 6, 13),
+            manifest_with_ticker_verification=lambda ticker, entry: {**entry, "ticker": ticker, "verified": True},
+            render_thesis_impact_markdown=lambda impact, storage_date: f"impact {storage_date.isoformat()}",
+            save_research_markdown=fake_save_research_markdown,
+        )
+        impact = FakeImpact(
+            summary="논거 강화",
+            overall_impact=SimpleNamespace(value="strengthens"),
+            source_count=2,
+            findings=[DumpItem(label="margin", impact="strengthens")],
+            watch_item_signals=[DumpItem(label="AI demand", signal="positive")],
+            next_actions=["Dossier 갱신"],
+            storage=None,
+        )
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "capture-storage-impact"
+
+        saved = capture_storage.save_thesis_impact_report(
+            runtime,
+            impact=impact,
+            ticker="005930",
+            vault_dir=vault_dir,
+            linked_capture_file="005930-research-capture.md",
+        )
+
+        self.assertEqual(saved.storage.file_name, "005930-thesis-impact-review.md")
+        self.assertEqual(save_calls[0]["report_type"], "thesis-impact-review")
+        self.assertEqual(save_calls[0]["manifest_entry"]["summary"], "논거 강화")
+        self.assertEqual(save_calls[0]["manifest_entry"]["overall_impact"], "strengthens")
+        self.assertEqual(save_calls[0]["manifest_entry"]["source_count"], 2)
+        self.assertEqual(save_calls[0]["manifest_entry"]["findings"][0]["label"], "margin")
+        self.assertEqual(save_calls[0]["manifest_entry"]["watch_item_signals"][0]["label"], "AI demand")
+        self.assertEqual(save_calls[0]["manifest_entry"]["linked_capture_file"], "005930-research-capture.md")
+        self.assertTrue(save_calls[0]["manifest_entry"]["verified"])
+
 
 class ResearchCaptureClassificationTagTests(unittest.TestCase):
     def test_classification_system_tags_include_scope_source_and_reason(self):
