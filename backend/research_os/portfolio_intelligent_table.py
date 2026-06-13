@@ -43,3 +43,54 @@ def build_readiness_summary(
         "data_readiness_score": round(readiness_score / 100, 4),
         "next_action": next_action,
     }
+
+def build_price_position_metrics(*, current_price, holding_currency: str | None, week52: dict, target: dict | None) -> dict:
+    week52_high = week52.get("week52_high")
+    week52_proximity = (
+        current_price / week52_high
+        if current_price is not None and week52_high and week52_high > 0
+        else None
+    )
+    week52_gap = (
+        (current_price - week52_high) / week52_high
+        if current_price is not None and week52_high and week52_high > 0
+        else None
+    )
+    target_price = target.get("target_price") if target else None
+    target_currency = target.get("target_price_currency") if target else None
+    same_target_currency = target_currency == (holding_currency or "KRW").upper()
+    target_proximity = (
+        current_price / target_price
+        if same_target_currency
+        and current_price is not None
+        and target_price
+        and target_price > 0
+        else None
+    )
+    target_upside = (
+        (target_price - current_price) / current_price
+        if same_target_currency
+        and current_price is not None
+        and current_price > 0
+        and target_price
+        else None
+    )
+    target_status = (
+        "계산 완료"
+        if target_proximity is not None
+        else "목표주가 미등록"
+        if target_price is None
+        else "목표주가 통화가 현재가 통화와 달라 근접도 계산 보류"
+    )
+    return {
+        "week52_high": week52_high,
+        "week52_high_proximity": round(week52_proximity, 4) if week52_proximity is not None else None,
+        "week52_high_gap": round(week52_gap, 4) if week52_gap is not None else None,
+        "target_price": target_price,
+        "target_price_currency": target_currency,
+        "target_price_proximity": round(target_proximity, 4) if target_proximity is not None else None,
+        "target_upside": round(target_upside, 4) if target_upside is not None else None,
+        "target_status": target_status,
+        "raw_week52_proximity": week52_proximity,
+        "raw_target_upside": target_upside,
+    }

@@ -16635,38 +16635,16 @@ def build_portfolio_intelligent_table(
             or ticker
         )
         week52 = fetch_52_week_high_for_holding(ticker, settings)
-        week52_high = week52.get("week52_high")
         current_price = holding.current_price
-        week52_proximity = (
-            current_price / week52_high
-            if current_price is not None and week52_high and week52_high > 0
-            else None
-        )
-        week52_gap = (
-            (current_price - week52_high) / week52_high
-            if current_price is not None and week52_high and week52_high > 0
-            else None
-        )
         target = parse_latest_target_price_from_memory(ticker, vault_dir, holding.currency)
-        target_price = target.get("target_price") if target else None
-        target_currency = target.get("target_price_currency") if target else None
-        same_target_currency = target_currency == (holding.currency or "KRW").upper()
-        target_proximity = (
-            current_price / target_price
-            if same_target_currency
-            and current_price is not None
-            and target_price
-            and target_price > 0
-            else None
+        price_position = portfolio_intelligent_table.build_price_position_metrics(
+            current_price=current_price,
+            holding_currency=holding.currency,
+            week52=week52,
+            target=target,
         )
-        target_upside = (
-            (target_price - current_price) / current_price
-            if same_target_currency
-            and current_price is not None
-            and current_price > 0
-            and target_price
-            else None
-        )
+        week52_high = price_position["week52_high"]
+        target_price = price_position["target_price"]
         if week52_high is None:
             warnings.append(f"{company_name}: 52주 최고가 {week52.get('week52_status')}")
         if target_price is None:
@@ -16692,8 +16670,8 @@ def build_portfolio_intelligent_table(
             thesis_connected=bool(thesis_snapshot),
             target_price=target_price,
             week52_high=week52_high,
-            target_upside=target_upside,
-            week52_proximity=week52_proximity,
+            target_upside=price_position["raw_target_upside"],
+            week52_proximity=price_position["raw_week52_proximity"],
         )
         rows.append(
             {
@@ -16722,31 +16700,19 @@ def build_portfolio_intelligent_table(
                     if (holding.currency or "KRW").upper() == "USD"
                     else "원화 현재가 기준"
                 ),
-                "week52_high": week52_high,
+                "week52_high": price_position["week52_high"],
                 "week52_high_as_of": week52.get("week52_high_as_of"),
                 "week52_high_source": week52.get("week52_high_source"),
-                "week52_high_proximity": round(week52_proximity, 4)
-                if week52_proximity is not None
-                else None,
-                "week52_high_gap": round(week52_gap, 4)
-                if week52_gap is not None
-                else None,
+                "week52_high_proximity": price_position["week52_high_proximity"],
+                "week52_high_gap": price_position["week52_high_gap"],
                 "week52_status": week52.get("week52_status"),
-                "target_price": target_price,
-                "target_price_currency": target_currency,
+                "target_price": price_position["target_price"],
+                "target_price_currency": price_position["target_price_currency"],
                 "target_price_source_file": target.get("target_price_source_file") if target else None,
                 "target_price_source_type": target.get("target_price_source_type") if target else None,
-                "target_price_proximity": round(target_proximity, 4)
-                if target_proximity is not None
-                else None,
-                "target_upside": round(target_upside, 4) if target_upside is not None else None,
-                "target_status": (
-                    "계산 완료"
-                    if target_proximity is not None
-                    else "목표주가 미등록"
-                    if target_price is None
-                    else "목표주가 통화가 현재가 통화와 달라 근접도 계산 보류"
-                ),
+                "target_price_proximity": price_position["target_price_proximity"],
+                "target_upside": price_position["target_upside"],
+                "target_status": price_position["target_status"],
                 "research_memory_count": memory_count,
                 "rag_document_count": rag_document_count,
                 "rag_connected": rag_document_count > 0,

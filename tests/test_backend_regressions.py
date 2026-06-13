@@ -1249,6 +1249,36 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
 
 
 class PortfolioIntelligentTableHelperTests(unittest.TestCase):
+    def test_price_position_metrics_calculates_target_and_52_week_position(self):
+        from research_os import portfolio_intelligent_table
+
+        metrics = portfolio_intelligent_table.build_price_position_metrics(
+            current_price=100,
+            holding_currency="KRW",
+            week52={"week52_high": 125},
+            target={"target_price": 150, "target_price_currency": "KRW"},
+        )
+
+        self.assertEqual(metrics["week52_high_proximity"], 0.8)
+        self.assertEqual(metrics["week52_high_gap"], -0.2)
+        self.assertEqual(metrics["target_price_proximity"], 0.6667)
+        self.assertEqual(metrics["target_upside"], 0.5)
+        self.assertEqual(metrics["target_status"], "계산 완료")
+
+    def test_price_position_metrics_flags_currency_mismatch(self):
+        from research_os import portfolio_intelligent_table
+
+        metrics = portfolio_intelligent_table.build_price_position_metrics(
+            current_price=100,
+            holding_currency="KRW",
+            week52={"week52_high": None},
+            target={"target_price": 150, "target_price_currency": "USD"},
+        )
+
+        self.assertIsNone(metrics["target_price_proximity"])
+        self.assertIsNone(metrics["target_upside"])
+        self.assertEqual(metrics["target_status"], "목표주가 통화가 현재가 통화와 달라 근접도 계산 보류")
+
     def test_readiness_summary_prioritizes_target_proximity_action(self):
         from research_os import portfolio_intelligent_table
 
