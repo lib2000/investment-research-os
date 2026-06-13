@@ -2053,12 +2053,43 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
             upsert_calls.append({"vault_dir": vault_dir, "entry": entry, "full_text": full_text})
             return {"stored": True, "entry": entry}
 
+        class FakeHttpException(Exception):
+            def __init__(self, status_code, detail):
+                super().__init__(detail)
+                self.status_code = status_code
+                self.detail = detail
+
+        class FakeDataSourceType:
+            OTHER = "other"
+            RESEARCH_MEMORY = "research_memory"
+
+        class FakeInjectedDataPoint:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
         runtime = SimpleNamespace(
+            DataSourceType=FakeDataSourceType,
+            HTTPException=FakeHttpException,
+            InjectedDataPoint=FakeInjectedDataPoint,
             current_storage_date=lambda: date(2026, 6, 13),
             decode_attachment_base64=lambda value: base64.b64decode(value),
             extract_uploaded_file_text=fake_extract_uploaded_file_text,
-            normalize_ticker=lambda value: str(value or "").upper(),
+            normalize_ticker=lambda value: str(value or "").upper().replace(" ", "-"),
+            official_ticker_registry={
+                "WORKFLOW": {
+                    "company_name": "Workflow Inc",
+                    "business_context": "automation",
+                    "watch_kpis": ["ARR", "FCF"],
+                }
+            },
+            read_dynamic_ticker_registry=lambda settings: {},
+            resolve_ticker_symbol_from_alias=lambda value, settings: str(value or "").upper(),
+            resolve_vault_dir=lambda research_vault_dir: Path(research_vault_dir),
             safe_attachment_file_name=lambda value: "upload.txt",
+            summarize_capture=lambda value: f"요약: {value[:20]}",
             upsert_research_memory_document=fake_upsert_research_memory_document,
         )
         test_tmp_dir = PROJECT_ROOT / ".test-tmp"
@@ -2095,6 +2126,31 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
                 markdown="# Note",
                 tags=["workflow"],
                 metadata={"source": "test"},
+            )
+            settings = SimpleNamespace(research_vault_dir=str(vault_dir))
+            earnings_response = research_workflow_files.build_earnings_filing_note_response(
+                runtime,
+                {
+                    "ticker": "workflow",
+                    "earnings_call": "Revenue and margin improved",
+                    "file_content_base64": base64.b64encode(b"revenue margin").decode("ascii"),
+                    "file_name": "upload.txt",
+                    "file_mime_type": "text/plain",
+                },
+                settings,
+            )
+            lp_response = research_workflow_files.build_gp_lp_staging_response(
+                runtime,
+                {
+                    "fund_name": "Workflow Fund",
+                    "gp_package": "IPO exit with write-down risk",
+                    "valuation_method": "DCF",
+                    "base_case": "Base",
+                    "file_content_base64": base64.b64encode(b"revenue margin").decode("ascii"),
+                    "file_name": "upload.txt",
+                    "file_mime_type": "text/plain",
+                },
+                settings,
             )
 
         self.assertEqual(attachment["file_name"], "upload.txt")
@@ -2140,6 +2196,14 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertIn("## 첨부 파일 처리", earnings_markdown)
         self.assertIn("# Workflow Fund LP 보고 스테이징", lp_markdown)
         self.assertIn("| NAV | 확인 | 입력 | 메모 |", lp_markdown)
+        self.assertEqual(earnings_response["ticker"], "WORKFLOW")
+        self.assertEqual(earnings_response["company_name"], "Workflow Inc")
+        self.assertEqual(earnings_response["file_processing"]["file_name"], "upload.txt")
+        self.assertEqual(earnings_response["injected_data"][0]["label"], "official_company_profile")
+        self.assertEqual(lp_response["fund_name"], "Workflow Fund")
+        self.assertIn("감액 신호", "\n".join(lp_response["valuation_template_output"]))
+        self.assertIn("엑시트 이벤트", "\n".join(lp_response["valuation_template_output"]))
+        self.assertEqual(lp_response["file_processing"]["file_name"], "upload.txt")
         self.assertTrue(rag_result["stored"])
         self.assertEqual(upsert_calls[0]["entry"]["ticker"], "WORKFLOW")
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
