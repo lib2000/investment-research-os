@@ -76,7 +76,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_risk_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
+from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_risk_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -2176,61 +2176,24 @@ def render_dart_filing_markdown(ticker: str, filing: dict, importance: str, acti
 """
 
 
+def _dart_filing_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        dart_filing_importance=dart_filing_importance,
+        manifest_with_ticker_verification=manifest_with_ticker_verification,
+        render_dart_filing_markdown=render_dart_filing_markdown,
+        resolve_vault_dir=resolve_vault_dir,
+        save_research_markdown=save_research_markdown,
+        upsert_research_memory_document=upsert_research_memory_document,
+    )
+
+
 def save_dart_filing_watch_item(ticker: str, filing: dict, settings: Settings) -> ResearchStorageInfo:
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    importance, action, tags = dart_filing_importance(str(filing.get("report_name") or ""))
-    markdown = render_dart_filing_markdown(ticker, filing, importance, action)
-    receipt_date_text = str(filing.get("receipt_date") or "")
-    try:
-        report_date = datetime.strptime(receipt_date_text, "%Y%m%d").date()
-    except ValueError:
-        report_date = date.today()
-    payload = {
-        "module": "dart_filing_watch",
-        "ticker": ticker,
-        "filing": filing,
-        "importance": importance,
-        "action": action,
-        "tags": tags,
-    }
-    summary = f"{filing.get('corp_name') or ticker} DART 신규 공시: {filing.get('report_name') or '공시명 미확인'}"
-    storage = save_research_markdown(
-        vault_dir=vault_dir,
+    return dart_filing_storage.save_dart_filing_watch_item(
+        _dart_filing_storage_runtime(),
         ticker=ticker,
-        report_type="dart-filing-watch",
-        markdown=markdown,
-        structured_payload=payload,
-        manifest_entry=manifest_with_ticker_verification(
-            ticker,
-            {
-                "module": "dart_filing_watch",
-                "summary": summary,
-                "source_type": "official_filing",
-                "source_url": filing.get("source_url"),
-                "confidence": 0.96,
-                "importance": importance,
-                "tags": tags,
-                "rcept_no": filing.get("rcept_no"),
-            },
-        ),
-        report_date=report_date,
-        file_suffix=str(filing.get("rcept_no") or ""),
+        filing=filing,
+        settings=settings,
     )
-    upsert_research_memory_document(
-        vault_dir=vault_dir,
-        entry={
-            "ticker": ticker,
-            "type": "dart-filing-watch",
-            "date": report_date.isoformat(),
-            "file_name": storage.file_name,
-            "relative_path": storage.relative_path,
-            "summary": summary,
-            "source_type": "official_filing",
-            "tags": tags,
-        },
-        full_text=markdown,
-    )
-    return storage
 
 
 def classify_dart_filing_refresh_error(exc: Exception) -> dict:

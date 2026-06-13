@@ -5075,6 +5075,70 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertEqual(pending, [])
 
 
+class DartFilingStorageTests(unittest.TestCase):
+    def test_dart_filing_storage_persists_manifest_and_rag(self):
+        from research_os import dart_filing_storage
+        from research_os.research_memory import ResearchStorageInfo
+
+        save_calls = []
+        rag_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        runtime = SimpleNamespace(
+            dart_filing_importance=lambda report_name: ("높음", "리스크 재점검", ["dart", "risk"]),
+            manifest_with_ticker_verification=lambda ticker, entry: {**entry, "ticker": ticker, "verified": True},
+            render_dart_filing_markdown=lambda ticker, filing, importance, action: f"{ticker} {importance} {action}",
+            resolve_vault_dir=lambda value: Path(value),
+            save_research_markdown=fake_save_research_markdown,
+            upsert_research_memory_document=lambda **kwargs: rag_calls.append(kwargs) or {"status": "upserted"},
+        )
+        filing = {
+            "corp_name": "삼성전자",
+            "receipt_date": "20260613",
+            "report_name": "주요사항보고서",
+            "rcept_no": "202606130001",
+            "source_url": "https://dart.example.test/filing",
+        }
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "dart_filing_storage_vault"
+
+        storage = dart_filing_storage.save_dart_filing_watch_item(
+            runtime,
+            ticker="005930",
+            filing=filing,
+            settings=SimpleNamespace(research_vault_dir=str(vault_dir)),
+        )
+
+        self.assertEqual(storage.file_name, "005930-dart-filing-watch.md")
+        self.assertEqual(len(save_calls), 1)
+        saved = save_calls[0]
+        self.assertEqual(saved["vault_dir"], vault_dir)
+        self.assertEqual(saved["ticker"], "005930")
+        self.assertEqual(saved["report_type"], "dart-filing-watch")
+        self.assertEqual(saved["report_date"], date(2026, 6, 13))
+        self.assertEqual(saved["file_suffix"], "202606130001")
+        self.assertEqual(saved["structured_payload"]["importance"], "높음")
+        self.assertEqual(saved["structured_payload"]["filing"], filing)
+        self.assertEqual(saved["manifest_entry"]["module"], "dart_filing_watch")
+        self.assertEqual(saved["manifest_entry"]["ticker"], "005930")
+        self.assertEqual(saved["manifest_entry"]["source_type"], "official_filing")
+        self.assertEqual(saved["manifest_entry"]["source_url"], "https://dart.example.test/filing")
+        self.assertEqual(saved["manifest_entry"]["rcept_no"], "202606130001")
+        self.assertTrue(saved["manifest_entry"]["verified"])
+        self.assertEqual(len(rag_calls), 1)
+        self.assertEqual(rag_calls[0]["vault_dir"], vault_dir)
+        self.assertEqual(rag_calls[0]["entry"]["type"], "dart-filing-watch")
+        self.assertEqual(rag_calls[0]["entry"]["source_type"], "official_filing")
+        self.assertEqual(rag_calls[0]["entry"]["date"], "2026-06-13")
+        self.assertIn("005930", rag_calls[0]["full_text"])
+
+
 class DartFilingWatchTests(unittest.TestCase):
     def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
         import research_os_main as main
