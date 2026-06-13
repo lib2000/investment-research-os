@@ -2019,6 +2019,99 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class ResearchMemoryQualityRebuildModuleTests(unittest.TestCase):
+    def test_quality_rebuild_module_updates_manifest_sidecar_markdown_and_rag(self):
+        from research_os import research_memory_quality_rebuild
+
+        updated_entries = []
+        section_updates = []
+        rag_updates = []
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "POLICY"
+            ticker_dir.mkdir(parents=True)
+            markdown_path = ticker_dir / "POLICY-research-capture-2026-06-13-test.md"
+            json_path = markdown_path.with_suffix(".json")
+            markdown_path.write_text("# 정책 자료\n\n코스닥 정책 메모", encoding="utf-8")
+            entry = {
+                "ticker": "POLICY",
+                "type": "research-capture",
+                "file_name": markdown_path.name,
+                "summary": "첨부 중심 저장",
+                "tags": ["auto_classified"],
+                "attachment": {"file_name": "kosdaq.pdf", "mime_type": "application/pdf"},
+                "capture_quality": {"status": "실패"},
+            }
+            payload = {
+                "raw_content": "코스닥 활성화 정책",
+                "captured_item": {"summary": "첨부 중심 저장", "tags": ["auto_classified"]},
+                "attachment": {"file_name": "kosdaq.pdf", "mime_type": "application/pdf"},
+                "capture_quality": {"status": "실패"},
+            }
+            json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            def merge_tags(*groups):
+                merged = []
+                for group in groups:
+                    for tag in group or []:
+                        if tag not in merged:
+                            merged.append(tag)
+                return merged
+
+            runtime = SimpleNamespace(
+                resolve_vault_dir=lambda value: Path(value),
+                read_manifest=lambda _vault_dir: [entry],
+                current_storage_timestamp=lambda: "2026-06-13T08:00:00+09:00",
+                is_archived_research_entry=lambda _entry: False,
+                read_manifest_entry_payload=lambda _entry, _vault_dir: json.loads(json_path.read_text(encoding="utf-8")),
+                read_manifest_entry_text=lambda _vault_dir, _entry: markdown_path.read_text(encoding="utf-8"),
+                build_quality_rebuild_context=lambda _entry, _payload, _markdown_text: (
+                    "코스닥 활성화 정책",
+                    {"file_name": "kosdaq.pdf", "mime_type": "application/pdf"},
+                    "첨부 파일명: kosdaq.pdf",
+                ),
+                manifest_entry_markdown_path=lambda _entry, _vault_dir: markdown_path,
+                quality_rebuild_marker="## 품질 재점검/투자 반영 추론",
+                infer_capture_investment_scope=lambda _context, _settings: {
+                    "tags": ["theme:kosdaq"],
+                    "theme_candidates": [{"label": "코스닥"}],
+                    "matched_interest_tickers": [],
+                    "matched_interest_sectors": [{"name": "코스닥"}],
+                    "matched_portfolio_holdings": [],
+                },
+                render_investment_scope_context=lambda _scope: "관심 범위 후보: 코스닥",
+                merge_research_tags=merge_tags,
+                strip_quality_rebuild_tags=lambda tags: [tag for tag in (tags or []) if not str(tag).startswith("theme:")],
+                strip_quality_scope_from_summary=lambda summary: str(summary or "").split(" 관심 범위 후보:", 1)[0],
+                compact_representative_sentence=lambda text, _limit: text,
+                update_manifest=lambda **kwargs: updated_entries.append(kwargs["entry"]),
+                manifest_entry_json_path=lambda _entry, _vault_dir: json_path,
+                upsert_quality_rebuild_section=lambda path, section: section_updates.append((path, section)) or True,
+                upsert_research_memory_document=lambda **kwargs: rag_updates.append(kwargs),
+                backfill_research_memory_documents_from_manifest=lambda _vault_dir: {"updated_count": 1},
+                backfill_thesis_snapshots_from_manifest=lambda _vault_dir: {"updated_count": 1},
+            )
+
+            result = research_memory_quality_rebuild.rebuild_research_memory_quality_metadata(
+                runtime,
+                SimpleNamespace(research_vault_dir=str(vault_dir)),
+            )
+            updated_payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["enriched_count"], 1)
+        self.assertEqual(result["markdown_updated_count"], 1)
+        self.assertEqual(result["sidecar_updated_count"], 1)
+        self.assertIn("theme:kosdaq", updated_entries[0]["tags"])
+        self.assertEqual(updated_entries[0]["capture_quality"]["status"], "보강 필요")
+        self.assertTrue(updated_payload["capture_quality"]["metadata_enriched"])
+        self.assertIn("theme:kosdaq", updated_payload["captured_item"]["tags"])
+        self.assertIn("관심 범위 후보: 코스닥", section_updates[0][1])
+        self.assertIn("관심 범위 후보: 코스닥", rag_updates[0]["full_text"])
+
+
 class ResearchMemoryOcrModuleTests(unittest.TestCase):
     def test_research_memory_ocr_module_updates_attachment_sidecar_markdown_and_rag(self):
         from research_os import research_memory_ocr
