@@ -2356,6 +2356,96 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class NewsMarketJournalModuleTests(unittest.TestCase):
+    def test_news_market_journal_module_reads_existing_summary(self):
+        from research_os import news_market_journal
+
+        runtime = SimpleNamespace(
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {"market": "US", "session_date": "2026-06-12", "raw_summary": "old"},
+                    {"market": "KR", "session_date": "2026-06-13", "raw_summary": "국내 요약"},
+                ]
+            }
+        )
+
+        result = news_market_journal.market_journal_existing_summary(runtime, SimpleNamespace(), "KR", "2026-06-13")
+
+        self.assertEqual(result, "국내 요약")
+
+    def test_news_market_journal_module_saves_entry_and_markdown(self):
+        from research_os import news_market_journal
+
+        writes = []
+        saves = []
+
+        class FakeEntry:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+            @classmethod
+            def model_validate(cls, raw_entry):
+                return cls(**raw_entry)
+
+            def model_dump(self, mode="json"):
+                return dict(self.__dict__)
+
+        class FakeResponse:
+            status = "success"
+            module = "market_close_review"
+
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+                self.status = "success"
+                self.module = "market_close_review"
+                self.storage = None
+
+        runtime = SimpleNamespace(
+            MarketCloseEntry=FakeEntry,
+            MarketCloseReviewResponse=FakeResponse,
+            build_auto_market_utilization_focus=lambda **_kwargs: {"focus": "risk"},
+            build_market_interest_implications=lambda **_kwargs: ["implication"],
+            build_market_next_watch=lambda _tags, _market: ["watch"],
+            build_market_portfolio_actions=lambda _sentiment, _risk, _regime: ["action"],
+            build_sector_implications=lambda _summary, _tags: ["sector"],
+            capture_quality_status=lambda raw_content: {"status": "정상", "text_length": len(raw_content)},
+            clean_market_summary_text=lambda text: text,
+            compact_interest_text=lambda text, limit: str(text)[:limit],
+            cumulative_market_patterns=lambda entries, market: ([f"{market} pattern"], "regime summary"),
+            current_storage_date=lambda: date(2026, 6, 13),
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            infer_market_close_sentiment=lambda _summary: ("positive", "low", "risk-on"),
+            infer_market_from_news_item=lambda _item: "US",
+            infer_market_tags=lambda _summary: ["macro"],
+            market_close_journal_path=lambda _settings: Path("market_journal.json"),
+            market_research_key=lambda market: f"MARKET-{market}",
+            news_item_safe_view=lambda item: dict(item),
+            read_market_close_journal=lambda _settings: {"entries": []},
+            render_market_close_markdown=lambda response, report_date: f"# {response.entry.market} {report_date}",
+            resolve_vault_dir=lambda value: Path(value),
+            save_research_markdown=lambda **kwargs: saves.append(kwargs) or SimpleNamespace(relative_path="research_vault/MARKET-US/a.md"),
+            summarize_market_lines=lambda _summary: ["driver"],
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+        settings = SimpleNamespace(research_vault_dir="research_vault")
+        item = {
+            "title": "FOMC update",
+            "source_url": "https://example.com/fomc",
+            "raw_content": "FOMC and NASDAQ risk-on update",
+        }
+
+        response = news_market_journal.save_news_item_to_market_journal(runtime, item, settings)
+
+        self.assertEqual(response.entry.market, "US")
+        self.assertEqual(response.entry.session_date, "2026-06-13")
+        self.assertEqual(response.history_count, 1)
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(len(saves), 1)
+        self.assertEqual(saves[0]["ticker"], "MARKET-US")
+        self.assertEqual(saves[0]["report_type"], "market-close-review")
+        self.assertIn("news_inbox", saves[0]["structured_payload"]["source"])
+
+
 class NewsActionModuleTests(unittest.TestCase):
     def test_news_action_module_marks_market_journal_candidate(self):
         from research_os import news_actions
