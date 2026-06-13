@@ -81,3 +81,79 @@ def save_research_checklist_assessment(runtime, *, assessment, ticker: str, vaul
         report_date=storage_date,
     )
     return assessment
+
+
+def save_collaborative_team_report(
+    runtime,
+    *,
+    report,
+    ticker: str,
+    vault_dir,
+    settings,
+    refresh_dossier: bool,
+):
+    storage_date = runtime.current_storage_date()
+    report.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="collaborative-team-report",
+        markdown=runtime.render_team_analysis_markdown(report, storage_date),
+        structured_payload=report.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, {
+            "summary": report.executive_summary,
+            "data_quality": report.data_quality.data_quality,
+            "source_confidence": report.data_quality.source_confidence,
+            "source_count": len(report.injected_data),
+            "consensus": report.consensus,
+            "conflicts": [item.model_dump(mode="json") for item in report.conflicts],
+            "investment_thesis": report.investment_thesis.model_dump(mode="json"),
+            "watch_items": [item.model_dump(mode="json") for item in report.watch_items],
+            "invalidation_conditions": report.invalidation_conditions,
+        }),
+        report_date=storage_date,
+    )
+    saved_entry = next(
+        (
+            entry
+            for entry in runtime.read_manifest(vault_dir)
+            if entry.get("file_name") == report.storage.file_name
+            and str(entry.get("ticker") or "").upper() == ticker
+        ),
+        None,
+    )
+    if saved_entry:
+        runtime.upsert_research_memory_document(vault_dir=vault_dir, entry=saved_entry)
+    runtime.upsert_ticker_thesis_snapshot(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        company_name=runtime.ticker_company_name(ticker),
+        investment_thesis=report.investment_thesis,
+        watch_items=report.watch_items,
+        source_entry={
+            "type": "collaborative-team-report",
+            "date": storage_date.isoformat(),
+            "file_name": report.storage.file_name if report.storage else None,
+            "relative_path": report.storage.relative_path
+            if report.storage
+            else None,
+        },
+        confidence=report.data_quality.source_confidence,
+    )
+    if refresh_dossier:
+        try:
+            runtime.synthesize_and_save_dossier(ticker, settings, save_result=True)
+            report.dossier_refresh_status = "refreshed"
+        except Exception as exc:
+            report.dossier_refresh_status = "failed"
+            runtime.append_jsonl(
+                runtime.user_state_dir(settings) / "dossier_refresh_errors.jsonl",
+                {
+                    "ticker": ticker,
+                    "at": runtime.current_storage_timestamp(),
+                    "source": "team_report",
+                    "error": str(exc),
+                },
+            )
+    else:
+        report.dossier_refresh_status = "deferred"
+    return report

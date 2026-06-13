@@ -1846,7 +1846,7 @@ class NaverResearchIngestTests(unittest.TestCase):
 
 
 class AnalysisModuleStorageTests(unittest.TestCase):
-    def test_analysis_module_storage_saves_sector_and_compounder_manifest_payloads(self):
+    def test_analysis_module_storage_saves_analysis_module_manifest_payloads(self):
         from research_os import analysis_module_storage
         from research_os.research_memory import ResearchStorageInfo
 
@@ -1862,6 +1862,10 @@ class AnalysisModuleStorageTests(unittest.TestCase):
                 return dict(self.__dict__)
 
         save_calls = []
+        rag_calls = []
+        snapshot_calls = []
+        dossier_calls = []
+        error_logs = []
 
         def fake_save_research_markdown(**kwargs):
             save_calls.append(kwargs)
@@ -1872,12 +1876,27 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             )
 
         runtime = SimpleNamespace(
+            append_jsonl=lambda path, payload: error_logs.append({"path": path, "payload": payload}),
             current_storage_date=lambda: date(2026, 6, 13),
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00",
             manifest_with_ticker_verification=lambda ticker, entry: {**entry, "ticker": ticker, "verified": True},
+            read_manifest=lambda vault_dir: [
+                {
+                    "file_name": "005930-collaborative-team-report.md",
+                    "ticker": "005930",
+                    "relative_path": "research_vault/005930/005930-collaborative-team-report.md",
+                }
+            ],
             render_checklist_markdown=lambda assessment, storage_date: f"checklist {storage_date.isoformat()}",
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
+            render_team_analysis_markdown=lambda report, storage_date: f"team {storage_date.isoformat()}",
             save_research_markdown=fake_save_research_markdown,
+            synthesize_and_save_dossier=lambda *args, **kwargs: dossier_calls.append({"args": args, "kwargs": kwargs}),
+            ticker_company_name=lambda ticker: "삼성전자",
+            upsert_research_memory_document=lambda **kwargs: rag_calls.append(kwargs),
+            upsert_ticker_thesis_snapshot=lambda **kwargs: snapshot_calls.append(kwargs),
+            user_state_dir=lambda settings: PROJECT_ROOT / ".test-tmp" / "state",
         )
         vault_dir = PROJECT_ROOT / ".test-tmp" / "analysis_storage_vault"
         sector_report = FakeReport(
@@ -1914,6 +1933,18 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             next_steps=["시나리오 확인"],
             storage=None,
         )
+        team_report = FakeReport(
+            executive_summary="7개 스킬 종합",
+            data_quality=SimpleNamespace(data_quality="높음", source_confidence=0.9),
+            injected_data=[DumpItem(label="source")],
+            consensus="강세 우위",
+            conflicts=[DumpItem(type="valuation")],
+            investment_thesis=DumpItem(summary="장기 논거"),
+            watch_items=[DumpItem(label="실적")],
+            invalidation_conditions=["마진 훼손"],
+            storage=None,
+            dossier_refresh_status=None,
+        )
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -1933,6 +1964,14 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             ticker="005930",
             vault_dir=vault_dir,
         )
+        saved_team = analysis_module_storage.save_collaborative_team_report(
+            runtime,
+            report=team_report,
+            ticker="005930",
+            vault_dir=vault_dir,
+            settings=SimpleNamespace(),
+            refresh_dossier=True,
+        )
 
         self.assertEqual(saved_sector.storage.file_name, "SECTOR-KR-BALANCED-sector-opportunity.md")
         self.assertEqual(saved_compounder.storage.file_name, "COMPOUNDER-KR-ALL-QUALITY-long-term-compounder.md")
@@ -1948,6 +1987,18 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[2]["manifest_entry"]["readiness_level"], "높음")
         self.assertEqual(save_calls[2]["manifest_entry"]["source_count"], 1)
         self.assertTrue(save_calls[2]["manifest_entry"]["verified"])
+        self.assertEqual(saved_team.storage.file_name, "005930-collaborative-team-report.md")
+        self.assertEqual(save_calls[3]["report_type"], "collaborative-team-report")
+        self.assertEqual(save_calls[3]["manifest_entry"]["ticker"], "005930")
+        self.assertEqual(save_calls[3]["manifest_entry"]["source_confidence"], 0.9)
+        self.assertTrue(save_calls[3]["manifest_entry"]["verified"])
+        self.assertEqual(rag_calls[0]["entry"]["file_name"], "005930-collaborative-team-report.md")
+        self.assertEqual(snapshot_calls[0]["company_name"], "삼성전자")
+        self.assertEqual(snapshot_calls[0]["source_entry"]["type"], "collaborative-team-report")
+        self.assertEqual(snapshot_calls[0]["source_entry"]["file_name"], "005930-collaborative-team-report.md")
+        self.assertEqual(len(dossier_calls), 1)
+        self.assertEqual(saved_team.dossier_refresh_status, "refreshed")
+        self.assertEqual(error_logs, [])
 
 
 class CompounderPresentationTests(unittest.TestCase):
