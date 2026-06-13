@@ -16990,16 +16990,10 @@ def build_target_consensus_scan(
                 "source_scope": ", ".join(dict.fromkeys(item.get("sources") or [])),
             }
         )
-    rows.sort(
-        key=lambda row: (
-            row.get("target_upside") is not None,
-            row.get("target_upside") if row.get("target_upside") is not None else -999,
-            row.get("source_count") or 0,
-        ),
-        reverse=True,
+    finalized_rows = target_price_memory.finalize_target_consensus_rows(
+        rows,
+        universe_count=len(universe),
     )
-    calculable = [row for row in rows if row.get("target_upside") is not None]
-    best = calculable[0] if calculable else None
     return {
         "status": "success",
         "module": "target_consensus_scanner",
@@ -17008,15 +17002,11 @@ def build_target_consensus_scan(
         "include_interests": include_interests,
         "price_refresh_mode": "on_missing_prices" if refresh_missing_prices else "stored_prices_only",
         "universe_count": len(universe),
-        "calculated_count": len(calculable),
-        "best_undervalued": best,
-        "summary": (
-            f"{len(universe)}개 보유/관심 종목 중 {len(calculable)}개에서 현재가와 "
-            "증권사 목표주가를 동시에 비교했습니다."
-            + (f" 가장 저평가 후보는 {best.get('company_name')}({best.get('ticker')})입니다." if best else "")
-        ),
+        "calculated_count": finalized_rows["calculated_count"],
+        "best_undervalued": finalized_rows["best_undervalued"],
+        "summary": finalized_rows["summary"],
         "warnings": warnings[:30],
-        "rows": rows,
+        "rows": finalized_rows["rows"],
     }
 
 

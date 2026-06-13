@@ -308,3 +308,27 @@ def build_target_upside_signal(target_price, current_price) -> dict:
         "valuation_signal": signal,
         "raw_target_upside": target_upside,
     }
+
+def finalize_target_consensus_rows(rows: list[dict], *, universe_count: int) -> dict:
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (
+            row.get("target_upside") is not None,
+            row.get("target_upside") if row.get("target_upside") is not None else -999,
+            row.get("source_count") or 0,
+        ),
+        reverse=True,
+    )
+    calculable = [row for row in sorted_rows if row.get("target_upside") is not None]
+    best = calculable[0] if calculable else None
+    return {
+        "rows": sorted_rows,
+        "calculable": calculable,
+        "best_undervalued": best,
+        "calculated_count": len(calculable),
+        "summary": (
+            f"{universe_count}개 보유/관심 종목 중 {len(calculable)}개에서 현재가와 "
+            "증권사 목표주가를 동시에 비교했습니다."
+            + (f" 가장 저평가 후보는 {best.get('company_name')}({best.get('ticker')})입니다." if best else "")
+        ),
+    }

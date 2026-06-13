@@ -1315,6 +1315,24 @@ class PortfolioIntelligentTableHelperTests(unittest.TestCase):
 
 
 class TargetPriceMemoryHelperTests(unittest.TestCase):
+    def test_finalize_target_consensus_rows_sorts_and_summarizes_best(self):
+        from research_os import target_price_memory
+
+        finalized = target_price_memory.finalize_target_consensus_rows(
+            [
+                {"ticker": "A", "company_name": "알파", "target_upside": None, "source_count": 10},
+                {"ticker": "B", "company_name": "베타", "target_upside": 0.2, "source_count": 2},
+                {"ticker": "C", "company_name": "감마", "target_upside": 0.35, "source_count": 1},
+            ],
+            universe_count=3,
+        )
+
+        self.assertEqual([row["ticker"] for row in finalized["rows"]], ["C", "B", "A"])
+        self.assertEqual(finalized["calculated_count"], 2)
+        self.assertEqual(finalized["best_undervalued"]["ticker"], "C")
+        self.assertIn("3개 보유/관심 종목 중 2개", finalized["summary"])
+        self.assertIn("감마(C)", finalized["summary"])
+
     def test_target_upside_signal_labels_thresholds_and_missing_prices(self):
         from research_os import target_price_memory
 
