@@ -61,3 +61,23 @@ def save_long_term_compounder_report(runtime, *, report, research_key: str, vaul
         report_date=storage_date,
     )
     return report
+
+
+def save_research_checklist_assessment(runtime, *, assessment, ticker: str, vault_dir):
+    storage_date = runtime.current_storage_date()
+    assessment.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="research-checklist",
+        markdown=runtime.render_checklist_markdown(assessment, storage_date),
+        structured_payload=assessment.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, {
+            "summary": assessment.readiness_summary,
+            "completion_rate": assessment.completion_rate,
+            "readiness_level": assessment.readiness_level,
+            "source_count": len(assessment.injected_data),
+            "next_steps": assessment.next_steps,
+        }),
+        report_date=storage_date,
+    )
+    return assessment

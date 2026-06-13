@@ -18876,6 +18876,8 @@ def render_lp_report_staging_markdown(response: dict, storage_date: date) -> str
 def _analysis_module_storage_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         current_storage_date=current_storage_date,
+        manifest_with_ticker_verification=manifest_with_ticker_verification,
+        render_checklist_markdown=render_checklist_markdown,
         render_long_term_compounder_markdown=render_long_term_compounder_markdown,
         render_sector_opportunity_markdown=render_sector_opportunity_markdown,
         save_research_markdown=save_research_markdown,
@@ -19238,20 +19240,10 @@ def assess_research_checklist(
     )
 
     if request.save_result:
-        storage_date = current_storage_date()
-        assessment.storage = save_research_markdown(
-            vault_dir=vault_dir,
+        assessment = analysis_module_storage.save_research_checklist_assessment(
+            _analysis_module_storage_runtime(),
+            assessment=assessment,
             ticker=ticker,
-            report_type="research-checklist",
-            markdown=render_checklist_markdown(assessment, storage_date),
-            structured_payload=assessment.model_dump(mode="json"),
-            manifest_entry=manifest_with_ticker_verification(ticker, {
-                "summary": assessment.readiness_summary,
-                "completion_rate": assessment.completion_rate,
-                "readiness_level": assessment.readiness_level,
-                "source_count": len(assessment.injected_data),
-                "next_steps": assessment.next_steps,
-            }),
-            report_date=storage_date,
+            vault_dir=vault_dir,
         )
     return assessment

@@ -1873,6 +1873,8 @@ class AnalysisModuleStorageTests(unittest.TestCase):
 
         runtime = SimpleNamespace(
             current_storage_date=lambda: date(2026, 6, 13),
+            manifest_with_ticker_verification=lambda ticker, entry: {**entry, "ticker": ticker, "verified": True},
+            render_checklist_markdown=lambda assessment, storage_date: f"checklist {storage_date.isoformat()}",
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
             save_research_markdown=fake_save_research_markdown,
@@ -1904,6 +1906,14 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             next_actions=["추적"],
             storage=None,
         )
+        checklist_assessment = FakeReport(
+            readiness_summary="준비도 높음",
+            completion_rate=0.875,
+            readiness_level="높음",
+            injected_data=[DumpItem(label="source")],
+            next_steps=["시나리오 확인"],
+            storage=None,
+        )
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -1917,6 +1927,12 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             research_key="COMPOUNDER-KR-ALL-QUALITY",
             vault_dir=vault_dir,
         )
+        saved_checklist = analysis_module_storage.save_research_checklist_assessment(
+            runtime,
+            assessment=checklist_assessment,
+            ticker="005930",
+            vault_dir=vault_dir,
+        )
 
         self.assertEqual(saved_sector.storage.file_name, "SECTOR-KR-BALANCED-sector-opportunity.md")
         self.assertEqual(saved_compounder.storage.file_name, "COMPOUNDER-KR-ALL-QUALITY-long-term-compounder.md")
@@ -1927,6 +1943,11 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[1]["report_type"], "long-term-compounder")
         self.assertEqual(save_calls[1]["manifest_entry"]["screening_criteria"], "매출 성장")
         self.assertEqual(save_calls[1]["manifest_entry"]["candidates"][0]["company_name"], "SK하이닉스")
+        self.assertEqual(saved_checklist.storage.file_name, "005930-research-checklist.md")
+        self.assertEqual(save_calls[2]["report_type"], "research-checklist")
+        self.assertEqual(save_calls[2]["manifest_entry"]["readiness_level"], "높음")
+        self.assertEqual(save_calls[2]["manifest_entry"]["source_count"], 1)
+        self.assertTrue(save_calls[2]["manifest_entry"]["verified"])
 
 
 class CompounderPresentationTests(unittest.TestCase):
