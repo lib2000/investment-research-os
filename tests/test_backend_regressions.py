@@ -1,5 +1,6 @@
 import sys
 import unittest
+import base64
 import copy
 import json
 from datetime import date
@@ -2017,6 +2018,97 @@ class FileExtractionTests(unittest.TestCase):
         self.assertIn("원본 이미지는 저장", " ".join(result["extraction_warnings"]))
         self.assertEqual(result["extraction_profile"]["ocr_status"], "unavailable")
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
+
+
+class ResearchWorkflowFilesModuleTests(unittest.TestCase):
+    def test_research_workflow_files_module_handles_attachments_and_rag_payloads(self):
+        from research_os import research_workflow_files
+        from research_os.research_memory import ResearchStorageInfo
+
+        upsert_calls = []
+
+        def fake_extract_uploaded_file_text(file_bytes, file_name, mime_type, source_path=None):
+            self.assertEqual(file_bytes, b"revenue margin")
+            self.assertEqual(file_name, "upload.txt")
+            self.assertEqual(mime_type, "text/plain")
+            self.assertTrue(source_path.exists())
+            return {
+                "text_extraction": "extracted",
+                "extracted_text": "revenue margin",
+                "document_type": "text",
+                "extraction_quality": "high",
+                "extraction_char_count": 14,
+                "extraction_preview": "revenue margin",
+                "extraction_warnings": ["sample warning"],
+                "extraction_profile": {
+                    "analysis_readiness": "ready",
+                    "line_count": 1,
+                    "numeric_token_count": 0,
+                    "table_like_line_count": 0,
+                    "next_action": "review",
+                },
+            }
+
+        def fake_upsert_research_memory_document(*, vault_dir, entry, full_text=None):
+            upsert_calls.append({"vault_dir": vault_dir, "entry": entry, "full_text": full_text})
+            return {"stored": True, "entry": entry}
+
+        runtime = SimpleNamespace(
+            current_storage_date=lambda: date(2026, 6, 13),
+            decode_attachment_base64=lambda value: base64.b64decode(value),
+            extract_uploaded_file_text=fake_extract_uploaded_file_text,
+            normalize_ticker=lambda value: str(value or "").upper(),
+            safe_attachment_file_name=lambda value: "upload.txt",
+            upsert_research_memory_document=fake_upsert_research_memory_document,
+        )
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            payload = {
+                "file_content_base64": base64.b64encode(b"revenue margin").decode("ascii"),
+                "file_name": "upload.txt",
+                "file_mime_type": "text/plain",
+            }
+            attachment = research_workflow_files.prepare_workflow_attachment(
+                runtime,
+                vault_dir=vault_dir,
+                storage_key="workflow",
+                payload=payload,
+                storage_date=date(2026, 6, 13),
+            )
+            storage = ResearchStorageInfo(
+                file_name="WORKFLOW-note.md",
+                relative_path="research_vault/WORKFLOW/WORKFLOW-note.md",
+                absolute_path=str(vault_dir / "WORKFLOW" / "WORKFLOW-note.md"),
+                json_file_name="WORKFLOW-note.json",
+                json_relative_path="research_vault/WORKFLOW/WORKFLOW-note.json",
+                json_absolute_path=str(vault_dir / "WORKFLOW" / "WORKFLOW-note.json"),
+            )
+            rag_result = research_workflow_files.upsert_saved_workflow_rag_document(
+                runtime,
+                vault_dir=vault_dir,
+                storage=storage,
+                storage_key="workflow",
+                report_type="workflow-note",
+                summary="요약",
+                markdown="# Note",
+                tags=["workflow"],
+                metadata={"source": "test"},
+            )
+
+        self.assertEqual(attachment["file_name"], "upload.txt")
+        self.assertEqual(attachment["text_extraction"], "extracted")
+        self.assertEqual(attachment["extraction_profile"]["analysis_readiness"], "ready")
+        self.assertIn("WORKFLOW/_attachments/WORKFLOW-workflow-attachment-2026-06-13", attachment["relative_path"])
+        self.assertIn("매출", [item["item"] for item in research_workflow_files.infer_model_update_items("Revenue and margin improved")])
+        self.assertEqual(research_workflow_files.workflow_material_excerpt("  "), "입력 자료 없음")
+        self.assertIn("- 추출 경고: sample warning", research_workflow_files.render_file_processing_markdown(attachment))
+        self.assertTrue(rag_result["stored"])
+        self.assertEqual(upsert_calls[0]["entry"]["ticker"], "WORKFLOW")
+        self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
+        self.assertEqual(upsert_calls[0]["entry"]["source"], "test")
+        self.assertEqual(upsert_calls[0]["full_text"], "# Note")
 
 
 class ResearchMemoryFilesModuleTests(unittest.TestCase):

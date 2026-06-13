@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement
+from research_os import automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -18784,10 +18784,18 @@ def run_earnings_reaction_analyzer(
 
 
 def workflow_material_excerpt(value: str | None, limit: int = 900) -> str:
-    compact = " ".join((value or "").split())
-    if not compact:
-        return "입력 자료 없음"
-    return compact if len(compact) <= limit else f"{compact[:limit - 3]}..."
+    return research_workflow_files.workflow_material_excerpt(value, limit)
+
+
+def _research_workflow_files_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        current_storage_date=current_storage_date,
+        decode_attachment_base64=decode_attachment_base64,
+        extract_uploaded_file_text=extract_uploaded_file_text,
+        normalize_ticker=normalize_ticker,
+        safe_attachment_file_name=safe_attachment_file_name,
+        upsert_research_memory_document=upsert_research_memory_document,
+    )
 
 
 def prepare_workflow_attachment(
@@ -18797,36 +18805,13 @@ def prepare_workflow_attachment(
     payload: dict,
     storage_date: date,
 ) -> dict | None:
-    file_bytes = decode_attachment_base64(payload.get("file_content_base64"))
-    if file_bytes is None:
-        return None
-    safe_key = normalize_ticker(storage_key) or "WORKFLOW"
-    attachments_dir = vault_dir / safe_key / "_attachments"
-    attachments_dir.mkdir(parents=True, exist_ok=True)
-    safe_name = safe_attachment_file_name(payload.get("file_name"))
-    timestamp = datetime.now().strftime("%H%M%S")
-    attachment_path = attachments_dir / f"{safe_key}-workflow-attachment-{storage_date.isoformat()}-{timestamp}-{safe_name}"
-    attachment_path.write_bytes(file_bytes)
-    extraction = extract_uploaded_file_text(
-        file_bytes,
-        payload.get("file_name"),
-        payload.get("file_mime_type"),
-        source_path=attachment_path,
+    return research_workflow_files.prepare_workflow_attachment(
+        _research_workflow_files_runtime(),
+        vault_dir=vault_dir,
+        storage_key=storage_key,
+        payload=payload,
+        storage_date=storage_date,
     )
-    return {
-        "file_name": payload.get("file_name") or safe_name,
-        "mime_type": payload.get("file_mime_type") or "application/octet-stream",
-        "size": len(file_bytes),
-        "relative_path": attachment_path.relative_to(vault_dir).as_posix(),
-        "text_extraction": extraction.get("text_extraction"),
-        "extracted_text": extraction.get("extracted_text") or "",
-        "document_type": extraction.get("document_type"),
-        "extraction_quality": extraction.get("extraction_quality"),
-        "extraction_char_count": extraction.get("extraction_char_count"),
-        "extraction_preview": extraction.get("extraction_preview"),
-        "extraction_warnings": extraction.get("extraction_warnings") or [],
-        "extraction_profile": extraction.get("extraction_profile") or {},
-    }
 
 
 def upsert_saved_workflow_rag_document(
@@ -18841,87 +18826,26 @@ def upsert_saved_workflow_rag_document(
     source_confidence: float = 0.85,
     metadata: dict | None = None,
 ) -> dict:
-    entry = {
-        "ticker": normalize_ticker(storage_key) or "GENERAL",
-        "type": report_type,
-        "date": current_storage_date().isoformat(),
-        "file_name": storage.file_name,
-        "relative_path": storage.relative_path,
-        "json_file_name": storage.json_file_name,
-        "json_relative_path": storage.json_relative_path,
-        "summary": summary,
-        "title": storage.file_name,
-        "source_confidence": source_confidence,
-        "tags": tags or [],
-        **(metadata or {}),
-    }
-    return upsert_research_memory_document(
+    return research_workflow_files.upsert_saved_workflow_rag_document(
+        _research_workflow_files_runtime(),
         vault_dir=vault_dir,
-        entry=entry,
-        full_text=markdown,
+        storage=storage,
+        storage_key=storage_key,
+        report_type=report_type,
+        summary=summary,
+        markdown=markdown,
+        tags=tags,
+        source_confidence=source_confidence,
+        metadata=metadata,
     )
 
 
 def infer_model_update_items(material_text: str) -> list[dict]:
-    text = material_text.lower()
-    rules = [
-        ("매출", ["revenue", "sales", "매출", "수요", "주문"], "매출 성장률과 다음 분기 가이던스 가정을 재점검"),
-        ("마진", ["margin", "gross margin", "operating margin", "마진", "원가"], "매출총이익률/영업이익률 가정 업데이트"),
-        ("CAPEX", ["capex", "투자", "설비", "데이터센터", "전력"], "CAPEX와 감가상각, 관련 수혜/부담 항목 반영"),
-        ("현금흐름", ["cash flow", "fcf", "현금흐름", "현금 소진", "free cash"], "FCF, 운전자본, 현금 소진 속도 업데이트"),
-        ("가이던스", ["guidance", "outlook", "가이던스", "전망"], "회사 가이던스와 컨센서스 차이를 모델에 반영"),
-        ("리스크", ["risk", "lawsuit", "regulation", "리스크", "규제", "소송"], "할인율, 목표 멀티플, 약세 시나리오 확률 조정"),
-    ]
-    updates = []
-    for label, keywords, action in rules:
-        matched = [keyword for keyword in keywords if keyword in text]
-        if matched:
-            updates.append({
-                "item": label,
-                "signal": ", ".join(matched[:4]),
-                "model_action": action,
-                "status": "업데이트 필요",
-            })
-    if not updates:
-        updates.append({
-            "item": "핵심 가정",
-            "signal": "명시적 수치 신호 부족",
-            "model_action": "어닝 콜/공시 원문에서 매출, 마진, 현금흐름, 가이던스 수치를 보강",
-            "status": "보강 필요",
-        })
-    return updates
+    return research_workflow_files.infer_model_update_items(material_text)
 
 
 def render_file_processing_markdown(file_processing: dict | None) -> str:
-    if not file_processing:
-        return "- 첨부 파일 없음"
-    profile = file_processing.get("extraction_profile") or {}
-    lines = [
-        f"- 파일명: {file_processing.get('file_name')}",
-        f"- 문서 유형: {file_processing.get('document_type') or '미확인'}",
-        f"- 저장 경로: {file_processing.get('relative_path')}",
-        f"- 추출 상태: {file_processing.get('text_extraction')}",
-        f"- 추출 품질: {file_processing.get('extraction_quality') or '미평가'}",
-        f"- 추출 본문 길이: {file_processing.get('extraction_char_count') or 0}자",
-    ]
-    if profile:
-        lines.extend(
-            [
-                f"- 분석 활용도: {profile.get('analysis_readiness') or '미평가'}",
-                f"- 구조 신호: 줄 {profile.get('line_count') or 0}개, 숫자 토큰 {profile.get('numeric_token_count') or 0}개, 표형 줄 {profile.get('table_like_line_count') or 0}개",
-                f"- 권장 조치: {profile.get('next_action') or '미평가'}",
-            ]
-        )
-        if profile.get("image_size") or profile.get("ocr_available") is not None:
-            ocr_state = "사용 가능" if profile.get("ocr_available") else "사용 불가"
-            lines.append(f"- 이미지/OCR: {profile.get('image_size') or '크기 미확인'} · OCR {ocr_state}")
-        if profile.get("ocr_language"):
-            lines.append(f"- OCR 언어: {profile.get('ocr_language')}")
-    lines.extend(
-        f"- 추출 경고: {warning}"
-        for warning in (file_processing.get("extraction_warnings") or [])
-    )
-    return "\n".join(lines)
+    return research_workflow_files.render_file_processing_markdown(file_processing)
 
 
 def render_earnings_filing_note_markdown(response: dict, storage_date: date) -> str:
