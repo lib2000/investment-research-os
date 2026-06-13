@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
+    apply_daily_recommendation_overseas_tracking,
     daily_recommendation_state_path,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
@@ -43,6 +44,29 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(first["score"], 0)
         self.assertEqual(first["portfolio_risk_connection"], {})
         self.assertEqual(overseas["currency"], "USD")
+
+    def test_apply_daily_recommendation_overseas_tracking_marks_fx_review(self):
+        candidate = {
+            "ticker": "PL",
+            "currency": "usd",
+            "baseline_price": 42.5,
+            "baseline_price_source": "test",
+            "baseline_price_checked_at": "2026-06-14T08:00:00+09:00",
+            "quality_flags": [],
+        }
+
+        updated = apply_daily_recommendation_overseas_tracking(candidate)
+
+        self.assertIs(updated, candidate)
+        self.assertTrue(candidate["overseas_tracking"]["needs_fx_conversion"])
+        self.assertEqual(candidate["overseas_tracking"]["currency"], "USD")
+        self.assertEqual(candidate["overseas_tracking"]["baseline_price"], 42.5)
+        self.assertEqual(candidate["overseas_tracking"]["price_source"], "test")
+        self.assertIn("해외 종목: 환율·원화 평가 병행 확인", candidate["quality_flags"])
+
+        domestic = apply_daily_recommendation_overseas_tracking({"currency": "KRW"})
+        self.assertFalse(domestic["overseas_tracking"]["needs_fx_conversion"])
+        self.assertEqual(domestic["overseas_tracking"]["currency"], "KRW")
 
     def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
         candidate = {"score": 10}

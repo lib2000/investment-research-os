@@ -398,6 +398,26 @@ def apply_daily_recommendation_storage_quality(candidate: dict, quality: dict | 
         evidence_sources.insert(0, quality_evidence)
 
 
+def apply_daily_recommendation_overseas_tracking(candidate: dict) -> dict:
+    currency = str(candidate.get("currency") or "KRW").upper()
+    if currency != "KRW":
+        candidate["overseas_tracking"] = {
+            "currency": currency,
+            "baseline_price": candidate.get("baseline_price"),
+            "needs_fx_conversion": True,
+            "fx_note": "해외 종목은 원통화 기준 수익률을 우선 추적하고, 포트폴리오 평가에는 USD/KRW 환율 반영 상태를 함께 확인합니다.",
+            "price_source": candidate.get("baseline_price_source"),
+            "price_checked_at": candidate.get("baseline_price_checked_at"),
+        }
+        candidate.setdefault("quality_flags", []).append("해외 종목: 환율·원화 평가 병행 확인")
+    else:
+        candidate["overseas_tracking"] = {
+            "currency": "KRW",
+            "needs_fx_conversion": False,
+        }
+    return candidate
+
+
 def compact_recommendation_text(value: object, max_length: int = 180) -> str:
     text = " ".join(str(value or "").split())
     if len(text) <= max_length:

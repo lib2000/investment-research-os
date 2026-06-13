@@ -60,6 +60,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
     add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
+    apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
@@ -17232,22 +17233,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
                 candidate["quality_flags"].append("기준 현재가 미확인")
                 _add_daily_recommendation_penalty(candidate, "현재가 미확인", 5)
 
-        currency = str(candidate.get("currency") or "KRW").upper()
-        if currency != "KRW":
-            candidate["overseas_tracking"] = {
-                "currency": currency,
-                "baseline_price": candidate.get("baseline_price"),
-                "needs_fx_conversion": True,
-                "fx_note": "해외 종목은 원통화 기준 수익률을 우선 추적하고, 포트폴리오 평가에는 USD/KRW 환율 반영 상태를 함께 확인합니다.",
-                "price_source": candidate.get("baseline_price_source"),
-                "price_checked_at": candidate.get("baseline_price_checked_at"),
-            }
-            candidate["quality_flags"].append("해외 종목: 환율·원화 평가 병행 확인")
-        else:
-            candidate["overseas_tracking"] = {
-                "currency": "KRW",
-                "needs_fx_conversion": False,
-            }
+        _apply_daily_recommendation_overseas_tracking(candidate)
 
         recent_evidence_documents = list(candidate.get("evidence_documents") or [])
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(
