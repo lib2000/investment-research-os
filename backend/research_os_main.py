@@ -18801,6 +18801,7 @@ def _research_workflow_files_runtime() -> SimpleNamespace:
         resolve_ticker_symbol_from_alias=resolve_ticker_symbol_from_alias,
         resolve_vault_dir=resolve_vault_dir,
         safe_attachment_file_name=safe_attachment_file_name,
+        save_research_markdown=save_research_markdown,
         summarize_capture=summarize_capture,
         upsert_research_memory_document=upsert_research_memory_document,
     )
@@ -18891,50 +18892,10 @@ def run_earnings_filing_note_workflow(
 ) -> dict:
     response = build_earnings_filing_note_response(payload, settings)
     if payload.get("save_result", True):
-        storage_date = current_storage_date()
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        markdown = render_earnings_filing_note_markdown(response, storage_date)
-        storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=response["ticker"],
-            report_type="earnings-filing-note",
-            markdown=markdown,
-            structured_payload=response,
-            manifest_entry={
-                "summary": f"{response['company_name']} 어닝 콜/공시 기반 모델 업데이트 노트 초안",
-                "model_updates": response["model_updates"],
-                "open_questions": response["open_questions"],
-                "source_confidence": 0.88,
-                "tags": ["earnings", "filing", "model_update", "valuation", "rag_connected"],
-                "ticker_verification": {
-                    "official_symbol": response["ticker"],
-                    "company_name": response["company_name"],
-                    "verified": True,
-                    "verification_source": "local_or_dynamic_registry",
-                },
-            },
-            report_date=storage_date,
-        )
-        response["storage"] = storage
-        response["rag_document"] = upsert_saved_workflow_rag_document(
-            vault_dir=vault_dir,
-            storage=storage,
-            storage_key=response["ticker"],
-            report_type="earnings-filing-note",
-            summary=f"{response['company_name']} 어닝 콜/공시 기반 모델 업데이트 노트 초안",
-            markdown=markdown,
-            tags=["earnings", "filing", "model_update", "valuation", "workflow"],
-            source_confidence=0.88,
-            metadata={
-                "ticker_verification": {
-                    "official_symbol": response["ticker"],
-                    "company_name": response["company_name"],
-                    "verified": True,
-                    "verification_source": "local_or_dynamic_registry",
-                },
-                "model_updates": response["model_updates"],
-                "open_questions": response["open_questions"],
-            },
+        response = research_workflow_files.save_earnings_filing_note_response(
+            _research_workflow_files_runtime(),
+            response,
+            settings,
         )
     return response
 
@@ -18949,41 +18910,10 @@ def run_gp_lp_staging_workflow(
 ) -> dict:
     response = build_gp_lp_staging_response(payload, settings)
     if payload.get("save_result", True):
-        storage_date = current_storage_date()
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        storage_key = normalize_ticker(response["fund_name"]) or "LP-REPORT"
-        markdown = render_lp_report_staging_markdown(response, storage_date)
-        storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=storage_key,
-            report_type="lp-report-staging",
-            markdown=markdown,
-            structured_payload=response,
-            manifest_entry={
-                "summary": f"{response['fund_name']} LP 보고 스테이징",
-                "fund_name": response["fund_name"],
-                "valuation_method": response["valuation_method"],
-                "lp_risk_flags": response["lp_risk_flags"],
-                "source_confidence": 0.82,
-                "tags": ["gp_package", "lp_report", "valuation_template", "workflow", "rag_connected"],
-            },
-            report_date=storage_date,
-        )
-        response["storage"] = storage
-        response["rag_document"] = upsert_saved_workflow_rag_document(
-            vault_dir=vault_dir,
-            storage=storage,
-            storage_key=storage_key,
-            report_type="lp-report-staging",
-            summary=f"{response['fund_name']} LP 보고 스테이징",
-            markdown=markdown,
-            tags=["gp_package", "lp_report", "valuation_template", "workflow"],
-            source_confidence=0.82,
-            metadata={
-                "fund_name": response["fund_name"],
-                "valuation_method": response["valuation_method"],
-                "lp_risk_flags": response["lp_risk_flags"],
-            },
+        response = research_workflow_files.save_gp_lp_staging_response(
+            _research_workflow_files_runtime(),
+            response,
+            settings,
         )
     return response
 

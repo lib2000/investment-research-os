@@ -2026,6 +2026,7 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         from research_os.research_memory import ResearchStorageInfo
 
         upsert_calls = []
+        saved_calls = []
 
         def fake_extract_uploaded_file_text(file_bytes, file_name, mime_type, source_path=None):
             self.assertEqual(file_bytes, b"revenue margin")
@@ -2052,6 +2053,17 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         def fake_upsert_research_memory_document(*, vault_dir, entry, full_text=None):
             upsert_calls.append({"vault_dir": vault_dir, "entry": entry, "full_text": full_text})
             return {"stored": True, "entry": entry}
+
+        def fake_save_research_markdown(**kwargs):
+            saved_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+                json_file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.json",
+                json_relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.json",
+                json_absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.json"),
+            )
 
         class FakeHttpException(Exception):
             def __init__(self, status_code, detail):
@@ -2089,6 +2101,7 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
             resolve_ticker_symbol_from_alias=lambda value, settings: str(value or "").upper(),
             resolve_vault_dir=lambda research_vault_dir: Path(research_vault_dir),
             safe_attachment_file_name=lambda value: "upload.txt",
+            save_research_markdown=fake_save_research_markdown,
             summarize_capture=lambda value: f"요약: {value[:20]}",
             upsert_research_memory_document=fake_upsert_research_memory_document,
         )
@@ -2152,6 +2165,16 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
                 },
                 settings,
             )
+            saved_earnings_response = research_workflow_files.save_earnings_filing_note_response(
+                runtime,
+                dict(earnings_response),
+                settings,
+            )
+            saved_lp_response = research_workflow_files.save_gp_lp_staging_response(
+                runtime,
+                dict(lp_response),
+                settings,
+            )
 
         self.assertEqual(attachment["file_name"], "upload.txt")
         self.assertEqual(attachment["text_extraction"], "extracted")
@@ -2204,6 +2227,12 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertIn("감액 신호", "\n".join(lp_response["valuation_template_output"]))
         self.assertIn("엑시트 이벤트", "\n".join(lp_response["valuation_template_output"]))
         self.assertEqual(lp_response["file_processing"]["file_name"], "upload.txt")
+        self.assertIn("storage", saved_earnings_response)
+        self.assertIn("rag_document", saved_earnings_response)
+        self.assertIn("storage", saved_lp_response)
+        self.assertIn("rag_document", saved_lp_response)
+        self.assertEqual(saved_calls[0]["report_type"], "earnings-filing-note")
+        self.assertEqual(saved_calls[1]["report_type"], "lp-report-staging")
         self.assertTrue(rag_result["stored"])
         self.assertEqual(upsert_calls[0]["entry"]["ticker"], "WORKFLOW")
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
