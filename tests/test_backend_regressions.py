@@ -2019,6 +2019,61 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class ResearchMemoryFilesModuleTests(unittest.TestCase):
+    def test_research_memory_files_module_resolves_payload_paths_and_updates_tail_sections(self):
+        from research_os import research_memory_files
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "POLICY"
+            attachment_dir = ticker_dir / "_attachments"
+            attachment_dir.mkdir(parents=True)
+            markdown_path = ticker_dir / "POLICY-research-capture-2026-06-13-test.md"
+            json_path = markdown_path.with_suffix(".json")
+            attachment_path = attachment_dir / "policy.pdf"
+            markdown_path.write_text("# 정책 자료\n\n본문", encoding="utf-8")
+            json_path.write_text(json.dumps({"raw_content": "본문"}, ensure_ascii=False), encoding="utf-8")
+            attachment_path.write_bytes(b"pdf")
+            entry = {
+                "ticker": "POLICY",
+                "file_name": markdown_path.name,
+                "relative_path": markdown_path.relative_to(vault_dir.parent).as_posix(),
+                "json_relative_path": json_path.relative_to(vault_dir.parent).as_posix(),
+            }
+
+            payload = research_memory_files.read_manifest_entry_payload(entry, vault_dir)
+            resolved_json = research_memory_files.manifest_entry_json_path(entry, vault_dir)
+            resolved_markdown = research_memory_files.manifest_entry_markdown_path(entry, vault_dir)
+            updated = research_memory_files.upsert_markdown_tail_section(
+                markdown_path,
+                "## OCR 재처리 결과",
+                "- 처리 상태: 완료",
+            )
+            updated_again = research_memory_files.upsert_markdown_tail_section(
+                markdown_path,
+                "## OCR 재처리 결과",
+                "- 처리 상태: 완료",
+            )
+            resolved_attachment = research_memory_files.resolve_attachment_file_path(
+                vault_dir,
+                {"relative_path": attachment_path.relative_to(vault_dir).as_posix()},
+            )
+            escaped_attachment = research_memory_files.resolve_attachment_file_path(
+                vault_dir,
+                {"relative_path": "../outside.pdf"},
+            )
+
+        self.assertEqual(payload["raw_content"], "본문")
+        self.assertEqual(resolved_json, json_path.resolve())
+        self.assertEqual(resolved_markdown, markdown_path.resolve())
+        self.assertTrue(updated)
+        self.assertFalse(updated_again)
+        self.assertEqual(resolved_attachment, attachment_path.resolve())
+        self.assertIsNone(escaped_attachment)
+
+
 class ResearchMemoryQualityRebuildModuleTests(unittest.TestCase):
     def test_quality_rebuild_module_updates_manifest_sidecar_markdown_and_rag(self):
         from research_os import research_memory_quality_rebuild
