@@ -16957,29 +16957,11 @@ def build_target_consensus_scan(
             except Exception as exc:
                 warnings.append(f"{item.get('company_name') or ticker}: 현재가 보강 실패 - {provider_error_message(exc, settings)}")
         target_price = consensus.get("target_price") if consensus else None
-        target_upside = (
-            (target_price - current_price) / current_price
-            if target_price is not None
-            and current_price is not None
-            and current_price > 0
-            else None
-        )
+        target_signal = target_price_memory.build_target_upside_signal(target_price, current_price)
         if current_price is None:
             warnings.append(f"{item.get('company_name') or ticker}: 현재가를 찾지 못했습니다.")
         if consensus is None:
             warnings.append(f"{item.get('company_name') or ticker}: 저장 데이터에서 증권사 목표주가를 찾지 못했습니다.")
-        if target_upside is None:
-            signal = "계산 보류"
-        elif target_upside >= 0.35:
-            signal = "강한 저평가 후보"
-        elif target_upside >= 0.2:
-            signal = "저평가 후보"
-        elif target_upside >= 0.05:
-            signal = "중립 이상"
-        elif target_upside >= 0:
-            signal = "목표가 근접"
-        else:
-            signal = "목표가 초과"
         rows.append(
             {
                 "ticker": ticker,
@@ -16992,17 +16974,15 @@ def build_target_consensus_scan(
                 "consensus_target_median": consensus.get("target_price_median") if consensus else None,
                 "consensus_target_high": consensus.get("target_price_high") if consensus else None,
                 "consensus_target_low": consensus.get("target_price_low") if consensus else None,
-                "target_upside": round(target_upside, 4) if target_upside is not None else None,
-                "target_gap": round((target_price - current_price), 4)
-                if target_price is not None and current_price is not None
-                else None,
+                "target_upside": target_signal["target_upside"],
+                "target_gap": target_signal["target_gap"],
                 "source_count": consensus.get("source_count") if consensus else 0,
                 "observation_count": consensus.get("observation_count") if consensus else 0,
                 "confidence": consensus.get("confidence") if consensus else None,
                 "latest_source_file": consensus.get("latest_source_file") if consensus else None,
                 "latest_source_date": consensus.get("latest_source_date") if consensus else None,
                 "latest_context": consensus.get("latest_context") if consensus else None,
-                "valuation_signal": signal,
+                "valuation_signal": target_signal["valuation_signal"],
                 "market_value": item.get("market_value") or 0,
                 "quantity": item.get("quantity") or 0,
                 "portfolio_names": item.get("portfolio_names") or [],

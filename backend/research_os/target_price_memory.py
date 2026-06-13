@@ -279,3 +279,32 @@ def parse_latest_target_price_from_memory(
         if result:
             return result
     return None
+
+def build_target_upside_signal(target_price, current_price) -> dict:
+    target_upside = (
+        (target_price - current_price) / current_price
+        if target_price is not None
+        and current_price is not None
+        and current_price > 0
+        else None
+    )
+    if target_upside is None:
+        signal = "계산 보류"
+    elif target_upside >= 0.35:
+        signal = "강한 저평가 후보"
+    elif target_upside >= 0.2:
+        signal = "저평가 후보"
+    elif target_upside >= 0.05:
+        signal = "중립 이상"
+    elif target_upside >= 0:
+        signal = "목표가 근접"
+    else:
+        signal = "목표가 초과"
+    return {
+        "target_upside": round(target_upside, 4) if target_upside is not None else None,
+        "target_gap": round((target_price - current_price), 4)
+        if target_price is not None and current_price is not None
+        else None,
+        "valuation_signal": signal,
+        "raw_target_upside": target_upside,
+    }

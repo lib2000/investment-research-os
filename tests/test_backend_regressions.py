@@ -1315,6 +1315,22 @@ class PortfolioIntelligentTableHelperTests(unittest.TestCase):
 
 
 class TargetPriceMemoryHelperTests(unittest.TestCase):
+    def test_target_upside_signal_labels_thresholds_and_missing_prices(self):
+        from research_os import target_price_memory
+
+        strong = target_price_memory.build_target_upside_signal(135, 100)
+        near = target_price_memory.build_target_upside_signal(104, 100)
+        over = target_price_memory.build_target_upside_signal(90, 100)
+        missing = target_price_memory.build_target_upside_signal(None, 100)
+
+        self.assertEqual(strong["target_upside"], 0.35)
+        self.assertEqual(strong["target_gap"], 35)
+        self.assertEqual(strong["valuation_signal"], "강한 저평가 후보")
+        self.assertEqual(near["valuation_signal"], "목표가 근접")
+        self.assertEqual(over["valuation_signal"], "목표가 초과")
+        self.assertEqual(missing["valuation_signal"], "계산 보류")
+        self.assertIsNone(missing["target_upside"])
+
     def test_target_price_memory_extracts_explicit_and_consensus_prices(self):
         from research_os import target_price_memory
         from research_os.portfolio_performance import (
