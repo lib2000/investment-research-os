@@ -2356,6 +2356,94 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class AutomationStatusModuleTests(unittest.TestCase):
+    def test_automation_status_module_catches_rag_status_errors(self):
+        from research_os import automation_status
+
+        def failing_rag_status(_vault_dir):
+            raise RuntimeError("index unavailable")
+
+        runtime = SimpleNamespace(rag_memory_status=failing_rag_status)
+
+        result = automation_status.safe_rag_memory_status(runtime, Path("vault"))
+
+        self.assertEqual(result["document_count"], 0)
+        self.assertIn("index unavailable", result["warning"])
+
+    def test_automation_pipeline_uses_runtime_refresh_callbacks(self):
+        from research_os import automation_status
+
+        calls = []
+        settings = SimpleNamespace(
+            research_vault_dir="vault",
+            daily_recommendations_enabled=True,
+            daily_recommendations_time="09:00",
+        )
+
+        def refresh_source(name):
+            def _refresh(_settings, *, limit, force, save_result):
+                calls.append(name)
+                return {"status": "success", "limit": limit, "save_result": save_result}
+
+            return _refresh
+
+        runtime = SimpleNamespace(
+            backfill_research_memory_documents_from_manifest=lambda _vault_dir: {"updated_count": 0, "tickers": []},
+            build_daily_brief_payload=lambda _settings: {"date": "2026-06-13"},
+            build_external_source_schedule_status=lambda _settings: [],
+            build_interest_automation_board=lambda _settings, save_result=False: {
+                "target_count": 1,
+                "ticker_target_count": 1,
+                "sector_target_count": 0,
+                "portfolio_linked_count": 1,
+                "rag_connected_count": 1,
+                "thesis_connected_count": 1,
+                "duplicate_suspected_count": 0,
+                "automation_steps": [],
+                "next_actions": [],
+                "ticker_targets": [],
+                "sector_targets": [],
+            },
+            build_kcif_reports_watch_payload=lambda _settings, *, limit, force, save_result: {"status": "success"},
+            build_news_inbox_payload=lambda _settings, limit=10: {"items": [], "count": 0, "unpromoted_count": 0, "quality_issue_count": 0},
+            build_regional_business_sources_watch_payload=lambda _settings, *, limit, force, save_result: {"status": "success"},
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            daily_recommendation_state_path=lambda _settings: "daily_recommendation_state",
+            dart_daily_check_status=lambda _cache, _settings: {"due": False, "failure_count": 0},
+            dossier_candidate_tickers=lambda _settings, limit=30: [],
+            interest_collection_targets_path=lambda _settings: "interest_targets",
+            provider_error_message=lambda exc, _settings: str(exc),
+            rag_memory_status=lambda _vault_dir: {"document_count": 1, "snapshot_count": 1},
+            read_dart_filing_cache=lambda _settings: {},
+            read_json_store=lambda _path, default=None: {},
+            read_kcif_reports_watch=lambda _settings: {"related_reports": [], "updated_at": "2026-06-13T08:00:00+09:00"},
+            read_latest_daily_brief=lambda _settings: {"payload": {"date": "2026-06-13"}},
+            read_manifest=lambda _vault_dir: [],
+            read_news_inbox=lambda _settings: {"items": []},
+            read_regional_business_sources_watch=lambda _settings: {"related_items": [], "updated_at": "2026-06-13T08:00:00+09:00"},
+            refresh_naver_research_cache=refresh_source("naver"),
+            refresh_shinhan_research_cache=refresh_source("shinhan"),
+            research_automation_status_path=lambda _settings: "automation_status",
+            resolve_vault_dir=lambda value: Path(value),
+            save_daily_brief=lambda payload, _settings: payload,
+            should_refresh_kcif_cache=lambda _payload: False,
+            should_refresh_regional_business_cache=lambda _payload: False,
+            should_run_daily_recommendations=lambda _settings: False,
+            storage_duplicate_review_path=lambda _settings: "duplicate_review",
+            summarize_daily_recommendation_store=lambda _settings, limit=10: {},
+            synthesize_and_save_dossier=lambda ticker, _settings, save_result=False: {"ticker": ticker},
+            dossier_refresh_queue_status_path=lambda _settings: "refresh_queue",
+            write_json_store=lambda _path, _payload: calls.append("write_status"),
+        )
+
+        result = automation_status.run_research_automation_pipeline(runtime, settings, limit=2, save_result=False)
+
+        self.assertEqual(calls[:2], ["shinhan", "naver"])
+        self.assertIn("write_status", calls)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["automation_digest"]["daily_brief_date"], "2026-06-13")
+
+
 class DailyBriefModuleTests(unittest.TestCase):
     def test_daily_brief_module_uses_runtime_date_for_thesis_age(self):
         from research_os import daily_brief
