@@ -1248,6 +1248,61 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
 
+class TargetPriceMemoryHelperTests(unittest.TestCase):
+    def test_target_price_memory_extracts_explicit_and_consensus_prices(self):
+        from research_os import target_price_memory
+        from research_os.portfolio_performance import (
+            is_plausible_target_price,
+            is_probable_year_or_metadata_number,
+            target_price_context_source_type,
+            target_price_currency,
+            target_price_result,
+        )
+
+        def parse_float(value):
+            try:
+                return float(str(value).replace(",", ""))
+            except (TypeError, ValueError):
+                return None
+
+        runtime = SimpleNamespace(
+            infer_report_date_from_file=lambda file_name: "2026-06-13",
+            is_plausible_target_price=is_plausible_target_price,
+            is_probable_year_or_metadata_number=is_probable_year_or_metadata_number,
+            parse_float_or_none=parse_float,
+            target_price_context_source_type=target_price_context_source_type,
+            target_price_currency=target_price_currency,
+            target_price_result=target_price_result,
+        )
+        memory_file = SimpleNamespace(
+            absolute_path=str(PROJECT_ROOT / ".test-tmp" / "target-price.md"),
+            file_name="005930-research-capture-2026-06-13.md",
+            modified_at="2026-06-13T09:00:00+09:00",
+            report_type="research-capture",
+        )
+
+        explicit = target_price_memory.parse_explicit_analyst_target_from_text(
+            runtime,
+            "증권사 리포트는 목표주가 12만원을 제시했습니다.",
+            memory_file,
+            "KRW",
+        )
+        observations = target_price_memory.extract_target_price_observations_from_text(
+            runtime,
+            "증권사 평균 목표주가 150,000원, 핵심은 HBM 수요입니다.",
+            memory_file,
+            "KRW",
+            ticker_context="005930",
+        )
+
+        self.assertEqual(explicit["target_price"], 120000)
+        self.assertEqual(explicit["target_price_currency"], "KRW")
+        self.assertEqual(explicit["target_price_source_type"], "research-capture:명시 목표주가")
+        self.assertEqual(observations[0]["target_price"], 150000)
+        self.assertEqual(observations[0]["source_type"], "증권사 컨센서스 목표주가")
+        self.assertEqual(observations[0]["source_date"], "2026-06-13")
+
+
 class TargetConsensusScanTests(unittest.TestCase):
     def test_target_consensus_scan_uses_stored_prices_by_default(self):
         import research_os_main as main
