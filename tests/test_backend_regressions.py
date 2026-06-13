@@ -2224,6 +2224,63 @@ class CaptureInferenceModuleTests(unittest.TestCase):
         self.assertAlmostEqual(confidence, 0.78)
 
 
+class CaptureTickerInferenceModuleTests(unittest.TestCase):
+    def test_capture_ticker_inference_module_matches_alias_boundaries(self):
+        from research_os import capture_ticker_inference
+
+        aliases = capture_ticker_inference.ticker_aliases(
+            "JOBY",
+            {"company_name": "Joby Aviation, Inc.", "aliases": ["Joby"]},
+        )
+
+        self.assertIn("JOBY AVIATION", aliases)
+        self.assertTrue(capture_ticker_inference.alias_matches_research_text("JOBY", "JOBY reports"))
+        self.assertFalse(capture_ticker_inference.alias_matches_research_text("JOBY", "JOBYQ reports"))
+        self.assertTrue(capture_ticker_inference.alias_matches_research_text("코스닥", "코스닥 활성화 정책"))
+
+    def test_capture_ticker_inference_module_detects_non_ticker_scope(self):
+        from research_os import capture_ticker_inference
+
+        ticker, source = capture_ticker_inference.infer_non_ticker_research_key(
+            "국채 금리 인하와 CPI 물가, 장단기 금리 스프레드"
+        )
+
+        self.assertEqual(ticker, "RATES")
+        self.assertEqual(source, "rates_research")
+
+    def test_capture_ticker_inference_module_infers_explicit_symbol_and_alias(self):
+        from research_os import capture_ticker_inference
+
+        class FakeVerification:
+            verified = True
+
+        runtime = SimpleNamespace(
+            get_settings=lambda: SimpleNamespace(),
+            is_plausible_equity_symbol=lambda symbol: symbol not in {"CASH"},
+            normalize_ticker=lambda value: str(value or "").upper(),
+            official_ticker_registry={
+                "JOBY": {"company_name": "Joby Aviation Inc", "aliases": ["Joby"]},
+                "MSFT": {"company_name": "Microsoft Corporation", "aliases": ["Microsoft"]},
+            },
+            read_dynamic_ticker_registry=lambda _settings: {},
+            special_research_keys={"INBOX", "MARKET", "MACRO", "POLICY", "RATES", "FLOWS", "SECTOR"},
+            verify_ticker_symbol=lambda _candidate, _settings: FakeVerification(),
+        )
+
+        self.assertEqual(
+            capture_ticker_inference.infer_capture_ticker(runtime, "Ticker: JOBY", SimpleNamespace()),
+            ("JOBY", "explicit_symbol"),
+        )
+        self.assertEqual(
+            capture_ticker_inference.infer_capture_ticker(
+                runtime,
+                "Microsoft Azure demand accelerates",
+                SimpleNamespace(),
+            ),
+            ("MSFT", "company_alias_match"),
+        )
+
+
 class ResearchCaptureInferenceTests(unittest.TestCase):
     def test_empty_pdf_filename_context_infers_policy_and_investment_scope(self):
         import research_os_main as main
