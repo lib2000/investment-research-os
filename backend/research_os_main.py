@@ -228,6 +228,7 @@ from research_os.models import (
 )
 from research_os.portfolio_performance import (
     build_period_accumulators as _build_period_accumulators,
+    build_performance_quality_summary as _build_performance_quality_summary,
     build_price_refresh_summary,
     filter_target_price_outliers,
     finalize_period_accumulators as _finalize_period_accumulators,
@@ -16500,27 +16501,6 @@ def build_portfolio_performance(
         if current_cost_basis > 0
         else None
     )
-    coverage_rates = [
-        period.get("coverage_rate")
-        for period in periods
-        if period.get("coverage_rate") is not None
-    ]
-    min_coverage_rate = min(coverage_rates) if coverage_rates else None
-    avg_coverage_rate = (
-        sum(coverage_rates) / len(coverage_rates)
-        if coverage_rates
-        else None
-    )
-    if min_coverage_rate is None:
-        confidence_label = "계산 보류"
-    elif min_coverage_rate >= 0.8 and not price_comparisons:
-        confidence_label = "높음"
-    elif min_coverage_rate >= 0.5:
-        confidence_label = "보통"
-    else:
-        confidence_label = "제한적"
-    if price_comparisons and confidence_label == "높음":
-        confidence_label = "확인 필요"
     price_basis = (
         "제공자 현재가 강제 갱신"
         if force_price_refresh
@@ -16530,6 +16510,13 @@ def build_portfolio_performance(
         stored_price_checked_at_values[-1]
         if stored_price_checked_at_values
         else None
+    )
+    performance_quality = _build_performance_quality_summary(
+        periods,
+        price_comparisons,
+        excluded_holding_count=len(skipped),
+        latest_stored_price_checked_at=latest_stored_price_checked_at,
+        price_basis=price_basis,
     )
     return {
         "status": "success",
@@ -16574,16 +16561,7 @@ def build_portfolio_performance(
                 reverse=True,
             )[:12],
         },
-        "performance_quality": {
-            "confidence_label": confidence_label,
-            "min_coverage_rate": round(min_coverage_rate, 4) if min_coverage_rate is not None else None,
-            "average_coverage_rate": round(avg_coverage_rate, 4) if avg_coverage_rate is not None else None,
-            "covered_holding_count": max((period.get("included_count") or 0 for period in periods), default=0),
-            "excluded_holding_count": len(skipped),
-            "domestic_price_difference_count": len(price_comparisons),
-            "latest_stored_price_checked_at": latest_stored_price_checked_at,
-            "price_basis": price_basis,
-        },
+        "performance_quality": performance_quality,
         "method": (
             "현재가는 요청 시 강제 갱신하고, 국내 기간 수익은 가격 히스토리의 최신 종가와 기간별 과거 종가를 비교해 평가금액 차이를 계산했습니다."
             if force_price_refresh

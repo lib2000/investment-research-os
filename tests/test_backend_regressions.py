@@ -6288,6 +6288,28 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
 
 
 class PortfolioPerformanceTests(unittest.TestCase):
+    def test_portfolio_performance_quality_marks_price_difference(self):
+        from research_os.portfolio_performance import build_performance_quality_summary
+
+        summary = build_performance_quality_summary(
+            [
+                {"coverage_rate": 0.9, "included_count": 3},
+                {"coverage_rate": 0.85, "included_count": 2},
+            ],
+            [{"ticker": "003230", "difference_rate": 0.02}],
+            excluded_holding_count=1,
+            latest_stored_price_checked_at="2026-06-13T09:00:00+09:00",
+            price_basis="저장 현재가 + 국내 가격 히스토리 최신 종가",
+        )
+
+        self.assertEqual(summary["confidence_label"], "보통")
+        self.assertEqual(summary["min_coverage_rate"], 0.85)
+        self.assertEqual(summary["average_coverage_rate"], 0.875)
+        self.assertEqual(summary["covered_holding_count"], 3)
+        self.assertEqual(summary["excluded_holding_count"], 1)
+        self.assertEqual(summary["domestic_price_difference_count"], 1)
+        self.assertEqual(summary["latest_stored_price_checked_at"], "2026-06-13T09:00:00+09:00")
+
     def test_portfolio_period_accumulators_finalize_coverage_and_leaders(self):
         from research_os.portfolio_performance import (
             build_period_accumulators,

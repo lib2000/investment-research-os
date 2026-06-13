@@ -234,3 +234,43 @@ def finalize_period_accumulators(
         )[:3]
         periods.append(period)
     return periods
+
+def build_performance_quality_summary(
+    periods: list[dict],
+    price_comparisons: list[dict],
+    *,
+    excluded_holding_count: int,
+    latest_stored_price_checked_at: str | None,
+    price_basis: str,
+) -> dict:
+    coverage_rates = [
+        period.get("coverage_rate")
+        for period in periods
+        if period.get("coverage_rate") is not None
+    ]
+    min_coverage_rate = min(coverage_rates) if coverage_rates else None
+    avg_coverage_rate = (
+        sum(coverage_rates) / len(coverage_rates)
+        if coverage_rates
+        else None
+    )
+    if min_coverage_rate is None:
+        confidence_label = "계산 보류"
+    elif min_coverage_rate >= 0.8 and not price_comparisons:
+        confidence_label = "높음"
+    elif min_coverage_rate >= 0.5:
+        confidence_label = "보통"
+    else:
+        confidence_label = "제한적"
+    if price_comparisons and confidence_label == "높음":
+        confidence_label = "확인 필요"
+    return {
+        "confidence_label": confidence_label,
+        "min_coverage_rate": round(min_coverage_rate, 4) if min_coverage_rate is not None else None,
+        "average_coverage_rate": round(avg_coverage_rate, 4) if avg_coverage_rate is not None else None,
+        "covered_holding_count": max((period.get("included_count") or 0 for period in periods), default=0),
+        "excluded_holding_count": excluded_holding_count,
+        "domestic_price_difference_count": len(price_comparisons),
+        "latest_stored_price_checked_at": latest_stored_price_checked_at,
+        "price_basis": price_basis,
+    }
