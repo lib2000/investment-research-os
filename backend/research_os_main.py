@@ -5,6 +5,7 @@ import math
 import os
 import threading
 import time
+from types import SimpleNamespace
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
@@ -29,6 +30,29 @@ from research_os.data_providers import (
     fetch_nps_institutional_signal,
     get_analysis_data_provider,
 )
+from research_os.dossier_text import (
+    DOSSIER_ALLOWED_REPORT_TYPES,
+    DOSSIER_EXCLUDED_REPORT_TYPES,
+    DOSSIER_FACT_TERMS,
+    DOSSIER_NEGATIVE_TERMS,
+    DOSSIER_POSITIVE_TERMS,
+    add_dossier_signal,
+    add_unique_text,
+    clean_dossier_signal,
+    compact_representative_sentence,
+    content_fingerprint,
+    is_allowed_dossier_source_entry,
+    is_dossier_noise_line,
+    line_has_any,
+    line_has_negated_bear_context,
+    manifest_entry_sort_key,
+    manifest_similarity_text,
+    plain_research_lines,
+    read_manifest_entry_text,
+    representative_thesis_line,
+    similarity_tokens,
+    token_jaccard_similarity,
+)
 from research_os.daily_recommendations import (
     add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
     add_daily_recommendation_score as _add_daily_recommendation_score,
@@ -49,6 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
+from research_os import dossier_queue, dossier_text
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -12378,593 +12403,17 @@ def infer_capture_confidence(source_type: str, has_file: bool = False) -> float:
     base = confidence_by_source.get(source_type, 0.72)
     return min(base + (0.03 if has_file else 0), 0.95)
 
-
-DOSSIER_POSITIVE_TERMS = {
-    "상향",
-    "개선",
-    "강세",
-    "호조",
-    "성장",
-    "수요",
-    "수주",
-    "확대",
-    "마진 개선",
-    "가이던스 상향",
-    "beat",
-    "raise",
-    "raised",
-    "growth",
-    "demand",
-    "margin expansion",
-    "upside",
-}
-
-DOSSIER_NEGATIVE_TERMS = {
-    "하향",
-    "악화",
-    "약세",
-    "둔화",
-    "하회",
-    "약화",
-    "하락",
-    "적자",
-    "못 미쳤",
-    "제한적",
-    "부진",
-    "리스크",
-    "경쟁",
-    "현금 소진",
-    "마진 압박",
-    "가이던스 하향",
-    "miss",
-    "cut",
-    "risk",
-    "slowdown",
-    "downside",
-    "cash burn",
-}
-
-DOSSIER_FACT_TERMS = {
-    "매출",
-    "영업이익",
-    "순이익",
-    "EPS",
-    "가이던스",
-    "수주",
-    "계약",
-    "마진",
-    "현금",
-    "FCF",
-    "고객",
-    "시장",
-    "섹터",
-    "정책",
-    "금리",
-    "revenue",
-    "guidance",
-    "margin",
-    "cash",
-    "contract",
-    "customer",
-}
-
-DOSSIER_ALLOWED_REPORT_TYPES = {
-    "collaborative-team-report",
-    "institutional-stock-breakdown",
-    "earnings-reaction",
-    "research-capture",
-    "market-close-review",
-    "sector-opportunity",
-    "compounder-finder",
-}
-
-DOSSIER_EXCLUDED_REPORT_TYPES = {
-    "dossier-synthesis",
-    "rag-query-synthesis",
-    "thesis-impact-review",
-    "smart-trade-setup",
-    "research-checklist",
-    "chart-analysis",
-    "portfolio-risk-scan",
-    "reinforcement-portfolio-optimizer",
-    "daily-dossier-brief",
-}
-
-
-def content_fingerprint(text: str | None) -> str:
-    normalized = " ".join(str(text or "").lower().split())
-    if not normalized:
-        return ""
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-
-def similarity_tokens(text: str | None) -> set[str]:
-    normalized = sub(r"[^0-9a-zA-Z가-힣]+", " ", str(text or "").lower())
-    tokens = {
-        token
-        for token in normalized.split()
-        if len(token) >= 2 and token not in {"the", "and", "for", "with", "from", "this", "that"}
-    }
-    return tokens
-
-
-def token_jaccard_similarity(left: set[str], right: set[str]) -> float:
-    if not left or not right:
-        return 0.0
-    return len(left & right) / max(1, len(left | right))
-
-
-def manifest_similarity_text(entry: dict, text: str | None = None) -> str:
-    # source_url/file_name은 exact match에는 유용하지만 유사도 토큰에 넣으면
-    # 같은 사이트의 서로 다른 리포트까지 과하게 중복으로 묶일 수 있다.
-    body = str(text or "")
-    try:
-        if body:
-            body = " ".join(plain_research_lines(body, limit=40))
-    except NameError:
-        body = body[:2400]
-    return " ".join(
-        str(part or "")
-        for part in [
-            entry.get("title"),
-            entry.get("summary"),
-            body[:2400],
-        ]
-    )
-
-
-def add_unique_text(items: list[str], value: str | None, limit: int = 8) -> None:
-    cleaned = " ".join(str(value or "").split())
-    if cleaned and cleaned not in items and len(items) < limit:
-        items.append(cleaned)
-
-
-DOSSIER_NOISE_TERMS = {
-    "[네이버 금융 리서치 자동 수집]",
-    "분류:",
-    "기타 /",
-    "투자 정보 캡처",
-    "분류 근거:",
-    "증권사:",
-    "종목명:",
-    "종목코드:",
-    "발행일:",
-    "저장 범위:",
-    "원문 링크:",
-    "pdf 링크:",
-    "활용 메모:",
-    "source_url",
-    "source type",
-    "source_type",
-    "source_file",
-    "source_relative_path",
-    "content_hash",
-    "attachment",
-    "json_relative_path",
-    "json_file_name",
-    "official_company_profile",
-    "DataSourceType.",
-    "DataSourceType.EARNINGS_RELEASE",
-    "DataSourceType.MARKET_PRICE",
-    "DataSourceType.FINANCIAL_STATEMENT",
-    "리서치 메모리 / latest_thesis_snapshot",
-    "리서치 메모리 / rag_memory_document",
-    "latest_thesis_snapshot",
-    "rag_memory_document",
-    "주입된 데이터 컨텍스트",
-    "injected_data",
-    "DataSourceType.RESEARCH_MEMORY",
-    "DataSourceType.OTHER",
-    "저장된 투자 논거가 없어",
-    "판단 이유: 이 정보는 신뢰도",
-    "새 데이터는 평균 신뢰도",
-    "매매전략 탭에서",
-    "매매 전략:",
-    "포트폴리오 리스크 스캔",
-    "기관급 분석",
-    "스마트 매매 전략",
-    "실적 발표 반응 분석",
-    "장기 복리 성장주 발굴",
-    "리서치 체크리스트",
-    "관점의 핵심 판단",
-    "주의 관점:",
-    "다음 실적 체크포인트:",
-    "직전/최신 실적 메모:",
-    "정확한 매출",
-    "회사 공시 또는 DART",
-    "보강해야",
-    "DART/IR 자료",
-    "주입 데이터",
-    "빠른 정보 저장",
-    "재실행",
-    "시나리오를 갱신",
-    "기준/강세/약세",
-    "기준 시나리오의 성장 가정을 하회",
-    "이전 가이던스",
-    "리스크 예산 초과",
-    "포지션 크기를",
-    "센티먼트가 개선이면",
-    "하는지 확인",
-    "방향과 일치하는지",
-    "매출 및 수주상황",
-    "[첨부 파일]",
-    "파일명:",
-    "글로벌리더",
-    "거래정지 기간 동안",
-    "7개 분석 스킬",
-    "생성했습니다",
-    "실적은 '긍정적 확인'",
-    "주가 반응은 미입력",
-    "입력되지 않았습니다",
-    "보강하세요",
-    "다음 실적 전 확인할 KPI",
-    "가이던스 평가:",
-    "역할:",
-    "페르소나:",
-    "중점 분석:",
-    "체크리스트",
-    "보강 필요 입력",
-    "표시할 데이터 경고가 없습니다",
-    "저장 파일:",
-    "저장 데이터:",
-    "태그:",
-    "tags:",
-    "auto_ingested",
-    "auto_classified",
-    "auto_ticker:",
-    "naver_category:",
-    "naver_research",
-    "가격/리스크 조건을 분리",
-    "새 데이터가 들어올 때마다",
-    "긍정 관점:",
-    "정리:",
-    "포지션은 리스크 예산",
-    "포트폴리오 리스크 예산",
-    "경쟁 우위 훼손",
-    "센티먼트가 악화",
-    "밸류에이션 범위를 단일 목표가",
-    "현재가와 최근 변동성 데이터를",
-    "진입 구간, 손절, 목표가를 자동 보정",
-    "손익비가",
-    "실적 발표 전후에는 포지션 사이즈",
-    "장기 복리 후보 여부는",
-    "관찰 목록 유지",
-    "com/research/company_read",
-    "com/research/industry_read",
-}
-
-
-def is_dossier_noise_line(line: str) -> bool:
-    cleaned = " ".join(str(line or "").split())
-    lowered = cleaned.lower()
-    if not cleaned:
-        return True
-    if cleaned.startswith(("[x]", "[ ]")):
-        return True
-    if cleaned[0] in {",", ".", ")", "]", "}"}:
-        return True
-    if cleaned.count(".") >= 8:
-        return True
-    if cleaned.startswith(("이었", "였", "및 ", "을 ", "를 ", "는 ", "하며", "했고", "화,", "동안 ", "지했다", "(YoY", "악된다", "기의 ")):
-        return True
-    if len(cleaned) < 24 and not any(ch.isdigit() for ch in cleaned):
-        return True
-    return any(term.lower() in lowered for term in DOSSIER_NOISE_TERMS)
-
-
-def is_allowed_dossier_source_entry(entry: dict) -> bool:
-    report_type = str(entry.get("type") or "").strip().lower()
-    if report_type in DOSSIER_EXCLUDED_REPORT_TYPES:
-        return False
-    if report_type not in DOSSIER_ALLOWED_REPORT_TYPES:
-        return False
-    summary = str(entry.get("summary") or "")
-    tags = {str(tag).strip().lower() for tag in (entry.get("tags") or []) if str(tag).strip()}
-    if {"naver_research", "auto_ingested"} <= tags and len(summary) < 260:
-        return False
-    return True
-
-
-def is_research_line_continuation(line: str) -> bool:
-    cleaned = str(line or "").strip()
-    return bool(
-        cleaned
-        and (
-            cleaned[0] in {",", ".", ")", "]", "}", "%"}
-            or cleaned.startswith(
-                (
-                    "은 ",
-                    "는 ",
-                    "을 ",
-                    "를 ",
-                    "이 ",
-                    "가 ",
-                    "와 ",
-                    "과 ",
-                    "으로",
-                    "로 ",
-                    "며 ",
-                    "고 ",
-                    "다.",
-                )
-            )
-        )
-    )
-
-
-def should_merge_research_lines(previous: str, current: str) -> bool:
-    prev = str(previous or "").strip()
-    cur = str(current or "").strip()
-    if not prev or not cur:
-        return False
-    if is_research_line_continuation(cur):
-        return True
-    if prev.endswith(("은", "는", "이", "가", "을", "를", "및", "로", "으로", "영업이익은", "매출액은")):
-        return True
-    return False
-
-
-def extract_scenario_clause(line: str, mode: str) -> str:
-    cleaned = " ".join(str(line or "").split())
-    if mode == "bull" and "강세:" in cleaned:
-        clause = cleaned.split("강세:", 1)[1]
-        for marker in ("기준:", "약세:"):
-            clause = clause.split(marker, 1)[0]
-        return clause.strip()
-    if mode == "bear" and "약세:" in cleaned:
-        return cleaned.split("약세:", 1)[1].strip()
-    return cleaned
-
-
-def clean_dossier_signal(line: str, mode: str = "generic") -> str:
-    candidate = extract_scenario_clause(line, mode) if mode in {"bull", "bear"} else " ".join(str(line or "").split())
-    candidate = sub(r"^(강세|약세|기준|요약)\s*:\s*", "", candidate).strip()
-    candidate = candidate.strip(" -•")
-    if not candidate or is_dossier_noise_line(candidate):
-        return ""
-    return compact_representative_sentence(candidate, 220)
-
-
-def add_dossier_signal(items: list[str], line: str, mode: str, limit: int) -> None:
-    candidate = clean_dossier_signal(line, mode)
-    if not candidate:
-        return
-    if mode == "bull" and "강세:" not in str(line) and line_has_any(candidate, DOSSIER_NEGATIVE_TERMS) and not line_has_negated_bear_context(candidate):
-        return
-    if mode == "bear" and "약세:" not in str(line) and line_has_any(candidate, DOSSIER_POSITIVE_TERMS) and not line_has_any(candidate, DOSSIER_NEGATIVE_TERMS):
-        return
-    if mode == "bear" and line_has_negated_bear_context(candidate):
-        return
-    if len(candidate) < 24 and not any(ch.isdigit() for ch in candidate):
-        return
-    add_unique_text(items, candidate, limit=limit)
-
-
-def representative_thesis_line(items: list[str], fallback: str, mode: str = "generic") -> str:
-    if not items:
-        return fallback
-
-    def score(line: str) -> tuple[int, int, int]:
-        cleaned = " ".join(str(line or "").split())
-        metric_score = 0
-        for terms in (DOSSIER_FACT_TERMS, DOSSIER_POSITIVE_TERMS, DOSSIER_NEGATIVE_TERMS):
-            if line_has_any(cleaned, terms):
-                metric_score += 1
-        completeness = 1 if cleaned.endswith((".", "다.", "입니다.", "습니다.", "요.")) else 0
-        return (metric_score, completeness, min(len(cleaned), 180))
-
-    candidates = [item for item in items if not is_dossier_noise_line(item)]
-    candidates = [item for item in candidates if len(item) >= 40]
-    if not candidates:
-        return fallback
-    if mode in {"bull", "bear"}:
-        marker = "강세:" if mode == "bull" else "약세:"
-        scenario_candidates = [
-            extract_scenario_clause(item, mode)
-            for item in candidates
-            if marker in str(item)
-        ]
-        scenario_candidates = [
-            item for item in scenario_candidates if len(item) >= 20 and not is_dossier_noise_line(item)
-        ]
-        if scenario_candidates:
-            return compact_representative_sentence(scenario_candidates[0])
-    selected = extract_scenario_clause(sorted(candidates, key=score, reverse=True)[0], mode)
-    if is_dossier_noise_line(selected):
-        return fallback
-    return compact_representative_sentence(selected)
-
-
-def manifest_entry_sort_key(entry: dict) -> tuple[str, int, str]:
-    return (
-        str(entry.get("date") or ""),
-        report_file_sequence(str(entry.get("file_name") or "")),
-        str(entry.get("updated_at") or ""),
-    )
-
-
-def read_manifest_entry_text(vault_dir: Path, entry: dict) -> str:
-    candidates: list[Path] = []
-    relative_path = entry.get("relative_path")
-    if relative_path:
-        candidates.append(vault_dir.parent / str(relative_path))
-    ticker = str(entry.get("ticker") or "").strip()
-    file_name = str(entry.get("file_name") or "").strip()
-    if ticker and file_name:
-        candidates.append(vault_dir / ticker / file_name)
-    for candidate in candidates:
-        try:
-            resolved = candidate.resolve()
-            if not str(resolved).startswith(str(vault_dir.parent.resolve())):
-                continue
-            if resolved.exists() and resolved.is_file():
-                return resolved.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-    return str(entry.get("summary") or "")
-
-
-def plain_research_lines(text: str, limit: int = 80) -> list[str]:
-    lines: list[str] = []
-    raw_lines: list[str] = []
-    in_front_matter = False
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if line == "---":
-            in_front_matter = not in_front_matter
-            continue
-        if in_front_matter:
-            continue
-        line = sub(r"^[#>*\-\d.\s]+", "", line).strip()
-        line = sub(r"\s+", " ", line)
-        if len(line) < 2 or line.lower().startswith(("ticker:", "type:", "date:", "module:")):
-            continue
-        if is_dossier_noise_line(line) and not is_research_line_continuation(line):
-            continue
-        if raw_lines and should_merge_research_lines(raw_lines[-1], line):
-            raw_lines[-1] = f"{raw_lines[-1]} {line}"
-        else:
-            raw_lines.append(line)
-
-    for line in raw_lines:
-        if len(line) < 12 or is_dossier_noise_line(line):
-            continue
-        if len(line) > 320:
-            line = f"{line[:317]}..."
-        add_unique_text(lines, line, limit=limit)
-    return lines
-
-
-def line_has_any(text: str, terms: set[str]) -> bool:
-    lowered = text.lower()
-    return any(term.lower() in lowered for term in terms)
-
-
-def line_has_negated_bear_context(text: str) -> bool:
-    cleaned = " ".join(str(text or "").split())
-    compacted = cleaned.replace(" ", "")
-    negated_patterns = (
-        "둔화 신호로 해석하기는 어렵",
-        "둔화 신호로 보기 어렵",
-        "훼손이라기보다는",
-        "리스크가 제한",
-        "우려는 제한",
-        "부담은 제한",
-        "악화라기보다",
-        "리스크 해소",
-    )
-    compacted_patterns = tuple(pattern.replace(" ", "") for pattern in negated_patterns)
-    return any(pattern in cleaned for pattern in negated_patterns) or any(
-        pattern in compacted for pattern in compacted_patterns
-    )
-
-
-def compact_representative_sentence(text: str, max_len: int = 180) -> str:
-    cleaned = " ".join(str(text or "").split())
-    if len(cleaned) <= max_len:
-        return cleaned
-    pieces = [piece.strip() for piece in findall(r"[^.!?。]+[.!?。]?", cleaned) if piece.strip()]
-    scored: list[tuple[int, int, str]] = []
-    for piece in pieces:
-        if is_dossier_noise_line(piece):
-            continue
-        score = 0
-        if line_has_any(piece, DOSSIER_FACT_TERMS):
-            score += 2
-        if line_has_any(piece, DOSSIER_POSITIVE_TERMS) or line_has_any(piece, DOSSIER_NEGATIVE_TERMS):
-            score += 1
-        if 35 <= len(piece) <= max_len:
-            score += 2
-        scored.append((score, min(len(piece), max_len), piece))
-    if scored:
-        selected = sorted(scored, reverse=True)[0][2]
-        if len(selected) <= max_len:
-            return selected
-    return f"{cleaned[: max_len - 3]}..."
-
-
 def latest_verified_entries_for_dossier(ticker: str, vault_dir: Path) -> tuple[list[dict], list[dict]]:
-    entries = [
-        entry
-        for entry in read_manifest(vault_dir)
-        if entry.get("ticker") == ticker
-        and is_allowed_dossier_source_entry(entry)
-        and is_verified_manifest_entry(entry, ticker)
-    ]
-    entries.sort(key=manifest_entry_sort_key, reverse=True)
-    unique_entries: list[dict] = []
-    duplicates: list[dict] = []
-    seen: set[str] = set()
-    seen_token_sets: list[set[str]] = []
-    for entry in entries:
-        text = read_manifest_entry_text(vault_dir, entry)
-        clean_lines = plain_research_lines(text, limit=12)
-        if not clean_lines and is_dossier_noise_line(entry.get("summary")):
-            duplicates.append(
-                {
-                    "file_name": entry.get("file_name"),
-                    "type": entry.get("type"),
-                    "summary": entry.get("summary"),
-                    "reason": "metadata_or_internal_output_only",
-                }
-            )
-            continue
-        dedup_key = (
-            str(entry.get("source_url") or "").strip()
-            or str(entry.get("content_hash") or "").strip()
-            or content_fingerprint(f"{entry.get('type')} {entry.get('summary')} {text[:1200]}")
-        )
-        signature_tokens = similarity_tokens(manifest_similarity_text(entry, text))
-        similar_to_seen = any(
-            token_jaccard_similarity(signature_tokens, previous_tokens) >= 0.82
-            for previous_tokens in seen_token_sets
-            if len(signature_tokens) >= 8 and len(previous_tokens) >= 8
-        )
-        if dedup_key in seen or similar_to_seen:
-            duplicates.append(
-                {
-                    "file_name": entry.get("file_name"),
-                    "type": entry.get("type"),
-                    "summary": entry.get("summary"),
-                    "reason": "exact_match" if dedup_key in seen else "title_body_similarity",
-                }
-            )
-            continue
-        seen.add(dedup_key)
-        if signature_tokens:
-            seen_token_sets.append(signature_tokens)
-        unique_entries.append({**entry, "_full_text": text})
-    return unique_entries, duplicates
+    return dossier_text.latest_verified_entries_for_dossier(
+        ticker,
+        vault_dir,
+        read_manifest_fn=read_manifest,
+        is_verified_manifest_entry_fn=is_verified_manifest_entry,
+    )
 
 
 def dedupe_manifest_entries_by_similarity(entries: list[dict], vault_dir: Path, limit: int = 15) -> tuple[list[dict], list[dict]]:
-    unique_entries: list[dict] = []
-    duplicates: list[dict] = []
-    seen_keys: set[str] = set()
-    seen_tokens: list[set[str]] = []
-    for entry in entries:
-        text = read_manifest_entry_text(vault_dir, entry)
-        exact_key = (
-            str(entry.get("source_url") or "").strip()
-            or str(entry.get("content_hash") or "").strip()
-            or content_fingerprint(manifest_similarity_text(entry, text))
-        )
-        tokens = similarity_tokens(manifest_similarity_text(entry, text))
-        similar = any(
-            token_jaccard_similarity(tokens, previous) >= 0.84
-            for previous in seen_tokens
-            if len(tokens) >= 8 and len(previous) >= 8
-        )
-        if exact_key in seen_keys or similar:
-            duplicates.append({**entry, "duplicate_reason": "exact_match" if exact_key in seen_keys else "title_body_similarity"})
-            continue
-        seen_keys.add(exact_key)
-        if tokens:
-            seen_tokens.append(tokens)
-        unique_entries.append(entry)
-        if len(unique_entries) >= limit:
-            break
-    return unique_entries, duplicates
+    return dossier_text.dedupe_manifest_entries_by_similarity(entries, vault_dir, limit=limit)
 
 
 def detect_capture_duplicate(
@@ -12977,83 +12426,22 @@ def detect_capture_duplicate(
     content_hash: str | None = None,
     max_candidates: int = 120,
 ) -> dict:
-    normalized_ticker = ticker.strip().upper()
-    new_text = manifest_similarity_text(
-        {
-            "title": title,
-            "summary": summarize_capture(raw_content),
-            "source_url": source_url,
-        },
-        raw_content,
+    return dossier_text.detect_capture_duplicate(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        title=title,
+        raw_content=raw_content,
+        source_url=source_url,
+        content_hash=content_hash,
+        max_candidates=max_candidates,
+        read_manifest_fn=read_manifest,
+        summarize_capture_fn=summarize_capture,
+        special_research_keys=SPECIAL_RESEARCH_KEYS,
     )
-    new_tokens = similarity_tokens(new_text)
-    new_hash = content_hash or content_fingerprint(raw_content)
-    candidates = [
-        entry
-        for entry in sorted(
-            [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)],
-            key=manifest_entry_sort_key,
-            reverse=True,
-        )
-        if (entry.get("type") == "research-capture")
-        and not is_failed_capture_manifest_entry(entry)
-        and (
-            str(entry.get("ticker") or "").upper() == normalized_ticker
-            or normalized_ticker in SPECIAL_RESEARCH_KEYS
-            or str(entry.get("ticker") or "").upper() in SPECIAL_RESEARCH_KEYS
-        )
-    ][:max_candidates]
-
-    best: dict | None = None
-    for entry in candidates:
-        reason = None
-        similarity = 0.0
-        if source_url and entry.get("source_url") == source_url:
-            reason = "source_url_exact_match"
-            similarity = 1.0
-        elif new_hash and entry.get("content_hash") == new_hash:
-            reason = "content_hash_exact_match"
-            similarity = 1.0
-        else:
-            existing_text = read_manifest_entry_text(vault_dir, entry)
-            existing_tokens = similarity_tokens(manifest_similarity_text(entry, existing_text))
-            similarity = token_jaccard_similarity(new_tokens, existing_tokens)
-            if len(new_tokens) >= 8 and len(existing_tokens) >= 8 and similarity >= 0.84:
-                reason = "title_body_similarity"
-
-        if reason and (best is None or similarity > best.get("similarity", 0)):
-            best = {
-                "reason": reason,
-                "similarity": round(similarity, 4),
-                "matched_ticker": entry.get("ticker"),
-                "matched_type": entry.get("type"),
-                "matched_date": entry.get("date"),
-                "matched_file_name": entry.get("file_name"),
-                "matched_relative_path": entry.get("relative_path"),
-            }
-
-    return {
-        "is_duplicate_suspected": best is not None,
-        "checked_count": len(candidates),
-        "reason": best.get("reason") if best else "no_match",
-        "similarity": best.get("similarity") if best else 0.0,
-        "matched_ticker": best.get("matched_ticker") if best else None,
-        "matched_file_name": best.get("matched_file_name") if best else None,
-        "matched_relative_path": best.get("matched_relative_path") if best else None,
-    }
 
 
 def is_failed_capture_manifest_entry(entry: dict) -> bool:
-    summary = str(entry.get("summary") or "")
-    relative_path = str(entry.get("relative_path") or "")
-    source_processing = entry.get("source_url_processing") or {}
-    failed_statuses = {"fetch_failed", "invalid", "empty_text"}
-    return (
-        "WinError 10061" in summary
-        or "웹사이트 본문을 추출하지 못했습니다" in summary
-        or "winerror-10061" in relative_path.lower()
-        or str(source_processing.get("status") or "") in failed_statuses
-    )
+    return dossier_text.is_failed_capture_manifest_entry(entry)
 
 
 def capture_quality_status(
@@ -13062,55 +12450,46 @@ def capture_quality_status(
     attachment_info: dict | None = None,
     source_url_processing: dict | None = None,
 ) -> dict:
-    url_status = str((source_url_processing or {}).get("status") or "")
-    url_text = str((source_url_processing or {}).get("text") or "")
-    attachment_text = str((attachment_info or {}).get("extracted_text") or "")
-    text_length = max(len(raw_content or ""), len(url_text), len(attachment_text))
-    warnings: list[str] = []
-    if url_status in {"fetch_failed", "invalid", "empty_text"}:
-        warnings.append("웹사이트 본문 추출 실패")
-    attachment_profile = (attachment_info or {}).get("extraction_profile") or {}
-    if attachment_profile.get("ocr_status") == "unavailable":
-        warnings.append("이미지 OCR 미연결")
-    if attachment_info and not attachment_text and not (attachment_info or {}).get("extraction_char_count"):
-        warnings.append(
-            "첨부 파일 본문 추출 확인 필요"
-            if attachment_profile.get("ocr_status") != "unavailable"
-            else "이미지 원본은 저장됐지만 OCR 미연결로 본문 분석은 제외"
-        )
-    if text_length >= 1000 and not warnings:
-        status = "정상"
-    elif text_length >= 250:
-        status = "보강 필요" if warnings else "정상"
-    else:
-        status = "실패" if warnings else "보강 필요"
-    return {
-        "status": status,
-        "text_length": text_length,
-        "warnings": warnings,
-        "url_status": url_status or None,
-        "readiness": (
-            "분석에 바로 활용 가능"
-            if status == "정상"
-            else "추가 본문/원문 확인 후 활용"
-            if status == "보강 필요"
-            else "분석 반영 제외 권장"
-        ),
-    }
+    return dossier_text.capture_quality_status(
+        raw_content=raw_content,
+        attachment_info=attachment_info,
+        source_url_processing=source_url_processing,
+    )
+
+def _dossier_queue_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        build_storage_duplicate_review=build_storage_duplicate_review,
+        upsert_ticker_thesis_snapshot=upsert_ticker_thesis_snapshot,
+        ticker_watch_kpis=ticker_watch_kpis,
+        save_research_markdown=save_research_markdown,
+        read_interest_list=read_interest_list,
+        portfolio_calendar_tickers=portfolio_calendar_tickers,
+        manifest_with_ticker_verification=manifest_with_ticker_verification,
+        ensure_verified_ticker=ensure_verified_ticker,
+        current_storage_date=current_storage_date,
+        clamp_confidence=clamp_confidence,
+        analysis_focus_for_ticker=analysis_focus_for_ticker,
+        current_storage_timestamp=current_storage_timestamp,
+        dossier_refresh_candidates_from_duplicate_review=dossier_refresh_candidates_from_duplicate_review,
+        dossier_refresh_queue_status_path=dossier_refresh_queue_status_path,
+        is_archived_research_entry=is_archived_research_entry,
+        is_verified_manifest_entry=is_verified_manifest_entry,
+        normalize_ticker=normalize_ticker,
+        provider_error_message=provider_error_message,
+        read_json_store=read_json_store,
+        read_manifest=read_manifest,
+        research_automation_status_path=research_automation_status_path,
+        resolve_vault_dir=resolve_vault_dir,
+        special_research_keys=SPECIAL_RESEARCH_KEYS,
+        storage_duplicate_review_path=storage_duplicate_review_path,
+        synthesize_and_save_dossier=synthesize_and_save_dossier,
+        ticker_company_name=ticker_company_name,
+        write_json_store=write_json_store,
+    )
 
 
 def compact_manifest_review_entry(entry: dict) -> dict:
-    return {
-        "ticker": entry.get("ticker"),
-        "company_name": entry.get("company_name"),
-        "type": entry.get("type"),
-        "date": entry.get("date"),
-        "title": entry.get("title") or entry.get("file_name") or "제목 없음",
-        "summary": compact_representative_sentence(entry.get("summary") or "", 180),
-        "file_name": entry.get("file_name"),
-        "relative_path": entry.get("relative_path"),
-        "source_url": entry.get("source_url"),
-    }
+    return dossier_queue.compact_manifest_review_entry(_dossier_queue_runtime(), entry)
 
 
 def build_storage_duplicate_review(
@@ -13119,344 +12498,20 @@ def build_storage_duplicate_review(
     limit: int = 80,
     save_result: bool = True,
 ) -> dict:
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    manifest_entries = [
-        entry
-        for entry in read_manifest(vault_dir)
-        if isinstance(entry, dict)
-        and str(entry.get("type") or "").strip().lower() in DOSSIER_ALLOWED_REPORT_TYPES
-    ]
-    archived_input_count = sum(1 for entry in manifest_entries if is_archived_research_entry(entry))
-    manifest_entries = [entry for entry in manifest_entries if not is_archived_research_entry(entry)]
-    manifest_entries.sort(key=manifest_entry_sort_key, reverse=True)
-
-    representatives: list[dict] = []
-    groups: list[dict] = []
-    exact_keys: dict[str, int] = {}
-    token_sets: list[set[str]] = []
-    checked_count = 0
-
-    for entry in manifest_entries[: max(limit * 10, 200)]:
-        text = read_manifest_entry_text(vault_dir, entry)
-        if not plain_research_lines(text, limit=3) and is_dossier_noise_line(entry.get("summary")):
-            continue
-        checked_count += 1
-        exact_key = (
-            str(entry.get("source_url") or "").strip()
-            or str(entry.get("content_hash") or "").strip()
-            or content_fingerprint(manifest_similarity_text(entry, text))
-        )
-        tokens = similarity_tokens(manifest_similarity_text(entry, text))
-        match_index: int | None = None
-        reason = "no_match"
-        similarity = 0.0
-
-        if exact_key and exact_key in exact_keys:
-            match_index = exact_keys[exact_key]
-            reason = "exact_match"
-            similarity = 1.0
-        else:
-            best: tuple[float, int] | None = None
-            for index, previous_tokens in enumerate(token_sets):
-                current_ticker = str(entry.get("ticker") or "").upper()
-                previous_ticker = str((representatives[index] if index < len(representatives) else {}).get("ticker") or "").upper()
-                same_scope = current_ticker == previous_ticker or (
-                    current_ticker in SPECIAL_RESEARCH_KEYS and previous_ticker in SPECIAL_RESEARCH_KEYS
-                )
-                if not same_scope:
-                    continue
-                if len(tokens) < 8 or len(previous_tokens) < 8:
-                    continue
-                score = token_jaccard_similarity(tokens, previous_tokens)
-                if score >= 0.84 and (best is None or score > best[0]):
-                    best = (score, index)
-            if best is not None:
-                similarity, match_index = best
-                reason = "title_body_similarity"
-
-        if match_index is None:
-            exact_keys[exact_key] = len(representatives)
-            if tokens:
-                token_sets.append(tokens)
-            else:
-                token_sets.append(set())
-            representatives.append(entry)
-            continue
-
-        while len(groups) <= match_index:
-            representative = representatives[len(groups)] if len(groups) < len(representatives) else {}
-            groups.append(
-                {
-                    "group_id": content_fingerprint(
-                        f"{representative.get('ticker')} {representative.get('file_name')} {representative.get('source_url')}"
-                    )[:16],
-                    "ticker": representative.get("ticker"),
-                    "company_name": representative.get("company_name"),
-                    "representative": compact_manifest_review_entry(representative),
-                    "duplicates": [],
-                    "duplicate_count": 0,
-                    "excluded_duplicate_count": 0,
-                    "dossier_usage": "representative_only",
-                    "duplicate_usage": "excluded_from_dossier",
-                    "reasons": {},
-                    "recommended_action": "대표 자료 1개만 Dossier 합성에 사용하고, 중복 자료는 복기용 원문으로만 유지합니다.",
-                }
-            )
-
-        group = groups[match_index]
-        group["duplicates"].append(
-            {
-                **compact_manifest_review_entry(entry),
-                "duplicate_reason": reason,
-                "similarity": round(similarity, 4),
-            }
-        )
-        group["duplicate_count"] = len(group["duplicates"])
-        group["excluded_duplicate_count"] = group["duplicate_count"]
-        reasons = group.setdefault("reasons", {})
-        reasons[reason] = int(reasons.get(reason) or 0) + 1
-
-    groups = [group for group in groups if group.get("duplicate_count")]
-    groups.sort(key=lambda item: int(item.get("duplicate_count") or 0), reverse=True)
-    groups = groups[: max(limit, 1)]
-    duplicate_entry_count = sum(int(group.get("duplicate_count") or 0) for group in groups)
-
-    ticker_breakdown: dict[str, dict] = {}
-    for group in groups:
-        key = str(group.get("ticker") or "UNKNOWN")
-        item = ticker_breakdown.setdefault(
-            key,
-            {
-                "ticker": key,
-                "company_name": group.get("company_name"),
-                "duplicate_group_count": 0,
-                "duplicate_entry_count": 0,
-            },
-        )
-        item["duplicate_group_count"] += 1
-        item["duplicate_entry_count"] += int(group.get("duplicate_count") or 0)
-
-    payload = {
-        "status": "success",
-        "module": "storage_duplicate_review",
-        "as_of": current_storage_timestamp(),
-        "checked_count": checked_count,
-        "skipped_archived_count": archived_input_count,
-        "unique_representative_count": len(representatives),
-        "duplicate_group_count": len(groups),
-        "duplicate_entry_count": duplicate_entry_count,
-        "representative_policy": {
-            "dossier_usage": "representative_only",
-            "duplicate_usage": "excluded_from_dossier",
-            "archive_policy": "soft_archive_only",
-            "hard_delete_allowed": False,
-            "message": "Dossier 합성과 추천 근거에는 대표 자료만 사용하고 중복 의심 자료는 복기/원문 추적용으로 유지합니다.",
-        },
-        "dossier_usage_summary": {
-            "representative_count": len(representatives),
-            "duplicate_excluded_count": duplicate_entry_count,
-            "archived_excluded_count": archived_input_count,
-            "needs_dossier_refresh_count": len(ticker_breakdown),
-        },
-        "groups": groups,
-        "ticker_breakdown": sorted(
-            ticker_breakdown.values(),
-            key=lambda item: (int(item.get("duplicate_entry_count") or 0), int(item.get("duplicate_group_count") or 0)),
-            reverse=True,
-        )[:20],
-        "next_actions": [
-            "Dossier 합성/추천 근거에는 representative_only 정책을 적용해 중복 의심 자료를 제외했습니다.",
-            "중복 의심이 많은 종목부터 Dossier 재합성을 실행해 최신 투자 논거를 다시 고정하세요.",
-            "source_url/content_hash 일치 자료는 사실상 같은 자료로 보고 대표 자료만 의사결정에 반영하세요.",
-            "제목·본문 유사 자료는 원문이 다른 업데이트일 수 있으므로 요약 차이가 있는지 우선 확인하세요.",
-        ],
-    }
-    if save_result:
-        write_json_store(storage_duplicate_review_path(settings), payload)
-        payload["storage"] = {
-            "relative_path": str(storage_duplicate_review_path(settings).relative_to(vault_dir.parent)).replace("\\", "/")
-        }
-    return payload
+    return dossier_queue.build_storage_duplicate_review(
+        _dossier_queue_runtime(),
+        settings,
+        limit=limit,
+        save_result=save_result,
+    )
 
 
 def build_dossier_payload(ticker: str, vault_dir: Path) -> dict:
-    storage_date = current_storage_date()
-    company_name = ticker_company_name(ticker)
-    entries, duplicates = latest_verified_entries_for_dossier(ticker, vault_dir)
-    profile_focus = analysis_focus_for_ticker(ticker, None)
-    watch_kpis = ticker_watch_kpis(ticker)
-    consensus_facts: list[str] = []
-    bull_thesis: list[str] = []
-    bear_thesis: list[str] = []
-    latest_changes: list[dict] = []
-    confidence_values: list[float] = []
-    tags: set[str] = set()
-
-    for entry in entries[:30]:
-        summary = str(entry.get("summary") or "")
-        text = str(entry.get("_full_text") or summary)
-        lines = [
-            line
-            for line in [summary, *plain_research_lines(text, limit=40)]
-            if not is_dossier_noise_line(line)
-        ]
-        for tag in entry.get("tags") or []:
-            tags.add(str(tag))
-        confidence_values.append(clamp_confidence(entry.get("confidence") or entry.get("source_confidence")))
-        latest_changes.append(
-            {
-                "date": entry.get("date"),
-                "type": entry.get("type"),
-                "file_name": entry.get("file_name"),
-                "summary": summary,
-                "confidence": entry.get("confidence") or entry.get("source_confidence"),
-            }
-        )
-        for line in lines:
-            has_bull_marker = "강세:" in line
-            has_bear_marker = "약세:" in line
-            if line_has_any(line, DOSSIER_FACT_TERMS) and not (has_bull_marker or has_bear_marker):
-                fact = clean_dossier_signal(line, "generic")
-                if fact:
-                    add_unique_text(consensus_facts, fact, limit=8)
-            if has_bull_marker or (line_has_any(line, DOSSIER_POSITIVE_TERMS) and not has_bear_marker):
-                add_dossier_signal(bull_thesis, line, "bull", limit=6)
-            if has_bear_marker or (line_has_any(line, DOSSIER_NEGATIVE_TERMS) and not has_bull_marker):
-                add_dossier_signal(bear_thesis, line, "bear", limit=6)
-
-    if not consensus_facts:
-        for entry in entries[:6]:
-            add_unique_text(consensus_facts, entry.get("summary"), limit=6)
-    if not bull_thesis:
-        add_unique_text(
-            bull_thesis,
-            f"{company_name}의 강세 논거는 {profile_focus}가 실제 수치와 신규 자료에서 반복 확인되는 경우입니다.",
-        )
-    if not bear_thesis:
-        add_unique_text(
-            bear_thesis,
-            f"{company_name}의 약세 논거는 핵심 KPI 둔화, 마진 훼손, 경쟁 심화 또는 투자 심리 악화가 동시에 나타나는 경우입니다.",
-        )
-
-    cruxes = [
-        f"{watch_kpis[0] if watch_kpis else '핵심 성장 KPI'}가 다음 데이터에서 개선 추세를 유지하는가?",
-        "현재 밸류에이션이 성장률, 마진, 현금흐름 품질을 과도하게 선반영하고 있지 않은가?",
-        "최근 입력 자료의 강세/약세 신호 중 실제 숫자로 확인 가능한 항목은 무엇인가?",
-    ]
-    observables = [
-        f"{metric}: 다음 실적/공시/뉴스에서 방향성 확인"
-        for metric in watch_kpis[:5]
-    ]
-    if not observables:
-        observables = [
-            "매출 성장률: 다음 실적에서 추세 확인",
-            "마진 품질: 비용 구조와 가격 결정력 확인",
-            "현금흐름: 투자 확대와 현금 소진 균형 확인",
-        ]
-
-    confidence = round(sum(confidence_values) / len(confidence_values), 2) if confidence_values else 0.65
-    bull_summary = representative_thesis_line(
-        bull_thesis,
-        f"{company_name}의 강세 논거는 {profile_focus}가 실제 수치와 신규 자료에서 반복 확인되는 경우입니다.",
-        mode="bull",
-    )
-    bear_summary = representative_thesis_line(
-        bear_thesis,
-        f"{company_name}의 약세 논거는 핵심 KPI 둔화, 마진 훼손, 경쟁 심화 또는 투자 심리 악화가 동시에 나타나는 경우입니다.",
-        mode="bear",
-    )
-    thesis_summary = (
-        f"{company_name}의 최신 Dossier는 {len(entries)}개 고유 저장 자료를 바탕으로 "
-        f"{profile_focus}를 핵심 투자 논거로 추적합니다. "
-        f"강세는 {bull_summary} / 약세는 {bear_summary}입니다."
-    )
-    invalidation_conditions = [
-        "핵심 성장 KPI가 2개 분기 연속 약화",
-        "기존 강세 논거를 뒷받침하던 수요·마진·현금흐름 지표가 동시에 후퇴",
-        "새 자료의 부정 신호가 반복 입력되고 신뢰도 가중 평균이 70% 이상으로 상승",
-    ]
-
-    return {
-        "ticker": ticker,
-        "company_name": company_name,
-        "date": storage_date.isoformat(),
-        "source_count": len(entries),
-        "duplicate_count": len(duplicates),
-        "confidence": confidence,
-        "tags": sorted(tags),
-        "thesis_summary": thesis_summary,
-        "consensus_facts": consensus_facts,
-        "bull_thesis": bull_thesis,
-        "bear_thesis": bear_thesis,
-        "cruxes": cruxes,
-        "observables": observables,
-        "invalidation_conditions": invalidation_conditions,
-        "latest_changes": latest_changes[:10],
-        "duplicates": duplicates[:10],
-    }
+    return dossier_queue.build_dossier_payload(_dossier_queue_runtime(), ticker, vault_dir)
 
 
 def render_dossier_markdown(payload: dict) -> str:
-    def bullet(items: list[str] | list[dict], empty: str = "표시할 항목이 없습니다.") -> str:
-        if not items:
-            return f"- {empty}"
-        lines = []
-        for item in items:
-            if isinstance(item, dict):
-                lines.append(
-                    f"- {item.get('date') or '날짜 미확인'} · {item.get('type') or '자료'} · "
-                    f"{item.get('summary') or item.get('file_name') or '요약 없음'}"
-                )
-            else:
-                lines.append(f"- {item}")
-        return "\n".join(lines)
-
-    return f"""---
-ticker: {payload["ticker"]}
-type: dossier-synthesis
-date: {payload["date"]}
-module: research_dossier_synthesis
----
-
-# {payload["company_name"]} Dossier 합성 보고서
-
-## 요약
-
-{payload["thesis_summary"]}
-
-- 고유 자료: {payload["source_count"]}개
-- 중복 제외: {payload["duplicate_count"]}개
-- 합성 신뢰도: {payload["confidence"]:.0%}
-- 태그: {", ".join(payload["tags"]) or "없음"}
-
-## 합의된 사실
-
-{bullet(payload["consensus_facts"])}
-
-## 강세 논거
-
-{bullet(payload["bull_thesis"])}
-
-## 약세 논거
-
-{bullet(payload["bear_thesis"])}
-
-## 핵심 쟁점
-
-{bullet(payload["cruxes"])}
-
-## 관찰 가능한 트리거
-
-{bullet(payload["observables"])}
-
-## 무효화 조건
-
-{bullet(payload["invalidation_conditions"])}
-
-## 최근 변화
-
-{bullet(payload["latest_changes"])}
-"""
+    return dossier_queue.render_dossier_markdown(payload)
 
 
 def synthesize_and_save_dossier(
@@ -13465,163 +12520,28 @@ def synthesize_and_save_dossier(
     *,
     save_result: bool = True,
 ) -> dict:
-    normalized_ticker = ensure_verified_ticker(ticker, settings)
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    payload = build_dossier_payload(normalized_ticker, vault_dir)
-    storage = None
-    if save_result:
-        markdown = render_dossier_markdown(payload)
-        storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=normalized_ticker,
-            report_type="dossier-synthesis",
-            markdown=markdown,
-            structured_payload=payload,
-            manifest_entry=manifest_with_ticker_verification(normalized_ticker, {
-                "summary": payload["thesis_summary"],
-                "company_name": payload["company_name"],
-                "source_count": payload["source_count"],
-                "duplicate_count": payload["duplicate_count"],
-                "source_confidence": payload["confidence"],
-                "tags": payload["tags"],
-                "investment_thesis": {
-                    "ticker": normalized_ticker,
-                    "thesis": payload["thesis_summary"],
-                    "time_horizon": "상시 업데이트",
-                    "bull_triggers": payload["bull_thesis"],
-                    "bear_triggers": payload["bear_thesis"],
-                    "invalidation_conditions": payload["invalidation_conditions"],
-                    "watch_kpis": ticker_watch_kpis(normalized_ticker),
-                    "valuation_assumptions": {
-                        "method": "저장 자료 기반 Dossier 합성",
-                        "confidence": payload["confidence"],
-                    },
-                    "last_updated": payload["date"],
-                },
-                "watch_items": [
-                    {
-                        "ticker": normalized_ticker,
-                        "metric": item.split(":")[0],
-                        "condition": item,
-                        "action": "다음 정보 입력/시장일지/실적 분석에서 자동 대조",
-                        "priority": "medium",
-                    }
-                    for item in payload["observables"][:5]
-                ],
-            }),
-            report_date=current_storage_date(),
-        )
-        payload["storage"] = storage.model_dump(mode="json")
-        thesis = InvestmentThesis(
-            ticker=normalized_ticker,
-            thesis=payload["thesis_summary"],
-            time_horizon="상시 업데이트",
-            bull_triggers=payload["bull_thesis"],
-            bear_triggers=payload["bear_thesis"],
-            invalidation_conditions=payload["invalidation_conditions"],
-            watch_kpis=ticker_watch_kpis(normalized_ticker),
-            valuation_assumptions={
-                "method": "저장 자료 기반 Dossier 합성",
-                "confidence": payload["confidence"],
-            },
-            last_updated=payload["date"],
-        )
-        watch_items = [
-            WatchItem(
-                ticker=normalized_ticker,
-                metric=item.split(":")[0],
-                condition=item,
-                action="다음 정보 입력/시장일지/실적 분석에서 자동 대조",
-                priority="medium",
-            )
-            for item in payload["observables"][:5]
-        ]
-        upsert_ticker_thesis_snapshot(
-            vault_dir=vault_dir,
-            ticker=normalized_ticker,
-            company_name=payload["company_name"],
-            investment_thesis=thesis,
-            watch_items=watch_items,
-            source_entry={
-                "type": "dossier-synthesis",
-                "date": payload["date"],
-                "file_name": storage.file_name if storage else None,
-                "relative_path": storage.relative_path if storage else None,
-            },
-            confidence=payload["confidence"],
-        )
-    return {"status": "success", "module": "dossier_synthesis", **payload}
+    return dossier_queue.synthesize_and_save_dossier(
+        _dossier_queue_runtime(),
+        ticker,
+        settings,
+        save_result=save_result,
+    )
 
 
 def dossier_candidate_tickers(settings: Settings, limit: int = 30) -> list[str]:
-    tickers: set[str] = set()
-    for ticker in portfolio_calendar_tickers(settings):
-        normalized = normalize_ticker(ticker)
-        if is_dossier_refresh_ticker_key(normalized):
-            tickers.add(normalized)
-    try:
-        interest_payload = read_interest_list(settings)
-        for item in interest_payload.get("tickers", []):
-            if isinstance(item, dict) and item.get("ticker"):
-                tickers.add(ensure_verified_ticker(str(item["ticker"]), settings))
-    except Exception:
-        pass
-    try:
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        for entry in read_manifest(vault_dir):
-            ticker = normalize_ticker(str(entry.get("ticker") or ""))
-            if is_dossier_refresh_ticker_key(ticker):
-                tickers.add(ticker)
-    except Exception:
-        pass
-    return sorted(tickers)[: max(1, min(limit, 100))]
+    return dossier_queue.dossier_candidate_tickers(_dossier_queue_runtime(), settings, limit=limit)
 
 
 def is_dossier_refresh_ticker_key(ticker: str) -> bool:
-    normalized = normalize_ticker(ticker)
-    if (
-        not normalized
-        or normalized in SPECIAL_RESEARCH_KEYS
-        or normalized in {"UNKNOWN", "CASH"}
-        or normalized.startswith("COMPOUNDER-")
-        or "-" in normalized
-    ):
-        return False
-    if fullmatch(r"\d{6}", normalized):
-        return True
-    if fullmatch(r"[A-Z]{1,5}", normalized):
-        return True
-    if fullmatch(r"[A-Z0-9]{6}", normalized) and search(r"[A-Z]", normalized):
-        return True
-    return False
+    return dossier_queue.is_dossier_refresh_ticker_key(_dossier_queue_runtime(), ticker)
 
 
 def dossier_refresh_candidates_from_duplicate_review(settings: Settings, limit: int = 8) -> list[dict]:
-    review = read_json_store(storage_duplicate_review_path(settings), {})
-    if not review:
-        review = build_storage_duplicate_review(settings, limit=max(limit * 3, 20), save_result=False)
-    candidates: list[dict] = []
-    seen: set[str] = set()
-    for item in review.get("ticker_breakdown") or []:
-        ticker = normalize_ticker(str(item.get("ticker") or ""))
-        if (
-            not is_dossier_refresh_ticker_key(ticker)
-            or ticker in seen
-        ):
-            continue
-        seen.add(ticker)
-        candidates.append(
-            {
-                "ticker": ticker,
-                "company_name": item.get("company_name") or ticker_company_name(ticker),
-                "duplicate_group_count": int(item.get("duplicate_group_count") or 0),
-                "duplicate_entry_count": int(item.get("duplicate_entry_count") or 0),
-                "reason": "중복 리뷰에서 대표 자료 재합성이 필요한 종목으로 선별됨",
-            }
-        )
-        if len(candidates) >= max(limit, 1):
-            break
-    return candidates
+    return dossier_queue.dossier_refresh_candidates_from_duplicate_review(
+        _dossier_queue_runtime(),
+        settings,
+        limit=limit,
+    )
 
 
 def run_deduped_dossier_refresh_queue(
@@ -13630,74 +12550,12 @@ def run_deduped_dossier_refresh_queue(
     limit: int = 8,
     save_result: bool = True,
 ) -> dict:
-    candidates = dossier_refresh_candidates_from_duplicate_review(settings, limit=limit)
-    refreshed: list[dict] = []
-    failed: list[dict] = []
-    skipped: list[dict] = []
-
-    for candidate in candidates:
-        ticker = candidate["ticker"]
-        try:
-            preview = synthesize_and_save_dossier(ticker, settings, save_result=False)
-            if int(preview.get("source_count") or 0) <= 0:
-                skipped.append(
-                    {
-                        **candidate,
-                        "reason": "Dossier에 사용할 검증된 고유 자료가 없어 저장을 건너뜀",
-                    }
-                )
-                continue
-            result = synthesize_and_save_dossier(ticker, settings, save_result=save_result)
-            refreshed.append(
-                {
-                    "ticker": ticker,
-                    "company_name": result.get("company_name") or candidate.get("company_name"),
-                    "source_count": result.get("source_count"),
-                    "duplicate_count": result.get("duplicate_count"),
-                    "confidence": result.get("confidence"),
-                    "storage": result.get("storage"),
-                    "reason": candidate.get("reason"),
-                }
-            )
-        except Exception as exc:
-            message = provider_error_message(exc, settings)
-            if "공식 티커" in message or "확인되지 않았습니다" in message:
-                skipped.append({**candidate, "reason": message})
-            else:
-                failed.append({**candidate, "error": message})
-
-    payload = {
-        "status": "success" if not failed else "partial",
-        "module": "deduped_dossier_refresh_queue",
-        "as_of": current_storage_timestamp(),
-        "candidate_count": len(candidates),
-        "refreshed_count": len(refreshed),
-        "failed_count": len(failed),
-        "skipped_count": len(skipped),
-        "candidates": candidates,
-        "refreshed": refreshed,
-        "failed": failed,
-        "skipped": skipped,
-        "next_actions": [
-            "갱신된 Dossier의 강세/약세 논거가 대시보드 최신 투자 논거에 반영됐는지 확인하세요.",
-            "실패 또는 스킵 종목은 티커 인증 상태와 원천 저장 자료 품질을 먼저 점검하세요.",
-            "중복 리뷰가 새로 생성되면 이 큐를 다시 실행해 대표 자료 기준을 갱신하세요.",
-        ],
-    }
-    if save_result:
-        write_json_store(dossier_refresh_queue_status_path(settings), payload)
-        status = read_json_store(research_automation_status_path(settings), {})
-        if isinstance(status, dict):
-            status["updated_at"] = payload["as_of"]
-            status["last_deduped_dossier_refresh"] = {
-                "updated_at": payload["as_of"],
-                "candidate_count": payload["candidate_count"],
-                "refreshed_count": payload["refreshed_count"],
-                "failed_count": payload["failed_count"],
-                "skipped_count": payload["skipped_count"],
-            }
-            write_json_store(research_automation_status_path(settings), status)
-    return payload
+    return dossier_queue.run_deduped_dossier_refresh_queue(
+        _dossier_queue_runtime(),
+        settings,
+        limit=limit,
+        save_result=save_result,
+    )
 
 
 def _portfolio_thesis_date_age_days(source_date: object) -> int | None:

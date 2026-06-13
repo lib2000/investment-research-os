@@ -2357,6 +2357,110 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
 
 
 class ResearchMemoryPolicyTests(unittest.TestCase):
+    def test_dossier_text_module_dedupes_exact_manifest_entries(self):
+        from research_os import dossier_text
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            stock_dir = vault_dir / "003230"
+            stock_dir.mkdir(parents=True)
+            first = stock_dir / "first.md"
+            second = stock_dir / "second.md"
+            body = "\n".join(
+                [
+                    "삼양식품 미국 채널 매출 성장률이 개선되고 있습니다.",
+                    "불닭볶음면 글로벌 수요와 마진 개선이 핵심 투자 논거입니다.",
+                    "환율과 원가 리스크는 감시하되 장기 성장 가시성은 유지됩니다.",
+                ]
+            )
+            first.write_text(body, encoding="utf-8")
+            second.write_text(body, encoding="utf-8")
+            entries = [
+                {
+                    "ticker": "003230",
+                    "type": "research-capture",
+                    "date": "2026-05-24",
+                    "file_name": first.name,
+                    "relative_path": first.relative_to(vault_dir.parent).as_posix(),
+                    "summary": "삼양식품 글로벌 수요와 마진 개선",
+                    "content_hash": "same-content",
+                },
+                {
+                    "ticker": "003230",
+                    "type": "research-capture",
+                    "date": "2026-05-24",
+                    "file_name": second.name,
+                    "relative_path": second.relative_to(vault_dir.parent).as_posix(),
+                    "summary": "삼양식품 글로벌 수요와 마진 개선",
+                    "content_hash": "same-content",
+                },
+            ]
+
+            unique_entries, duplicates = dossier_text.dedupe_manifest_entries_by_similarity(entries, vault_dir)
+
+        self.assertEqual([entry["file_name"] for entry in unique_entries], [first.name])
+        self.assertEqual([entry["file_name"] for entry in duplicates], [second.name])
+        self.assertEqual(duplicates[0]["duplicate_reason"], "exact_match")
+
+    def test_dossier_text_module_detects_capture_duplicate_without_main_runtime(self):
+        from research_os import dossier_text
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            stock_dir = vault_dir / "018260"
+            stock_dir.mkdir(parents=True)
+            existing = stock_dir / "existing.md"
+            raw_content = "삼성에스디에스 클라우드 매출 성장과 영업이익 마진 개선이 확인된 리서치 본문입니다."
+            existing.write_text(raw_content, encoding="utf-8")
+            manifest = [
+                {
+                    "ticker": "018260",
+                    "type": "research-capture",
+                    "date": "2026-05-25",
+                    "file_name": existing.name,
+                    "relative_path": existing.relative_to(vault_dir.parent).as_posix(),
+                    "summary": "클라우드 매출 성장과 마진 개선",
+                    "source_url": "https://example.com/report",
+                    "content_hash": dossier_text.content_fingerprint(raw_content),
+                }
+            ]
+
+            result = dossier_text.detect_capture_duplicate(
+                vault_dir=vault_dir,
+                ticker="018260",
+                title="삼성에스디에스 리서치",
+                raw_content=raw_content,
+                source_url="https://example.com/report",
+                read_manifest_fn=lambda _vault_dir: manifest,
+                summarize_capture_fn=lambda text: text[:60],
+                special_research_keys=set(),
+            )
+
+        self.assertTrue(result["is_duplicate_suspected"])
+        self.assertEqual(result["reason"], "source_url_exact_match")
+        self.assertEqual(result["matched_file_name"], existing.name)
+
+    def test_dossier_text_module_capture_quality_classifies_ready_and_failed(self):
+        from research_os import dossier_text
+
+        ready = dossier_text.capture_quality_status(raw_content="매출 성장과 마진 개선이 확인됩니다. " * 60)
+        failed = dossier_text.capture_quality_status(
+            raw_content="",
+            attachment_info={
+                "extraction_profile": {"ocr_status": "unavailable"},
+            },
+            source_url_processing={"status": "empty_text"},
+        )
+
+        self.assertEqual(ready["status"], "정상")
+        self.assertEqual(failed["status"], "실패")
+        self.assertIn("웹사이트 본문 추출 실패", failed["warnings"])
+        self.assertIn("이미지 OCR 미연결", failed["warnings"])
+
     def test_duplicate_review_excludes_soft_archived_files(self):
         import json
         import research_os_main as main
