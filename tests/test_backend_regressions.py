@@ -2019,6 +2019,146 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class ResearchMemoryOcrModuleTests(unittest.TestCase):
+    def test_research_memory_ocr_module_updates_attachment_sidecar_markdown_and_rag(self):
+        from research_os import research_memory_ocr
+
+        updated_entries = []
+        markdown_updates = []
+        rag_updates = []
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "POLICY"
+            attachment_dir = ticker_dir / "_attachments"
+            attachment_dir.mkdir(parents=True)
+            attachment_path = attachment_dir / "policy-scan.pdf"
+            attachment_path.write_bytes(b"%PDF-1.4 scan")
+            markdown_path = ticker_dir / "POLICY-research-capture-2026-06-13-test.md"
+            json_path = markdown_path.with_suffix(".json")
+            markdown_path.write_text("# 정책 자료\n\n첨부 본문 없음", encoding="utf-8")
+            attachment = {
+                "file_name": "policy-scan.pdf",
+                "mime_type": "application/pdf",
+                "relative_path": attachment_path.relative_to(vault_dir).as_posix(),
+                "text_extraction": "OCR 언어팩 누락",
+                "extracted_text": "",
+                "extraction_char_count": 0,
+                "extraction_profile": {"ocr_status": "unavailable"},
+            }
+            entry = {
+                "ticker": "POLICY",
+                "file_name": markdown_path.name,
+                "summary": "첨부 본문 없음",
+                "tags": [],
+                "attachment": attachment,
+                "capture_quality": {"status": "보강 필요"},
+            }
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "raw_content": "코스닥 정책",
+                        "attachment": attachment,
+                        "capture_quality": {"status": "보강 필요"},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            def merge_tags(*groups):
+                merged = []
+                for group in groups:
+                    for tag in group or []:
+                        if tag not in merged:
+                            merged.append(tag)
+                return merged
+
+            runtime = SimpleNamespace(
+                resolve_vault_dir=lambda value: Path(value),
+                read_manifest=lambda _vault_dir: [entry],
+                is_archived_research_entry=lambda _entry: False,
+                is_pdf_attachment=lambda file_name, mime_type: str(file_name).endswith(".pdf") or mime_type == "application/pdf",
+                is_image_attachment=lambda _file_name, _mime_type: False,
+                resolve_attachment_file_path=lambda _vault_dir, _attachment: attachment_path,
+                extract_uploaded_file_text=lambda *_args, **_kwargs: {
+                    "text_extraction": "OCR 텍스트 추출 완료",
+                    "extracted_text": "코스닥 활성화 정책 본문",
+                    "document_type": "PDF",
+                    "extraction_quality": 0.91,
+                    "extraction_char_count": 14,
+                    "extraction_preview": "코스닥 활성화",
+                    "extraction_warnings": [],
+                    "extraction_profile": {"ocr_status": "success", "ocr_language": "kor+eng"},
+                },
+                read_manifest_entry_payload=lambda _entry, _vault_dir: json.loads(json_path.read_text(encoding="utf-8")),
+                render_attachment_signal_context=lambda file_name, _mime_type, note: f"첨부 파일명: {file_name}\n{note}",
+                infer_capture_investment_scope=lambda _context, _settings: {"tags": ["theme:kosdaq"]},
+                current_storage_timestamp=lambda: "2026-06-13T08:00:00+09:00",
+                merge_research_tags=merge_tags,
+                strip_quality_rebuild_tags=lambda tags: tags or [],
+                update_manifest=lambda **kwargs: updated_entries.append(kwargs["entry"]),
+                manifest_entry_json_path=lambda _entry, _vault_dir: json_path,
+                manifest_entry_markdown_path=lambda _entry, _vault_dir: markdown_path,
+                upsert_markdown_tail_section=lambda path, marker, section: markdown_updates.append((path, marker, section)),
+                upsert_research_memory_document=lambda **kwargs: rag_updates.append(kwargs),
+                read_manifest_entry_text=lambda _vault_dir, _entry: markdown_path.read_text(encoding="utf-8"),
+                backfill_research_memory_documents_from_manifest=lambda _vault_dir: {"updated_count": 1},
+                ocr_runtime_status=lambda: {"available": True},
+                ocr_reprocess_marker="## OCR 재처리 결과",
+            )
+
+            result = research_memory_ocr.reprocess_research_memory_ocr(
+                runtime,
+                SimpleNamespace(research_vault_dir=str(vault_dir)),
+            )
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["reprocessed_count"], 1)
+        self.assertEqual(result["rag_updated_count"], 1)
+        self.assertEqual(updated_entries[0]["capture_quality"]["status"], "정상")
+        self.assertIn("theme:kosdaq", updated_entries[0]["tags"])
+        self.assertEqual(payload["capture_quality"]["status"], "정상")
+        self.assertEqual(payload["attachment"]["extracted_text"], "코스닥 활성화 정책 본문")
+        self.assertEqual(markdown_updates[0][1], "## OCR 재처리 결과")
+        self.assertIn("OCR 텍스트 추출 완료", markdown_updates[0][2])
+        self.assertIn("코스닥 활성화 정책 본문", rag_updates[0]["full_text"])
+
+    def test_research_memory_ocr_module_classifies_ocr_needed_attachment(self):
+        from research_os import research_memory_ocr
+
+        runtime = SimpleNamespace(
+            is_pdf_attachment=lambda file_name, mime_type: str(file_name).endswith(".pdf") or mime_type == "application/pdf",
+            is_image_attachment=lambda _file_name, _mime_type: False,
+        )
+
+        self.assertTrue(
+            research_memory_ocr.attachment_needs_ocr_reprocess(
+                runtime,
+                {
+                    "file_name": "scan.pdf",
+                    "mime_type": "application/pdf",
+                    "extraction_char_count": 0,
+                    "text_extraction": "Tesseract OCR 실행 파일을 찾지 못했습니다",
+                },
+            )
+        )
+        self.assertFalse(
+            research_memory_ocr.attachment_needs_ocr_reprocess(
+                runtime,
+                {
+                    "file_name": "scan.pdf",
+                    "mime_type": "application/pdf",
+                    "extraction_char_count": 120,
+                    "extracted_text": "이미 추출됨",
+                },
+            )
+        )
+
+
 class ResearchMemorySupplementModuleTests(unittest.TestCase):
     def test_research_memory_supplement_module_updates_markdown_json_manifest_and_rag(self):
         from research_os import research_memory_supplement
