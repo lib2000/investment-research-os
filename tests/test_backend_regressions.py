@@ -4182,6 +4182,54 @@ class NewsMarketJournalModuleTests(unittest.TestCase):
 
         self.assertEqual(result, "국내 요약")
 
+    def test_news_market_journal_module_saves_standard_review_payload(self):
+        from research_os import news_market_journal
+
+        saves = []
+
+        class FakeResponse(SimpleNamespace):
+            def model_dump(self, mode="json"):
+                return {"entry": self.entry.model_dump(mode=mode)}
+
+        class DumpEntry(SimpleNamespace):
+            def model_dump(self, mode="json"):
+                return dict(self.__dict__)
+
+        runtime = SimpleNamespace(
+            market_research_key=lambda market: f"MARKET-{market}",
+            render_market_close_markdown=lambda response, report_date: f"# {response.entry.market} {report_date}",
+            save_research_markdown=lambda **kwargs: saves.append(kwargs) or SimpleNamespace(relative_path="research_vault/MARKET-KR/a.md"),
+        )
+        entry = DumpEntry(
+            market="KR",
+            session_date="2026-06-13",
+            sentiment="중립",
+            risk_level="보통",
+            regime="혼조",
+            tags=["semiconductor"],
+            auto_utilization_focus={"focus": "risk"},
+            interest_implications=["관심종목 점검"],
+        )
+        response = FakeResponse(entry=entry, storage=None)
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "market-close-storage"
+
+        saved = news_market_journal.save_market_close_review_response(
+            runtime,
+            response=response,
+            entry=entry,
+            vault_dir=vault_dir,
+            report_date=date(2026, 6, 13),
+        )
+
+        self.assertIs(saved, response)
+        self.assertEqual(saves[0]["ticker"], "MARKET-KR")
+        self.assertEqual(saves[0]["report_type"], "market-close-review")
+        self.assertIn("KR 2026-06-13 폐장 리뷰", saves[0]["manifest_entry"]["summary"])
+        self.assertEqual(saves[0]["manifest_entry"]["sentiment"], "중립")
+        self.assertEqual(saves[0]["manifest_entry"]["risk_level"], "보통")
+        self.assertEqual(saves[0]["manifest_entry"]["auto_utilization_focus"], {"focus": "risk"})
+        self.assertEqual(saves[0]["manifest_entry"]["interest_implications"], ["관심종목 점검"])
+
     def test_news_market_journal_module_saves_entry_and_markdown(self):
         from research_os import news_market_journal
 

@@ -24,6 +24,39 @@ def market_journal_existing_summary(
     return ""
 
 
+def save_market_close_review_response(
+    runtime: NewsMarketJournalRuntime,
+    *,
+    response,
+    entry,
+    vault_dir,
+    report_date,
+):
+    response.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=runtime.market_research_key(entry.market),
+        report_type="market-close-review",
+        markdown=runtime.render_market_close_markdown(response, report_date),
+        structured_payload=response.model_dump(mode="json"),
+        manifest_entry={
+            "summary": (
+                f"{entry.market} {entry.session_date} 폐장 리뷰: {entry.regime}, "
+                f"심리 {entry.sentiment}, 리스크 {entry.risk_level}"
+            ),
+            "market": entry.market,
+            "session_date": entry.session_date,
+            "sentiment": entry.sentiment,
+            "risk_level": entry.risk_level,
+            "regime": entry.regime,
+            "tags": entry.tags,
+            "auto_utilization_focus": entry.auto_utilization_focus,
+            "interest_implications": entry.interest_implications,
+        },
+        report_date=report_date,
+    )
+    return response
+
+
 def save_news_item_to_market_journal(
     runtime: NewsMarketJournalRuntime,
     item: dict,

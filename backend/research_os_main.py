@@ -18352,23 +18352,11 @@ def save_market_close_review(
     )
 
     if request.save_result:
-        response.storage = save_research_markdown(
+        response = news_market_journal.save_market_close_review_response(
+            _news_market_journal_runtime(),
+            response=response,
+            entry=entry,
             vault_dir=vault_dir,
-            ticker=market_research_key(entry.market),
-            report_type="market-close-review",
-            markdown=render_market_close_markdown(response, report_date),
-            structured_payload=response.model_dump(mode="json"),
-            manifest_entry={
-                "summary": f"{entry.market} {entry.session_date} 폐장 리뷰: {entry.regime}, 심리 {entry.sentiment}, 리스크 {entry.risk_level}",
-                "market": entry.market,
-                "session_date": entry.session_date,
-                "sentiment": entry.sentiment,
-                "risk_level": entry.risk_level,
-                "regime": entry.regime,
-                "tags": entry.tags,
-                "auto_utilization_focus": entry.auto_utilization_focus,
-                "interest_implications": entry.interest_implications,
-            },
             report_date=report_date,
         )
 
