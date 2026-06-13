@@ -117,12 +117,17 @@ REQUIRED_CSS_SNIPPETS = {
     "daily_recommendation_timeline_steps": ".daily-recommendation-timeline-steps",
     "daily_recommendation_evidence": ".daily-recommendation-evidence",
     "daily_recommendation_citation": "daily-recommendation-citation",
+    "daily_recommendation_rank_card": ".daily-recommendation-rank-card",
+    "daily_recommendation_rank_metrics": ".daily-recommendation-rank-metrics",
+    "daily_recommendation_top_rank": ".daily-recommendation-top-rank",
     "investment_calendar_grid": ".investment-calendar-grid",
     "investment_calendar_weekly": ".investment-calendar-weekly",
 }
 
 REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_result_title": "오늘의 추천 결과",
+    "daily_recommendation_rank_layout_text": "1~3위 추천 후보를 한 줄 카드로 정렬했습니다",
+    "daily_recommendation_rank_card_class": "daily-recommendation-rank-card",
     "daily_recommendation_daily_list": "일자별 추천 목록",
     "daily_recommendation_progress_graph": "경과 그래프",
     "daily_recommendation_short_label_helper": "dailyRecommendationMilestoneShortLabel",

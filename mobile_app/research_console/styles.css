@@ -549,7 +549,7 @@ label {
 
 .daily-recommendation-top-panel ul {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(260px, 1.35fr) repeat(2, minmax(180px, 1fr));
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -565,6 +565,53 @@ label {
   border: 1px solid rgba(41, 84, 89, 0.16);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.daily-recommendation-top-rank {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.daily-recommendation-top-rank.is-leader {
+  background: #ffffff;
+  border-color: #14b8a6;
+  box-shadow: 0 10px 26px rgba(15, 118, 110, 0.12);
+}
+
+.daily-recommendation-rank-badge {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 8px;
+  color: #ffffff;
+  background: #0f766e;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.daily-recommendation-top-rank.rank-2 .daily-recommendation-rank-badge {
+  background: #2563eb;
+}
+
+.daily-recommendation-top-rank.rank-3 .daily-recommendation-rank-badge {
+  background: #7c3aed;
+}
+
+.daily-recommendation-top-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.daily-recommendation-top-body p {
+  margin: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .daily-recommendation-top-panel li.is-empty {
@@ -3189,6 +3236,77 @@ label {
   border-color: #6ee7b7;
 }
 
+.daily-recommendation-board-summary {
+  grid-column: 1 / -1;
+}
+
+.daily-recommendation-rank-card {
+  align-content: start;
+  border-color: #d8e1ec;
+  background: #ffffff;
+}
+
+.daily-recommendation-rank-card.is-leader {
+  border-color: #14b8a6;
+  background: #f0fdfa;
+  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.11);
+}
+
+.daily-recommendation-rank-card.rank-2 {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.daily-recommendation-rank-card.rank-3 {
+  border-color: #ddd6fe;
+  background: #fbfaff;
+}
+
+.daily-recommendation-rank-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.daily-recommendation-rank-head b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 32px;
+  padding: 0 8px;
+  color: #ffffff;
+  background: #0f766e;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.daily-recommendation-rank-card.rank-2 .daily-recommendation-rank-head b {
+  background: #2563eb;
+}
+
+.daily-recommendation-rank-card.rank-3 .daily-recommendation-rank-head b {
+  background: #7c3aed;
+}
+
+.daily-recommendation-rank-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.daily-recommendation-rank-metrics span {
+  padding: 7px 8px;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
 .daily-recommendation-badges {
   display: flex;
   flex-wrap: wrap;
@@ -4350,6 +4468,18 @@ pre {
 
   .daily-recommendation-top-head {
     display: grid;
+  }
+
+  .daily-recommendation-top-rank {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-recommendation-rank-badge {
+    width: fit-content;
+  }
+
+  .daily-recommendation-rank-metrics {
+    grid-template-columns: 1fr;
   }
 
   .daily-recommendation-top-head button {

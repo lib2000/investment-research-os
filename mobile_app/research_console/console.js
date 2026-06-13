@@ -8166,18 +8166,27 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
   const tone = !payload || payload?.due_now || !records.length ? "warning" : "ok";
   const rows = records.length
     ? records
-        .map((record) => {
+        .map((record, index) => {
+          const rank = Number(record.rank || index + 1);
           const exposure = dailyRecommendationExposureSummary(record);
           const reasonItems = Array.isArray(record.reasons) && record.reasons.length
             ? record.reasons
             : record.evidence_sources || [];
-          const topReason = compactOutputText(reasonItems[0] || "근거 요약 준비 중", 88);
+          const topReason = compactOutputText(reasonItems[0] || "근거 요약 준비 중", rank === 1 ? 118 : 78);
+          const scoreComponents = (record.score_components || [])
+            .slice()
+            .sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
+          const keyDriver = scoreComponents[0]?.label || exposure || "추천 근거 확인";
+          const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
-            <li>
-              <b>${escapeHtml(record.rank || "-")}위</b>
-              <strong>${escapeHtml(displayCompanyName(record))}</strong>
-              <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인"))}</span>
-              <small>${escapeHtml(exposure || topReason)}</small>
+            <li class="daily-recommendation-top-rank rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}">
+              <div class="daily-recommendation-rank-badge">${escapeHtml(rank)}위</div>
+              <div class="daily-recommendation-top-body">
+                <strong>${escapeHtml(displayCompanyName(record))}</strong>
+                <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(price)}</span>
+                <small>${escapeHtml(keyDriver)}</small>
+                <p>${escapeHtml(exposure || topReason)}</p>
+              </div>
             </li>
           `;
         })
@@ -8401,7 +8410,7 @@ function renderDailyRecommendationCards(payload) {
     { penaltyCount: 0, flagCount: 0, overseasCount: 0, portfolioLinkedCount: 0 }
   );
   const cards = records
-    .map((record) => {
+    .map((record, index) => {
       const reasons = (record.reasons || []).slice(0, 3);
       const evidence = (record.evidence_sources || []).slice(0, 3);
       const scoreComponents = (record.score_components || []).slice(0, 4);
@@ -8425,12 +8434,19 @@ function renderDailyRecommendationCards(payload) {
       const citationRows = dailyRecommendationCitationRows(record);
       const exposureSummary = dailyRecommendationExposureSummary(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
+      const rank = Number(record.rank || index + 1);
       return `
-        <article class="daily-recommendation-card${publicIrSecLinked ? " has-public-ir-sec" : ""}">
-          <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")} · ${escapeHtml(record.rank || "-")}위</span>
+        <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
+          <div class="daily-recommendation-rank-head">
+            <b>${escapeHtml(rank)}위</b>
+            <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")}</span>
+          </div>
           <strong>${escapeHtml(displayCompanyName(record))}</strong>
           ${publicIrSecLinked ? `<div class="daily-recommendation-badges"><em>공개 IR/SEC 근거</em></div>` : ""}
-          <p>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))} · 점수 ${escapeHtml(record.score ?? "n/a")}</p>
+          <div class="daily-recommendation-rank-metrics">
+            <span>점수 ${escapeHtml(record.score ?? "n/a")}</span>
+            <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
+          </div>
           ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           <div class="daily-recommendation-score">
@@ -8504,10 +8520,10 @@ function renderDailyRecommendationCards(payload) {
     })
     .join("");
   elements.dailyRecommendationCards.innerHTML = `
-    <article class="daily-recommendation-card daily-recommendation-summary ok">
+    <article class="daily-recommendation-card daily-recommendation-summary ok daily-recommendation-board-summary">
       <span>오늘의 추천 결과</span>
       <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
-      <p>저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
+      <p>1~3위 추천 후보를 한 줄 카드로 정렬했습니다 · 저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
       <small>${escapeHtml(
         `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
       )}</small>
