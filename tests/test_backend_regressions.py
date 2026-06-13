@@ -1867,7 +1867,9 @@ class PortfolioRiskStorageTests(unittest.TestCase):
         runtime = SimpleNamespace(
             current_storage_date=lambda: date(2026, 6, 13),
             normalize_ticker=lambda value: str(value).strip().upper().replace(" ", "-"),
+            portfolio_store_key=lambda value: str(value).strip().upper().replace(" ", "-"),
             render_portfolio_risk_markdown=lambda scan, storage_date: f"portfolio risk {storage_date.isoformat()}",
+            render_reinforcement_policy_markdown=lambda response, portfolio_value, report_date: f"policy {portfolio_value:.0f} {report_date.isoformat()}",
             resolve_vault_dir=lambda value: Path(value),
             save_research_markdown=fake_save_research_markdown,
         )
@@ -1878,6 +1880,13 @@ class PortfolioRiskStorageTests(unittest.TestCase):
             warnings=[DumpItem(type="single_position", message="집중도 높음")],
             storage=None,
             model_dump=lambda mode=None: {"risk_score": 72},
+        )
+        policy_response = SimpleNamespace(
+            allocation_adjustments=[DumpItem(ticker="005930"), DumpItem(ticker="000660")],
+            objective="risk_adjusted_return",
+            risk_profile="balanced",
+            storage=None,
+            model_dump=lambda mode=None: {"objective": "risk_adjusted_return"},
         )
 
         saved = portfolio_risk_storage.save_portfolio_risk_scan(
@@ -1899,6 +1908,22 @@ class PortfolioRiskStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[0]["manifest_entry"]["sector_concentration"][0]["name"], "반도체")
         self.assertEqual(save_calls[0]["manifest_entry"]["theme_concentration"][0]["name"], "AI")
         self.assertEqual(save_calls[0]["manifest_entry"]["warnings"][0]["type"], "single_position")
+
+        saved_policy = portfolio_risk_storage.save_reinforcement_portfolio_policy(
+            runtime,
+            response=policy_response,
+            portfolio_name="core portfolio",
+            portfolio_value=1234567.891,
+            settings=SimpleNamespace(research_vault_dir=str(vault_dir)),
+        )
+
+        self.assertEqual(saved_policy.storage.file_name, "CORE-PORTFOLIO-reinforcement-portfolio-optimizer.md")
+        self.assertEqual(save_calls[1]["report_type"], "reinforcement-portfolio-optimizer")
+        self.assertEqual(save_calls[1]["ticker"], "CORE-PORTFOLIO")
+        self.assertIn("2개 조정 후보", save_calls[1]["manifest_entry"]["summary"])
+        self.assertEqual(save_calls[1]["manifest_entry"]["portfolio_name"], "core portfolio")
+        self.assertEqual(save_calls[1]["manifest_entry"]["objective"], "risk_adjusted_return")
+        self.assertEqual(save_calls[1]["manifest_entry"]["risk_profile"], "balanced")
 
 
 class AnalysisModuleStorageTests(unittest.TestCase):

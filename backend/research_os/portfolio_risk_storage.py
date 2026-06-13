@@ -3,6 +3,40 @@
 from __future__ import annotations
 
 
+def save_reinforcement_portfolio_policy(
+    runtime,
+    *,
+    response,
+    portfolio_name: str,
+    portfolio_value: float,
+    settings,
+):
+    vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
+    report_date = runtime.current_storage_date()
+    response.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=runtime.portfolio_store_key(portfolio_name),
+        report_type="reinforcement-portfolio-optimizer",
+        markdown=runtime.render_reinforcement_policy_markdown(
+            response,
+            portfolio_value,
+            report_date,
+        ),
+        structured_payload=response.model_dump(mode="json"),
+        manifest_entry={
+            "summary": (
+                f"{portfolio_name} 포트폴리오 정책 최적화: "
+                f"{len(response.allocation_adjustments)}개 조정 후보"
+            ),
+            "portfolio_name": portfolio_name,
+            "objective": response.objective,
+            "risk_profile": response.risk_profile,
+        },
+        report_date=report_date,
+    )
+    return response
+
+
 def save_portfolio_risk_scan(
     runtime,
     *,

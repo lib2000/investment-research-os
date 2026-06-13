@@ -7242,7 +7242,9 @@ def _portfolio_risk_storage_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         current_storage_date=current_storage_date,
         normalize_ticker=normalize_ticker,
+        portfolio_store_key=portfolio_store_key,
         render_portfolio_risk_markdown=render_portfolio_risk_markdown,
+        render_reinforcement_policy_markdown=render_reinforcement_policy_markdown,
         resolve_vault_dir=resolve_vault_dir,
         save_research_markdown=save_research_markdown,
     )
@@ -7323,21 +7325,12 @@ def run_reinforcement_portfolio_policy(
         saved_to_research_memory=request.save_result,
     )
     if request.save_result:
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        report_date = current_storage_date()
-        response.storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=portfolio_store_key(request.portfolio_name),
-            report_type="reinforcement-portfolio-optimizer",
-            markdown=render_reinforcement_policy_markdown(response, portfolio_value, report_date),
-            structured_payload=response.model_dump(mode="json"),
-            manifest_entry={
-                "summary": f"{request.portfolio_name} 포트폴리오 정책 최적화: {len(response.allocation_adjustments)}개 조정 후보",
-                "portfolio_name": request.portfolio_name,
-                "objective": request.objective,
-                "risk_profile": request.risk_profile,
-            },
-            report_date=report_date,
+        response = portfolio_risk_storage.save_reinforcement_portfolio_policy(
+            _portfolio_risk_storage_runtime(),
+            response=response,
+            portfolio_name=request.portfolio_name,
+            portfolio_value=portfolio_value,
+            settings=settings,
         )
     return response
 
