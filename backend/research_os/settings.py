@@ -109,7 +109,7 @@ class Settings(BaseModel):
     naver_market_close_auto_journal: bool = True
     naver_market_close_journal_time: str = "08:30"
     daily_recommendations_enabled: bool = True
-    daily_recommendations_time: str = "09:00"
+    daily_recommendations_time: str = "08:00"
     daily_recommendations_tracking_enabled: bool = True
     kcif_use_login: bool = True
     kcif_username: str = Field(default="")
@@ -330,7 +330,7 @@ class Settings(BaseModel):
                 "DAILY_RECOMMENDATIONS_ENABLED", True
             ),
             daily_recommendations_time=os.getenv(
-                "DAILY_RECOMMENDATIONS_TIME", "09:00"
+                "DAILY_RECOMMENDATIONS_TIME", "08:00"
             ),
             daily_recommendations_tracking_enabled=_read_bool(
                 "DAILY_RECOMMENDATIONS_TRACKING_ENABLED", True

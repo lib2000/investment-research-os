@@ -19028,7 +19028,7 @@ _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED = False
 
 def daily_recommendations_scheduler_loop() -> None:
     settings = get_settings()
-    interval_seconds = 15 * 60
+    interval_seconds = 60
     while True:
         try:
             now = current_storage_datetime()
@@ -19079,10 +19079,19 @@ def start_daily_recommendations_scheduler() -> None:
 def get_daily_recommendations_status(settings: Settings = Depends(get_settings)) -> dict:
     payload = summarize_daily_recommendation_store(settings)
     state = read_json_store(daily_recommendation_state_path(settings), {})
+    today = current_storage_date().isoformat()
+    today_records = [
+        item
+        for item in (payload.get("records") or [])
+        if item.get("recommendation_date") == today
+    ]
     payload["enabled"] = settings.daily_recommendations_enabled
     payload["daily_time"] = settings.daily_recommendations_time
     payload["tracking_enabled"] = settings.daily_recommendations_tracking_enabled
     payload["due_now"] = should_run_daily_recommendations(settings)
+    payload["today_recommendation_date"] = today
+    payload["today_records"] = sorted(today_records, key=lambda item: int(item.get("rank") or 999))[:3]
+    payload["has_today_recommendations"] = bool(today_records)
     payload["state"] = state
     return payload
 

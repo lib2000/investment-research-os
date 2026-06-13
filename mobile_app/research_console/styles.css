@@ -507,6 +507,90 @@ label {
   background: #ffffff;
 }
 
+.daily-recommendation-top-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #99d5cb;
+  border-radius: 8px;
+  background: #eefaf7;
+}
+
+.daily-recommendation-top-panel.warning {
+  border-color: #f7c873;
+  background: #fff8e7;
+}
+
+.daily-recommendation-top-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.daily-recommendation-top-head span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.daily-recommendation-top-head h2 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.daily-recommendation-top-head button {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.daily-recommendation-top-panel ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-recommendation-top-panel li {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid rgba(41, 84, 89, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.daily-recommendation-top-panel li.is-empty {
+  grid-column: 1 / -1;
+}
+
+.daily-recommendation-top-panel li b,
+.daily-recommendation-top-panel li span,
+.daily-recommendation-top-panel li small,
+.daily-recommendation-top-panel > p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.daily-recommendation-top-panel li strong {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.daily-recommendation-top-panel > p {
+  margin: 0;
+}
+
 .dashboard-clean-hero.ok {
   border-color: #99d5cb;
   background: linear-gradient(135deg, #eefaf7 0%, #ffffff 58%);
@@ -4225,6 +4309,7 @@ pre {
   .dashboard-link-list,
   .ticker-cache-list,
   .daily-recommendation-cards,
+  .daily-recommendation-top-panel ul,
   .daily-recommendation-date-groups,
   .daily-recommendation-progress-grid,
   .daily-recommendation-timeline-steps,
@@ -4261,6 +4346,14 @@ pre {
   .dashboard-clean-actions {
     grid-template-columns: 1fr;
     min-width: 0;
+  }
+
+  .daily-recommendation-top-head {
+    display: grid;
+  }
+
+  .daily-recommendation-top-head button {
+    width: 100%;
   }
 
   .dashboard-clean-signal-list li {

@@ -52,9 +52,9 @@ def current_recommendation_datetime() -> datetime:
 
 
 def parse_daily_recommendations_time(settings: Settings) -> tuple[int, int]:
-    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.daily_recommendations_time or "09:00").strip())
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.daily_recommendations_time or "08:00").strip())
     if not match:
-        return 9, 0
+        return 8, 0
     hour = min(max(int(match.group(1)), 0), 23)
     minute = min(max(int(match.group(2)), 0), 59)
     return hour, minute

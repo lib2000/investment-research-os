@@ -117,7 +117,35 @@ class DailyRecommendationsTests(unittest.TestCase):
 
     def test_daily_recommendation_schedule_defaults_invalid_time(self):
         settings = Settings(daily_recommendations_time="bad-value")
-        self.assertEqual(parse_daily_recommendations_time(settings), (9, 0))
+        self.assertEqual(parse_daily_recommendations_time(settings), (8, 0))
+
+    def test_daily_recommendation_status_exposes_today_records(self):
+        import research_os_main as main
+
+        settings = Settings(daily_recommendations_time="08:00")
+        with (
+            patch.object(
+                main,
+                "summarize_daily_recommendation_store",
+                return_value={
+                    "records": [
+                        {"recommendation_date": "2026-06-12", "rank": 1, "ticker": "OLD"},
+                        {"recommendation_date": "2026-06-13", "rank": 2, "ticker": "B"},
+                        {"recommendation_date": "2026-06-13", "rank": 1, "ticker": "A"},
+                    ],
+                    "latest_recommendation_date": "2026-06-13",
+                },
+            ),
+            patch.object(main, "current_storage_date", return_value=date(2026, 6, 13)),
+            patch.object(main, "read_json_store", return_value={"last_run_date": "2026-06-13"}),
+            patch.object(main, "should_run_daily_recommendations", return_value=False),
+        ):
+            payload = main.get_daily_recommendations_status(settings)
+
+        self.assertEqual(payload["daily_time"], "08:00")
+        self.assertTrue(payload["has_today_recommendations"])
+        self.assertEqual([item["ticker"] for item in payload["today_records"]], ["A", "B"])
+        self.assertEqual(payload["today_recommendation_date"], "2026-06-13")
 
     def test_daily_recommendations_save_top_three_and_track_milestones(self):
         with TemporaryDirectory() as temp_dir:

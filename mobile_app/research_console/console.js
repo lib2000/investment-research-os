@@ -289,6 +289,7 @@ let lastPortfolioTeamReportQueue = null;
 let lastInterestList = null;
 let lastInterestAutomationBoard = null;
 let lastTodayResearchUpdate = null;
+let latestDailyRecommendations = null;
 let activeMemoryPreviewFile = null;
 let dashboardTickerGroupsExpanded = false;
 let dashboardSyncTimer = null;
@@ -837,6 +838,7 @@ function setDashboardCards(html) {
 
 function renderDashboardEmptyState() {
   setDashboardCards(`
+    ${renderDailyRecommendationHomeTopPanel()}
     <div class="dashboard-actions">
       <button data-workflow-action="portfolio" type="button">포트폴리오</button>
       <button data-workflow-action="capture" type="button">정보 입력</button>
@@ -5428,6 +5430,11 @@ async function handleWorkflowAction(action) {
     return;
   }
 
+  if (action === "daily-recommendations-status") {
+    await runDailyRecommendationsStatusFlow();
+    return;
+  }
+
   if (action === "dart-refresh") {
     startOutputLoading("DART 공시 재점검 중", [
       "보유/관심종목 감시 대상 정리",
@@ -7009,6 +7016,7 @@ function renderDashboardCards(dashboard) {
 
   setDashboardCards(`
     <section class="dashboard-clean-layout" aria-label="대시보드 요약">
+      ${renderDailyRecommendationHomeTopPanel()}
       <section class="dashboard-clean-hero ${escapeHtml(decisionTone)}">
         <div class="dashboard-clean-title">
           <span>현재 조회</span>
@@ -8120,6 +8128,92 @@ function dailyRecommendationMilestoneSummary(records) {
     });
   });
   return order.map((label) => summary[label]).filter((item) => item.total > 0);
+}
+
+function dailyRecommendationTopRecords(payload = {}) {
+  const today = Array.isArray(payload.today_records) ? payload.today_records : [];
+  if (today.length) {
+    return today
+      .slice()
+      .sort((left, right) => Number(left.rank || 99) - Number(right.rank || 99))
+      .slice(0, 3);
+  }
+  if (payload.has_today_recommendations === false) {
+    return [];
+  }
+  const latest = Array.isArray(payload.latest_records) ? payload.latest_records : [];
+  const records = latest.length ? latest : Array.isArray(payload.records) ? payload.records : [];
+  return records
+    .slice()
+    .sort((left, right) => Number(left.rank || 99) - Number(right.rank || 99))
+    .slice(0, 3);
+}
+
+function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
+  const schedule = payload?.daily_time || "08:00";
+  const records = dailyRecommendationTopRecords(payload || {});
+  const todayDate = payload?.today_recommendation_date || "오늘";
+  const state = payload?.state || {};
+  const runStatus = dailyRecommendationStatusLabel(state.status || payload?.status);
+  const staleText = payload?.latest_recommendation_date && payload.latest_recommendation_date !== todayDate
+    ? ` · 최신 저장 ${payload.latest_recommendation_date}`
+    : "";
+  const dueText = payload?.due_now
+    ? `오늘 ${todayDate} 추천 자동 실행이 필요합니다. 백엔드 스케줄러가 곧 처리합니다${staleText}.`
+    : records.length
+      ? `매일 ${schedule} 자동 실행 · 최신 상태 ${runStatus}`
+      : `매일 ${schedule} 자동 실행 대기${staleText}`;
+  const tone = !payload || payload?.due_now || !records.length ? "warning" : "ok";
+  const rows = records.length
+    ? records
+        .map((record) => {
+          const exposure = dailyRecommendationExposureSummary(record);
+          const reasonItems = Array.isArray(record.reasons) && record.reasons.length
+            ? record.reasons
+            : record.evidence_sources || [];
+          const topReason = compactOutputText(reasonItems[0] || "근거 요약 준비 중", 88);
+          return `
+            <li>
+              <b>${escapeHtml(record.rank || "-")}위</b>
+              <strong>${escapeHtml(displayCompanyName(record))}</strong>
+              <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인"))}</span>
+              <small>${escapeHtml(exposure || topReason)}</small>
+            </li>
+          `;
+        })
+        .join("")
+    : `
+      <li class="is-empty">
+        <b>대기</b>
+        <strong>오늘 추천 1~3위 준비 중</strong>
+        <span>${escapeHtml(dueText)}</span>
+        <small>서버가 ${escapeHtml(schedule)} 이후 자동 실행하면 이 영역에 바로 표시됩니다.</small>
+      </li>
+    `;
+  return `
+    <section class="daily-recommendation-top-panel ${escapeHtml(tone)}" aria-label="오늘 추천 1~3위">
+      <div class="daily-recommendation-top-head">
+        <div>
+          <span>오늘 추천 1~3위</span>
+          <h2>${escapeHtml(records.length ? todayDate : "매일 08:00 자동 실행")}</h2>
+        </div>
+        <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
+      </div>
+      <ul>${rows}</ul>
+      <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}</p>
+    </section>
+  `;
+}
+
+function refreshDashboardDailyRecommendationTop() {
+  if (activePanelId() !== "dashboard") {
+    return;
+  }
+  if (lastDashboard) {
+    renderDashboardCards(lastDashboard);
+    return;
+  }
+  renderDashboardEmptyState();
 }
 
 
@@ -11990,7 +12084,9 @@ async function runDailyRecommendationsFlow() {
   ]);
   try {
     const result = await runDailyRecommendations(token(), { force: false, saveResult: true });
+    latestDailyRecommendations = result || latestDailyRecommendations;
     renderDailyRecommendationCards(result);
+    refreshDashboardDailyRecommendationTop();
     setOutput(result || "오늘 추천 후보 결과를 확인하지 못했습니다.");
     await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
   } catch (error) {
@@ -12009,7 +12105,9 @@ async function runDailyRecommendationsStatusFlow() {
   try {
     await trackDailyRecommendations(token());
     const result = await fetchDailyRecommendationsStatus(token());
+    latestDailyRecommendations = result || latestDailyRecommendations;
     renderDailyRecommendationCards(result);
+    refreshDashboardDailyRecommendationTop();
     setOutput(result || "추천 추적 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
@@ -12718,6 +12816,7 @@ async function initializeConsole() {
     refreshStatus(false),
     refreshPortfolioStore(true),
     refreshInterestList(true),
+    fetchDailyRecommendationsStatus(token()),
   ];
   const results = await Promise.allSettled(steps);
   const failed = results.find((result) => result.status === "rejected");
@@ -12725,6 +12824,7 @@ async function initializeConsole() {
     setError(failed.reason);
     return;
   }
+  latestDailyRecommendations = results[3]?.status === "fulfilled" ? results[3].value : null;
   renderDashboardEmptyState();
   renderDashboardTickerPicker();
   setOutput("대시보드 준비 완료\n\n티커 입력칸은 비워두었습니다. 최근 사용/보유/관심종목/섹터에서 종목을 선택하거나 회사명을 직접 입력해 조회하세요.");
