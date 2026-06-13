@@ -67,6 +67,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
     ensure_daily_recommendation_candidate as _ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate as _finalize_daily_recommendation_candidate,
+    finalize_daily_recommendation_ranking as _finalize_daily_recommendation_ranking,
     daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
@@ -17245,30 +17246,13 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         candidate["evidence_documents"] = [*recent_evidence_documents, *rag_evidence_documents]
         _finalize_daily_recommendation_candidate(candidate)
 
-    candidates = sorted(
-        candidates_by_ticker.values(),
-        key=lambda item: (
-            int(item.get("score") or 0),
-            item.get("baseline_price") is not None,
-            str(item.get("company_name") or ""),
-        ),
-        reverse=True,
+    return _finalize_daily_recommendation_ranking(
+        candidates_by_ticker,
+        limit=limit,
+        as_of=current_storage_timestamp(),
+        consensus_summary=consensus_scan.get("summary"),
+        warnings=consensus_scan.get("warnings", []),
     )
-    selected_limit = max(1, min(limit, 10))
-    ranked_candidates = [
-        {**candidate, "rank": index}
-        for index, candidate in enumerate(candidates[:selected_limit], start=1)
-    ]
-    return {
-        "status": "success",
-        "module": "daily_recommendation_candidate_ranking",
-        "as_of": current_storage_timestamp(),
-        "universe_count": len(candidates_by_ticker),
-        "selected_count": min(limit, len(candidates)),
-        "consensus_summary": consensus_scan.get("summary"),
-        "candidates": ranked_candidates,
-        "warnings": consensus_scan.get("warnings", [])[:10],
-    }
 
 
 def run_daily_stock_recommendations(

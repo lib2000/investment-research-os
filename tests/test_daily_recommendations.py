@@ -18,6 +18,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_state_path,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
+    finalize_daily_recommendation_ranking,
     parse_daily_recommendations_time,
     summarize_daily_recommendation_store,
     should_run_daily_recommendations,
@@ -67,6 +68,27 @@ class DailyRecommendationsTests(unittest.TestCase):
         domestic = apply_daily_recommendation_overseas_tracking({"currency": "KRW"})
         self.assertFalse(domestic["overseas_tracking"]["needs_fx_conversion"])
         self.assertEqual(domestic["overseas_tracking"]["currency"], "KRW")
+
+    def test_finalize_daily_recommendation_ranking_limits_and_ranks_candidates(self):
+        result = finalize_daily_recommendation_ranking(
+            {
+                "A": {"ticker": "A", "company_name": "알파", "score": 70, "baseline_price": None},
+                "B": {"ticker": "B", "company_name": "베타", "score": 90, "baseline_price": 10},
+                "C": {"ticker": "C", "company_name": "감마", "score": 90, "baseline_price": None},
+            },
+            limit=2,
+            as_of="2026-06-14T08:00:00+09:00",
+            consensus_summary="테스트 요약",
+            warnings=["w1", "w2"],
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["selected_count"], 2)
+        self.assertEqual(result["universe_count"], 3)
+        self.assertEqual(result["consensus_summary"], "테스트 요약")
+        self.assertEqual(result["warnings"], ["w1", "w2"])
+        self.assertEqual([item["ticker"] for item in result["candidates"]], ["B", "C"])
+        self.assertEqual([item["rank"] for item in result["candidates"]], [1, 2])
 
     def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
         candidate = {"score": 10}

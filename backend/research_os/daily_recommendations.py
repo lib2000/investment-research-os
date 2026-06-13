@@ -418,6 +418,40 @@ def apply_daily_recommendation_overseas_tracking(candidate: dict) -> dict:
     return candidate
 
 
+def finalize_daily_recommendation_ranking(
+    candidates_by_ticker: dict[str, dict],
+    *,
+    limit: int,
+    as_of: str,
+    consensus_summary: object = None,
+    warnings: list | None = None,
+) -> dict:
+    candidates = sorted(
+        candidates_by_ticker.values(),
+        key=lambda item: (
+            int(item.get("score") or 0),
+            item.get("baseline_price") is not None,
+            str(item.get("company_name") or ""),
+        ),
+        reverse=True,
+    )
+    selected_limit = max(1, min(limit, 10))
+    ranked_candidates = [
+        {**candidate, "rank": index}
+        for index, candidate in enumerate(candidates[:selected_limit], start=1)
+    ]
+    return {
+        "status": "success",
+        "module": "daily_recommendation_candidate_ranking",
+        "as_of": as_of,
+        "universe_count": len(candidates_by_ticker),
+        "selected_count": min(limit, len(candidates)),
+        "consensus_summary": consensus_summary,
+        "candidates": ranked_candidates,
+        "warnings": list(warnings or [])[:10],
+    }
+
+
 def compact_recommendation_text(value: object, max_length: int = 180) -> str:
     text = " ".join(str(value or "").split())
     if len(text) <= max_length:
