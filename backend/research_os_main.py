@@ -18602,22 +18602,11 @@ def run_institutional_stock_breakdown(
     )
 
     if request.save_result:
-        storage_date = current_storage_date()
-        analysis.storage = save_research_markdown(
-            vault_dir=vault_dir,
+        analysis = analysis_module_storage.save_institutional_stock_breakdown(
+            _analysis_module_storage_runtime(),
+            analysis=analysis,
             ticker=ticker,
-            report_type="institutional-stock-breakdown",
-            markdown=render_institutional_markdown(analysis, storage_date),
-            structured_payload=analysis.model_dump(mode="json"),
-            manifest_entry=manifest_with_ticker_verification(ticker, {
-                "summary": analysis.executive_summary,
-                "source_count": len(analysis.injected_data),
-                "key_risks": analysis.key_risks,
-                "watch_items": analysis.bull_case.watch_items
-                + analysis.base_case.watch_items
-                + analysis.bear_case.watch_items,
-            }),
-            report_date=storage_date,
+            vault_dir=vault_dir,
         )
 
     return analysis
@@ -18868,6 +18857,7 @@ def _analysis_module_storage_runtime() -> SimpleNamespace:
         manifest_with_ticker_verification=manifest_with_ticker_verification,
         read_manifest=read_manifest,
         render_checklist_markdown=render_checklist_markdown,
+        render_institutional_markdown=render_institutional_markdown,
         render_long_term_compounder_markdown=render_long_term_compounder_markdown,
         render_naver_chart_analysis_markdown=render_naver_chart_analysis_markdown,
         render_sector_opportunity_markdown=render_sector_opportunity_markdown,

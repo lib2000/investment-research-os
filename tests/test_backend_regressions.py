@@ -1888,6 +1888,7 @@ class AnalysisModuleStorageTests(unittest.TestCase):
                 }
             ],
             render_checklist_markdown=lambda assessment, storage_date: f"checklist {storage_date.isoformat()}",
+            render_institutional_markdown=lambda analysis, storage_date: f"institutional {storage_date.isoformat()}",
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
             render_naver_chart_analysis_markdown=lambda analysis, storage_date: f"chart {storage_date.isoformat()}",
@@ -1955,6 +1956,15 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             "latest_indicators": {"rsi14": 58.2},
             "support_resistance": {"recent_20d_support": 70000},
         }
+        institutional_analysis = FakeReport(
+            executive_summary="기관급 분석 요약",
+            injected_data=[DumpItem(label="source-a"), DumpItem(label="source-b")],
+            key_risks=["밸류에이션"],
+            bull_case=SimpleNamespace(watch_items=["매출 성장률"]),
+            base_case=SimpleNamespace(watch_items=["컨센서스 변화"]),
+            bear_case=SimpleNamespace(watch_items=["마진 압박"]),
+            storage=None,
+        )
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -1988,6 +1998,12 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             code="005930",
             settings=SimpleNamespace(research_vault_dir=str(vault_dir)),
         )
+        saved_institutional = analysis_module_storage.save_institutional_stock_breakdown(
+            runtime,
+            analysis=institutional_analysis,
+            ticker="005930",
+            vault_dir=vault_dir,
+        )
 
         self.assertEqual(saved_sector.storage.file_name, "SECTOR-KR-BALANCED-sector-opportunity.md")
         self.assertEqual(saved_compounder.storage.file_name, "COMPOUNDER-KR-ALL-QUALITY-long-term-compounder.md")
@@ -2019,6 +2035,16 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[4]["manifest_entry"]["company_name"], "삼성전자")
         self.assertEqual(save_calls[4]["manifest_entry"]["overall_signal"], "상승 추세 우위")
         self.assertEqual(save_calls[4]["manifest_entry"]["latest_indicators"]["rsi14"], 58.2)
+        self.assertEqual(saved_institutional.storage.file_name, "005930-institutional-stock-breakdown.md")
+        self.assertEqual(save_calls[5]["report_type"], "institutional-stock-breakdown")
+        self.assertEqual(save_calls[5]["manifest_entry"]["summary"], "기관급 분석 요약")
+        self.assertEqual(save_calls[5]["manifest_entry"]["source_count"], 2)
+        self.assertEqual(save_calls[5]["manifest_entry"]["key_risks"], ["밸류에이션"])
+        self.assertEqual(
+            save_calls[5]["manifest_entry"]["watch_items"],
+            ["매출 성장률", "컨센서스 변화", "마진 압박"],
+        )
+        self.assertTrue(save_calls[5]["manifest_entry"]["verified"])
         self.assertEqual(error_logs, [])
 
 

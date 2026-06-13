@@ -83,6 +83,26 @@ def save_research_checklist_assessment(runtime, *, assessment, ticker: str, vaul
     return assessment
 
 
+def save_institutional_stock_breakdown(runtime, *, analysis, ticker: str, vault_dir):
+    storage_date = runtime.current_storage_date()
+    analysis.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="institutional-stock-breakdown",
+        markdown=runtime.render_institutional_markdown(analysis, storage_date),
+        structured_payload=analysis.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, {
+            "summary": analysis.executive_summary,
+            "source_count": len(analysis.injected_data),
+            "key_risks": analysis.key_risks,
+            "watch_items": analysis.bull_case.watch_items
+            + analysis.base_case.watch_items
+            + analysis.bear_case.watch_items,
+        }),
+        report_date=storage_date,
+    )
+    return analysis
+
 
 def save_naver_chart_analysis(runtime, *, analysis: dict, code: str, settings):
     vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
@@ -109,6 +129,7 @@ def save_naver_chart_analysis(runtime, *, analysis: dict, code: str, settings):
     )
     analysis["storage"] = storage.model_dump(mode="json")
     return analysis
+
 
 def save_collaborative_team_report(
     runtime,
