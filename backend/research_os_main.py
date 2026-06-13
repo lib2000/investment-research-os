@@ -20,7 +20,10 @@ from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
 from research_os.code_knowledge import build_code_knowledge_graph_payload
-from research_os.customs_trade import customs_trade_quality_metadata
+from research_os.customs_trade import (
+    customs_trade_quality_metadata,
+    save_customs_trade_snapshot as _save_customs_trade_snapshot,
+)
 from research_os.data_providers import (
     FmpClient,
     OpenDartClient,
@@ -13889,59 +13892,22 @@ period: {snapshot.get('start_yymm')}~{snapshot.get('end_yymm')}
 """
 
 
+def _customs_trade_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        current_storage_date=current_storage_date,
+        render_customs_trade_markdown=render_customs_trade_markdown,
+        resolve_vault_dir=resolve_vault_dir,
+        save_research_markdown=save_research_markdown,
+        upsert_saved_workflow_rag_document=upsert_saved_workflow_rag_document,
+    )
+
+
 def save_customs_trade_snapshot(snapshot: dict, settings: Settings) -> dict:
-    if not snapshot.get("has_valid_data"):
-        return {
-            **snapshot,
-            "storage_skipped": True,
-            "storage_skip_reason": str(
-                snapshot.get("storage_policy")
-                or "실제 수출입 수치가 없어 저장/RAG 반영을 건너뜁니다."
-            ),
-        }
-    storage_date = current_storage_date()
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    markdown = render_customs_trade_markdown(snapshot, storage_date)
-    storage = save_research_markdown(
-        vault_dir=vault_dir,
-        ticker="CUSTOMS",
-        report_type="customs-trade-brief",
-        markdown=markdown,
-        structured_payload=snapshot,
-        manifest_entry={
-            "summary": (
-                f"관세청 수출입 동향 {snapshot.get('start_yymm')}~{snapshot.get('end_yymm')}: "
-                f"{'; '.join(snapshot.get('key_takeaways', [])[:2]) or '요약 없음'}"
-            ),
-            "source": snapshot.get("source"),
-            "source_confidence": 0.88 if not snapshot.get("warnings") else 0.72,
-            "tags": ["customs", "trade", "exports", "imports", "inventory", "macro", "sector"],
-            "sector_implications": snapshot.get("sector_implications", []),
-            "release_schedule": snapshot.get("release_schedule"),
-        },
-        report_date=storage_date,
-        file_suffix=f"{snapshot.get('start_yymm')}-{snapshot.get('end_yymm')}",
+    return _save_customs_trade_snapshot(
+        _customs_trade_storage_runtime(),
+        snapshot,
+        settings,
     )
-    rag_document = upsert_saved_workflow_rag_document(
-        vault_dir=vault_dir,
-        storage=storage,
-        storage_key="CUSTOMS",
-        report_type="customs-trade-brief",
-        summary=(
-            f"관세청 수출입 동향 {snapshot.get('start_yymm')}~{snapshot.get('end_yymm')}: "
-            f"{'; '.join(snapshot.get('key_takeaways', [])[:2]) or '요약 없음'}"
-        ),
-        markdown=markdown,
-        tags=["customs", "exports", "imports", "inventory", "macro", "sector"],
-        source_confidence=0.88 if not snapshot.get("warnings") else 0.72,
-        metadata={
-            "source": snapshot.get("source"),
-            "source_urls": snapshot.get("source_urls"),
-            "release_schedule": snapshot.get("release_schedule"),
-            "sector_implications": snapshot.get("sector_implications"),
-        },
-    )
-    return {**snapshot, "storage": storage, "rag_document": rag_document}
 
 
 def attach_customs_total_trend_diagnostic(snapshot: dict, settings: Settings) -> dict:

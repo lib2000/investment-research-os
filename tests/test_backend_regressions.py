@@ -5843,6 +5843,59 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
         self.assertTrue(saved["storage_skipped"])
         self.assertIn("저장/RAG 반영하지 않습니다", saved["storage_skip_reason"])
 
+    def test_customs_trade_storage_helper_persists_valid_snapshot_and_rag(self):
+        from research_os import customs_trade
+        from research_os.research_memory import ResearchStorageInfo
+
+        save_calls = []
+        rag_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        runtime = SimpleNamespace(
+            current_storage_date=lambda: date(2026, 6, 13),
+            render_customs_trade_markdown=lambda snapshot, storage_date: f"customs {storage_date.isoformat()}",
+            resolve_vault_dir=lambda value: Path(value),
+            save_research_markdown=fake_save_research_markdown,
+            upsert_saved_workflow_rag_document=lambda **kwargs: rag_calls.append(kwargs) or {"status": "upserted"},
+        )
+        snapshot = {
+            "has_valid_data": True,
+            "start_yymm": "202605",
+            "end_yymm": "202605",
+            "key_takeaways": ["반도체 수출 증가", "자동차 둔화"],
+            "source": "관세청",
+            "source_urls": ["https://example.test/customs"],
+            "sector_implications": ["반도체 점검"],
+            "release_schedule": "1,11,21",
+            "warnings": [],
+        }
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "customs-storage-vault"
+
+        saved = customs_trade.save_customs_trade_snapshot(
+            runtime,
+            snapshot,
+            SimpleNamespace(research_vault_dir=str(vault_dir)),
+        )
+
+        self.assertEqual(saved["storage"].file_name, "CUSTOMS-customs-trade-brief.md")
+        self.assertEqual(saved["rag_document"], {"status": "upserted"})
+        self.assertEqual(save_calls[0]["ticker"], "CUSTOMS")
+        self.assertEqual(save_calls[0]["report_type"], "customs-trade-brief")
+        self.assertEqual(save_calls[0]["file_suffix"], "202605-202605")
+        self.assertIn("반도체 수출 증가", save_calls[0]["manifest_entry"]["summary"])
+        self.assertEqual(save_calls[0]["manifest_entry"]["source_confidence"], 0.88)
+        self.assertEqual(save_calls[0]["manifest_entry"]["sector_implications"], ["반도체 점검"])
+        self.assertEqual(rag_calls[0]["storage_key"], "CUSTOMS")
+        self.assertEqual(rag_calls[0]["source_confidence"], 0.88)
+        self.assertEqual(rag_calls[0]["metadata"]["source_urls"], ["https://example.test/customs"])
+
     def test_customs_total_trend_provider_status_is_separated_from_item_trade_api(self):
         from research_os.data_providers import get_analysis_data_provider
         from research_os.settings import Settings
