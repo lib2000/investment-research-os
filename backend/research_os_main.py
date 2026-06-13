@@ -18707,35 +18707,11 @@ def run_earnings_reaction_analyzer(
     reaction = build_earnings_reaction(ticker, request, injected_data, settings)
 
     if request.save_result:
-        storage_date = current_storage_date()
-        reaction.storage = save_research_markdown(
-            vault_dir=vault_dir,
+        reaction = analysis_module_storage.save_earnings_reaction(
+            _analysis_module_storage_runtime(),
+            reaction=reaction,
             ticker=ticker,
-            report_type="earnings-reaction",
-            markdown=render_earnings_reaction_markdown(reaction, storage_date),
-            structured_payload=reaction.model_dump(mode="json"),
-            manifest_entry=manifest_with_ticker_verification(ticker, {
-                "summary": reaction.headline_assessment,
-                "quarter": reaction.quarter,
-                "official_latest_quarter": reaction.official_latest_quarter,
-                "official_latest_earnings_report_date": reaction.official_latest_earnings_report_date,
-                "earnings_calendar_source": reaction.earnings_calendar_source,
-                "earnings_reference_status": reaction.earnings_reference_status,
-                "earnings_report_date": reaction.earnings_report_date,
-                "previous_earnings_date": reaction.previous_earnings_date,
-                "previous_earnings_key_takeaways": reaction.previous_earnings_key_takeaways,
-                "next_earnings_date": reaction.next_earnings_date,
-                "next_earnings_guidance": reaction.next_earnings_guidance,
-                "price_reaction": reaction.price_reaction,
-                "reaction_type": reaction.reaction_type,
-                "sentiment_shift": reaction.sentiment_shift,
-                "guidance_assessment": reaction.guidance_assessment,
-                "evidence_status": reaction.evidence_status,
-                "missing_inputs": reaction.missing_inputs,
-                "watch_before_next_earnings": reaction.watch_before_next_earnings,
-                "thesis_implications": reaction.thesis_implications,
-            }),
-            report_date=storage_date,
+            vault_dir=vault_dir,
         )
 
     return reaction
@@ -18839,6 +18815,7 @@ def _analysis_module_storage_runtime() -> SimpleNamespace:
         manifest_with_ticker_verification=manifest_with_ticker_verification,
         read_manifest=read_manifest,
         render_checklist_markdown=render_checklist_markdown,
+        render_earnings_reaction_markdown=render_earnings_reaction_markdown,
         render_institutional_markdown=render_institutional_markdown,
         render_long_term_compounder_markdown=render_long_term_compounder_markdown,
         render_naver_chart_analysis_markdown=render_naver_chart_analysis_markdown,

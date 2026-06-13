@@ -83,6 +83,40 @@ def save_research_checklist_assessment(runtime, *, assessment, ticker: str, vaul
     return assessment
 
 
+def save_earnings_reaction(runtime, *, reaction, ticker: str, vault_dir):
+    storage_date = runtime.current_storage_date()
+    reaction.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="earnings-reaction",
+        markdown=runtime.render_earnings_reaction_markdown(reaction, storage_date),
+        structured_payload=reaction.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, {
+            "summary": reaction.headline_assessment,
+            "quarter": reaction.quarter,
+            "official_latest_quarter": reaction.official_latest_quarter,
+            "official_latest_earnings_report_date": reaction.official_latest_earnings_report_date,
+            "earnings_calendar_source": reaction.earnings_calendar_source,
+            "earnings_reference_status": reaction.earnings_reference_status,
+            "earnings_report_date": reaction.earnings_report_date,
+            "previous_earnings_date": reaction.previous_earnings_date,
+            "previous_earnings_key_takeaways": reaction.previous_earnings_key_takeaways,
+            "next_earnings_date": reaction.next_earnings_date,
+            "next_earnings_guidance": reaction.next_earnings_guidance,
+            "price_reaction": reaction.price_reaction,
+            "reaction_type": reaction.reaction_type,
+            "sentiment_shift": reaction.sentiment_shift,
+            "guidance_assessment": reaction.guidance_assessment,
+            "evidence_status": reaction.evidence_status,
+            "missing_inputs": reaction.missing_inputs,
+            "watch_before_next_earnings": reaction.watch_before_next_earnings,
+            "thesis_implications": reaction.thesis_implications,
+        }),
+        report_date=storage_date,
+    )
+    return reaction
+
+
 def save_smart_trade_setup(runtime, *, setup, ticker: str, vault_dir):
     storage_date = runtime.current_storage_date()
     setup.storage = runtime.save_research_markdown(

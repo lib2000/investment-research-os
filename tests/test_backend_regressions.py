@@ -1892,6 +1892,7 @@ class AnalysisModuleStorageTests(unittest.TestCase):
                 }
             ],
             render_checklist_markdown=lambda assessment, storage_date: f"checklist {storage_date.isoformat()}",
+            render_earnings_reaction_markdown=lambda reaction, storage_date: f"earnings {storage_date.isoformat()}",
             render_institutional_markdown=lambda analysis, storage_date: f"institutional {storage_date.isoformat()}",
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
@@ -1982,6 +1983,28 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             risk_per_share=2000.0,
             storage=None,
         )
+        earnings_reaction = FakeReport(
+            headline_assessment="실적 반응 양호",
+            quarter="2026Q1",
+            official_latest_quarter="2026Q1",
+            official_latest_earnings_report_date="2026-05-01",
+            earnings_calendar_source="profile",
+            earnings_reference_status="official",
+            earnings_report_date="2026-05-01",
+            previous_earnings_date="2026-02-01",
+            previous_earnings_key_takeaways=["마진 개선"],
+            next_earnings_date="2026-08-01",
+            next_earnings_guidance="AI 수요 확인",
+            price_reaction="상승",
+            reaction_type="beat",
+            sentiment_shift="positive",
+            guidance_assessment="상향",
+            evidence_status="sufficient",
+            missing_inputs=[],
+            watch_before_next_earnings=["가이던스"],
+            thesis_implications=["논거 강화"],
+            storage=None,
+        )
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -2024,6 +2047,12 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         saved_smart_trade = analysis_module_storage.save_smart_trade_setup(
             runtime,
             setup=smart_trade_setup,
+            ticker="005930",
+            vault_dir=vault_dir,
+        )
+        saved_earnings = analysis_module_storage.save_earnings_reaction(
+            runtime,
+            reaction=earnings_reaction,
             ticker="005930",
             vault_dir=vault_dir,
         )
@@ -2077,6 +2106,15 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[6]["manifest_entry"]["stop_loss"]["price"], 68000.0)
         self.assertEqual(save_calls[6]["manifest_entry"]["targets"][0]["price"], 76000.0)
         self.assertTrue(save_calls[6]["manifest_entry"]["verified"])
+        self.assertEqual(saved_earnings.storage.file_name, "005930-earnings-reaction.md")
+        self.assertEqual(save_calls[7]["report_type"], "earnings-reaction")
+        self.assertEqual(save_calls[7]["manifest_entry"]["summary"], "실적 반응 양호")
+        self.assertEqual(save_calls[7]["manifest_entry"]["quarter"], "2026Q1")
+        self.assertEqual(save_calls[7]["manifest_entry"]["earnings_calendar_source"], "profile")
+        self.assertEqual(save_calls[7]["manifest_entry"]["price_reaction"], "상승")
+        self.assertEqual(save_calls[7]["manifest_entry"]["evidence_status"], "sufficient")
+        self.assertEqual(save_calls[7]["manifest_entry"]["thesis_implications"], ["논거 강화"])
+        self.assertTrue(save_calls[7]["manifest_entry"]["verified"])
         self.assertEqual(error_logs, [])
 
 
