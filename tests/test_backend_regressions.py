@@ -2356,6 +2356,87 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class NewsInboxModuleTests(unittest.TestCase):
+    def test_news_inbox_module_fingerprint_uses_runtime_callback(self):
+        from research_os import news_inbox
+
+        calls = []
+        runtime = SimpleNamespace(
+            content_fingerprint=lambda text: calls.append(text) or "hash-value",
+        )
+
+        result = news_inbox.news_item_fingerprint(runtime, "Title", "Body", "HTTPS://Example.com/Article ")
+
+        self.assertEqual(result, "hash-value")
+        self.assertEqual(calls, ["url::https://example.com/article"])
+
+    def test_news_inbox_module_filters_and_sanitizes_safe_view(self):
+        from research_os import news_inbox
+
+        runtime = SimpleNamespace(storage_quality_entry_is_policy_url_only=lambda _item: False)
+        item = {
+            "id": "n1",
+            "title": "시장 뉴스",
+            "source_url": "https://example.com/news",
+            "raw_content": "본문" * 500,
+            "tags": ["needs_body_copy"],
+            "capture_quality": {"status": "보강 필요"},
+            "source_url_processing": {
+                "status": "empty_text",
+                "text": "원문 본문" * 300,
+                "raw_text": "저장되면 안 되는 원문",
+            },
+        }
+
+        keys = news_inbox.news_filter_key(runtime, item)
+        safe_item = news_inbox.news_item_safe_view(item)
+
+        self.assertIn("needs_body", keys)
+        self.assertIn("url_only", keys)
+        self.assertIn("quality_issue", keys)
+        self.assertLessEqual(len(safe_item["raw_content"]), news_inbox.NEWS_SAFE_TEXT_LIMIT + 3)
+        self.assertNotIn("raw_text", safe_item["source_url_processing"])
+        self.assertFalse(safe_item["source_url_processing"]["full_text_stored"])
+        self.assertIn("copyright_safe_metadata", safe_item["tags"])
+
+    def test_news_inbox_module_build_payload_applies_filter_counts(self):
+        from research_os import news_inbox
+
+        payload = {
+            "updated_at": "2026-06-13T09:00:00+09:00",
+            "items": [
+                {
+                    "id": "n1",
+                    "created_at": "2026-06-13T08:00:00+09:00",
+                    "title": "URL only",
+                    "source_url": "https://example.com/a",
+                    "tags": ["url_only"],
+                    "capture_quality": {"status": "보강 필요"},
+                },
+                {
+                    "id": "n2",
+                    "created_at": "2026-06-12T08:00:00+09:00",
+                    "title": "Promoted",
+                    "promoted": True,
+                    "promoted_storage": {"relative_path": "research_vault/MARKET/a.md"},
+                    "capture_quality": {"status": "보강 필요"},
+                },
+            ],
+        }
+        runtime = SimpleNamespace(
+            news_inbox_path=lambda _settings: "news_inbox",
+            read_json_store=lambda _path, _default=None: payload,
+            storage_quality_entry_is_policy_url_only=lambda _item: False,
+        )
+
+        result = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="needs_body")
+
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(result["filter_counts"]["needs_body"], 1)
+        self.assertEqual(result["quality_issue_count"], 1)
+        self.assertEqual([item["id"] for item in result["items"]], ["n1"])
+
+
 class AutomationStatusModuleTests(unittest.TestCase):
     def test_automation_status_module_catches_rag_status_errors(self):
         from research_os import automation_status
