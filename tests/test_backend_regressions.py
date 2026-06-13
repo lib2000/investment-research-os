@@ -2019,6 +2019,85 @@ class FileExtractionTests(unittest.TestCase):
         self.assertEqual(result["extraction_profile"]["ocr_missing_reason"], "tesseract_not_found")
 
 
+class ResearchMemorySupplementModuleTests(unittest.TestCase):
+    def test_research_memory_supplement_module_updates_markdown_json_manifest_and_rag(self):
+        from research_os import research_memory_supplement
+        from research_os.models import ResearchMemoryContentResponse, ResearchMemorySupplementRequest
+
+        updated_entries = []
+        upsert_calls = []
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "POLICY"
+            ticker_dir.mkdir(parents=True)
+            markdown_path = ticker_dir / "POLICY-research-capture-2026-06-13-test.md"
+            json_path = markdown_path.with_suffix(".json")
+            markdown_path.write_text("# 정책 자료\n\nURL-only 저장", encoding="utf-8")
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "raw_content": "",
+                        "capture_quality": {"status": "보강 필요"},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            manifest_entry = {
+                "ticker": "POLICY",
+                "file_name": markdown_path.name,
+                "tags": ["needs_body_copy"],
+                "capture_quality": {"status": "보강 필요"},
+            }
+
+            def read_response(ticker, file_name, _vault_dir):
+                return ResearchMemoryContentResponse(
+                    ticker=ticker,
+                    file_name=file_name,
+                    relative_path=f"research_vault/{ticker}/{file_name}",
+                    content=markdown_path.read_text(encoding="utf-8"),
+                    modified_at="2026-06-13T08:00:00+09:00",
+                    json_payload=json.loads(json_path.read_text(encoding="utf-8")),
+                    tags=updated_entries[-1]["tags"],
+                    capture_quality=updated_entries[-1]["capture_quality"],
+                )
+
+            runtime = SimpleNamespace(
+                current_storage_timestamp=lambda: "2026-06-13T08:00:00+09:00",
+                read_manifest=lambda _vault_dir: [manifest_entry],
+                content_fingerprint=lambda value: f"hash:{len(value)}",
+                update_manifest=lambda **kwargs: updated_entries.append(kwargs["entry"]),
+                upsert_research_memory_document=lambda **kwargs: upsert_calls.append(kwargs),
+                read_research_memory_file=read_response,
+            )
+
+            response = research_memory_supplement.supplement_research_memory_file(
+                runtime,
+                "POLICY",
+                markdown_path.name,
+                ResearchMemorySupplementRequest(body_text="보강 본문입니다.", note="원문 확인"),
+                vault_dir,
+            )
+
+            updated_markdown = markdown_path.read_text(encoding="utf-8")
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+        self.assertIn("## 본문 보강", updated_markdown)
+        self.assertIn("보강 본문입니다.", updated_markdown)
+        self.assertEqual(payload["body_supplements"][0]["source"], "user_body_copy")
+        self.assertTrue(payload["capture_quality"]["body_supplemented"])
+        self.assertEqual(payload["capture_quality"]["status"], "정상")
+        self.assertIn("body_supplemented", updated_entries[0]["tags"])
+        self.assertEqual(updated_entries[0]["body_supplement_count"], 1)
+        self.assertTrue(updated_entries[0]["capture_quality"]["body_supplemented"])
+        self.assertEqual(upsert_calls[0]["full_text"], updated_markdown)
+        self.assertEqual(response.capture_quality["status"], "정상")
+
+
 class CaptureAutoModuleTests(unittest.TestCase):
     def test_capture_auto_module_builds_url_based_special_scope_request(self):
         from research_os import capture_auto
