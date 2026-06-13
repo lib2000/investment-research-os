@@ -1845,6 +1845,62 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("삼양식품", impact["affected"])
 
 
+class PortfolioRiskStorageTests(unittest.TestCase):
+    def test_portfolio_risk_storage_preserves_manifest_payload(self):
+        from research_os import portfolio_risk_storage
+        from research_os.research_memory import ResearchStorageInfo
+
+        class DumpItem(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
+        save_calls = []
+
+        def fake_save_research_markdown(**kwargs):
+            save_calls.append(kwargs)
+            return ResearchStorageInfo(
+                file_name=f"{kwargs['ticker']}-{kwargs['report_type']}.md",
+                relative_path=f"research_vault/{kwargs['ticker']}/{kwargs['ticker']}-{kwargs['report_type']}.md",
+                absolute_path=str(kwargs['vault_dir'] / kwargs['ticker'] / f"{kwargs['ticker']}-{kwargs['report_type']}.md"),
+            )
+
+        runtime = SimpleNamespace(
+            current_storage_date=lambda: date(2026, 6, 13),
+            normalize_ticker=lambda value: str(value).strip().upper().replace(" ", "-"),
+            render_portfolio_risk_markdown=lambda scan, storage_date: f"portfolio risk {storage_date.isoformat()}",
+            resolve_vault_dir=lambda value: Path(value),
+            save_research_markdown=fake_save_research_markdown,
+        )
+        vault_dir = PROJECT_ROOT / ".test-tmp" / "portfolio_risk_storage_vault"
+        scan = SimpleNamespace(
+            sector_concentration=[DumpItem(name="반도체", weight=0.62)],
+            theme_concentration=[DumpItem(name="AI", weight=0.48)],
+            warnings=[DumpItem(type="single_position", message="집중도 높음")],
+            storage=None,
+            model_dump=lambda mode=None: {"risk_score": 72},
+        )
+
+        saved = portfolio_risk_storage.save_portfolio_risk_scan(
+            runtime,
+            scan=scan,
+            portfolio_name="core portfolio",
+            portfolio_value=1234567.891,
+            risk_score=72,
+            top_five_weight=0.83,
+            settings=SimpleNamespace(research_vault_dir=str(vault_dir)),
+        )
+
+        self.assertEqual(saved.storage.file_name, "CORE-PORTFOLIO-portfolio-risk-scan.md")
+        self.assertEqual(save_calls[0]["report_type"], "portfolio-risk-scan")
+        self.assertEqual(save_calls[0]["ticker"], "CORE-PORTFOLIO")
+        self.assertIn("리스크 점수 72/100", save_calls[0]["manifest_entry"]["summary"])
+        self.assertEqual(save_calls[0]["manifest_entry"]["portfolio_value"], 1234567.89)
+        self.assertEqual(save_calls[0]["manifest_entry"]["top_five_weight"], 0.83)
+        self.assertEqual(save_calls[0]["manifest_entry"]["sector_concentration"][0]["name"], "반도체")
+        self.assertEqual(save_calls[0]["manifest_entry"]["theme_concentration"][0]["name"], "AI")
+        self.assertEqual(save_calls[0]["manifest_entry"]["warnings"][0]["type"], "single_position")
+
+
 class AnalysisModuleStorageTests(unittest.TestCase):
     def test_analysis_module_storage_saves_analysis_module_manifest_payloads(self):
         from research_os import analysis_module_storage

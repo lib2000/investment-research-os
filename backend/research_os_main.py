@@ -73,7 +73,7 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
-from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
+from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_risk_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -7236,6 +7236,16 @@ risk_profile: {response.risk_profile}
 
 {chr(10).join(f"- {item}" for item in response.next_training_data_needed)}
 """
+
+
+def _portfolio_risk_storage_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        current_storage_date=current_storage_date,
+        normalize_ticker=normalize_ticker,
+        render_portfolio_risk_markdown=render_portfolio_risk_markdown,
+        resolve_vault_dir=resolve_vault_dir,
+        save_research_markdown=save_research_markdown,
+    )
 
 
 def run_reinforcement_portfolio_policy(
@@ -18502,29 +18512,14 @@ def run_portfolio_risk_scan(
     )
 
     if request.save_result:
-        storage_date = current_storage_date()
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        portfolio_key = normalize_ticker(request.portfolio_name)
-        scan.storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=portfolio_key,
-            report_type="portfolio-risk-scan",
-            markdown=render_portfolio_risk_markdown(scan, storage_date),
-            structured_payload=scan.model_dump(mode="json"),
-            manifest_entry={
-                "summary": f"{request.portfolio_name} 리스크 점수 {risk_score}/100, 상위 5개 비중 {top_five_weight:.0%}",
-                "portfolio_value": round(portfolio_value, 2),
-                "risk_score": risk_score,
-                "top_five_weight": top_five_weight,
-                "sector_concentration": [
-                    item.model_dump(mode="json") for item in sector_concentration
-                ],
-                "theme_concentration": [
-                    item.model_dump(mode="json") for item in theme_concentration
-                ],
-                "warnings": [item.model_dump(mode="json") for item in warnings],
-            },
-            report_date=storage_date,
+        scan = portfolio_risk_storage.save_portfolio_risk_scan(
+            _portfolio_risk_storage_runtime(),
+            scan=scan,
+            portfolio_name=request.portfolio_name,
+            portfolio_value=portfolio_value,
+            risk_score=risk_score,
+            top_five_weight=top_five_weight,
+            settings=settings,
         )
 
     return scan
