@@ -83,6 +83,35 @@ def save_research_checklist_assessment(runtime, *, assessment, ticker: str, vaul
     return assessment
 
 
+def save_smart_trade_setup(runtime, *, setup, ticker: str, vault_dir):
+    storage_date = runtime.current_storage_date()
+    setup.storage = runtime.save_research_markdown(
+        vault_dir=vault_dir,
+        ticker=ticker,
+        report_type="smart-trade-setup",
+        markdown=runtime.render_smart_trade_markdown(setup, storage_date),
+        structured_payload=setup.model_dump(mode="json"),
+        manifest_entry=runtime.manifest_with_ticker_verification(ticker, {
+            "summary": (
+                f"{ticker} 매매 전략: 1차 진입 {setup.entry_zone[0].price:.2f}, "
+                f"손절 {setup.stop_loss.price:.2f}, "
+                f"1차 목표 {setup.targets[0].price:.2f}"
+            ),
+            "current_price": setup.current_price,
+            "style": setup.style,
+            "risk_tolerance": setup.risk_tolerance,
+            "market_structure": setup.market_structure,
+            "setup_quality": setup.setup_quality,
+            "entry_zone": [item.model_dump(mode="json") for item in setup.entry_zone],
+            "stop_loss": setup.stop_loss.model_dump(mode="json"),
+            "targets": [item.model_dump(mode="json") for item in setup.targets],
+            "risk_per_share": setup.risk_per_share,
+        }),
+        report_date=storage_date,
+    )
+    return setup
+
+
 def save_institutional_stock_breakdown(runtime, *, analysis, ticker: str, vault_dir):
     storage_date = runtime.current_storage_date()
     analysis.storage = runtime.save_research_markdown(

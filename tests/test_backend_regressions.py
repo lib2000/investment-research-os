@@ -1861,6 +1861,10 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             def model_dump(self, mode=None):
                 return dict(self.__dict__)
 
+        class PriceItem(SimpleNamespace):
+            def model_dump(self, mode=None):
+                return dict(self.__dict__)
+
         save_calls = []
         rag_calls = []
         snapshot_calls = []
@@ -1892,6 +1896,7 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
             render_naver_chart_analysis_markdown=lambda analysis, storage_date: f"chart {storage_date.isoformat()}",
+            render_smart_trade_markdown=lambda setup, storage_date: f"smart trade {storage_date.isoformat()}",
             render_team_analysis_markdown=lambda report, storage_date: f"team {storage_date.isoformat()}",
             resolve_vault_dir=lambda value: Path(value),
             save_research_markdown=fake_save_research_markdown,
@@ -1965,6 +1970,18 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             bear_case=SimpleNamespace(watch_items=["마진 압박"]),
             storage=None,
         )
+        smart_trade_setup = FakeReport(
+            current_price=71000.0,
+            style="swing",
+            risk_tolerance="moderate",
+            market_structure="상승 추세",
+            setup_quality="양호",
+            entry_zone=[PriceItem(price=70000.0, label="1차")],
+            stop_loss=PriceItem(price=68000.0, label="손절"),
+            targets=[PriceItem(price=76000.0, label="1차 목표")],
+            risk_per_share=2000.0,
+            storage=None,
+        )
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -2001,6 +2018,12 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         saved_institutional = analysis_module_storage.save_institutional_stock_breakdown(
             runtime,
             analysis=institutional_analysis,
+            ticker="005930",
+            vault_dir=vault_dir,
+        )
+        saved_smart_trade = analysis_module_storage.save_smart_trade_setup(
+            runtime,
+            setup=smart_trade_setup,
             ticker="005930",
             vault_dir=vault_dir,
         )
@@ -2045,6 +2068,15 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             ["매출 성장률", "컨센서스 변화", "마진 압박"],
         )
         self.assertTrue(save_calls[5]["manifest_entry"]["verified"])
+        self.assertEqual(saved_smart_trade.storage.file_name, "005930-smart-trade-setup.md")
+        self.assertEqual(save_calls[6]["report_type"], "smart-trade-setup")
+        self.assertIn("1차 진입 70000.00", save_calls[6]["manifest_entry"]["summary"])
+        self.assertEqual(save_calls[6]["manifest_entry"]["current_price"], 71000.0)
+        self.assertEqual(save_calls[6]["manifest_entry"]["setup_quality"], "양호")
+        self.assertEqual(save_calls[6]["manifest_entry"]["entry_zone"][0]["price"], 70000.0)
+        self.assertEqual(save_calls[6]["manifest_entry"]["stop_loss"]["price"], 68000.0)
+        self.assertEqual(save_calls[6]["manifest_entry"]["targets"][0]["price"], 76000.0)
+        self.assertTrue(save_calls[6]["manifest_entry"]["verified"])
         self.assertEqual(error_logs, [])
 
 

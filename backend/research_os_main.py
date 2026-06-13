@@ -18665,29 +18665,11 @@ def run_smart_trade_setup(
     setup = build_smart_trade_setup(ticker, request, injected_data)
 
     if request.save_result:
-        storage_date = current_storage_date()
-        setup.storage = save_research_markdown(
-            vault_dir=vault_dir,
+        setup = analysis_module_storage.save_smart_trade_setup(
+            _analysis_module_storage_runtime(),
+            setup=setup,
             ticker=ticker,
-            report_type="smart-trade-setup",
-            markdown=render_smart_trade_markdown(setup, storage_date),
-            structured_payload=setup.model_dump(mode="json"),
-            manifest_entry=manifest_with_ticker_verification(ticker, {
-                "summary": (
-                    f"{ticker} 매매 전략: 1차 진입 {setup.entry_zone[0].price:.2f}, "
-                    f"손절 {setup.stop_loss.price:.2f}, 1차 목표 {setup.targets[0].price:.2f}"
-                ),
-                "current_price": setup.current_price,
-                "style": setup.style,
-                "risk_tolerance": setup.risk_tolerance,
-                "market_structure": setup.market_structure,
-                "setup_quality": setup.setup_quality,
-                "entry_zone": [item.model_dump(mode="json") for item in setup.entry_zone],
-                "stop_loss": setup.stop_loss.model_dump(mode="json"),
-                "targets": [item.model_dump(mode="json") for item in setup.targets],
-                "risk_per_share": setup.risk_per_share,
-            }),
-            report_date=storage_date,
+            vault_dir=vault_dir,
         )
 
     return setup
@@ -18861,6 +18843,7 @@ def _analysis_module_storage_runtime() -> SimpleNamespace:
         render_long_term_compounder_markdown=render_long_term_compounder_markdown,
         render_naver_chart_analysis_markdown=render_naver_chart_analysis_markdown,
         render_sector_opportunity_markdown=render_sector_opportunity_markdown,
+        render_smart_trade_markdown=render_smart_trade_markdown,
         render_team_analysis_markdown=render_team_analysis_markdown,
         resolve_vault_dir=resolve_vault_dir,
         save_research_markdown=save_research_markdown,
