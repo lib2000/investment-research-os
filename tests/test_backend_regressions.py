@@ -2356,6 +2356,107 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class InterestAutomationModuleTests(unittest.TestCase):
+    def test_interest_automation_module_dedupes_keyword_candidates(self):
+        from research_os import interest_automation
+
+        result = interest_automation.target_keyword_candidates(
+            "AI/반도체",
+            "AI",
+            ["클라우드", "반도체"],
+            "",
+        )
+
+        self.assertEqual(result[:4], ["AI/반도체", "AI", "반도체", "클라우드"])
+        self.assertEqual(len(result), len(set(value.lower() for value in result)))
+
+    def test_interest_automation_module_builds_board_from_interest_and_portfolio(self):
+        from research_os import interest_automation
+
+        writes = []
+        settings = SimpleNamespace(research_vault_dir="research_vault")
+        manifest_entries = [
+            {
+                "ticker": "018260",
+                "title": "삼성에스디에스 클라우드",
+                "summary": "클라우드 매출 성장",
+                "tags": ["cloud"],
+                "type": "research-capture",
+            },
+            {
+                "ticker": "005930",
+                "title": "삼성전자 반도체",
+                "summary": "AI 반도체 수요",
+                "tags": ["semiconductor"],
+                "type": "research-capture",
+            },
+        ]
+
+        def verify_symbol(symbol, _settings):
+            return SimpleNamespace(
+                verified=True,
+                official_symbol=str(symbol).upper(),
+                company_name={"018260": "삼성에스디에스", "005930": "삼성전자"}.get(str(symbol).upper(), str(symbol)),
+                exchange="KRX",
+                country="KR",
+            )
+
+        runtime = SimpleNamespace(
+            count_research_memory_documents_by_ticker=lambda _vault, tickers: {ticker: 2 for ticker in tickers},
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            dedupe_manifest_entries_by_similarity=lambda entries, _vault, limit=20: (entries[:limit], []),
+            interest_collection_targets_path=lambda _settings: Path("interest_targets.json"),
+            manifest_entry_sort_key=lambda entry: (entry.get("date") or "", entry.get("title") or ""),
+            normalize_ticker=lambda value: str(value or "").strip().upper(),
+            official_ticker_profile=lambda ticker, _settings, refresh_external=False: {
+                "company_name": {"018260": "삼성에스디에스", "005930": "삼성전자"}.get(ticker, ticker),
+                "sector": "IT",
+                "industry": "Software",
+                "business_context": "클라우드 AI",
+            },
+            portfolio_store_response=lambda _settings: SimpleNamespace(
+                portfolios=[
+                    SimpleNamespace(
+                        portfolio_name="Core",
+                        holdings=[
+                            SimpleNamespace(ticker="005930", name="삼성전자", market_value=1000000, theme_tags=["AI"])
+                        ],
+                    )
+                ]
+            ),
+            read_interest_list=lambda _settings: {
+                "tickers": [{"ticker": "018260", "priority": "high", "tags": ["cloud"], "thesis": "클라우드 성장"}],
+                "sectors": [{"name": "AI 반도체", "region": "KR", "tags": ["AI"]}],
+            },
+            read_manifest=lambda _vault: manifest_entries,
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {
+                        "market": "KR",
+                        "session_date": "2026-06-12",
+                        "raw_summary": "AI 반도체와 클라우드 강세",
+                        "tags": ["AI"],
+                    }
+                ]
+            },
+            read_ticker_thesis_snapshot=lambda _vault, ticker: {"thesis_summary": f"{ticker} thesis"},
+            resolve_vault_dir=lambda value: Path(value),
+            verify_ticker_symbol_local_cached=verify_symbol,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = interest_automation.build_interest_automation_board(runtime, settings, save_result=True)
+
+        self.assertEqual(result["target_count"], 3)
+        self.assertEqual(result["ticker_target_count"], 2)
+        self.assertEqual(result["sector_target_count"], 1)
+        self.assertEqual(result["portfolio_linked_count"], 1)
+        self.assertEqual(result["rag_connected_count"], 2)
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0][1]["payload"]["module"], "interest_automation_board")
+        self.assertTrue(result["rag_search_prompts"])
+
+
 class NewsBuilderModuleTests(unittest.TestCase):
     def test_news_builder_module_builds_url_only_item_with_body_warning(self):
         from research_os import news_builder
