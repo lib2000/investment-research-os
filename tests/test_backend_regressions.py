@@ -6288,6 +6288,38 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
 
 
 class PortfolioPerformanceTests(unittest.TestCase):
+    def test_portfolio_performance_helpers_select_history_and_current_value(self):
+        from research_os.models import PortfolioHolding
+        from research_os.portfolio_performance import (
+            historical_close_on_or_before,
+            portfolio_holding_current_value,
+        )
+
+        rows = [
+            {"date": "2026-06-10", "close": "95"},
+            {"date": "2026-06-12", "close": "100"},
+            {"date": "2026-06-13", "close": "105"},
+        ]
+        parse_float = lambda value: float(value) if value not in {None, ""} else None
+        holding = PortfolioHolding(
+            ticker="PL",
+            quantity=10,
+            current_price=5,
+            market_value=0,
+            currency="USD",
+        )
+
+        close, close_date = historical_close_on_or_before(rows, date(2026, 6, 11), parse_float)
+        current_value = portfolio_holding_current_value(
+            holding,
+            6.5,
+            lambda _holding: 1300.0,
+            prefer_market_value=False,
+        )
+
+        self.assertEqual((close, close_date), (95.0, "2026-06-10"))
+        self.assertEqual(current_value, 84500.0)
+
     def test_price_refresh_summary_tracks_status_counts_and_latest_check(self):
         from research_os.models import PortfolioHolding
         from research_os.portfolio_performance import build_price_refresh_summary

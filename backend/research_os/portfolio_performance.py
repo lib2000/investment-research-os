@@ -152,3 +152,26 @@ def target_price_context_source_type(text: str) -> tuple[str, float]:
     if "target price" in normalized or "analyst" in normalized:
         return "애널리스트 목표주가", 0.86
     return "저장 리포트 목표주가", 0.78
+
+def historical_close_on_or_before(rows: list[dict], target_date, parse_float) -> tuple[float | None, str | None]:
+    target = target_date.isoformat()
+    for row in reversed(rows):
+        row_date = str(row.get("date") or "")
+        close = parse_float(row.get("close"))
+        if row_date and row_date <= target and close is not None and close > 0:
+            return close, row_date
+    return None, None
+
+
+def portfolio_holding_current_value(
+    holding,
+    current_price: float | None,
+    infer_fx_rate,
+    *,
+    prefer_market_value: bool = True,
+) -> float | None:
+    if prefer_market_value and holding.market_value is not None and holding.market_value > 0:
+        return holding.market_value
+    if holding.quantity is None or holding.quantity <= 0 or current_price is None:
+        return None
+    return holding.quantity * current_price * infer_fx_rate(holding)

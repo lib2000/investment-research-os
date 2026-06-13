@@ -229,8 +229,10 @@ from research_os.models import (
 from research_os.portfolio_performance import (
     build_price_refresh_summary,
     filter_target_price_outliers,
+    historical_close_on_or_before as _historical_close_on_or_before,
     is_plausible_target_price,
     is_probable_year_or_metadata_number,
+    portfolio_holding_current_value as _portfolio_holding_current_value,
     target_price_context_source_type,
     target_price_currency,
     target_price_result,
@@ -16188,13 +16190,7 @@ def portfolio_history_rows_for_ticker(
 
 
 def historical_close_on_or_before(rows: list[dict], target_date: date) -> tuple[float | None, str | None]:
-    target = target_date.isoformat()
-    for row in reversed(rows):
-        row_date = str(row.get("date") or "")
-        close = parse_float_or_none(row.get("close"))
-        if row_date and row_date <= target and close is not None and close > 0:
-            return close, row_date
-    return None, None
+    return _historical_close_on_or_before(rows, target_date, parse_float_or_none)
 
 
 def portfolio_holding_current_value(
@@ -16203,11 +16199,12 @@ def portfolio_holding_current_value(
     *,
     prefer_market_value: bool = True,
 ) -> float | None:
-    if prefer_market_value and holding.market_value is not None and holding.market_value > 0:
-        return holding.market_value
-    if holding.quantity is None or holding.quantity <= 0 or current_price is None:
-        return None
-    return holding.quantity * current_price * infer_holding_fx_rate(holding)
+    return _portfolio_holding_current_value(
+        holding,
+        current_price,
+        infer_holding_fx_rate,
+        prefer_market_value=prefer_market_value,
+    )
 
 
 def build_portfolio_performance(
