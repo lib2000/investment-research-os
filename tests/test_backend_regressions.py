@@ -2059,6 +2059,48 @@ class ResearchCaptureClassificationTagTests(unittest.TestCase):
         self.assertTrue(response.rag_document)
 
 
+class CaptureInferenceModuleTests(unittest.TestCase):
+    def test_capture_inference_module_summarizes_and_tags_research_text(self):
+        from research_os import capture_inference
+
+        summary = capture_inference.summarize_capture(("AI capex demand growth " * 20).strip())
+        tags = capture_inference.infer_capture_tags(
+            "FOMC rate cut, AI capex demand growth, and gross margin improvement",
+            ["manual"],
+        )
+
+        self.assertLessEqual(len(summary), 240)
+        self.assertTrue(summary.endswith("..."))
+        self.assertIn("manual", tags)
+        self.assertIn("ai", tags)
+        self.assertIn("growth", tags)
+        self.assertIn("macro", tags)
+        self.assertIn("margin", tags)
+
+    def test_capture_inference_module_source_type_uses_non_ticker_scope_callback(self):
+        from research_os import capture_inference
+
+        source_type = capture_inference.infer_capture_source_type(
+            "국채 금리와 CPI가 장단기 금리에 미치는 영향",
+            allow_non_ticker_scope=True,
+            infer_non_ticker_research_key_fn=lambda _text: ("RATES", "rates_research"),
+            special_research_keys={"INBOX", "RATES", "MARKET"},
+        )
+
+        self.assertEqual(source_type, "rates_research")
+
+    def test_capture_inference_module_source_type_and_confidence_defaults(self):
+        from research_os import capture_inference
+
+        filing_type = capture_inference.infer_capture_source_type("10-K annual report revenue details")
+        news_type = capture_inference.infer_capture_source_type("press release article")
+        confidence = capture_inference.infer_capture_confidence(news_type, has_file=True)
+
+        self.assertEqual(filing_type, "official_filing")
+        self.assertEqual(news_type, "news")
+        self.assertAlmostEqual(confidence, 0.78)
+
+
 class ResearchCaptureInferenceTests(unittest.TestCase):
     def test_empty_pdf_filename_context_infers_policy_and_investment_scope(self):
         import research_os_main as main
