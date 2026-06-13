@@ -2356,6 +2356,69 @@ class ResearchCaptureInferenceTests(unittest.TestCase):
             self.assertIn("OCR 재처리 결과", markdown_path.read_text(encoding="utf-8"))
 
 
+class DailyBriefModuleTests(unittest.TestCase):
+    def test_daily_brief_module_uses_runtime_date_for_thesis_age(self):
+        from research_os import daily_brief
+
+        runtime = SimpleNamespace(current_storage_date=lambda: date(2026, 6, 13))
+
+        self.assertEqual(daily_brief.portfolio_thesis_date_age_days(runtime, "2026-06-01"), 12)
+        self.assertIsNone(daily_brief.portfolio_thesis_date_age_days(runtime, "날짜 없음"))
+
+    def test_daily_brief_module_renders_core_sections(self):
+        from research_os import daily_brief
+
+        payload = {
+            "date": "2026-06-13",
+            "generated_at": "2026-06-13T09:00:00+09:00",
+            "portfolio_tickers": ["018260"],
+            "snapshot_count": 1,
+            "recent_entry_count": 1,
+            "market_entries": [],
+            "customs_trade_reference": {},
+            "snapshots": [
+                {
+                    "ticker": "018260",
+                    "updated_at": "2026-06-12T10:00:00+09:00",
+                    "summary": "클라우드 매출 성장과 마진 개선",
+                    "confidence": 0.82,
+                }
+            ],
+            "portfolio_overview": {
+                "snapshot_connected_count": 1,
+                "holding_count": 1,
+                "priority_reviews": [
+                    {
+                        "ticker": "018260",
+                        "company_name": "삼성에스디에스",
+                        "status": "정상",
+                        "confidence": 0.82,
+                        "recommended_action": "기존 논거와 비교",
+                        "watch_kpis": ["클라우드 매출"],
+                    }
+                ],
+            },
+            "interest_automation": {"ticker_targets": [], "sector_targets": []},
+            "recent_entries": [
+                {
+                    "ticker": "018260",
+                    "type": "research-capture",
+                    "date": "2026-06-12",
+                    "summary": "신규 저장 자료",
+                    "confidence": 0.8,
+                }
+            ],
+            "next_actions": ["Dossier 논거 변화를 확인하세요."],
+        }
+
+        rendered = daily_brief.render_daily_brief_markdown(payload)
+
+        self.assertIn("# 일일 리서치 브리핑", rendered)
+        self.assertIn("## 포트폴리오 우선 점검", rendered)
+        self.assertIn("삼성에스디에스(018260)", rendered)
+        self.assertIn("Dossier 논거 변화를 확인하세요.", rendered)
+
+
 class ResearchMemoryPolicyTests(unittest.TestCase):
     def test_dossier_text_module_dedupes_exact_manifest_entries(self):
         from research_os import dossier_text
