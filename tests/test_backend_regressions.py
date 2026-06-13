@@ -2104,6 +2104,42 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertIn("매출", [item["item"] for item in research_workflow_files.infer_model_update_items("Revenue and margin improved")])
         self.assertEqual(research_workflow_files.workflow_material_excerpt("  "), "입력 자료 없음")
         self.assertIn("- 추출 경고: sample warning", research_workflow_files.render_file_processing_markdown(attachment))
+        earnings_markdown = research_workflow_files.render_earnings_filing_note_markdown(
+            {
+                "ticker": "WORKFLOW",
+                "company_name": "Workflow Inc",
+                "model_updates": research_workflow_files.infer_model_update_items("Revenue and margin improved"),
+                "note_draft": [{"title": "핵심 요약", "body": "본문"}],
+                "open_questions": ["질문"],
+                "next_actions": ["액션"],
+                "file_processing": attachment,
+            },
+            date(2026, 6, 13),
+        )
+        lp_markdown = research_workflow_files.render_lp_report_staging_markdown(
+            {
+                "fund_name": "Workflow Fund",
+                "gp_package_summary": "요약",
+                "valuation_template_output": ["템플릿"],
+                "valuation_template_rows": [
+                    {
+                        "line_item": "NAV",
+                        "input_status": "확인",
+                        "model_action": "입력",
+                        "lp_note": "메모",
+                    }
+                ],
+                "staging_checklist": ["체크"],
+                "lp_risk_flags": ["리스크"],
+                "lp_report_draft": [{"title": "초안", "body": "본문"}],
+                "file_processing": attachment,
+            },
+            date(2026, 6, 13),
+        )
+        self.assertIn("# Workflow Inc 어닝 콜/공시 기반 노트 초안", earnings_markdown)
+        self.assertIn("## 첨부 파일 처리", earnings_markdown)
+        self.assertIn("# Workflow Fund LP 보고 스테이징", lp_markdown)
+        self.assertIn("| NAV | 확인 | 입력 | 메모 |", lp_markdown)
         self.assertTrue(rag_result["stored"])
         self.assertEqual(upsert_calls[0]["entry"]["ticker"], "WORKFLOW")
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")

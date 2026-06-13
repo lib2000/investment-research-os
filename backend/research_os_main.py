@@ -18849,43 +18849,7 @@ def render_file_processing_markdown(file_processing: dict | None) -> str:
 
 
 def render_earnings_filing_note_markdown(response: dict, storage_date: date) -> str:
-    model_updates = "\n".join(
-        f"- {item['item']}: {item['model_action']} (근거: {item['signal']})"
-        for item in response.get("model_updates", [])
-    )
-    file_processing = response.get("file_processing") or {}
-    file_section = render_file_processing_markdown(file_processing)
-    note_sections = "\n\n".join(f"## {section['title']}\n\n{section['body']}" for section in response.get("note_draft", []))
-    open_questions = "\n".join(f"- {item}" for item in response.get("open_questions", []))
-    next_actions = "\n".join(f"- {item}" for item in response.get("next_actions", []))
-    return f"""---
-ticker: {response.get('ticker')}
-type: earnings-filing-note
-date: {storage_date.isoformat()}
-module: earnings_filing_note
-persona: Buy-Side 모델 업데이트 애널리스트
----
-
-# {response.get('company_name')} 어닝 콜/공시 기반 노트 초안
-
-## 모델 업데이트 항목
-
-{model_updates}
-
-## 첨부 파일 처리
-
-{file_section}
-
-{note_sections}
-
-## 미확인 질문
-
-{open_questions}
-
-## 다음 액션
-
-{next_actions}
-"""
+    return research_workflow_files.render_earnings_filing_note_markdown(response, storage_date)
 
 
 def build_earnings_filing_note_response(payload: dict, settings: Settings) -> dict:
@@ -18983,51 +18947,7 @@ def build_earnings_filing_note_response(payload: dict, settings: Settings) -> di
 
 
 def render_lp_report_staging_markdown(response: dict, storage_date: date) -> str:
-    valuation = "\n".join(f"- {item}" for item in response.get("valuation_template_output", []))
-    valuation_rows = "\n".join(
-        f"| {item.get('line_item')} | {item.get('input_status')} | {item.get('model_action')} | {item.get('lp_note')} |"
-        for item in response.get("valuation_template_rows", [])
-    )
-    staging = "\n".join(f"- {item}" for item in response.get("staging_checklist", []))
-    risks = "\n".join(f"- {item}" for item in response.get("lp_risk_flags", []))
-    draft = "\n\n".join(f"## {section['title']}\n\n{section['body']}" for section in response.get("lp_report_draft", []))
-    file_processing = response.get("file_processing") or {}
-    file_section = render_file_processing_markdown(file_processing)
-    return f"""---
-type: lp-report-staging
-date: {storage_date.isoformat()}
-module: gp_lp_staging
-fund_name: {response.get('fund_name')}
----
-
-# {response.get('fund_name')} LP 보고 스테이징
-
-## GP 패키지 요약
-
-{response.get('gp_package_summary')}
-
-## 밸류에이션 템플릿 결과
-
-{valuation}
-
-| 항목 | 입력 상태 | 모델 액션 | LP 보고 메모 |
-| --- | --- | --- | --- |
-{valuation_rows}
-
-## 첨부 파일 처리
-
-{file_section}
-
-{draft}
-
-## LP 보고 전 리스크 플래그
-
-{risks}
-
-## 스테이징 체크리스트
-
-{staging}
-"""
+    return research_workflow_files.render_lp_report_staging_markdown(response, storage_date)
 
 
 def build_gp_lp_staging_response(payload: dict, settings: Settings) -> dict:
