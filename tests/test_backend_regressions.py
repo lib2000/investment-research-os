@@ -2439,6 +2439,126 @@ class CompanyIrWatchModuleTests(unittest.TestCase):
         self.assertEqual(len(writes), 1)
 
 
+class RegionalBusinessWatchModuleTests(unittest.TestCase):
+    def test_regional_business_watch_module_disabled_payload_uses_cached_items(self):
+        from research_os import regional_business_watch
+
+        writes = []
+        settings = SimpleNamespace(regional_business_sources_enabled=False)
+        cached_items = [
+            {
+                "item_id": "csf-1",
+                "source_provider": "CSF",
+                "title": "중국 소비 회복",
+                "relevance_score": 12,
+                "matched_themes": ["중국"],
+            }
+        ]
+        runtime = SimpleNamespace(
+            build_kcif_watch_targets=lambda _portfolio, _interest: {"themes": ["중국"]},
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            match_regional_business_items_to_targets=lambda items, _targets: items,
+            portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
+            read_interest_list=lambda _settings: {},
+            read_json_store=lambda _path, _default=None: {
+                "items": cached_items,
+                "source_results": [{"provider": "CSF", "status": "success"}],
+            },
+            regional_business_copyright_policy=lambda: {"mode": "metadata_only"},
+            regional_business_sources_watch_path=lambda _settings: Path("regional.json"),
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = regional_business_watch.build_regional_business_sources_watch_payload(
+            runtime,
+            settings,
+            save_result=True,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "disabled")
+        self.assertEqual(result["related_count"], 1)
+        self.assertIn("REGIONAL_BUSINESS_SOURCES_ENABLED", result["warnings"][0])
+        self.assertEqual(writes[0][0], Path("regional.json"))
+        self.assertEqual(writes[0][1]["source_status"], "disabled")
+
+    def test_regional_business_watch_module_merges_cached_failed_sources(self):
+        from research_os import regional_business_watch
+
+        fetched_items = [{"item_id": "emerics-1", "source_provider": "EMERiCs", "title": "India exports"}]
+        source_results = [
+            {"provider": "EMERiCs", "status": "success"},
+            {"provider": "CSF", "status": "failed"},
+        ]
+        cache = {
+            "items": [
+                {"item_id": "csf-2", "source_provider": "CSF", "title": "중국 정책 브리프"},
+                {"item_id": "emerics-1", "source_provider": "EMERiCs", "title": "duplicate"},
+            ]
+        }
+
+        items, merged_results, restored_count = regional_business_watch.merge_cached_regional_items_for_failed_sources(
+            fetched_items,
+            source_results,
+            cache,
+        )
+
+        self.assertEqual(restored_count, 1)
+        self.assertEqual([item["item_id"] for item in items], ["emerics-1", "csf-2"])
+        csf_result = next(item for item in merged_results if item["provider"] == "CSF")
+        self.assertEqual(csf_result["status"], "cache_fallback")
+        self.assertEqual(csf_result["cached_item_count"], 1)
+
+    def test_regional_business_watch_module_refreshes_and_matches_related_items(self):
+        from research_os import regional_business_watch
+
+        writes = []
+        settings = SimpleNamespace(
+            regional_business_sources_enabled=True,
+            regional_business_sources_timeout_seconds=3,
+            regional_business_sources_user_agent="agent",
+        )
+        fetched_items = [
+            {"item_id": "kiep-1", "source_provider": "KIEP", "title": "세계경제 중국 공급망"},
+        ]
+
+        def match_items(items, _targets):
+            return [{**items[0], "relevance_score": 80, "matched_themes": ["중국", "공급망"]}]
+
+        runtime = SimpleNamespace(
+            build_kcif_watch_targets=lambda _portfolio, _interest: {"themes": ["중국"]},
+            current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
+            fetch_regional_business_sources=lambda **_kwargs: (
+                fetched_items,
+                [],
+                [{"provider": "KIEP", "status": "success"}],
+            ),
+            match_regional_business_items_to_targets=match_items,
+            portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
+            provider_error_message=lambda exc, _settings: str(exc),
+            read_interest_list=lambda _settings: {},
+            read_json_store=lambda _path, _default=None: {},
+            regional_business_copyright_policy=lambda: {"mode": "metadata_only"},
+            regional_business_sources_watch_path=lambda _settings: Path("regional.json"),
+            should_refresh_regional_business_cache=lambda _cache: True,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+        )
+
+        result = regional_business_watch.build_regional_business_sources_watch_payload(
+            runtime,
+            settings,
+            limit=5,
+            save_result=True,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "refreshed")
+        self.assertEqual(result["related_count"], 1)
+        self.assertEqual(result["related_items"][0]["matched_themes"], ["중국", "공급망"])
+        self.assertEqual(result["policy"], {"mode": "metadata_only"})
+        self.assertEqual(len(writes), 1)
+
+
 class KcifWatchModuleTests(unittest.TestCase):
     def test_kcif_watch_module_next_actions_preserve_copyright_policy(self):
         from research_os import kcif_watch
