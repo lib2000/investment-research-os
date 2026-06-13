@@ -6413,25 +6413,12 @@ def build_naver_chart_analysis(ticker: str, settings: Settings, save_result: boo
         "saved_to_research_memory": save_result,
     }
     if save_result:
-        vault_dir = resolve_vault_dir(settings.research_vault_dir)
-        storage_date = current_storage_date()
-        storage = save_research_markdown(
-            vault_dir=vault_dir,
-            ticker=code,
-            report_type="chart-analysis",
-            markdown=render_naver_chart_analysis_markdown(analysis, storage_date),
-            structured_payload=analysis,
-            manifest_entry=manifest_with_ticker_verification(code, {
-                "summary": f"{code} 차트 분석: {overall_signal}, {trade_bias}",
-                "company_name": analysis["company_name"],
-                "as_of": analysis["as_of"],
-                "overall_signal": overall_signal,
-                "latest_indicators": latest_indicators,
-                "support_resistance": analysis["support_resistance"],
-            }),
-            report_date=storage_date,
+        analysis = analysis_module_storage.save_naver_chart_analysis(
+            _analysis_module_storage_runtime(),
+            analysis=analysis,
+            code=code,
+            settings=settings,
         )
-        analysis["storage"] = storage.model_dump(mode="json")
     return analysis
 
 
@@ -18882,8 +18869,10 @@ def _analysis_module_storage_runtime() -> SimpleNamespace:
         read_manifest=read_manifest,
         render_checklist_markdown=render_checklist_markdown,
         render_long_term_compounder_markdown=render_long_term_compounder_markdown,
+        render_naver_chart_analysis_markdown=render_naver_chart_analysis_markdown,
         render_sector_opportunity_markdown=render_sector_opportunity_markdown,
         render_team_analysis_markdown=render_team_analysis_markdown,
+        resolve_vault_dir=resolve_vault_dir,
         save_research_markdown=save_research_markdown,
         synthesize_and_save_dossier=synthesize_and_save_dossier,
         ticker_company_name=ticker_company_name,

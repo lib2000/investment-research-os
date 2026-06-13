@@ -1890,7 +1890,9 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             render_checklist_markdown=lambda assessment, storage_date: f"checklist {storage_date.isoformat()}",
             render_sector_opportunity_markdown=lambda report, storage_date: f"sector {storage_date.isoformat()}",
             render_long_term_compounder_markdown=lambda report, storage_date: f"compounder {storage_date.isoformat()}",
+            render_naver_chart_analysis_markdown=lambda analysis, storage_date: f"chart {storage_date.isoformat()}",
             render_team_analysis_markdown=lambda report, storage_date: f"team {storage_date.isoformat()}",
+            resolve_vault_dir=lambda value: Path(value),
             save_research_markdown=fake_save_research_markdown,
             synthesize_and_save_dossier=lambda *args, **kwargs: dossier_calls.append({"args": args, "kwargs": kwargs}),
             ticker_company_name=lambda ticker: "삼성전자",
@@ -1945,6 +1947,14 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             storage=None,
             dossier_refresh_status=None,
         )
+        chart_analysis = {
+            "company_name": "삼성전자",
+            "as_of": "2026-06-13",
+            "overall_signal": "상승 추세 우위",
+            "trade_bias": "눌림 매수",
+            "latest_indicators": {"rsi14": 58.2},
+            "support_resistance": {"recent_20d_support": 70000},
+        }
 
         saved_sector = analysis_module_storage.save_sector_opportunity_report(
             runtime,
@@ -1972,6 +1982,12 @@ class AnalysisModuleStorageTests(unittest.TestCase):
             settings=SimpleNamespace(),
             refresh_dossier=True,
         )
+        saved_chart = analysis_module_storage.save_naver_chart_analysis(
+            runtime,
+            analysis=chart_analysis,
+            code="005930",
+            settings=SimpleNamespace(research_vault_dir=str(vault_dir)),
+        )
 
         self.assertEqual(saved_sector.storage.file_name, "SECTOR-KR-BALANCED-sector-opportunity.md")
         self.assertEqual(saved_compounder.storage.file_name, "COMPOUNDER-KR-ALL-QUALITY-long-term-compounder.md")
@@ -1998,6 +2014,11 @@ class AnalysisModuleStorageTests(unittest.TestCase):
         self.assertEqual(snapshot_calls[0]["source_entry"]["file_name"], "005930-collaborative-team-report.md")
         self.assertEqual(len(dossier_calls), 1)
         self.assertEqual(saved_team.dossier_refresh_status, "refreshed")
+        self.assertEqual(saved_chart["storage"]["file_name"], "005930-chart-analysis.md")
+        self.assertEqual(save_calls[4]["report_type"], "chart-analysis")
+        self.assertEqual(save_calls[4]["manifest_entry"]["company_name"], "삼성전자")
+        self.assertEqual(save_calls[4]["manifest_entry"]["overall_signal"], "상승 추세 우위")
+        self.assertEqual(save_calls[4]["manifest_entry"]["latest_indicators"]["rsi14"], 58.2)
         self.assertEqual(error_logs, [])
 
 
