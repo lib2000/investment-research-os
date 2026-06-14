@@ -146,7 +146,7 @@ def parse_hhmm(value: str | None, default: time) -> time:
 
 
 def before_daily_run(daily_time: str | None) -> bool:
-    return datetime.now(LOCAL_TIMEZONE).time() < parse_hhmm(daily_time, time(hour=9))
+    return datetime.now(LOCAL_TIMEZONE).time() < parse_hhmm(daily_time, time(hour=8))
 
 
 def baseline_age_limit_hours(args: argparse.Namespace, latest_age_days: int | None) -> float:

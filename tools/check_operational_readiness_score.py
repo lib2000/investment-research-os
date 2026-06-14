@@ -75,7 +75,7 @@ def recommendation_signal(system_dir: Path, daily_time: str) -> dict[str, Any]:
     selected_count = selected if isinstance(selected, int) else len(state.get("selected") or [])
     now = kst_now()
     expected = {now.date().isoformat()}
-    if now.time() < parse_hhmm(daily_time, time(hour=9)):
+    if now.time() < parse_hhmm(daily_time, time(hour=8)):
         expected.add((now.date() - timedelta(days=1)).isoformat())
     last_run = str(state.get("last_run_date") or state.get("last_run_at") or "")
     date_ok = last_run[:10] in expected

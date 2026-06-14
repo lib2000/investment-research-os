@@ -108,7 +108,7 @@ def _parse_hhmm(value: str | None, default: time) -> time:
 def _recommendation_expected_dates(settings: Settings) -> set[str]:
     now = _kst_now()
     expected = {now.date().isoformat()}
-    if now.time() < _parse_hhmm(settings.daily_recommendations_time, time(hour=9)):
+    if now.time() < _parse_hhmm(settings.daily_recommendations_time, time(hour=8)):
         expected.add((now.date() - timedelta(days=1)).isoformat())
     return expected
 
