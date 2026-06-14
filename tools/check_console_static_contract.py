@@ -141,6 +141,7 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_investment_profile_helper": "dailyRecommendationInvestmentProfileSummary",
     "daily_recommendation_investment_profile_line": "투자 방향 반영:",
     "daily_recommendation_investment_profile_badge_text": "투자 방향:",
+    "daily_recommendation_investment_profile_text_output": "투자 방향: ${investmentProfile.labelText}",
     "daily_recommendation_exposure_line": "추천 연결:",
     "recent_weekly_recommendation_impact_helper": "recommendationImpactForItem",
     "recent_weekly_impact_summary": "추천 영향 요약",

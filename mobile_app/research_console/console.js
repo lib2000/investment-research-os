@@ -13945,6 +13945,11 @@ function formatKoreanResult(value) {
         .join(" / ");
       const weeklyImpactRows = dailyRecommendationWeeklyImpactRows(item).slice(0, 3).join(" / ");
       const exposureSummary = dailyRecommendationExposureSummary(item);
+      const investmentProfile = dailyRecommendationInvestmentProfileSummary(item);
+      const investmentProfileLine = investmentProfile.hasProfile
+        ? `
+  투자 방향: ${investmentProfile.labelText}${investmentProfile.scoreBonus ? ` · +${formatNumber(investmentProfile.scoreBonus)}점` : ""}${investmentProfile.triggerText ? ` · ${investmentProfile.triggerText}` : ""}`
+        : "";
       const weeklyGroups = (item.weekly_evidence_groups || [])
         .slice(0, 3)
         .map((group) => {
@@ -13981,7 +13986,7 @@ function formatKoreanResult(value) {
       const baseline = formatSmartPrice(item.baseline_price, item.currency || "KRW", "기준가 미확인");
       return `${item.rank || "-"}위. ${displayCompanyName(item)} · 기준가 ${baseline} · 점수 ${
         item.score ?? "n/a"
-      }\n  추천 연결: ${exposureSummary || "보유/관심 연결 정보 없음"}\n  점수 구성: ${scoreComponents || "구성 저장 전"}${
+      }\n  추천 연결: ${exposureSummary || "보유/관심 연결 정보 없음"}\n  점수 구성: ${scoreComponents || "구성 저장 전"}${investmentProfileLine}${
         weights ? `\n  비중: ${weights}` : ""
       }${penalties ? `\n  감점/확인: ${penalties}` : ""}${weeklyImpactRows ? `\n  최근 1주 영향: ${weeklyImpactRows}` : ""}${weeklyGroups ? `\n  최근 1주 묶음: ${weeklyGroups}` : ""}${overseas}${portfolioRisk}\n  근거: ${
         reasons || "근거 요약 없음"
