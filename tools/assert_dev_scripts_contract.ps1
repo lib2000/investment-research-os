@@ -371,6 +371,7 @@ $contracts = @(
       'check_git_sync_status.py',
       'check_public_repo_safety.py',
       'check_backend_runtime_env.py',
+      '--check-daily-tests',
       'check_portfolio_analysis_coverage.py',
       '--all-portfolios',
       '--min-average-completion',
