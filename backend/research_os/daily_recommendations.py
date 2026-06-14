@@ -228,6 +228,7 @@ def normalize_candidate(candidate: dict) -> dict:
             for item in candidate.get("quality_flags", [])
             if str(item or "").strip()
         ][:6],
+        "investment_direction_profile": candidate.get("investment_direction_profile") or {},
         "overseas_tracking": candidate.get("overseas_tracking") or {},
         "portfolio_risk_connection": candidate.get("portfolio_risk_connection") or {},
     }
@@ -1046,6 +1047,7 @@ def build_recommendation_record(
             if str(item or "").strip()
         ][:5],
         "portfolio_context": normalized.get("portfolio_context") or [],
+        "investment_direction_profile": normalized.get("investment_direction_profile") or {},
         "portfolio_risk_connection": normalized.get("portfolio_risk_connection") or {},
         "overseas_tracking": normalized.get("overseas_tracking") or {},
         "tracking_milestones": build_tracking_milestones(recommendation_date),

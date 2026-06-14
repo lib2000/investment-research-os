@@ -82,6 +82,9 @@ from research_os.daily_recommendations import (
     update_recommendation_tracking,
     upsert_daily_recommendations,
 )
+from research_os.investment_direction_profile import (
+    apply_investment_direction_profile as _apply_investment_direction_profile,
+)
 from research_os import analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
@@ -17129,6 +17132,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             )
 
         _apply_daily_recommendation_overseas_tracking(candidate)
+        _apply_investment_direction_profile(candidate)
 
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(
             vault_dir,

@@ -34,6 +34,10 @@ from research_os.daily_recommendations import (
     upsert_daily_recommendations,
     write_json_payload,
 )
+from research_os.investment_direction_profile import (
+    apply_investment_direction_profile,
+    matched_investment_direction_themes,
+)
 from research_os.settings import Settings
 from research_os.storage_quality import storage_quality_entry_needs_body
 
@@ -76,6 +80,32 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(first["score"], 0)
         self.assertEqual(first["portfolio_risk_connection"], {})
         self.assertEqual(overseas["currency"], "USD")
+
+    def test_investment_direction_profile_scores_matching_ai_power_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "ORCL", "Oracle")
+        candidate["evidence_sources"].append("AIDC 전력망 SOFC 현장발전 검토")
+
+        updated = apply_investment_direction_profile(candidate)
+
+        self.assertIs(updated, candidate)
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["source_id"], "user-pasted-research-2026-06-14")
+        self.assertEqual(profile["score_bonus"], 8)
+        self.assertEqual(profile["themes"][0]["key"], "ai_power_bottleneck")
+        self.assertIn("첨부 투자 방향: AI 전력 병목", [item["label"] for item in candidate["score_components"]])
+        self.assertTrue(any("AI 데이터센터" in item for item in candidate["reasons"]))
+        self.assertTrue(any("가스터빈 납기" in item for item in candidate["risk_notes"]))
+
+    def test_investment_direction_profile_ignores_unmatched_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
+        candidate["evidence_sources"].append("라면 수출과 원가 안정성 점검")
+
+        self.assertEqual(matched_investment_direction_themes(candidate), [])
+        updated = apply_investment_direction_profile(candidate)
+
+        self.assertIs(updated, candidate)
+        self.assertNotIn("investment_direction_profile", candidate)
+        self.assertEqual(candidate["score"], 0)
 
     def test_apply_daily_recommendation_consensus_row_scores_target_and_portfolio_context(self):
         candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
