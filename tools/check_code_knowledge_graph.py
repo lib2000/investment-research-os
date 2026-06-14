@@ -25,6 +25,7 @@ REQUIRED_FLOW_IDS = {
 REQUIRED_NODE_IDS = {
     "file:backend/research_os_main.py",
     "file:backend/research_os/daily_recommendations.py",
+    "file:backend/research_os/investment_direction_profile.py",
     "file:backend/research_os/investment_calendar.py",
     "file:backend/research_os/rag_memory.py",
     "file:backend/research_os/portfolio_store.py",
