@@ -242,6 +242,15 @@ def daily_recommendation_target_key(item: dict) -> str:
     return normalize_recommendation_ticker(item.get("ticker") or item.get("key"))
 
 
+def daily_recommendation_target_label(item: dict, ticker: str) -> str:
+    return str(
+        item.get("label")
+        or item.get("company_name")
+        or item.get("name")
+        or ticker
+    )
+
+
 def daily_recommendation_candidate_is_valid(ticker: str, company_name: str) -> bool:
     if not ticker or ticker in {"CASH", "UNKNOWN"}:
         return False

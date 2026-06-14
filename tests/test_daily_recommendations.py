@@ -22,6 +22,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_priority_target,
     apply_daily_recommendation_recent_weekly_evidence,
     daily_recommendation_state_path,
+    daily_recommendation_target_label,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
     finalize_daily_recommendation_ranking,
@@ -37,6 +38,21 @@ from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_daily_recommendation_target_label_prefers_display_names(self):
+        self.assertEqual(
+            daily_recommendation_target_label({"label": "삼양식품", "company_name": "대체"}, "003230"),
+            "삼양식품",
+        )
+        self.assertEqual(
+            daily_recommendation_target_label({"company_name": "동성화인텍"}, "033500"),
+            "동성화인텍",
+        )
+        self.assertEqual(
+            daily_recommendation_target_label({"name": "Planet Labs"}, "PL"),
+            "Planet Labs",
+        )
+        self.assertEqual(daily_recommendation_target_label({}, "JOBY"), "JOBY")
+
     def test_ensure_daily_recommendation_candidate_initializes_defaults(self):
         candidates = {}
 

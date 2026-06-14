@@ -77,6 +77,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
+    daily_recommendation_target_label as _daily_recommendation_target_label,
     daily_recommendation_weekly_group_evidence_text as _daily_recommendation_weekly_group_evidence_text,
     daily_recommendation_recent_item_evidence_document as _daily_recommendation_recent_item_evidence_document,
     should_run_daily_recommendations,
@@ -17075,15 +17076,13 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         )
 
     for ticker, target in priority_targets.items():
-        if not _daily_recommendation_candidate_is_valid(
-            ticker,
-            str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
-        ):
+        target_label = _daily_recommendation_target_label(target, ticker)
+        if not _daily_recommendation_candidate_is_valid(ticker, target_label):
             continue
         candidate = _ensure_daily_recommendation_candidate(
             candidates_by_ticker,
             ticker,
-            str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
+            target_label,
         )
         _apply_daily_recommendation_priority_target(candidate, target)
 
