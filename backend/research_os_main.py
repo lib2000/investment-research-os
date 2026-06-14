@@ -60,6 +60,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
     add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
+    apply_daily_recommendation_freshness_profile as _apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
@@ -17203,23 +17204,19 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             verification = verify_ticker_symbol_local_cached(ticker, settings)
             official_symbol = normalize_ticker(verification.official_symbol or ticker)
             profile = official_ticker_profile(official_symbol, settings, refresh_external=False)
-            if verification.company_name and candidate.get("company_name") == ticker:
-                candidate["company_name"] = verification.company_name
             freshness = build_ticker_freshness_status(
                 ticker,
                 official_symbol,
                 manifest_entries,
                 dart_cache,
             )
-            if freshness.get("tone") == "ok":
-                _add_daily_recommendation_score(candidate, 10, "저장자료 신선도 양호")
-            elif freshness.get("tone") == "warning":
-                _add_daily_recommendation_score(candidate, 5, "저장자료 신선도 확인 필요")
-                candidate["quality_flags"].append("저장자료 신선도 확인 필요")
-                _add_daily_recommendation_penalty(candidate, "최근 자료 신선도 보강 필요", 2)
-            candidate["evidence_sources"].append(freshness.get("summary") or "저장자료 신선도 확인")
-            if profile.get("analysis_focus"):
-                candidate["reasons"].append(f"분석 초점: {profile.get('analysis_focus')}")
+            _apply_daily_recommendation_freshness_profile(
+                candidate,
+                ticker=ticker,
+                verification=verification,
+                profile=profile,
+                freshness=freshness,
+            )
         except Exception as exc:
             candidate["risk_notes"].append(f"티커/신선도 점검 일부 제한: {provider_error_message(exc, settings)}")
 

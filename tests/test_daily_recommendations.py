@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
+    apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check,
     daily_recommendation_state_path,
@@ -46,6 +47,47 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(first["score"], 0)
         self.assertEqual(first["portfolio_risk_connection"], {})
         self.assertEqual(overseas["currency"], "USD")
+
+    def test_apply_daily_recommendation_freshness_profile_records_tone_and_focus(self):
+        verification = SimpleNamespace(company_name="삼양식품")
+        candidate = {
+            "ticker": "003230",
+            "company_name": "003230",
+            "score": 10,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": [],
+            "reasons": [],
+        }
+
+        updated = apply_daily_recommendation_freshness_profile(
+            candidate,
+            ticker="003230",
+            verification=verification,
+            profile={"analysis_focus": "수출 성장"},
+            freshness={"tone": "warning", "summary": "최근 자료 보강 필요"},
+        )
+
+        self.assertIs(updated, candidate)
+        self.assertEqual(candidate["company_name"], "삼양식품")
+        self.assertEqual(candidate["score"], 13)
+        self.assertEqual(candidate["score_components"][-1], {"label": "저장자료 신선도 확인 필요", "points": 5})
+        self.assertEqual(candidate["score_penalties"], ["최근 자료 신선도 보강 필요 (-2)"])
+        self.assertIn("저장자료 신선도 확인 필요", candidate["quality_flags"])
+        self.assertIn("최근 자료 보강 필요", candidate["evidence_sources"])
+        self.assertIn("분석 초점: 수출 성장", candidate["reasons"])
+
+        ok_candidate = {"score": 0, "score_components": [], "evidence_sources": []}
+        apply_daily_recommendation_freshness_profile(
+            ok_candidate,
+            ticker="A",
+            verification=SimpleNamespace(company_name=""),
+            profile={},
+            freshness={"tone": "ok"},
+        )
+        self.assertEqual(ok_candidate["score"], 10)
+        self.assertEqual(ok_candidate["evidence_sources"], ["저장자료 신선도 확인"])
 
     def test_apply_daily_recommendation_overseas_tracking_marks_fx_review(self):
         candidate = {
