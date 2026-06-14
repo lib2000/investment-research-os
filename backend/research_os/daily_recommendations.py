@@ -418,6 +418,25 @@ def apply_daily_recommendation_overseas_tracking(candidate: dict) -> dict:
     return candidate
 
 
+def apply_daily_recommendation_price_check(
+    candidate: dict,
+    *,
+    price: object,
+    source: object = None,
+    checked_at: object = None,
+) -> dict:
+    if price is not None:
+        candidate["baseline_price"] = price
+        candidate["baseline_price_source"] = source or "data_provider"
+        candidate["baseline_price_checked_at"] = checked_at
+        add_daily_recommendation_score(candidate, 5, "현재가 확인")
+    else:
+        candidate.setdefault("risk_notes", []).append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
+        candidate.setdefault("quality_flags", []).append("기준 현재가 미확인")
+        add_daily_recommendation_penalty(candidate, "현재가 미확인", 5)
+    return candidate
+
+
 def finalize_daily_recommendation_ranking(
     candidates_by_ticker: dict[str, dict],
     *,

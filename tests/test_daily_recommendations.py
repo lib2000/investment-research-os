@@ -15,6 +15,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
     apply_daily_recommendation_overseas_tracking,
+    apply_daily_recommendation_price_check,
     daily_recommendation_state_path,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
@@ -68,6 +69,31 @@ class DailyRecommendationsTests(unittest.TestCase):
         domestic = apply_daily_recommendation_overseas_tracking({"currency": "KRW"})
         self.assertFalse(domestic["overseas_tracking"]["needs_fx_conversion"])
         self.assertEqual(domestic["overseas_tracking"]["currency"], "KRW")
+
+    def test_apply_daily_recommendation_price_check_records_success_and_missing_price(self):
+        candidate = {"score": 10, "score_components": [], "score_penalties": []}
+
+        updated = apply_daily_recommendation_price_check(
+            candidate,
+            price=123.4,
+            source="test",
+            checked_at="2026-06-14T08:00:00+09:00",
+        )
+
+        self.assertIs(updated, candidate)
+        self.assertEqual(candidate["baseline_price"], 123.4)
+        self.assertEqual(candidate["baseline_price_source"], "test")
+        self.assertEqual(candidate["baseline_price_checked_at"], "2026-06-14T08:00:00+09:00")
+        self.assertEqual(candidate["score"], 15)
+        self.assertEqual(candidate["score_components"][-1], {"label": "현재가 확인", "points": 5})
+
+        missing = {"score": 10, "score_components": [], "score_penalties": []}
+        apply_daily_recommendation_price_check(missing, price=None)
+
+        self.assertEqual(missing["score"], 5)
+        self.assertIn("기준 현재가 미확인", missing["quality_flags"])
+        self.assertEqual(missing["score_penalties"], ["현재가 미확인 (-5)"])
+        self.assertTrue(missing["risk_notes"][0].startswith("기준 현재가를 확인하지 못해"))
 
     def test_finalize_daily_recommendation_ranking_limits_and_ranks_candidates(self):
         result = finalize_daily_recommendation_ranking(

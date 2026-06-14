@@ -61,6 +61,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
+    apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
@@ -17224,15 +17225,12 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
         if candidate.get("baseline_price") is None:
             price, source = latest_provider_price(ticker, settings, force_refresh=True)
-            if price is not None:
-                candidate["baseline_price"] = price
-                candidate["baseline_price_source"] = source or "data_provider"
-                candidate["baseline_price_checked_at"] = current_storage_timestamp()
-                _add_daily_recommendation_score(candidate, 5, "현재가 확인")
-            else:
-                candidate["risk_notes"].append("기준 현재가를 확인하지 못해 사후 수익률 추적은 가격 확보 후 보강됩니다.")
-                candidate["quality_flags"].append("기준 현재가 미확인")
-                _add_daily_recommendation_penalty(candidate, "현재가 미확인", 5)
+            _apply_daily_recommendation_price_check(
+                candidate,
+                price=price,
+                source=source,
+                checked_at=current_storage_timestamp() if price is not None else None,
+            )
 
         _apply_daily_recommendation_overseas_tracking(candidate)
 
