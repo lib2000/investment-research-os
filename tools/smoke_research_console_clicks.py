@@ -1320,6 +1320,9 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                         dailyRecommendationsText.includes("최근자료 영향") ||
                         dailyRecommendationsText.includes("환율 확인") ||
                         dailyRecommendationsText.includes("보유/관심 연결 정보 없음")),
+                    dailyRecommendationsShowsInvestmentProfile:
+                      dailyRecommendationsText.includes("투자 방향:") ||
+                      dailyRecommendationsText.includes("투자 방향 반영:"),
                     dailyRecommendationsShowsTracking:
                       (dailyRecommendationsStatusText.includes("경과 그래프") ||
                         dailyRecommendationsStatusText.includes("사후 추적")) &&
@@ -1461,6 +1464,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError(
                     "오늘 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."
                 )
+            if not result["dailyRecommendationsShowsInvestmentProfile"]:
+                raise AssertionError("오늘 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다.")
             if not result["dailyRecommendationsShowsTracking"]:
                 raise AssertionError("추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:
