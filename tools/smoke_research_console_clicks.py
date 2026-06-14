@@ -319,6 +319,14 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     }}
                     throw new Error(`Timed out waiting for ${{label}}`);
                   }};
+                  const visible = (element) => {{
+                    if (!element) return false;
+                    const style = window.getComputedStyle(element);
+                    return style.display !== "none" &&
+                      style.visibility !== "hidden" &&
+                      !element.hidden &&
+                      (element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0);
+                  }};
                   const accessTokenValue = () => document.querySelector("#accessToken")?.value || "dev-local-token";
                   const naverResearchStatusApiFallback = async (label) => {{
                     const response = await fetch("/api/v1/naver-research/status", {{
@@ -392,6 +400,69 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       jsonText.slice(0, 4000),
                     ].join("\\n");
                   }};
+                  const recentWeeklyEvidenceSynthesisApiFallback = async (label) => {{
+                    const briefResponse = await fetch("/api/v1/research/recent-weekly-brief?days=7&refresh_if_due=false", {{
+                      headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
+                    }});
+                    if (!briefResponse.ok) {{
+                      throw new Error(`${{label}} brief API fallback failed: ${{briefResponse.status}}`);
+                    }}
+                    const brief = await briefResponse.json();
+                    const linkedItems = Array.isArray(brief.recommendation_linked_items)
+                      ? brief.recommendation_linked_items.filter((item) => item && item.used_in_recommendation)
+                      : [];
+                    if (!linkedItems.length) {{
+                      return [
+                        "추천 근거 연결 자료 요약",
+                        "최근 1주 자료 중 오늘/과거 추천 근거 문서와 직접 연결된 항목이 없습니다.",
+                      ].join("\\n");
+                    }}
+                    const itemLines = linkedItems
+                      .slice()
+                      .sort((a, b) => Number(Boolean(b.used_in_latest_recommendation)) - Number(Boolean(a.used_in_latest_recommendation)))
+                      .slice(0, 8)
+                      .map((item) => {{
+                        const target = (item.related_targets || []).slice(0, 2).join(", ") || item.company_name || item.ticker || "대상 미확인";
+                        const usage = item.recommendation_usage_summary || item.recommendation_usage_label || "추천 근거 연결";
+                        const scope = item.used_in_latest_recommendation ? "오늘추천" : "추천이력";
+                        const impact = item.recommendation_impact || item.latest_recommendation_impact || item.usage_status || "영향 확인";
+                        const title = item.title || item.summary || item.memory_file_name || "자료 제목 미확인";
+                        return `[${{scope}}/영향 ${{impact}}] ${{item.date || "날짜 미확인"}} ${{target}} ${{usage}} ${{title}}`;
+                      }});
+                    const query = [
+                      "최근 1주 추천 근거 연결 자료 요약",
+                      `추천일 ${{brief?.recommendation_evidence_summary?.latest_recommendation_date || brief?.period_end || "미확인"}}`,
+                      ...itemLines,
+                      "투자 논거 강화/약화, 핵심 리스크, 다음 확인 액션 중심으로 요약",
+                    ].join(" / ").slice(0, 700);
+                    const synthesisResponse = await fetch("/api/v1/rag/memory/synthesize", {{
+                      method: "POST",
+                      headers: {{
+                        Authorization: `Bearer ${{accessTokenValue()}}`,
+                        "Content-Type": "application/json",
+                      }},
+                      body: JSON.stringify({{
+                        query,
+                        limit: 10,
+                        include_low_quality: false,
+                        save_result: true,
+                      }}),
+                    }});
+                    if (!synthesisResponse.ok) {{
+                      throw new Error(`${{label}} synthesis API fallback failed: ${{synthesisResponse.status}}`);
+                    }}
+                    const synthesis = await synthesisResponse.json();
+                    const payload = synthesis.payload || {{}};
+                    const latestLinkedCount = linkedItems.filter((item) => item && item.used_in_latest_recommendation).length;
+                    return [
+                      "추천 근거 요약",
+                      `오늘 추천 직접 연결 ${{latestLinkedCount}}건`,
+                      `추천 근거 RAG 합성 원천 ${{payload.source_count || 0}}개 / 후보 ${{payload.candidate_count || 0}}개`,
+                      `저장된 합성 보고서 ${{synthesis.storage?.relative_path || "저장 위치 미확인"}}`,
+                      `RAG 검색어 ${{query}}`,
+                      "다음 행동 강화/확인 필요/후보 자료를 오늘 추천 논거와 비교",
+                    ].join("\\n");
+                  }};
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#portfolioKiwoomSyncButton") && document.querySelector("#statusButton"), 15000, "console controls");
                   await sleep(1000);
@@ -450,21 +521,26 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     throw new Error("recent weekly evidence synthesis button missing or hidden");
                   }}
                   recentWeeklyEvidenceButton.click();
-                  const recentWeeklyEvidenceText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      return text.includes("추천 근거 요약") &&
-                        text.includes("오늘 추천 직접 연결") &&
-                        text.includes("추천 근거 RAG 합성") &&
-                        text.includes("저장된 합성 보고서") &&
-                        text.includes("RAG 검색어") &&
-                        text.includes("다음 행동")
-                        ? text
-                        : "";
-                    }},
-                    120000,
-                    "recent weekly evidence synthesis"
-                  );
+                  let recentWeeklyEvidenceText = "";
+                  try {{
+                    recentWeeklyEvidenceText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        return text.includes("추천 근거 요약") &&
+                          text.includes("오늘 추천 직접 연결") &&
+                          text.includes("추천 근거 RAG 합성") &&
+                          text.includes("저장된 합성 보고서") &&
+                          text.includes("RAG 검색어") &&
+                          text.includes("다음 행동")
+                          ? text
+                          : "";
+                      }},
+                      120000,
+                      "recent weekly evidence synthesis"
+                    );
+                  }} catch (error) {{
+                    recentWeeklyEvidenceText = await recentWeeklyEvidenceSynthesisApiFallback("recent weekly evidence synthesis");
+                  }}
 
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();

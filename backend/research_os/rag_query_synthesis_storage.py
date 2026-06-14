@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+from re import sub
+
 
 _NON_TICKER_STORAGE_KEYS = {"SEARCH", "MARKET", "GENERAL", "UNKNOWN"}
+
+
+def _query_file_suffix(query: str, max_length: int = 96) -> str:
+    safe = sub(r"[^A-Za-z0-9._-]+", "-", str(query or "").strip().lower()).strip("-")
+    if not safe:
+        return "search"
+    return safe[:max_length].rstrip("-") or "search"
 
 
 def build_rag_query_synthesis_manifest_extra(*, query: str, payload: dict) -> dict:
@@ -47,7 +56,7 @@ def save_rag_query_synthesis_result(runtime, *, vault_dir, query: str, payload: 
         structured_payload=payload,
         manifest_entry=manifest_extra,
         report_date=storage_date,
-        file_suffix=query,
+        file_suffix=_query_file_suffix(query),
     )
     rag_document = None
     thesis_snapshot = None

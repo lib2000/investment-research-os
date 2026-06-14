@@ -5231,6 +5231,16 @@ class ConsoleAssetHashTests(unittest.TestCase):
 
 
 class RagQuerySynthesisStorageTests(unittest.TestCase):
+    def test_rag_query_synthesis_query_file_suffix_is_filesystem_safe(self):
+        from research_os import rag_query_synthesis_storage
+
+        self.assertEqual(
+            rag_query_synthesis_storage._query_file_suffix("  AI 메모리 / HBM?  "),
+            "ai-hbm",
+        )
+        self.assertEqual(rag_query_synthesis_storage._query_file_suffix("   "), "search")
+        self.assertEqual(rag_query_synthesis_storage._query_file_suffix("A" * 120), "a" * 96)
+
     def test_rag_query_synthesis_storage_persists_manifest_rag_and_thesis(self):
         from research_os import rag_query_synthesis_storage
         from research_os.research_memory import ResearchStorageInfo
@@ -5305,7 +5315,7 @@ class RagQuerySynthesisStorageTests(unittest.TestCase):
         self.assertEqual(saved["ticker"], "005930")
         self.assertEqual(saved["report_type"], "rag-query-synthesis")
         self.assertEqual(saved["report_date"], date(2026, 6, 13))
-        self.assertEqual(saved["file_suffix"], "AI 메모리")
+        self.assertEqual(saved["file_suffix"], "ai")
         self.assertEqual(saved["structured_payload"], payload)
         self.assertEqual(saved["manifest_entry"]["query"], "AI 메모리")
         self.assertEqual(saved["manifest_entry"]["source_confidence"], 0.86)
