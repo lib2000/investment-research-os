@@ -122,6 +122,22 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(any("AWS lock-in" in item for item in candidate["risk_notes"]))
         self.assertTrue(any("RPO" in item for item in profile["watch_triggers"]))
 
+    def test_investment_direction_profile_score_bonus_matches_component_sum(self):
+        candidate = ensure_daily_recommendation_candidate({}, "SNOW", "Snowflake")
+        candidate["evidence_sources"].append("AIDC 전력망 SOFC, HBM CoWoS, AWS Graviton 데이터 클라우드 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        profile_component_points = sum(
+            int(component.get("points") or 0)
+            for component in candidate["score_components"]
+            if str(component.get("label") or "").startswith("첨부 투자 방향:")
+        )
+        self.assertGreater(len(profile["themes"]), 1)
+        self.assertEqual(profile["score_bonus"], profile_component_points)
+        self.assertEqual(candidate["score"], profile_component_points)
+
     def test_investment_direction_profile_ignores_unmatched_candidate(self):
         candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
         candidate["evidence_sources"].append("라면 수출과 원가 안정성 점검")
