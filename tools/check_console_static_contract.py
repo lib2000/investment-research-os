@@ -127,6 +127,7 @@ REQUIRED_CSS_SNIPPETS = {
 REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_result_title": "오늘의 추천 결과",
     "daily_recommendation_rank_layout_text": "1~3위 추천 후보를 한 줄 카드로 정렬했습니다",
+    "daily_recommendation_dashboard_top": "${renderDailyRecommendationHomeTopPanel()}\n      <section class=\"dashboard-clean-hero",
     "daily_recommendation_rank_card_class": "daily-recommendation-rank-card",
     "daily_recommendation_daily_list": "일자별 추천 목록",
     "daily_recommendation_progress_graph": "경과 그래프",
