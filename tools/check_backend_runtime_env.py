@@ -100,6 +100,29 @@ def check_http_health(url: str, timeout: float) -> tuple[bool, str]:
         return False, f"연결 실패: {exc}"
 
 
+def run_daily_recommendation_tests(
+    python_executable: Path,
+    root: Path,
+    timeout: float,
+) -> tuple[bool, list[str]]:
+    try:
+        completed = subprocess.run(
+            [str(python_executable), "-m", "unittest", "tests.test_daily_recommendations"],
+            cwd=str(root),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return False, [f"시간 초과: {exc}"]
+    except OSError as exc:
+        return False, [f"실행 실패: {exc}"]
+    output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
+    lines = [line for line in output.splitlines() if line.strip()]
+    return completed.returncode == 0, lines[-12:] or ["출력 없음"]
+
+
 def is_wsl_like() -> bool:
     if os.name == "nt":
         return False
@@ -124,6 +147,8 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:8001")
     parser.add_argument("--timeout", type=float, default=2.0)
     parser.add_argument("--strict", action="store_true", help="의존성 또는 백엔드 미가동을 실패로 처리합니다.")
+    parser.add_argument("--check-daily-tests", action="store_true", help="일일 추천 단위 테스트까지 실행합니다.")
+    parser.add_argument("--test-timeout", type=float, default=90.0, help="단위 테스트 실행 제한 시간(초)입니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -157,16 +182,34 @@ def main() -> int:
     if health_sandbox_blocked:
         print("참고: WSL/Codex 격리 환경에서 localhost 접근이 차단된 상태일 수 있습니다. Windows PowerShell의 Python으로 재확인하세요.")
 
-    if missing or mismatched or not health_ok:
+    daily_tests_ok = True
+    if args.check_daily_tests:
+        print("일일 추천 단위 테스트: 실행")
+        daily_tests_ok, daily_test_lines = run_daily_recommendation_tests(
+            runtime_python,
+            root,
+            timeout=args.test_timeout,
+        )
+        for line in daily_test_lines:
+            print(f"  {line}")
+        print(f"일일 추천 단위 테스트: {'통과' if daily_tests_ok else '실패'}")
+
+    if missing or mismatched or not health_ok or not daily_tests_ok:
         print("권장 조치:")
+        action_number = 1
         if missing or mismatched:
-            print(r"1. Windows PowerShell에서 `pip install -r backend\requirements.txt`로 백엔드 의존성을 맞추세요.")
+            print(rf"{action_number}. Windows PowerShell에서 `pip install -r backend\requirements.txt`로 백엔드 의존성을 맞추세요.")
+            action_number += 1
         if not health_ok:
             if health_sandbox_blocked:
-                print(r"2. 백엔드가 실제로 꺼졌다고 단정하지 말고 Windows PowerShell에서 `python tools\check_backend_runtime_env.py --strict`로 재확인하세요.")
+                print(rf"{action_number}. 백엔드가 실제로 꺼졌다고 단정하지 말고 Windows PowerShell에서 `python tools\check_backend_runtime_env.py --strict`로 재확인하세요.")
             else:
-                print(r"2. Windows PowerShell에서 `cd C:\Users\lib20\InvestmentJournalApp` 후 `.\scripts\start-research-backend.ps1 -Port 8001`를 실행하세요.")
-        print("3. 실행 후 `http://127.0.0.1:8001/console/index.html`에서 콘솔을 확인하세요.")
+                print(rf"{action_number}. Windows PowerShell에서 `cd C:\Users\lib20\InvestmentJournalApp` 후 `.\scripts\start-research-backend.ps1 -Port 8001`를 실행하세요.")
+            action_number += 1
+        if not daily_tests_ok:
+            print(rf"{action_number}. Windows PowerShell에서 `python -m unittest tests.test_daily_recommendations`로 실패 상세를 확인하세요.")
+            action_number += 1
+        print(f"{action_number}. 실행 후 `http://127.0.0.1:8001/console/index.html`에서 콘솔을 확인하세요.")
         if args.strict:
             return 1
 
