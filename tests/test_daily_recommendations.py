@@ -96,6 +96,32 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(any("AI 데이터센터" in item for item in candidate["reasons"]))
         self.assertTrue(any("가스터빈 납기" in item for item in candidate["risk_notes"]))
 
+    def test_investment_direction_profile_scores_repo_liquidity_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "TLT", "Long Treasury ETF")
+        candidate["evidence_sources"].append("SOFR-ON RRP와 SOFR-IORB, TGA, T-bill 순발행을 함께 확인")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "repo_liquidity_stress")
+        self.assertEqual(profile["score_bonus"], 6)
+        self.assertTrue(any("SOFR 단기자금 유동성" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("deleveraging" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("SOFR-ON RRP" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_enterprise_ai_data_cloud_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "SNOW", "Snowflake")
+        candidate["evidence_sources"].append("AWS Graviton, Natoma MCP governance, RPO와 NRR 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "enterprise_ai_data_cloud")
+        self.assertEqual(profile["score_bonus"], 6)
+        self.assertTrue(any("엔터프라이즈 AI 데이터 클라우드" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("AWS lock-in" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("RPO" in item for item in profile["watch_triggers"]))
+
     def test_investment_direction_profile_ignores_unmatched_candidate(self):
         candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
         candidate["evidence_sources"].append("라면 수출과 원가 안정성 점검")
