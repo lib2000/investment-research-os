@@ -11,6 +11,18 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+
+def import_research_os_main_or_skip():
+    try:
+        import importlib
+
+        return importlib.import_module("research_os_main")
+    except ModuleNotFoundError as exc:
+        if exc.name == "fastapi":
+            raise unittest.SkipTest("FastAPI is not installed in this Python environment") from exc
+        raise
+
+
 from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
@@ -473,7 +485,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(parse_daily_recommendations_time(settings), (8, 0))
 
     def test_daily_recommendation_status_exposes_today_records(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         settings = Settings(daily_recommendations_time="08:00")
         with (
@@ -595,7 +607,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(status["performance_summary"]["positive_count"], 1)
 
     def test_copyright_safe_url_only_is_not_body_missing_warning(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         policy_item = {
             "source_url": "https://example.com/news",
@@ -621,7 +633,7 @@ class DailyRecommendationsTests(unittest.TestCase):
 
 
     def test_daily_recommendation_storage_quality_records_missing_dashboard_evidence(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         candidate = {
             "ticker": "033500",
@@ -642,7 +654,7 @@ class DailyRecommendationsTests(unittest.TestCase):
 
 
     def test_daily_recommendation_storage_quality_penalizes_weak_evidence(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         quality = main._daily_recommendation_manifest_quality_by_ticker(
             [
@@ -687,7 +699,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(candidate["evidence_sources"][0].startswith("저장 품질:"))
 
     def test_daily_recommendation_candidate_ranking_uses_split_quality_helpers(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         settings = Settings(research_vault_dir="../research_vault")
         consensus_scan = {
@@ -776,7 +788,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
 
     def test_promoted_news_inbox_item_is_not_counted_as_open_quality_warning(self):
-        import research_os_main as main
+        main = import_research_os_main_or_skip()
 
         item = {
             "promoted": True,
