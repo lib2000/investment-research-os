@@ -388,6 +388,8 @@ $contracts = @(
       'check_backend_module_health.py',
       'check_operational_readiness_score.py',
       '운영 완성도 95%',
+      'analyze_code_diff_impact.py',
+      '변경 영향 분석',
       'check_console_static_contract.py',
       'check_console_asset_and_js.py',
       'check_storage_quality_store.py',
@@ -401,6 +403,19 @@ $contracts = @(
       'LLM/RAG 저장 상태',
       'RAG 합성 저장 상태',
       '오프라인 운영 점검 통과'
+    )
+  },
+  @{
+    Path = "tools\analyze_code_diff_impact.py"
+    Snippets = @(
+      'FLOW_IMPACT_HINTS',
+      'fallback_flow_ids',
+      'investment_direction',
+      '투자 방향 프로필 점수',
+      'daily_recommendations',
+      '--refresh',
+      '--strict',
+      '운영 흐름별 재검증 권장'
     )
   },
 
