@@ -18,6 +18,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check,
+    apply_daily_recommendation_priority_target,
     daily_recommendation_state_path,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
@@ -87,6 +88,38 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertIn("목표가/리포트 근거 3건", candidate["evidence_sources"])
         self.assertIn("최근 근거 파일: report.md", candidate["evidence_sources"])
         self.assertIn("대상 범위: portfolio", candidate["evidence_sources"])
+
+    def test_apply_daily_recommendation_priority_target_scores_research_links(self):
+        candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
+
+        updated = apply_daily_recommendation_priority_target(
+            candidate,
+            {
+                "priority": "high",
+                "recent_document_count": 4,
+                "rag_document_count": 8,
+                "thesis_snapshot_connected": True,
+                "market_journal_matches": [
+                    {"summary": "수출 성장과 원가 안정성이 동시에 확인되었습니다."},
+                    {"summary": "후속 메모"},
+                ],
+                "next_action": "실적 발표 전 가격 조건 확인",
+            },
+        )
+
+        self.assertIs(updated, candidate)
+        labels = [item["label"] for item in candidate["score_components"]]
+        self.assertEqual(candidate["score"], 50)
+        self.assertIn("보유/관심 우선순위", labels)
+        self.assertIn("최근 저장자료", labels)
+        self.assertIn("RAG 연결 문서", labels)
+        self.assertIn("최신 투자 논거 스냅샷", labels)
+        self.assertIn("시장일지 연결", labels)
+        self.assertIn("최근 저장자료 4건", candidate["reasons"])
+        self.assertIn("시장일지 연결: 수출 성장과 원가 안정성이 동시에 확인되었습니다.", candidate["reasons"])
+        self.assertIn("RAG 연결 문서 8건", candidate["evidence_sources"])
+        self.assertIn("최신 투자 논거 스냅샷 연결", candidate["evidence_sources"])
+        self.assertEqual(candidate["risk_notes"], ["실적 발표 전 가격 조건 확인"])
 
     def test_apply_daily_recommendation_freshness_profile_records_tone_and_focus(self):
         verification = SimpleNamespace(company_name="삼양식품")

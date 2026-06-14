@@ -16,6 +16,7 @@ from re import fullmatch
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from research_os.interest_automation import compact_interest_text
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
 from research_os.storage_quality import (
@@ -454,6 +455,37 @@ def apply_daily_recommendation_consensus_row(
         candidate.setdefault("evidence_sources", []).append(f"최근 근거 파일: {item.get('latest_source_file')}")
     if item.get("source_scope"):
         candidate.setdefault("evidence_sources", []).append(f"대상 범위: {item.get('source_scope')}")
+    return candidate
+
+
+def apply_daily_recommendation_priority_target(candidate: dict, target: dict) -> dict:
+    priority = str(target.get("priority") or "medium")
+    add_daily_recommendation_score(
+        candidate,
+        {"high": 20, "medium": 10, "low": 3}.get(priority, 10),
+        "보유/관심 우선순위",
+    )
+    recent_count = int(target.get("recent_document_count") or 0)
+    rag_count = int(target.get("rag_document_count") or 0)
+    if recent_count:
+        add_daily_recommendation_score(candidate, min(15, recent_count), "최근 저장자료")
+        candidate.setdefault("reasons", []).append(f"최근 저장자료 {recent_count}건")
+    if rag_count:
+        add_daily_recommendation_score(candidate, min(15, rag_count), "RAG 연결 문서")
+        candidate.setdefault("evidence_sources", []).append(f"RAG 연결 문서 {rag_count}건")
+    if target.get("thesis_snapshot_connected"):
+        add_daily_recommendation_score(candidate, 12, "최신 투자 논거 스냅샷")
+        candidate.setdefault("evidence_sources", []).append("최신 투자 논거 스냅샷 연결")
+    market_matches = target.get("market_journal_matches") or []
+    if market_matches:
+        add_daily_recommendation_score(candidate, min(10, len(market_matches) * 3), "시장일지 연결")
+        latest_market = market_matches[0]
+        candidate.setdefault("reasons", []).append(
+            "시장일지 연결: "
+            + compact_interest_text(latest_market.get("summary") or latest_market.get("session_date"), 90)
+        )
+    if target.get("next_action"):
+        candidate.setdefault("risk_notes", []).append(str(target.get("next_action")))
     return candidate
 
 

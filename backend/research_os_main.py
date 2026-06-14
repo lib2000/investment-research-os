@@ -64,6 +64,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_freshness_profile as _apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
+    apply_daily_recommendation_priority_target as _apply_daily_recommendation_priority_target,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
@@ -17082,29 +17083,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             ticker,
             str(target.get("label") or target.get("company_name") or target.get("name") or ticker),
         )
-        priority = str(target.get("priority") or "medium")
-        _add_daily_recommendation_score(candidate, {"high": 20, "medium": 10, "low": 3}.get(priority, 10), "보유/관심 우선순위")
-        recent_count = int(target.get("recent_document_count") or 0)
-        rag_count = int(target.get("rag_document_count") or 0)
-        if recent_count:
-            _add_daily_recommendation_score(candidate, min(15, recent_count), "최근 저장자료")
-            candidate["reasons"].append(f"최근 저장자료 {recent_count}건")
-        if rag_count:
-            _add_daily_recommendation_score(candidate, min(15, rag_count), "RAG 연결 문서")
-            candidate["evidence_sources"].append(f"RAG 연결 문서 {rag_count}건")
-        if target.get("thesis_snapshot_connected"):
-            _add_daily_recommendation_score(candidate, 12, "최신 투자 논거 스냅샷")
-            candidate["evidence_sources"].append("최신 투자 논거 스냅샷 연결")
-        market_matches = target.get("market_journal_matches") or []
-        if market_matches:
-            _add_daily_recommendation_score(candidate, min(10, len(market_matches) * 3), "시장일지 연결")
-            latest_market = market_matches[0]
-            candidate["reasons"].append(
-                "시장일지 연결: "
-                + compact_interest_text(latest_market.get("summary") or latest_market.get("session_date"), 90)
-            )
-        if target.get("next_action"):
-            candidate["risk_notes"].append(str(target.get("next_action")))
+        _apply_daily_recommendation_priority_target(candidate, target)
 
     recent_weekly_index = _daily_recommendation_recent_weekly_index(recent_weekly)
     recent_items_by_ticker = recent_weekly_index["items_by_ticker"]
