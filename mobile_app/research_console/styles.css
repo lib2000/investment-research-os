@@ -3325,6 +3325,12 @@ label {
   font-weight: 800;
 }
 
+.daily-recommendation-badges em.investment-profile {
+  color: #3730a3;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
 .daily-recommendation-card span,
 .daily-recommendation-card small {
   color: var(--muted);
@@ -3345,7 +3351,8 @@ label {
 
 .daily-recommendation-card .daily-recommendation-warning,
 .daily-recommendation-card .daily-recommendation-fx,
-.daily-recommendation-card .daily-recommendation-portfolio {
+.daily-recommendation-card .daily-recommendation-portfolio,
+.daily-recommendation-card .daily-recommendation-investment-profile {
   padding: 7px 8px;
   border-radius: 6px;
   line-height: 1.45;
@@ -3367,6 +3374,12 @@ label {
   color: #115e59;
   background: #ecfdf5;
   border: 1px solid #99f6e4;
+}
+
+.daily-recommendation-card .daily-recommendation-investment-profile {
+  color: #3730a3;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
 }
 
 .daily-recommendation-score-summary {

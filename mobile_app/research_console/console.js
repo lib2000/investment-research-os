@@ -7983,6 +7983,22 @@ function dailyRecommendationExposureSummary(record = {}) {
   return chips.filter(Boolean).slice(0, 6).join(" · ");
 }
 
+function dailyRecommendationInvestmentProfileSummary(record = {}) {
+  const profile = record.investment_direction_profile || {};
+  const themes = Array.isArray(profile.themes) ? profile.themes : [];
+  const labels = themes
+    .map((theme) => String(theme?.label || theme?.key || "").trim())
+    .filter(Boolean);
+  const triggers = Array.isArray(profile.watch_triggers) ? profile.watch_triggers : [];
+  return {
+    hasProfile: labels.length > 0,
+    labelText: labels.slice(0, 2).join(" · "),
+    badgeLabels: labels.slice(0, 3),
+    triggerText: compactOutputText(triggers[0] || "", 132),
+    scoreBonus: Number(profile.score_bonus || 0),
+  };
+}
+
 function dailyRecommendationEvidenceRows(record) {
   return [
     ...(record?.evidence_sources || []).slice(0, 3),
@@ -8176,7 +8192,10 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
           const scoreComponents = (record.score_components || [])
             .slice()
             .sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
-          const keyDriver = scoreComponents[0]?.label || exposure || "추천 근거 확인";
+          const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
+          const keyDriver = investmentProfile.hasProfile
+            ? `투자 방향: ${investmentProfile.labelText}`
+            : scoreComponents[0]?.label || exposure || "추천 근거 확인";
           const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
             <li class="daily-recommendation-top-rank rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}">
@@ -8434,6 +8453,7 @@ function renderDailyRecommendationCards(payload) {
       const citationRows = dailyRecommendationCitationRows(record);
       const exposureSummary = dailyRecommendationExposureSummary(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
+      const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
       const rank = Number(record.rank || index + 1);
       return `
         <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
@@ -8442,13 +8462,14 @@ function renderDailyRecommendationCards(payload) {
             <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")}</span>
           </div>
           <strong>${escapeHtml(displayCompanyName(record))}</strong>
-          ${publicIrSecLinked ? `<div class="daily-recommendation-badges"><em>공개 IR/SEC 근거</em></div>` : ""}
+          ${publicIrSecLinked || investmentProfile.hasProfile ? `<div class="daily-recommendation-badges">${publicIrSecLinked ? `<em>공개 IR/SEC 근거</em>` : ""}${investmentProfile.badgeLabels.map((label) => `<em class="investment-profile">투자 방향: ${escapeHtml(label)}</em>`).join("")}</div>` : ""}
           <div class="daily-recommendation-rank-metrics">
             <span>점수 ${escapeHtml(record.score ?? "n/a")}</span>
             <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
           </div>
           ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
+          ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
           <div class="daily-recommendation-score">
             ${scoreComponents
               .map(

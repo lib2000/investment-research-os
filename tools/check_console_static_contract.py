@@ -120,6 +120,8 @@ REQUIRED_CSS_SNIPPETS = {
     "daily_recommendation_rank_card": ".daily-recommendation-rank-card",
     "daily_recommendation_rank_metrics": ".daily-recommendation-rank-metrics",
     "daily_recommendation_top_rank": ".daily-recommendation-top-rank",
+    "daily_recommendation_investment_profile": ".daily-recommendation-investment-profile",
+    "daily_recommendation_investment_profile_badge": "em.investment-profile",
     "investment_calendar_grid": ".investment-calendar-grid",
     "investment_calendar_weekly": ".investment-calendar-weekly",
 }
@@ -136,6 +138,9 @@ REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_weekly_evidence_helper": "dailyRecommendationWeeklyEvidenceRows",
     "daily_recommendation_weekly_impact_helper": "dailyRecommendationWeeklyImpactRows",
     "daily_recommendation_exposure_helper": "dailyRecommendationExposureSummary",
+    "daily_recommendation_investment_profile_helper": "dailyRecommendationInvestmentProfileSummary",
+    "daily_recommendation_investment_profile_line": "투자 방향 반영:",
+    "daily_recommendation_investment_profile_badge_text": "투자 방향:",
     "daily_recommendation_exposure_line": "추천 연결:",
     "recent_weekly_recommendation_impact_helper": "recommendationImpactForItem",
     "recent_weekly_impact_summary": "추천 영향 요약",
