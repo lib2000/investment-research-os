@@ -57,8 +57,6 @@ from research_os.dossier_text import (
     token_jaccard_similarity,
 )
 from research_os.daily_recommendations import (
-    add_daily_recommendation_penalty as _add_daily_recommendation_penalty,
-    add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     apply_daily_recommendation_consensus_row as _apply_daily_recommendation_consensus_row,
     apply_daily_recommendation_evidence_documents as _apply_daily_recommendation_evidence_documents,
@@ -78,8 +76,6 @@ from research_os.daily_recommendations import (
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
     daily_recommendation_target_label as _daily_recommendation_target_label,
-    daily_recommendation_weekly_group_evidence_text as _daily_recommendation_weekly_group_evidence_text,
-    daily_recommendation_recent_item_evidence_document as _daily_recommendation_recent_item_evidence_document,
     should_run_daily_recommendations,
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
