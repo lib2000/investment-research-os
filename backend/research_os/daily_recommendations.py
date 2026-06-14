@@ -398,6 +398,65 @@ def apply_daily_recommendation_storage_quality(candidate: dict, quality: dict | 
         evidence_sources.insert(0, quality_evidence)
 
 
+def apply_daily_recommendation_consensus_row(
+    candidate: dict,
+    item: dict,
+    *,
+    price_refresh_mode: object = None,
+    as_of: object = None,
+) -> dict:
+    candidate["currency"] = item.get("currency") or candidate.get("currency")
+    if item.get("current_price") is not None:
+        candidate["baseline_price"] = item.get("current_price")
+        candidate["baseline_price_source"] = item.get("price_source") or price_refresh_mode
+        candidate["baseline_price_checked_at"] = as_of
+
+    target_upside = item.get("target_upside")
+    if target_upside is not None:
+        add_daily_recommendation_score(
+            candidate,
+            max(0, min(35, int(float(target_upside) * 100))),
+            "증권사 목표가 상승여력",
+        )
+        candidate.setdefault("reasons", []).append(
+            f"저장된 증권사 목표주가 대비 상승여력 {float(target_upside) * 100:.1f}%"
+        )
+    if item.get("valuation_signal") and item.get("valuation_signal") != "계산 보류":
+        add_daily_recommendation_score(candidate, 10, "밸류에이션 신호")
+        candidate.setdefault("reasons", []).append(f"밸류에이션 신호: {item.get('valuation_signal')}")
+    if item.get("source_count"):
+        add_daily_recommendation_score(candidate, min(15, int(item.get("source_count") or 0) * 3), "리포트 근거 수")
+        candidate.setdefault("evidence_sources", []).append(
+            f"목표가/리포트 근거 {item.get('source_count')}건"
+        )
+    if item.get("market_value"):
+        market_value = float(item.get("market_value") or 0)
+        add_daily_recommendation_score(candidate, 20, "실제 보유 포트폴리오 비중")
+        candidate.setdefault("portfolio_context", []).append(
+            f"보유 포트폴리오 평가금액 {round(market_value):,}원"
+        )
+        candidate["portfolio_risk_connection"] = {
+            "linked": True,
+            "priority": "high" if market_value >= 10_000_000 else "normal",
+            "market_value_krw": round(market_value),
+            "message": "보유 비중이 연결된 추천 후보입니다. 포트폴리오 리스크 스캔에서 비중·섹터 쏠림을 함께 확인하세요.",
+        }
+    if item.get("interest"):
+        add_daily_recommendation_score(candidate, 10, "관심종목 등록")
+        candidate.setdefault("portfolio_context", []).append("관심종목 등록")
+        if not candidate.get("portfolio_risk_connection"):
+            candidate["portfolio_risk_connection"] = {
+                "linked": True,
+                "priority": "watch",
+                "message": "관심종목 등록 후보입니다. 실제 보유 편입 전 가격 조건과 기존 보유 노출을 함께 확인하세요.",
+            }
+    if item.get("latest_source_file"):
+        candidate.setdefault("evidence_sources", []).append(f"최근 근거 파일: {item.get('latest_source_file')}")
+    if item.get("source_scope"):
+        candidate.setdefault("evidence_sources", []).append(f"대상 범위: {item.get('source_scope')}")
+    return candidate
+
+
 def apply_daily_recommendation_freshness_profile(
     candidate: dict,
     *,

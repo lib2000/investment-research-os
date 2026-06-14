@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
+    apply_daily_recommendation_consensus_row,
     apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check,
@@ -47,6 +48,45 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(first["score"], 0)
         self.assertEqual(first["portfolio_risk_connection"], {})
         self.assertEqual(overseas["currency"], "USD")
+
+    def test_apply_daily_recommendation_consensus_row_scores_target_and_portfolio_context(self):
+        candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
+
+        updated = apply_daily_recommendation_consensus_row(
+            candidate,
+            {
+                "currency": "KRW",
+                "current_price": 100000,
+                "target_upside": 0.24,
+                "valuation_signal": "저평가",
+                "source_count": 3,
+                "market_value": 12000000,
+                "interest": True,
+                "latest_source_file": "report.md",
+                "source_scope": "portfolio",
+            },
+            price_refresh_mode="consensus",
+            as_of="2026-06-14T08:00:00+09:00",
+        )
+
+        self.assertIs(updated, candidate)
+        self.assertEqual(candidate["baseline_price"], 100000)
+        self.assertEqual(candidate["baseline_price_source"], "consensus")
+        self.assertEqual(candidate["baseline_price_checked_at"], "2026-06-14T08:00:00+09:00")
+        labels = [item["label"] for item in candidate["score_components"]]
+        self.assertIn("증권사 목표가 상승여력", labels)
+        self.assertIn("밸류에이션 신호", labels)
+        self.assertIn("리포트 근거 수", labels)
+        self.assertIn("실제 보유 포트폴리오 비중", labels)
+        self.assertIn("관심종목 등록", labels)
+        self.assertTrue(candidate["portfolio_risk_connection"]["linked"])
+        self.assertEqual(candidate["portfolio_risk_connection"]["priority"], "high")
+        self.assertIn("보유 포트폴리오 평가금액 12,000,000원", candidate["portfolio_context"])
+        self.assertIn("저장된 증권사 목표주가 대비 상승여력 24.0%", candidate["reasons"])
+        self.assertIn("밸류에이션 신호: 저평가", candidate["reasons"])
+        self.assertIn("목표가/리포트 근거 3건", candidate["evidence_sources"])
+        self.assertIn("최근 근거 파일: report.md", candidate["evidence_sources"])
+        self.assertIn("대상 범위: portfolio", candidate["evidence_sources"])
 
     def test_apply_daily_recommendation_freshness_profile_records_tone_and_focus(self):
         verification = SimpleNamespace(company_name="삼양식품")
