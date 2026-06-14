@@ -367,7 +367,7 @@ def main() -> int:
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
     parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
-    parser.add_argument("--daily-time", default="09:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
+    parser.add_argument("--daily-time", default="08:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
     parser.add_argument("--skip-all-date-integrity", action="store_true", help="전체 추천 이력의 날짜별 1~3위 무결성 점검을 건너뜁니다.")
     args = parser.parse_args()
 

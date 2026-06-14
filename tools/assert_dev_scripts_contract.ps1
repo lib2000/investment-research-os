@@ -472,6 +472,8 @@ $contracts = @(
     Snippets = @(
       '운영 완성도 점수',
       '--min-score',
+      '--daily-time',
+      '08:00',
       'daily_recommendations_state.json',
       'code_knowledge_graph.json',
       'user_portfolios.json',
@@ -920,6 +922,8 @@ $contracts = @(
       'LOCAL_TIMEZONE',
       'Asia/Seoul',
       'local_today',
+      '--daily-time',
+      '08:00',
       '--expected-latest-count',
       '--max-latest-age-days',
       '최신 추천일 오래됨',

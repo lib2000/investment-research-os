@@ -302,7 +302,7 @@ def portfolio_signal(system_dir: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="운영 완성도 95% 기준을 백엔드 없이 점검합니다.")
     parser.add_argument("--min-score", type=float, default=95.0)
-    parser.add_argument("--daily-time", default="09:00")
+    parser.add_argument("--daily-time", default="08:00")
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
