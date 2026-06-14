@@ -270,6 +270,42 @@ def component_points_sum(record: dict[str, Any]) -> int:
     return total
 
 
+def validate_investment_direction_profile(record: dict[str, Any], errors: list[str]) -> None:
+    label = record.get("company_name") or record.get("ticker") or record.get("record_id")
+    components = record.get("score_components") if isinstance(record.get("score_components"), list) else []
+    profile_components = [
+        str(component.get("label") or "").strip()
+        for component in components
+        if isinstance(component, dict) and str(component.get("label") or "").startswith("첨부 투자 방향:")
+    ]
+    profile = record.get("investment_direction_profile")
+    if not profile_components and not profile:
+        return
+    if not isinstance(profile, dict) or not profile:
+        errors.append(f"{label} 투자 방향 프로필 저장 누락")
+        return
+    if not str(profile.get("source_id") or "").strip():
+        errors.append(f"{label} 투자 방향 프로필 source_id 누락")
+    themes = profile.get("themes")
+    if not isinstance(themes, list) or not themes:
+        errors.append(f"{label} 투자 방향 프로필 테마 누락")
+        themes = []
+    theme_labels = [
+        str(theme.get("label") or theme.get("key") or "").strip()
+        for theme in themes
+        if isinstance(theme, dict)
+    ]
+    for component_label in profile_components:
+        expected_label = component_label.split(":", 1)[-1].strip()
+        if expected_label and expected_label not in theme_labels:
+            errors.append(f"{label} 투자 방향 점수와 프로필 테마 불일치: {expected_label}")
+    if not isinstance(profile.get("score_bonus"), (int, float)) or profile.get("score_bonus", 0) <= 0:
+        errors.append(f"{label} 투자 방향 프로필 가산점 누락")
+    triggers = profile.get("watch_triggers")
+    if not isinstance(triggers, list) or not any(str(item or "").strip() for item in triggers):
+        errors.append(f"{label} 투자 방향 프로필 모니터링 트리거 누락")
+
+
 def validate_score_evidence_alignment(record: dict[str, Any], errors: list[str]) -> None:
     label = record.get("company_name") or record.get("ticker") or record.get("record_id")
     evidence = "\n".join(non_empty_strings(record.get("evidence_sources")))
@@ -472,6 +508,7 @@ def main() -> int:
             if isinstance(portfolio_risk, dict) and portfolio_risk.get("linked") is True and not portfolio_risk.get("message"):
                 errors.append(f"{label} 포트폴리오 연결 설명 누락")
             validate_score_evidence_alignment(record, errors)
+            validate_investment_direction_profile(record, errors)
             validate_tracking_milestones(record, errors)
 
         latest_sample = latest[: args.min_latest]
@@ -500,9 +537,17 @@ def main() -> int:
         evidence_categories = len(evidence_category_names(evidence))
         nearest = nearest_milestone_label(record)
         score_component_count = len(record.get("score_components") or [])
+        profile = record.get("investment_direction_profile") if isinstance(record.get("investment_direction_profile"), dict) else {}
+        profile_themes = profile.get("themes") if isinstance(profile.get("themes"), list) else []
+        profile_labels = [
+            str(theme.get("label") or theme.get("key") or "").strip()
+            for theme in profile_themes
+            if isinstance(theme, dict) and str(theme.get("label") or theme.get("key") or "").strip()
+        ]
+        profile_text = f" | 투자방향 {', '.join(profile_labels[:2])}" if profile_labels else ""
         print(
             f"{record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
-            f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}"
+            f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}{profile_text}"
         )
 
     if errors:

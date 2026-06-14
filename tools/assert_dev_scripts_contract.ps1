@@ -526,7 +526,14 @@ $contracts = @(
     Path = "backend\research_os_main.py"
     Snippets = @(
       'refresh_index=False',
-      'request.refresh_dossier',
+      'request.refresh_dossier'
+    )
+  },
+
+
+  @{
+    Path = "backend\research_os\analysis_module_storage.py"
+    Snippets = @(
       'dossier_refresh_status',
       'upsert_research_memory_document(vault_dir=vault_dir, entry=saved_entry)'
     )
@@ -916,6 +923,9 @@ $contracts = @(
       '--require-quality',
       '점수 설명 누락',
       'validate_score_evidence_alignment',
+      'validate_investment_direction_profile',
+      '투자 방향 프로필 저장 누락',
+      '투자 방향 점수와 프로필 테마 불일치',
       'component_points_sum',
       '최근 공시 점수와 근거 문구 불일치',
       '공개 IR/SEC 점수와 근거 문구 불일치',
