@@ -19,6 +19,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check,
     apply_daily_recommendation_priority_target,
+    apply_daily_recommendation_recent_weekly_evidence,
     daily_recommendation_state_path,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
@@ -120,6 +121,50 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertIn("RAG 연결 문서 8건", candidate["evidence_sources"])
         self.assertIn("최신 투자 논거 스냅샷 연결", candidate["evidence_sources"])
         self.assertEqual(candidate["risk_notes"], ["실적 발표 전 가격 조건 확인"])
+
+    def test_apply_daily_recommendation_recent_weekly_evidence_scores_and_dedupes_groups(self):
+        candidate = ensure_daily_recommendation_candidate({}, "003230", "삼양식품")
+        recent_items = [
+            {"category": "filing", "relative_path": "filing.md", "summary": "공시 요약", "date": "2026-06-14"},
+            {"category": "report", "relative_path": "report.md", "summary": "리포트 요약", "date": "2026-06-14"},
+            {
+                "category": "public_ir_sec",
+                "relative_path": "ir.md",
+                "summary": "IR 요약",
+                "usable_for_recommendation": True,
+            },
+            {
+                "category": "public_ir_sec",
+                "relative_path": "blocked.md",
+                "summary": "본문 보강 필요",
+                "usable_for_recommendation": False,
+            },
+        ]
+        weekly_groups = [
+            {"key": "reports", "label": "리포트", "count": 2, "visible_count": 2, "ticker_count": 1},
+            {"key": "reports", "label": "리포트 중복", "count": 9},
+            {"key": "public_ir_sec", "label": "공개 IR/SEC", "count": 2, "visible_count": 1, "ticker_count": 1},
+        ]
+
+        updated = apply_daily_recommendation_recent_weekly_evidence(candidate, recent_items, weekly_groups)
+
+        self.assertIs(updated, candidate)
+        labels = [item["label"] for item in candidate["score_components"]]
+        self.assertIn("최근 중요 공시 반영", labels)
+        self.assertIn("최근 핵심 리포트 반영", labels)
+        self.assertIn("최근 공개 IR/SEC 반영", labels)
+        self.assertIn("최근 1주 중요 공시 1건 확인", candidate["reasons"])
+        self.assertIn("본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨", candidate["reasons"])
+        self.assertIn("최근 1주 공시 브리프 반영", candidate["evidence_sources"])
+        self.assertIn("최근 1주 핵심 리포트 1건", candidate["evidence_sources"])
+        self.assertIn("최근 1주 공개 IR/SEC 자료 1건", candidate["evidence_sources"])
+        self.assertIn("공개 IR/SEC 본문 보강 필요", candidate["quality_flags"])
+        self.assertTrue(candidate["risk_notes"][0].startswith("공개 IR/SEC URL-only 자료 1건"))
+        self.assertEqual(len(candidate["evidence_documents"]), 4)
+        self.assertEqual([group["key"] for group in candidate["weekly_evidence_groups"]], ["reports", "public_ir_sec"])
+        weekly_text = next(item for item in candidate["evidence_sources"] if item.startswith("최근 1주 자료 묶음"))
+        self.assertIn("리포트 2건", weekly_text)
+        self.assertIn("공개 IR/SEC 2건", weekly_text)
 
     def test_apply_daily_recommendation_freshness_profile_records_tone_and_focus(self):
         verification = SimpleNamespace(company_name="삼양식품")

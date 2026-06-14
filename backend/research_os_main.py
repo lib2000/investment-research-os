@@ -65,6 +65,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
     apply_daily_recommendation_priority_target as _apply_daily_recommendation_priority_target,
+    apply_daily_recommendation_recent_weekly_evidence as _apply_daily_recommendation_recent_weekly_evidence,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
@@ -17093,47 +17094,11 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         if ticker not in candidates_by_ticker:
             continue
         candidate = candidates_by_ticker[ticker]
-        important_count = sum(1 for item in recent_items if item.get("category") == "filing")
-        report_count = sum(1 for item in recent_items if item.get("category") == "report")
-        public_ir_sec_items_for_ticker = [item for item in recent_items if item.get("category") == "public_ir_sec"]
-        public_ir_sec_count = len(public_ir_sec_items_for_ticker)
-        usable_public_ir_sec_count = sum(1 for item in public_ir_sec_items_for_ticker if item.get("usable_for_recommendation"))
-        blocked_public_ir_sec_count = public_ir_sec_count - usable_public_ir_sec_count
-        if important_count:
-            _add_daily_recommendation_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
-            candidate["reasons"].append(f"최근 1주 중요 공시 {important_count}건 확인")
-            candidate["evidence_sources"].append("최근 1주 공시 브리프 반영")
-        if report_count:
-            _add_daily_recommendation_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
-            candidate["evidence_sources"].append(f"최근 1주 핵심 리포트 {report_count}건")
-        if usable_public_ir_sec_count:
-            _add_daily_recommendation_score(candidate, min(12, usable_public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
-            candidate["evidence_sources"].append(f"최근 1주 공개 IR/SEC 자료 {usable_public_ir_sec_count}건")
-            candidate["reasons"].append("본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨")
-        if blocked_public_ir_sec_count:
-            candidate["risk_notes"].append(f"공개 IR/SEC URL-only 자료 {blocked_public_ir_sec_count}건은 본문 보강 전 추천 점수 가산에서 제외")
-            candidate["quality_flags"].append("공개 IR/SEC 본문 보강 필요")
-        for recent_item in recent_items[:8]:
-            document = _daily_recommendation_recent_item_evidence_document(recent_item)
-            if document:
-                candidate.setdefault("evidence_documents", []).append(document)
-        weekly_groups = []
-        seen_group_keys = set()
-        for group in weekly_groups_by_ticker.get(ticker, []):
-            group_key = str(group.get("key") or group.get("label") or "")
-            if group_key in seen_group_keys:
-                continue
-            seen_group_keys.add(group_key)
-            weekly_groups.append(group)
-        if weekly_groups:
-            candidate["weekly_evidence_groups"] = weekly_groups[:5]
-            weekly_group_text = ", ".join(
-                item
-                for item in (_daily_recommendation_weekly_group_evidence_text(group) for group in weekly_groups[:4])
-                if item
-            )
-            if weekly_group_text:
-                candidate["evidence_sources"].append(f"최근 1주 자료 묶음: {weekly_group_text}")
+        _apply_daily_recommendation_recent_weekly_evidence(
+            candidate,
+            recent_items,
+            weekly_groups_by_ticker.get(ticker, []),
+        )
 
     for ticker, candidate in list(candidates_by_ticker.items()):
         _apply_daily_recommendation_storage_quality(candidate, manifest_quality_by_ticker.get(ticker))
