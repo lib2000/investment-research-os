@@ -541,6 +541,18 @@ def apply_daily_recommendation_recent_weekly_evidence(
     return candidate
 
 
+def apply_daily_recommendation_evidence_documents(
+    candidate: dict,
+    rag_evidence_documents: list[dict] | None,
+) -> dict:
+    recent_evidence_documents = list(candidate.get("evidence_documents") or [])
+    candidate["evidence_documents"] = [
+        *recent_evidence_documents,
+        *(rag_evidence_documents or []),
+    ]
+    return candidate
+
+
 def apply_daily_recommendation_freshness_profile(
     candidate: dict,
     *,

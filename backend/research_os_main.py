@@ -61,6 +61,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_score as _add_daily_recommendation_score,
     apply_daily_recommendation_storage_quality as _apply_daily_recommendation_storage_quality,
     apply_daily_recommendation_consensus_row as _apply_daily_recommendation_consensus_row,
+    apply_daily_recommendation_evidence_documents as _apply_daily_recommendation_evidence_documents,
     apply_daily_recommendation_freshness_profile as _apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
@@ -17133,14 +17134,13 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
         _apply_daily_recommendation_overseas_tracking(candidate)
 
-        recent_evidence_documents = list(candidate.get("evidence_documents") or [])
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(
             vault_dir,
             ticker,
             candidate.get("evidence_sources") or [],
             candidate.get("reasons") or [],
         )
-        candidate["evidence_documents"] = [*recent_evidence_documents, *rag_evidence_documents]
+        _apply_daily_recommendation_evidence_documents(candidate, rag_evidence_documents)
         _finalize_daily_recommendation_candidate(candidate)
 
     return _finalize_daily_recommendation_ranking(

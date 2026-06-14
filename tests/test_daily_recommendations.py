@@ -15,6 +15,7 @@ from research_os.daily_recommendations import (
     add_daily_recommendation_penalty,
     add_daily_recommendation_score,
     apply_daily_recommendation_consensus_row,
+    apply_daily_recommendation_evidence_documents,
     apply_daily_recommendation_freshness_profile,
     apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check,
@@ -165,6 +166,29 @@ class DailyRecommendationsTests(unittest.TestCase):
         weekly_text = next(item for item in candidate["evidence_sources"] if item.startswith("최근 1주 자료 묶음"))
         self.assertIn("리포트 2건", weekly_text)
         self.assertIn("공개 IR/SEC 2건", weekly_text)
+
+    def test_apply_daily_recommendation_evidence_documents_preserves_recent_then_rag(self):
+        candidate = {
+            "evidence_documents": [
+                {"title": "최근 문서", "source_relative_path": "recent.md"},
+            ]
+        }
+
+        updated = apply_daily_recommendation_evidence_documents(
+            candidate,
+            [
+                {"title": "RAG 문서", "source_relative_path": "rag.md"},
+            ],
+        )
+
+        self.assertIs(updated, candidate)
+        self.assertEqual(
+            [item["source_relative_path"] for item in candidate["evidence_documents"]],
+            ["recent.md", "rag.md"],
+        )
+
+        empty = apply_daily_recommendation_evidence_documents({}, None)
+        self.assertEqual(empty["evidence_documents"], [])
 
     def test_apply_daily_recommendation_freshness_profile_records_tone_and_focus(self):
         verification = SimpleNamespace(company_name="삼양식품")
