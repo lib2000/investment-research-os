@@ -301,6 +301,18 @@ def validate_investment_direction_profile(record: dict[str, Any], errors: list[s
             errors.append(f"{label} 투자 방향 점수와 프로필 테마 불일치: {expected_label}")
     if not isinstance(profile.get("score_bonus"), (int, float)) or profile.get("score_bonus", 0) <= 0:
         errors.append(f"{label} 투자 방향 프로필 가산점 누락")
+    else:
+        profile_points = sum(
+            int(component.get("points") or 0)
+            for component in components
+            if isinstance(component, dict)
+            and str(component.get("label") or "").startswith("첨부 투자 방향:")
+            and isinstance(component.get("points"), (int, float))
+        )
+        if profile_points and int(profile.get("score_bonus") or 0) != profile_points:
+            errors.append(
+                f"{label} 투자 방향 프로필 가산점 불일치: 프로필 {profile.get('score_bonus')} / 점수구성 {profile_points}"
+            )
     triggers = profile.get("watch_triggers")
     if not isinstance(triggers, list) or not any(str(item or "").strip() for item in triggers):
         errors.append(f"{label} 투자 방향 프로필 모니터링 트리거 누락")

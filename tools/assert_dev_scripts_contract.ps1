@@ -926,6 +926,7 @@ $contracts = @(
       'validate_investment_direction_profile',
       '투자 방향 프로필 저장 누락',
       '투자 방향 점수와 프로필 테마 불일치',
+      '투자 방향 프로필 가산점 불일치',
       'component_points_sum',
       '최근 공시 점수와 근거 문구 불일치',
       '공개 IR/SEC 점수와 근거 문구 불일치',
