@@ -238,6 +238,10 @@ def normalize_recommendation_ticker(value: object) -> str:
     return "".join(char for char in text if char.isalnum() or char in {".", "-", "_"})
 
 
+def daily_recommendation_consensus_label(item: dict, ticker: str) -> str:
+    return str(item.get("company_name") or ticker).strip()
+
+
 def daily_recommendation_target_key(item: dict) -> str:
     return normalize_recommendation_ticker(item.get("ticker") or item.get("key"))
 

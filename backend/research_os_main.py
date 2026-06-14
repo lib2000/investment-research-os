@@ -67,6 +67,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_recent_weekly_evidence as _apply_daily_recommendation_recent_weekly_evidence,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
+    daily_recommendation_consensus_label as _daily_recommendation_consensus_label,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
     daily_recommendation_manifest_quality_by_ticker as _daily_recommendation_manifest_quality_by_ticker,
     ensure_daily_recommendation_candidate as _ensure_daily_recommendation_candidate,
@@ -17060,7 +17061,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
     for item in rows:
         ticker = normalize_ticker(item.get("ticker"))
-        company_name = str(item.get("company_name") or ticker).strip()
+        company_name = _daily_recommendation_consensus_label(item, ticker)
         if not _daily_recommendation_candidate_is_valid(ticker, company_name):
             continue
         candidate = _ensure_daily_recommendation_candidate(candidates_by_ticker, ticker, company_name)
