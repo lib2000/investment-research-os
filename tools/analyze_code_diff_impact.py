@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_code_knowledge_graph import DEFAULT_OUTPUT, build_graph, project_root  # noqa: E402
 
 FLOW_IMPACT_HINTS = {
-    "daily_recommendations": "오늘 추천 1~3위 생성, 저장, 성과 추적 화면을 재검증하세요.",
+    "daily_recommendations": "오늘 추천 1~3위 생성, 투자 방향 프로필 점수, 저장, 성과 추적 화면을 재검증하세요.",
     "research_storage_rag": "저장 데이터/RAG 색인, LLM 응답 저장, 저장/RAG 상태 확인을 재검증하세요.",
     "portfolio_realtime": "포트폴리오 수량 보호, 실시간 현재가, 수익률 계산을 재검증하세요.",
     "source_automation": "외부 리포트 자동 수집, 시장일지 반영, 출처별 실패 처리를 재검증하세요.",
@@ -59,7 +59,7 @@ def fallback_flow_ids(path: str) -> set[str]:
     if path.startswith("backend/research_os/"):
         lower = path.lower()
         ids: set[str] = {"backend_module_health"}
-        if "daily_recommend" in lower:
+        if "daily_recommend" in lower or "investment_direction" in lower:
             ids.add("daily_recommendations")
         if "rag" in lower or "research_memory" in lower or "llm" in lower:
             ids.add("research_storage_rag")
