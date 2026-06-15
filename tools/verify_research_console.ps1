@@ -189,9 +189,10 @@ if ($CheckCoreSafeguards) {
       -Strict
     $coreSafeguards = $coreSafeguardsJson | ConvertFrom-Json
     Write-Host (
-      "상태={0}; 관세청저장건너뜀={1}; 포트폴리오={2} {3}주; 저장본문누락={4}; 저장OCR필요={5}" -f
+      "상태={0}; 관세청저장건너뜀={1}; 관세청유효행저장={2}; 포트폴리오={3} {4}주; 저장본문누락={5}; 저장OCR필요={6}" -f
       $coreSafeguards.Status,
       $coreSafeguards.Customs.LatestStorageSkipped,
+      $coreSafeguards.Customs.LatestSavedValidRows,
       $coreSafeguards.PortfolioQuantity.PortfolioName,
       $coreSafeguards.PortfolioQuantity.Quantity,
       $coreSafeguards.StorageQuality.BodyMissingCount,
@@ -210,7 +211,7 @@ if ($CheckCustomsTradeQuality) {
       -RequireTotalTrendAuthorized:$RequireCustomsTotalTrendAuthorized
     $customsQuality = $customsQualityJson | ConvertFrom-Json
     Write-Host (
-      "Status={0}; Period={1}; Dir={2}->{3}; DirCreated={4}; Files={5}->{6}; FilesChanged={7}; LatestStorageSkipped={8}; TotalTrendHttp={9}; TotalTrendHasStorage={10}" -f
+      "Status={0}; Period={1}; Dir={2}->{3}; DirCreated={4}; Files={5}->{6}; FilesChanged={7}; FileChangeAllowed={8}; LatestStorageSkipped={9}; LatestSavedValidRows={10}; TotalTrendHttp={11}; TotalTrendHasStorage={12}" -f
       $customsQuality.Status,
       $customsQuality.Period,
       $customsQuality.CustomsDirExistsBefore,
@@ -219,7 +220,9 @@ if ($CheckCustomsTradeQuality) {
       $customsQuality.CustomsFilesBefore,
       $customsQuality.CustomsFilesAfter,
       $customsQuality.CustomsFileCountChanged,
+      $customsQuality.CustomsFileCountChangeAllowed,
       $customsQuality.LatestStorageSkipped,
+      $customsQuality.LatestSavedValidRows,
       $customsQuality.TotalTrendHttpStatusCode,
       $customsQuality.TotalTrendHasStorage
     )

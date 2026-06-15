@@ -5037,6 +5037,40 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertEqual(result["public_ir_sec_needs_body_count"], 1)
         self.assertEqual(result["public_ir_sec_items"][0]["file_name"], "joby-url-only.md")
 
+    def test_storage_quality_does_not_count_rag_synthesis_source_body_tags(self):
+        import json
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            vault_dir.mkdir(parents=True)
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "SEARCH",
+                            "type": "rag-query-synthesis",
+                            "date": "2026-06-14",
+                            "file_name": "search-rag-query-synthesis.md",
+                            "summary": "URL-only 원천을 포함한 합성 보고서",
+                            "tags": ["rag_query_synthesis", "public_ir_sec", "url_text_unavailable", "needs_body_copy"],
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = main.build_storage_quality_dashboard(Settings(research_vault_dir=str(vault_dir)))
+
+        self.assertEqual(result["body_missing_count"], 0)
+        self.assertEqual(result["public_ir_sec_count"], 0)
+        self.assertEqual(result["normal_count"], 1)
+
     def test_deduped_dossier_candidates_skip_system_keys(self):
         import json
         import research_os_main as main

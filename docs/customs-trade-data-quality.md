@@ -49,7 +49,7 @@ Invoke-RestMethod -Headers $headers -Uri 'http://127.0.0.1:8001/api/v1/macro/cus
 .\tools\check_customs_trade_quality.ps1 -StartYymm 202605 -EndYymm 202605
 ```
 
-이 스크립트는 `CUSTOMS` 파일 수 불변, 빈 응답 저장 차단, 총괄 진단의 비저장 계약, `next_action` 표시 여부를 함께 확인합니다. 점검 전후 `CUSTOMS` 폴더 존재 여부도 `CustomsDirExistsBefore`, `CustomsDirExistsAfter`로 출력하며, `CustomsDirCreatedDuringCheck`, `CustomsFileCountChanged`가 모두 `false`여야 점검 중 저장소가 오염되지 않은 상태입니다. 폴더가 없던 환경에서 점검 중 새 폴더가 생기면 실패합니다.
+이 스크립트는 최신 조회가 실제 수출입 행을 저장했는지와, 빈 응답 저장 차단, 총괄 진단의 비저장 계약, `next_action` 표시 여부를 함께 확인합니다. 점검 전후 `CUSTOMS` 폴더 존재 여부도 `CustomsDirExistsBefore`, `CustomsDirExistsAfter`로 출력합니다. `LatestSavedValidRows=true`이면 정상 데이터 저장으로 인한 `CustomsFileCountChanged=true`를 `CustomsFileCountChangeAllowed=true`로 허용합니다. 반대로 `LatestRequiresTotalTrendStatus=true`인 빈 응답/저장 건너뜀 상태에서는 `total_trend_status` 진단과 파일 수 불변을 계속 강제합니다. 폴더가 없던 환경에서 유효 행 저장 없이 점검 중 새 폴더가 생기면 실패합니다.
 
 총괄 API가 실제 승인 완료 상태인지까지 운영 게이트로 걸고 싶으면 `-RequireTotalTrendAuthorized`를 붙입니다. 현재 총괄 API가 403이면 이 명령은 의도적으로 실패합니다.
 

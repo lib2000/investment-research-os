@@ -67,6 +67,10 @@ $customsFileCountChanged = $afterCount -ne $beforeCount
 $latestHasTotalTrendStatus = $latest.PSObject.Properties.Name -contains "total_trend_status"
 $totalHasStorage = $totalTrend.PSObject.Properties.Name -contains "storage"
 $latestNextAction = if ($latestHasTotalTrendStatus) { $latest.total_trend_status.next_action } else { $null }
+$latestHasValidRows = [string]$latest.data_quality -eq "valid_trade_rows"
+$latestSavedValidRows = $latestHasValidRows -and -not [bool]$latest.storage_skipped
+$latestRequiresTotalTrendStatus = (-not $latestHasValidRows) -or [bool]$latest.storage_skipped
+$customsFileCountChangeAllowed = $customsFileCountChanged -and $latestSavedValidRows
 
 $result = [pscustomobject]@{
   Status = "success"
@@ -78,9 +82,13 @@ $result = [pscustomobject]@{
   CustomsFilesBefore = $beforeCount
   CustomsFilesAfter = $afterCount
   CustomsFileCountChanged = [bool]$customsFileCountChanged
+  CustomsFileCountChangeAllowed = [bool]$customsFileCountChangeAllowed
   LatestStatus = $latest.status
   LatestDataQuality = $latest.data_quality
   LatestStorageSkipped = [bool]$latest.storage_skipped
+  LatestHasValidRows = [bool]$latestHasValidRows
+  LatestSavedValidRows = [bool]$latestSavedValidRows
+  LatestRequiresTotalTrendStatus = [bool]$latestRequiresTotalTrendStatus
   LatestHasTotalTrendStatus = [bool]$latestHasTotalTrendStatus
   LatestNextAction = $latestNextAction
   TotalTrendStatus = $totalTrend.status
@@ -92,16 +100,16 @@ $result = [pscustomobject]@{
 }
 
 $failures = @()
-if ($customsFileCountChanged) {
+if ($customsFileCountChanged -and -not $customsFileCountChangeAllowed) {
   $failures += "CUSTOMS 파일 수가 바뀌었습니다: $beforeCount -> $afterCount"
 }
-if ($customsDirCreatedDuringCheck) {
+if ($customsDirCreatedDuringCheck -and -not $customsFileCountChangeAllowed) {
   $failures += "점검 중 CUSTOMS 폴더가 새로 생성되었습니다."
 }
 if (-not $latest.storage_skipped -and $latest.data_quality -eq "no_valid_trade_rows") {
   $failures += "실제 수치가 없는 최신 조회가 저장 건너뜀으로 표시되지 않았습니다."
 }
-if (-not $latestHasTotalTrendStatus) {
+if ($latestRequiresTotalTrendStatus -and -not $latestHasTotalTrendStatus) {
   $failures += "최신 조회 결과에 total_trend_status가 없습니다."
 }
 if ($totalHasStorage) {
@@ -110,7 +118,7 @@ if ($totalHasStorage) {
 if ([string]::IsNullOrWhiteSpace([string]$totalTrend.next_action)) {
   $failures += "총괄 진단 next_action이 비어 있습니다."
 }
-if ($latestHasTotalTrendStatus -and [string]::IsNullOrWhiteSpace([string]$latestNextAction)) {
+if ($latestRequiresTotalTrendStatus -and $latestHasTotalTrendStatus -and [string]::IsNullOrWhiteSpace([string]$latestNextAction)) {
   $failures += "최신 조회 total_trend_status.next_action이 비어 있습니다."
 }
 if ($RequireTotalTrendAuthorized -and -not [bool]$totalTrend.authorized) {

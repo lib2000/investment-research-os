@@ -46,7 +46,7 @@ python -m unittest tests.test_backend_regressions.CustomsTradeDataQualityTests
 .\tools\check_customs_trade_quality.ps1 -StartYymm 202605 -EndYymm 202605
 ```
 
-정상 점검 결과는 `CustomsDirCreatedDuringCheck=false`, `CustomsFileCountChanged=false`, `LatestStorageSkipped=true`, `TotalTrendHasStorage=false`를 보여야 합니다. 즉, 빈 관세청 응답은 저장/RAG에 들어가지 않고, 총괄 진단 라우트도 파일을 만들지 않아야 합니다.
+빈 관세청 응답 점검 결과는 `CustomsDirCreatedDuringCheck=false`, `CustomsFileCountChanged=false`, `LatestStorageSkipped=true`, `TotalTrendHasStorage=false`를 보여야 합니다. 즉, 빈 관세청 응답은 저장/RAG에 들어가지 않고, 총괄 진단 라우트도 파일을 만들지 않아야 합니다. 실제 수출입 행이 있는 운영 점검에서는 `LatestSavedValidRows=true`이고 저장 파일이 늘어날 수 있으며, 이때는 `CustomsFileCountChangeAllowed=true`가 함께 표시되어야 정상입니다.
 
 data.go.kr의 `관세청_수출입총괄(GW)` 활용 승인이 끝난 뒤에는 아래처럼 승인 상태까지 강제 검증합니다. 승인 전 403 상태에서는 실패하는 것이 정상입니다.
 
@@ -85,7 +85,7 @@ node --check mobile_app\research_console\console.js
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCustomsTradeQuality -RequireCustomsTotalTrendAuthorized -CustomsBaseUrl http://127.0.0.1:8001 -CustomsDevUserToken dev-local-token -CustomsStartYymm 202605 -CustomsEndYymm 202605
 ```
 
-통합 검증의 관세청 요약은 `DirCreated=False`, `FilesChanged=False`, `LatestStorageSkipped=True`, `TotalTrendHasStorage=False`를 한 줄로 보여줍니다.
+통합 검증의 관세청 요약은 `DirCreated`, `FilesChanged`, `FileChangeAllowed`, `LatestStorageSkipped`, `LatestSavedValidRows`, `TotalTrendHasStorage`를 한 줄로 보여줍니다. 빈 응답 방어에서는 파일 변경이 없어야 하고, 실제 수출입 행 저장에서는 파일 변경이 `FileChangeAllowed=True`로 설명되어야 합니다.
 
 라이브 스모크는 메뉴 17개, 대시보드 바로가기, 매크로/복리성장주, 포트폴리오 기간수익/PL 수량 보존, 네이버 리서치 상태, 저장/삭제 액션, `오늘 추천 1~3위`, `추천 추적 상태`, LLM/RAG 저장 상태를 확인합니다. `-CheckFeedbackSmoke`는 빠른 검증에서도 메뉴/대시보드 클릭 후 `요청 접수`, `처리 중`, `완료` 같은 사용자 피드백이 실제로 표시되는지 확인합니다. 정적 계약은 메뉴/대시보드 버튼이 긴 한국어 문구에서 잘리지 않도록 CSS 줄바꿈·최소폭 규칙을 확인하고, HTML과 JS 템플릿에 있는 `data-workflow-action` 버튼이 실제 워크플로우 핸들러와 연결되어 있는지도 함께 확인합니다. 또한 상단 액션 피드백과 추천 카드의 `aria-live` 영역, HTML/JS 템플릿 버튼의 명시적 `type` 계약을 강제해, 클릭 후 메시지가 보이지 않거나 폼 submit으로 흐르는 회귀를 백엔드 없이 잡습니다. 저장 액션 검증은 `QA-TEST-*` 데이터만 만들고 종료 시 정리합니다.
 

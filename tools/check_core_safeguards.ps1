@@ -65,6 +65,10 @@ $result = [pscustomobject]@{
     Status = $customs.Status
     Period = $customs.Period
     LatestStorageSkipped = $customs.LatestStorageSkipped
+    LatestHasValidRows = $customs.LatestHasValidRows
+    LatestSavedValidRows = $customs.LatestSavedValidRows
+    CustomsFileCountChanged = $customs.CustomsFileCountChanged
+    CustomsFileCountChangeAllowed = $customs.CustomsFileCountChangeAllowed
     TotalTrendHttpStatusCode = $customs.TotalTrendHttpStatusCode
     TotalTrendHasStorage = $customs.TotalTrendHasStorage
   }

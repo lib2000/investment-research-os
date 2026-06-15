@@ -118,6 +118,9 @@ def storage_quality_entry_needs_body(entry: dict) -> bool:
     """Classify URL-only or failed body extraction records that need manual body notes."""
     tags = set(entry.get("tags") or [])
     capture_quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+    report_type = str(entry.get("type") or entry.get("report_type") or "")
+    if report_type == "rag-query-synthesis":
+        return False
     if storage_quality_entry_is_policy_url_only(entry):
         return False
     if storage_quality_entry_is_public_ir_sec(entry):
