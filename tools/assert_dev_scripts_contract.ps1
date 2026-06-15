@@ -667,6 +667,8 @@ $contracts = @(
       'dashboard-refresh',
       'dailyRecommendationCitationRows',
       'daily-recommendation-citation',
+      'daily_recommendation_top_panel_schedule',
+      'daily-recommendation-top-panel',
       '근거 문서',
       '워크플로우 핸들러 누락',
       '필수 워크플로우 버튼 누락',
