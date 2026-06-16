@@ -40,7 +40,7 @@
 |---|---|---|
 | `backend\research_os\classification.py` | 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 | `check_classification_quality.py` |
 | `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
-| `backend\research_os\customs_trade.py` | 관세청 수출입 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
+| `backend\research_os\customs_trade.py` | 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
 | `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
 | `backend\research_os\data_providers.py` | KIS/OpenDART/가격/외부 데이터 프로바이더 호출 | `check_backend_runtime_env.py` |
