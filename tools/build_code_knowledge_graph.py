@@ -81,7 +81,12 @@ FLOW_DEFINITIONS = {
     "console_click_regression": {
         "label": "콘솔 클릭/쓰기 회귀",
         "keywords": ["smoke_research_console", "data-workflow-action", "actionFeedback", "클래식 콘솔"],
-        "expected_files": ["tools/smoke_research_console_menus.py", "tools/smoke_research_console_write_actions.py"],
+        "expected_files": [
+            "tools/smoke_research_console_clicks.py",
+            "tools/smoke_research_console_menus.py",
+            "tools/smoke_research_console_write_actions.py",
+            "tools/smoke_research_console_external_sources.py",
+        ],
     },
     "backend_module_health": {
         "label": "백엔드 모듈 헬스/구조 안정화",
