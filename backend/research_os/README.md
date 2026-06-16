@@ -19,6 +19,7 @@
 - `brokerage.py`: 증권사 연동 공통 클라이언트와 상태 추상화
 - `customs_trade.py`: 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정
 - `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 사후 추적표, 추천 후보 저장 품질 점수 보정 유틸
+- `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_providers.py`: KIS, OpenDART, 가격, 외부 데이터 프로바이더 호출
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_extraction.py`: 첨부 파일명 정리, base64 디코딩, PDF/OCR/Office/텍스트/표 본문 추출 유틸
