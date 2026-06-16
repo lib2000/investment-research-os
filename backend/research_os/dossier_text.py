@@ -131,11 +131,14 @@ def manifest_similarity_text(entry: dict, text: str | None = None) -> str:
             body = " ".join(plain_research_lines(body, limit=40))
     except NameError:
         body = body[:2400]
+    summary = str(entry.get("summary") or "")
+    if is_dossier_noise_line(summary):
+        summary = ""
     return " ".join(
         str(part or "")
         for part in [
             entry.get("title"),
-            entry.get("summary"),
+            summary,
             body[:2400],
         ]
     )
@@ -272,6 +275,8 @@ def is_dossier_noise_line(line: str) -> bool:
     if cleaned[0] in {",", ".", ")", "]", "}"}:
         return True
     if cleaned.count(".") >= 8:
+        return True
+    if "com/research/" in lowered or "finance.naver.com/research" in lowered:
         return True
     if cleaned.startswith(("이었", "였", "및 ", "을 ", "를 ", "는 ", "하며", "했고", "화,", "동안 ", "지했다", "(YoY", "악된다", "기의 ")):
         return True

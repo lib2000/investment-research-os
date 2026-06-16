@@ -620,6 +620,10 @@ def run_deduped_dossier_refresh_queue(
         runtime.write_json_store(runtime.dossier_refresh_queue_status_path(settings), payload)
         status = runtime.read_json_store(runtime.research_automation_status_path(settings), {})
         if isinstance(status, dict):
+            duplicate_review = runtime.read_json_store(runtime.storage_duplicate_review_path(settings), {})
+            if isinstance(duplicate_review, dict):
+                status["duplicate_suspected_count"] = int(duplicate_review.get("duplicate_entry_count") or 0)
+                status["duplicate_group_count"] = int(duplicate_review.get("duplicate_group_count") or 0)
             status["updated_at"] = payload["as_of"]
             status["last_deduped_dossier_refresh"] = {
                 "updated_at": payload["as_of"],

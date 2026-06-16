@@ -4832,6 +4832,21 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertIn("웹사이트 본문 추출 실패", failed["warnings"])
         self.assertIn("이미지 OCR 미연결", failed["warnings"])
 
+    def test_manifest_similarity_text_drops_naver_url_noise_summary(self):
+        from research_os import dossier_text
+
+        text = dossier_text.manifest_similarity_text(
+            {
+                "title": "Daily Morning Brief",
+                "summary": "com/research/market_info_read.",
+            },
+            "",
+        )
+        tokens = dossier_text.similarity_tokens(text)
+
+        self.assertNotIn("com", tokens)
+        self.assertNotIn("research", tokens)
+        self.assertNotIn("market_info_read", tokens)
     def test_duplicate_review_excludes_soft_archived_files(self):
         import json
         import research_os_main as main
@@ -5118,6 +5133,8 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
             (system_dir / "storage_duplicate_review.json").write_text(
                 json.dumps(
                     {
+                        "duplicate_group_count": 1,
+                        "duplicate_entry_count": 2,
                         "ticker_breakdown": [
                             {"ticker": "018260", "company_name": "삼성에스디에스", "duplicate_group_count": 1, "duplicate_entry_count": 2}
                         ]
@@ -5151,6 +5168,8 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertEqual(status["updated_at"], result["as_of"])
         self.assertEqual(status["last_deduped_dossier_refresh"]["updated_at"], result["as_of"])
         self.assertEqual(status["last_deduped_dossier_refresh"]["refreshed_count"], 1)
+        self.assertEqual(status["duplicate_suspected_count"], 2)
+        self.assertEqual(status["duplicate_group_count"], 1)
 
     def test_legacy_policy_defaults_to_soft_archive(self):
         import research_os_main as main
