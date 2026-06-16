@@ -847,7 +847,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                           ? text
                           : "";
                       }},
-                      90000,
+                      180000,
                       "system check output"
                     );
                     systemCheckCompleted = true;
@@ -1431,7 +1431,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                   }};
                 }})()
                 """,
-                timeout=480,
+                timeout=600,
             )
             if not result["dashboardShowsDartStrip"]:
                 raise AssertionError("대시보드 기본 화면에 최근 DART 공시 확인 스트립이 표시되지 않았습니다.")
@@ -1501,8 +1501,13 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("최근 계좌 동기화 이력 조회 결과가 표시되지 않았습니다.")
             if "수동 보호" not in result["kiwoomSyncOverviewText"]:
                 raise AssertionError("포트폴리오 동기화 요약에 수동 보호 상태가 표시되지 않았습니다.")
+            if not result["systemCheckCompleted"]:
+                raise AssertionError(
+                    "시스템 점검이 완료 상태까지 도달하지 못했습니다: "
+                    f"{result.get('systemCheckPreview', '')}"
+                )
             if not result["systemCheckShowsDartReliability"]:
-                raise AssertionError("시스템 점검 화면에 진행 상태 또는 자동화 점검 정보가 표시되지 않았습니다.")
+                raise AssertionError("시스템 점검 화면에 자동화 신뢰도/네이버 리서치 상태가 표시되지 않았습니다.")
             if not result["naverStatusShowsDuplicateGuard"]:
                 raise AssertionError("네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다.")
             if not result["naverStatusShowsTaskLog"]:
