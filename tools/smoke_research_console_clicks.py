@@ -1566,8 +1566,8 @@ def main() -> int:
             include_llm_save=args.include_llm_save,
             only_system_check=args.only_system_check,
         )
-    except (AssertionError, RuntimeError, TimeoutError) as exc:
-        print(json.dumps({"status": "failure", "message": str(exc)}, ensure_ascii=False, indent=2))
+    except (AssertionError, RuntimeError, TimeoutError, OSError) as exc:
+        print(json.dumps({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2))
         return 1
     print(json.dumps({"status": "success", **result}, ensure_ascii=False, indent=2))
     return 0
