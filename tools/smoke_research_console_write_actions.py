@@ -15,7 +15,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, wait_for_page
+from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, free_devtools_port, wait_for_page
 
 
 DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=write-actions"
@@ -151,7 +151,7 @@ def cleanup_qa_artifacts(api_base: str = DEFAULT_API_BASE, token: str = DEFAULT_
 def run_write_action_smoke(url: str) -> dict:
     assert_project_root()
     pre_cleanup = cleanup_qa_artifacts()
-    port = 9225
+    port = free_devtools_port()
     marker = f"QA-TEST-{int(time.time())}"
     with tempfile.TemporaryDirectory(prefix="research-console-write-chrome-", ignore_cleanup_errors=True) as profile_dir:
         process = subprocess.Popen(

@@ -62,7 +62,30 @@ def load_write_actions_smoke_tool():
     return module
 
 
+def load_clicks_smoke_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "smoke_research_console_clicks.py"
+    spec = spec_from_file_location("smoke_research_console_clicks", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 class ConsoleSmokeToolTests(unittest.TestCase):
+    def test_smoke_tools_allocate_bindable_devtools_port(self):
+        import socket
+
+        tool = load_clicks_smoke_tool()
+        port = tool.free_devtools_port()
+
+        self.assertIsInstance(port, int)
+        self.assertGreater(port, 0)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", port))
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 

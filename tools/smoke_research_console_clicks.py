@@ -198,6 +198,12 @@ def fetch_json(url: str, timeout: float = 10) -> object:
         return json.loads(response.read().decode("utf-8"))
 
 
+def free_devtools_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
 def wait_for_page(port: int, timeout: float = 15) -> dict:
     deadline = time.time() + timeout
     last_error: Exception | None = None
@@ -234,7 +240,7 @@ def assert_project_root() -> None:
 
 def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check: bool = False) -> dict:
     assert_project_root()
-    port = 9223
+    port = free_devtools_port()
     with tempfile.TemporaryDirectory(prefix="research-console-chrome-", ignore_cleanup_errors=True) as profile_dir:
         process = subprocess.Popen(
             [

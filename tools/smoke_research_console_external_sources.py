@@ -7,7 +7,7 @@ import json
 import subprocess
 import tempfile
 
-from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, wait_for_page
+from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, free_devtools_port, wait_for_page
 
 
 DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks&sourceSmoke=1"
@@ -15,7 +15,7 @@ DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks&sourceSmoke
 
 def run_external_source_smoke(url: str) -> dict:
     assert_project_root()
-    port = 9225
+    port = free_devtools_port()
     with tempfile.TemporaryDirectory(prefix="research-console-source-chrome-", ignore_cleanup_errors=True) as profile_dir:
         process = subprocess.Popen(
             [

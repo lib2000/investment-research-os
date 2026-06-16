@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, wait_for_page
+from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, free_devtools_port, wait_for_page
 
 
 DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=menus"
@@ -21,7 +21,7 @@ DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=menus"
 
 def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
     assert_project_root()
-    port = 9224
+    port = free_devtools_port()
     with tempfile.TemporaryDirectory(prefix="research-console-menu-chrome-", ignore_cleanup_errors=True) as profile_dir:
         process = subprocess.Popen(
             [
@@ -196,12 +196,17 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     }}, 120000, "dashboard cards");
                   }};
 
-                  const clickCardAction = async (selector, label, timeout = 70000) => {{
+                  const clickCardAction = async (selector, label, timeout = 70000, cardLabel = "") => {{
                     await loadDashboardCards();
                     const candidates = [...document.querySelectorAll(selector)]
-                      .filter((button) => visible(button) && (!label || button.textContent.trim() === label));
+                      .filter((button) => {{
+                        const cardText = button.closest(".dashboard-card, .dashboard-dart-strip")?.textContent || "";
+                        return visible(button) &&
+                          (!label || button.textContent.trim() === label) &&
+                          (!cardLabel || cardText.includes(cardLabel));
+                      }});
                     if (candidates.length !== 1) {{
-                      return {{ selector, label, ok: false, reason: `visible candidates=${{candidates.length}}` }};
+                      return {{ selector, label, cardLabel, ok: false, reason: `visible candidates=${{candidates.length}}` }};
                     }}
                     const beforeErrorCount = runtimeErrors.length;
                     const beforeOutput = outputText();
@@ -249,17 +254,17 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
 
                   await loadDashboardCards();
                   const cardActionPlan = [
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="memory"]', '저장 데이터', 30000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="marketData"]', '시장 데이터', 30000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="news"]', '뉴스 검토', 30000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="storage-quality"]', '품질 점검', 60000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="marketData"]', '시장일지 열기', 30000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="system-check"]', '상태 점검', 120000],
-                    ['#dashboard .dashboard-card-actions [data-workflow-action="dart-refresh"]', '공시 재점검', 120000],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="memory"]', '저장 데이터', 30000, '관세청 수출입'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="marketData"]', '수출입 보기', 30000, '관세청 수출입'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="news"]', '뉴스 검토', 30000, '저장 데이터 품질'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="storage-quality"]', '품질 점검', 60000, '저장 데이터 품질'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="marketData"]', '시장일지 열기', 30000, '시장일지 자동 활용'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="system-check"]', '상태 점검', 120000, 'DART 공시'],
+                    ['#dashboard .dashboard-card-actions [data-workflow-action="dart-refresh"]', '공시 재점검', 120000, 'DART 공시'],
                   ];
                   const cardActionResults = [];
-                  for (const [selector, label, timeout] of cardActionPlan) {{
-                    cardActionResults.push(await clickCardAction(selector, label, timeout));
+                  for (const [selector, label, timeout, cardLabel] of cardActionPlan) {{
+                    cardActionResults.push(await clickCardAction(selector, label, timeout, cardLabel));
                   }}
 
                   const failedMenus = menuResults.filter((item) =>
