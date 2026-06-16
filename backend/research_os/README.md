@@ -29,6 +29,7 @@
 - `file_extraction.py`: 첨부 파일명 정리, base64 디코딩, PDF/OCR/Office/텍스트/표 본문 추출 유틸
 - `kcif_reports.py`: KCIF 보고서 메타데이터 수집과 시장일지 연결
 - `kiwoom_auth.py`: 키움 인증/토큰 상태 확인
+- `kis_data_provider.py`: KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper
 - `llm_bridge_status.py`: LLM 응답 저장과 RAG 연결 상태 요약
 - `market_journal.py`: 네이버 마감 시황 시장일지 출처 메타데이터
 - `models.py`: API 입출력 모델과 도메인 스키마

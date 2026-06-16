@@ -53,6 +53,7 @@
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
 | `backend\research_os\kcif_reports.py` | KCIF 보고서 메타데이터 수집/시장일지 연결 | `check_research_source_store.py` |
 | `backend\research_os\kiwoom_auth.py` | 키움 인증/토큰 상태 확인 | `smoke_kiwoom_history_live.ps1` |
+| `backend\research_os\kis_data_provider.py` | KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper | `check_backend_runtime_env.py` |
 | `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
 | `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
