@@ -18,10 +18,11 @@
 - `classification.py`: 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 유틸
 - `brokerage.py`: 증권사 연동 공통 클라이언트와 상태 추상화
 - `customs_trade.py`: 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정
+- `customs_data_provider.py`: 관세청 품목별/총괄 수출입 API client, 응답 파싱, row 정규화/캐시
 - `daily_recommendation_store.py`: 매일 추천 저장소 경로, JSON 읽기/쓰기, 실행 시각 판정, 추천 record ID 유틸
 - `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 사후 추적표, 추천 후보 저장 품질 점수 보정 유틸
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
-- `data_providers.py`: KIS, OpenDART, 가격, 외부 데이터 프로바이더 호출
+- `data_providers.py`: KIS, OpenDART, 가격, NPS와 검색/보강 데이터 프로바이더 호출
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_extraction.py`: 첨부 파일명 정리, base64 디코딩, PDF/OCR/Office/텍스트/표 본문 추출 유틸
 - `kcif_reports.py`: KCIF 보고서 메타데이터 수집과 시장일지 연결

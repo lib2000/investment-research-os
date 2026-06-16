@@ -688,6 +688,8 @@ $contracts = @(
       'EXPECTED_MAIN_IMPORTS',
       'research_os.brokerage',
       'research_os.data_providers',
+      'research_os.customs_data_provider',
+      'customs_data_provider.py',
       'research_os.file_extraction',
       'research_os.market_journal',
       'research_os.portfolio_analysis_coverage',
