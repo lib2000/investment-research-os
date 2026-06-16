@@ -92,7 +92,7 @@ node --check mobile_app\research_console\console.js
 전체 클릭 스모크는 실제 브라우저 DevTools 명령을 오래 유지하므로 300초 이상 걸릴 수 있습니다. 수동 실행은 아래처럼 하고, 외부 실행 래퍼나 CI 타임아웃은 600초 이상으로 둡니다.
 
 ```powershell
-python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks
+python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks --progress
 ```
 
 
@@ -159,7 +159,7 @@ python tools\check_daily_recommendation_citations.py --strict
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.
 
 ```powershell
-python tools\smoke_research_console_clicks.py --only-system-check
+python tools\smoke_research_console_clicks.py --only-system-check --progress
 ```
 
 브라우저 스모크도 WSL/Codex 격리 환경에서는 Chrome DevTools 포트 접근이 차단될 수 있으므로, 실제 화면 검증은 Windows PowerShell에서 실행합니다.

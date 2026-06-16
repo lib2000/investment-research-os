@@ -27,6 +27,11 @@ DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks"
 COMMON_TICKER_PATTERN = r"005930\.KS|000660\.KS|207940\.KS|033500"
 
 
+def emit_progress(enabled: bool, label: str) -> None:
+    if enabled:
+        print(f"[smoke] {time.strftime('%Y-%m-%dT%H:%M:%S')} {label}", flush=True)
+
+
 def is_wsl_like() -> bool:
     if os.name == "nt":
         return False
@@ -238,10 +243,13 @@ def assert_project_root() -> None:
         raise RuntimeError(f"Unexpected project root: {PROJECT_ROOT} | missing: {', '.join(missing_markers)}")
 
 
-def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check: bool = False) -> dict:
+def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check: bool = False, progress: bool = False) -> dict:
     assert_project_root()
+    emit_progress(progress, "project root verified")
     port = free_devtools_port()
+    emit_progress(progress, f"devtools port selected: {port}")
     with tempfile.TemporaryDirectory(prefix="research-console-chrome-", ignore_cleanup_errors=True) as profile_dir:
+        emit_progress(progress, "launching headless browser")
         process = subprocess.Popen(
             [
                 chrome_path(),
@@ -259,10 +267,13 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
         client: CdpClient | None = None
         try:
             page = wait_for_page(port)
+            emit_progress(progress, "devtools page ready")
             client = CdpClient(page["webSocketDebuggerUrl"])
             client.call("Runtime.enable")
             client.call("Page.enable")
+            emit_progress(progress, "cdp runtime enabled")
             if only_system_check:
+                emit_progress(progress, "system-check smoke started")
                 result = client.evaluate(
                     """
                     (async () => {
@@ -313,9 +324,11 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     """,
                     timeout=180,
                 )
+                emit_progress(progress, "system-check smoke completed")
                 if not result["systemCheckCompleted"]:
                     raise AssertionError("시스템 점검이 완료 상태까지 도달하지 못했습니다.")
                 return result
+            emit_progress(progress, "full click smoke started")
             result = client.evaluate(
                 f"""
                 (async () => {{
@@ -1554,8 +1567,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 raise AssertionError("LLM 저장/RAG 상태 화면에 불필요한 '회사명 확인 필요' 표시가 남아 있습니다.")
             if include_llm_save and result["llmReset"] != {"target": "", "sourceContext": "", "prompt": "", "result": ""}:
                 raise AssertionError(f"LLM 저장 후 초기화 검증 실패: {result['llmReset']}")
+            emit_progress(progress, "full click smoke assertions completed")
             return result
         finally:
+            emit_progress(progress, "cleaning up browser")
             if client:
                 client.close()
             process.terminate()
@@ -1570,12 +1585,14 @@ def main() -> int:
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
+    parser.add_argument("--progress", action="store_true", help="긴 click smoke의 주요 진행 구간을 표준 출력에 표시합니다.")
     args = parser.parse_args()
     try:
         result = run_click_smoke(
             args.url,
             include_llm_save=args.include_llm_save,
             only_system_check=args.only_system_check,
+            progress=args.progress,
         )
     except (AssertionError, RuntimeError, TimeoutError, OSError) as exc:
         print(json.dumps({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2))

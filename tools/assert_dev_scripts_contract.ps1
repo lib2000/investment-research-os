@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp"
 )
 
@@ -347,6 +347,8 @@ $contracts = @(
     Path = "tools\smoke_research_console_clicks.py"
     Snippets = @(
       '--only-system-check',
+      '--progress',
+      '[smoke]',
       'system check completion',
       '전체 시스템 점검 완료',
       '네이버 리서치/시장일지 상태',
