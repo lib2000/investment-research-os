@@ -5862,6 +5862,60 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(status["failed_tickers"], ["071050"])
         self.assertEqual(status["failure_count"], 1)
 
+    def test_daily_dart_status_ignores_failures_removed_from_current_targets(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        cache = {
+            "daily_check": {
+                "date": "2026-05-18",
+                "checked_at": "2026-05-18T09:00:00+09:00",
+                "target_count": 2,
+                "checked_tickers": ["003230", "117700"],
+                "failed_tickers": ["117700"],
+            }
+        }
+        target_universe = {
+            "target_tickers": ["003230"],
+            "portfolio_tickers": ["003230"],
+            "interest_tickers": [],
+            "excluded_tickers": [
+                {"ticker": "117700", "reason": "etf_not_dart_corp"},
+            ],
+            "target_count": 1,
+        }
+
+        with (
+            patch.object(main, "current_storage_date", return_value=date(2026, 5, 18)),
+            patch.object(main, "dart_watch_universe", return_value=target_universe),
+        ):
+            status = main.dart_daily_check_status(cache, settings)
+
+        self.assertEqual(status["status"], "complete")
+        self.assertEqual(status["failed_tickers"], [])
+        self.assertEqual(status["failure_count"], 0)
+        self.assertEqual(status["checked_count"], 1)
+
+    def test_active_dart_last_failures_ignores_excluded_etfs(self):
+        import research_os_main as main
+
+        cache = {
+            "last_failures": [
+                {"ticker": "117700", "category": "needs_mapping_review"},
+                {"ticker": "071050", "category": "provider_error"},
+            ]
+        }
+        target_universe = {
+            "target_tickers": ["003230", "071050"],
+            "excluded_tickers": [
+                {"ticker": "117700", "reason": "etf_not_dart_corp"},
+            ],
+        }
+
+        failures = main.active_dart_last_failures(cache, target_universe)
+
+        self.assertEqual(failures, [{"ticker": "071050", "category": "provider_error"}])
     def test_daily_dart_status_marks_missing_daily_run_as_due(self):
         import research_os_main as main
         from research_os.settings import Settings

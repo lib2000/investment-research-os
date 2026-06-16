@@ -2085,11 +2085,16 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
         set(target_universe.get("target_tickers") or [])
         - set(daily_check.get("checked_tickers") or [])
     ) if not missing_today else list(target_universe.get("target_tickers") or [])
+    target_ticker_set = {
+        normalize_ticker(str(item))
+        for item in (target_universe.get("target_tickers") or [])
+        if normalize_ticker(str(item))
+    }
     failed_tickers = sorted(
         {
             normalize_ticker(str(item))
             for item in (daily_check.get("failed_tickers") or [])
-            if normalize_ticker(str(item))
+            if normalize_ticker(str(item)) and normalize_ticker(str(item)) in target_ticker_set
         }
     )
     excluded_tickers = target_universe.get("excluded_tickers") or daily_check.get("excluded_tickers") or []
@@ -2100,7 +2105,8 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
         for item in (daily_check.get("checked_tickers") or [])
         if normalize_ticker(str(item))
     ]
-    checked_count = 0 if missing_today else len(set(checked_tickers) - set(failed_tickers))
+    checked_target_tickers = set(checked_tickers) & target_ticker_set
+    checked_count = 0 if missing_today else len(checked_target_tickers - set(failed_tickers))
     coverage_rate = (
         checked_count / current_target_count
         if current_target_count
@@ -2145,6 +2151,34 @@ def dart_daily_check_status(cache: dict, settings: Settings) -> dict:
         "target_universe": target_universe,
     }
 
+
+def active_dart_last_failures(cache: dict, target_universe: dict, limit: int = 10) -> list[dict]:
+    """Return DART failures that still belong to the current watch universe."""
+    if not isinstance(cache, dict):
+        return []
+    target_tickers = {
+        normalize_ticker(str(item))
+        for item in (target_universe.get("target_tickers") or [])
+        if normalize_ticker(str(item))
+    }
+    excluded_tickers = {
+        normalize_ticker(str((item or {}).get("ticker") or ""))
+        for item in (target_universe.get("excluded_tickers") or [])
+        if isinstance(item, dict) and normalize_ticker(str(item.get("ticker") or ""))
+    }
+    active_failures: list[dict] = []
+    for item in cache.get("last_failures") or []:
+        if not isinstance(item, dict):
+            continue
+        ticker = normalize_ticker(str(item.get("ticker") or ""))
+        if ticker and ticker in excluded_tickers:
+            continue
+        if ticker and target_tickers and ticker not in target_tickers:
+            continue
+        active_failures.append(item)
+        if len(active_failures) >= max(1, int(limit or 10)):
+            break
+    return active_failures
 
 def dart_filing_importance(report_name: str) -> tuple[str, str, list[str]]:
     name = report_name or ""
@@ -14996,6 +15030,7 @@ def get_dart_filing_watch_status(
     cache = read_dart_filing_cache(settings)
     entries = cache.get("entries") if isinstance(cache, dict) else {}
     recent_entries = recent_dart_cache_entries(cache, limit=20)
+    target_universe = dart_watch_universe(settings)
     return {
         "status": "success",
         "module": "dart_filing_watch_status",
@@ -15003,13 +15038,13 @@ def get_dart_filing_watch_status(
         "configured": bool(settings.dart_api_key),
         "refresh_hours": settings.dart_filing_refresh_hours,
         "lookback_days": settings.dart_filing_lookback_days,
-        "target_tickers": dart_watch_tickers(settings),
-        "target_universe": dart_watch_universe(settings),
+        "target_tickers": list(target_universe.get("target_tickers") or []),
+        "target_universe": target_universe,
         "daily_check": dart_daily_check_status(cache, settings),
         "updated_at": cache.get("updated_at"),
         "entry_count": len(entries or {}),
         "recent_entries": recent_entries,
-        "last_failures": (cache.get("last_failures") or [])[:10],
+        "last_failures": active_dart_last_failures(cache, target_universe, limit=10),
         "cache_path": str(dart_filing_cache_path(settings)),
     }
 
