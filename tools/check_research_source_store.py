@@ -255,6 +255,25 @@ def main() -> int:
         add_issue(issues, not str(market_close_state.get("source_item_id") or "").strip(), "마감 시황 중복 판정 source_item_id 누락")
         add_issue(issues, not str(market_close_state.get("last_attempt_message") or "").strip(), "마감 시황 중복 판정 설명 누락")
 
+    telegram_market_close_state = load_json(system_dir, "telegram_market_close_journal_state.json")
+    telegram_market_close_status = str(telegram_market_close_state.get("status") or "").strip()
+    if telegram_market_close_state:
+        telegram_market_close_attempt_age = age_hours(telegram_market_close_state.get("last_attempt_at"))
+        add_issue(
+            issues,
+            telegram_market_close_status not in {"success", "skipped_duplicate", "not_found"},
+            f"텔레그램 미국 시장일지 자동 수집 상태 확인 필요: {telegram_market_close_status or '미확인'}",
+        )
+        add_issue(issues, not str(telegram_market_close_state.get("last_attempt_date") or "").strip(), "텔레그램 미국 시장일지 자동 수집 시도일 누락")
+        add_issue(
+            issues,
+            telegram_market_close_attempt_age is None or telegram_market_close_attempt_age > args.max_market_journal_attempt_age_hours,
+            "텔레그램 미국 시장일지 자동 수집 시도 최신성 확인 필요",
+        )
+        if telegram_market_close_status in {"success", "skipped_duplicate"}:
+            add_issue(issues, not str(telegram_market_close_state.get("source_item_id") or "").strip(), "텔레그램 미국 시장일지 source_item_id 누락")
+            add_issue(issues, not str(telegram_market_close_state.get("source_provider") or "").strip(), "텔레그램 미국 시장일지 출처 제공자 누락")
+
     market_journal = load_json(system_dir, "market_close_journal.json")
     market_journal_rows = rows_from_mapping_or_list(market_journal.get("entries"))
     market_journal_complete_rows = []
@@ -300,6 +319,7 @@ def main() -> int:
     print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
     print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 파일 누락 {len(shinhan_missing_files)}개 | 갱신 {shinhan.get('updated_at')}")
     print(f"마감 시황 자동 시도: 상태 {market_close_status or '미확인'} | 시도일 {market_close_state.get('last_attempt_date') or '미확인'} | 시각 {market_close_state.get('last_attempt_at') or '미확인'}")
+    print(f"텔레그램 미국 시장일지 자동 시도: 상태 {telegram_market_close_status or '미확인'} | 시도일 {telegram_market_close_state.get('last_attempt_date') or '미확인'} | 시각 {telegram_market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
 
     if issues:

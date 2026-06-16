@@ -33,6 +33,7 @@
 - `kis_data_provider.py`: KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper
 - `llm_bridge_status.py`: LLM 응답 저장과 RAG 연결 상태 요약
 - `market_journal.py`: 네이버 마감 시황 시장일지 출처 메타데이터
+- `telegram_market_journal.py`: 텔레그램 @ehdwl 공개 채널의 미국 시장일지 후보 파싱/선정
 - `models.py`: API 입출력 모델과 도메인 스키마
 - `portfolio_analysis_coverage.py`: 포트폴리오별 보유 종목 분석 커버리지와 보강 큐 생성
 - `portfolio_import.py`: CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론

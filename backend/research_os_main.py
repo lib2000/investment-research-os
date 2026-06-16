@@ -120,6 +120,11 @@ from research_os.kcif_reports import (
     should_refresh_kcif_cache,
 )
 from research_os.market_journal import naver_market_close_source_metadata
+from research_os.telegram_market_journal import (
+    fetch_telegram_public_channel_posts,
+    latest_telegram_us_market_close_candidate,
+    telegram_market_close_source_metadata,
+)
 from research_os.llm_bridge_status import build_llm_bridge_storage_status
 from research_os.regional_sources import (
     fetch_regional_business_sources,
@@ -2914,6 +2919,14 @@ def naver_market_close_journal_task_log_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "naver_market_close_journal_task.log"
 
 
+def telegram_market_close_journal_state_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "telegram_market_close_journal_state.json"
+
+
+def telegram_market_close_journal_task_log_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "telegram_market_close_journal_task.log"
+
+
 def read_naver_research_cache(settings: Settings) -> dict:
     return read_json_store(
         naver_research_cache_path(settings),
@@ -4223,6 +4236,213 @@ def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20
     }
 
 
+def refresh_telegram_us_market_close_journal(settings: Settings, force: bool = False) -> dict:
+    state_path = telegram_market_close_journal_state_path(settings)
+    try:
+        posts, warnings = fetch_telegram_public_channel_posts(
+            channel_username=settings.telegram_market_close_channel_username,
+            channel_url=settings.telegram_market_close_channel_url,
+            timeout_seconds=settings.telegram_market_close_timeout_seconds,
+            user_agent=settings.telegram_market_close_user_agent,
+            max_posts=settings.telegram_market_close_max_posts,
+        )
+        candidate = latest_telegram_us_market_close_candidate(
+            posts,
+            today=current_storage_date(),
+            max_summary_chars=settings.telegram_market_close_max_summary_chars,
+        )
+    except Exception as exc:
+        state = {
+            **read_json_store(state_path, {}),
+            "status": "error",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": provider_error_message(exc, settings),
+        }
+        write_json_store(state_path, state)
+        return {
+            "status": "error",
+            "module": "telegram_market_close_journal",
+            "message": state["last_attempt_message"],
+            "state_path": str(state_path),
+        }
+    if not candidate:
+        state = {
+            **read_json_store(state_path, {}),
+            "status": "not_found",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": "텔레그램 @ehdwl 공개 채널에서 미국 시장일지 후보를 찾지 못했습니다.",
+            "warnings": warnings,
+        }
+        write_json_store(state_path, state)
+        return {
+            "status": "not_found",
+            "module": "telegram_market_close_journal",
+            "message": state["last_attempt_message"],
+            "warnings": warnings,
+            "state_path": str(state_path),
+        }
+    previous_state = read_json_store(state_path, {})
+    if (
+        not force
+        and previous_state.get("source_item_id") == candidate.source_item_id
+        and previous_state.get("source_published_at") == candidate.source_published_at
+        and previous_state.get("session_date") == candidate.session_date
+    ):
+        state = {
+            **previous_state,
+            "status": "skipped_duplicate",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": "같은 텔레그램 미국 시장일지 원본이라 중복 저장하지 않았습니다.",
+            "warnings": warnings,
+        }
+        write_json_store(state_path, state)
+        return {
+            "status": "skipped",
+            "module": "telegram_market_close_journal",
+            "message": "이미 같은 텔레그램 미국 시장일지를 반영했습니다.",
+            "source": candidate.__dict__,
+            "previous_state": state,
+            "state_path": str(state_path),
+        }
+    source_metadata = telegram_market_close_source_metadata(candidate.source_title)
+    request = MarketCloseReviewRequest(
+        market="US",
+        session_date=candidate.session_date,
+        raw_summary=candidate.raw_summary,
+        **source_metadata,
+        save_result=True,
+    )
+    response = save_market_close_review(request, settings)
+    run_at = current_storage_timestamp()
+    run_date = current_storage_date().isoformat()
+    state = {
+        "status": "success",
+        "last_run_at": run_at,
+        "last_run_date": run_date,
+        "last_attempt_at": run_at,
+        "last_attempt_date": run_date,
+        "last_attempt_message": "텔레그램 @ehdwl 미국 시장일지를 시장일지에 반영했습니다.",
+        "source_item_id": candidate.source_item_id,
+        "source_url": candidate.source_url,
+        "source_title": candidate.source_title,
+        "source_origin": source_metadata["source_origin"],
+        "source_provider": source_metadata["source_provider"],
+        "source_published_at": candidate.source_published_at,
+        "session_date": candidate.session_date,
+        "included_post_count": candidate.included_post_count,
+        "market_journal_entry_id": response.entry.entry_id,
+        "storage": response.storage.model_dump(mode="json") if response.storage else None,
+        "warnings": warnings,
+    }
+    write_json_store(state_path, state)
+    return {
+        "status": "success",
+        "module": "telegram_market_close_journal",
+        "source": candidate.__dict__,
+        "entry": response.entry.model_dump(mode="json"),
+        "storage": response.storage.model_dump(mode="json") if response.storage else None,
+        "warnings": warnings,
+        "state_path": str(state_path),
+    }
+
+
+def parse_telegram_market_close_journal_time(settings: Settings) -> tuple[int, int]:
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.telegram_market_close_journal_time or "07:20").strip())
+    if not match:
+        return 7, 20
+    hour = min(max(int(match.group(1)), 0), 23)
+    minute = min(max(int(match.group(2)), 0), 59)
+    return hour, minute
+
+
+def should_run_telegram_us_market_close_journal(settings: Settings, now: datetime | None = None) -> bool:
+    if not settings.telegram_market_close_auto_journal:
+        return False
+    now = now or current_storage_datetime()
+    hour, minute = parse_telegram_market_close_journal_time(settings)
+    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
+        return False
+    state = read_json_store(telegram_market_close_journal_state_path(settings), {})
+    today = now.date().isoformat()
+    return state.get("last_run_date") != today and state.get("last_attempt_date") != today
+
+
+def read_telegram_market_close_task_log(settings: Settings, limit: int = 20) -> dict:
+    log_path = telegram_market_close_journal_task_log_path(settings)
+    normalized_limit = min(max(int(limit or 20), 1), 100)
+    if not log_path.exists():
+        return {
+            "exists": False,
+            "path": str(log_path),
+            "line_count": 0,
+            "recent_lines": [],
+            "last_line": "",
+        }
+    try:
+        with log_path.open("r", encoding="utf-8-sig", errors="replace") as handle:
+            lines = [line.rstrip("\r\n") for line in handle if line.strip()]
+    except Exception as exc:
+        return {
+            "exists": True,
+            "path": str(log_path),
+            "line_count": 0,
+            "recent_lines": [],
+            "last_line": "",
+            "read_error": provider_error_message(exc, settings),
+        }
+    recent_lines = lines[-normalized_limit:]
+    return {
+        "exists": True,
+        "path": str(log_path),
+        "line_count": len(lines),
+        "recent_lines": [repair_mojibake_log_line(line) for line in recent_lines],
+        "last_line": repair_mojibake_log_line(recent_lines[-1]) if recent_lines else "",
+    }
+
+
+def build_telegram_market_close_task_status(settings: Settings, log_limit: int = 20) -> dict:
+    state = read_json_store(telegram_market_close_journal_state_path(settings), {})
+    log = read_telegram_market_close_task_log(settings, limit=log_limit)
+    enabled = bool(settings.telegram_market_close_auto_journal)
+    if not enabled:
+        next_action = "텔레그램 미국 시장일지 자동 반영이 비활성화되어 있습니다."
+        status = "disabled"
+    elif not log.get("exists") and not state:
+        next_action = "작업 스케줄러 첫 실행 전입니다. 07:20 이후 로그가 생성되는지 확인하세요."
+        status = "waiting_for_first_run"
+    elif should_run_telegram_us_market_close_journal(settings):
+        next_action = "오늘 텔레그램 미국 시장일지 자동 반영이 아직 실행되지 않았습니다."
+        status = "due"
+    elif state.get("status") == "skipped_duplicate":
+        next_action = "오늘 자동 점검이 실행됐고 같은 원본은 중복 저장하지 않았습니다."
+        status = "ok_duplicate_skipped"
+    elif state.get("status") == "not_found":
+        next_action = "오늘 자동 점검이 실행됐지만 신규 미국 시장일지 후보가 없어 저장하지 않았습니다."
+        status = "ok_no_new_report"
+    elif state.get("status") == "error":
+        next_action = "텔레그램 공개 채널 확인 중 오류가 발생했습니다. 네트워크 또는 t.me 접근 상태를 확인하세요."
+        status = "needs_attention"
+    else:
+        next_action = "최근 상태가 정상입니다. 같은 텔레그램 원본은 중복 저장하지 않습니다."
+        status = "ok"
+    return {
+        "status": status,
+        "module": "telegram_market_close_task_status",
+        "enabled": enabled,
+        "daily_time": settings.telegram_market_close_journal_time,
+        "channel_username": settings.telegram_market_close_channel_username,
+        "channel_url": settings.telegram_market_close_channel_url,
+        "scheduled_task_name": "InvestmentResearchOS-TelegramUSMarketCloseJournal-0720",
+        "due_now": should_run_telegram_us_market_close_journal(settings) if enabled else False,
+        "state": state,
+        "task_log": log,
+        "next_action": next_action,
+    }
+
+
 _NAVER_RESEARCH_SCHEDULER_STARTED = False
 
 
@@ -4242,6 +4462,8 @@ def naver_research_scheduler_loop() -> None:
                 last_refresh_at = now
             if should_run_naver_market_close_journal(settings, now):
                 refresh_naver_market_close_journal(settings)
+            if should_run_telegram_us_market_close_journal(settings, now):
+                refresh_telegram_us_market_close_journal(settings)
         except Exception:
             pass
         threading.Event().wait(interval_seconds)
@@ -14275,6 +14497,30 @@ def get_naver_market_close_task_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_naver_market_close_task_status(settings, log_limit=log_limit)
+
+
+@app.post(
+    "/api/v1/telegram-market-close-journal/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_telegram_us_market_close_journal_endpoint(
+    force: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return refresh_telegram_us_market_close_journal(settings, force=force)
+
+
+@app.get(
+    "/api/v1/telegram-market-close-journal/task-status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_telegram_market_close_task_status(
+    log_limit: int = 20,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_telegram_market_close_task_status(settings, log_limit=log_limit)
+
+
 @app.get(
     "/api/v1/tickers/diagnose/{ticker}",
     dependencies=[Depends(verify_user_token)],

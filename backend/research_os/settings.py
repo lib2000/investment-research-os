@@ -113,6 +113,14 @@ class Settings(BaseModel):
     naver_research_pdf_snippet_max_chars: int = 900
     naver_market_close_auto_journal: bool = True
     naver_market_close_journal_time: str = "08:30"
+    telegram_market_close_auto_journal: bool = True
+    telegram_market_close_journal_time: str = "07:20"
+    telegram_market_close_channel_username: str = "ehdwl"
+    telegram_market_close_channel_url: str = "https://t.me/s/ehdwl"
+    telegram_market_close_timeout_seconds: float = 10.0
+    telegram_market_close_max_posts: int = 20
+    telegram_market_close_max_summary_chars: int = 12000
+    telegram_market_close_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     daily_recommendations_enabled: bool = True
     daily_recommendations_time: str = "08:00"
     daily_recommendations_tracking_enabled: bool = True
@@ -330,6 +338,31 @@ class Settings(BaseModel):
             ),
             naver_market_close_journal_time=os.getenv(
                 "NAVER_MARKET_CLOSE_JOURNAL_TIME", "08:30"
+            ),
+            telegram_market_close_auto_journal=_read_bool(
+                "TELEGRAM_MARKET_CLOSE_AUTO_JOURNAL", True
+            ),
+            telegram_market_close_journal_time=os.getenv(
+                "TELEGRAM_MARKET_CLOSE_JOURNAL_TIME", "07:20"
+            ),
+            telegram_market_close_channel_username=os.getenv(
+                "TELEGRAM_MARKET_CLOSE_CHANNEL_USERNAME", "ehdwl"
+            ),
+            telegram_market_close_channel_url=os.getenv(
+                "TELEGRAM_MARKET_CLOSE_CHANNEL_URL", "https://t.me/s/ehdwl"
+            ),
+            telegram_market_close_timeout_seconds=float(
+                os.getenv("TELEGRAM_MARKET_CLOSE_TIMEOUT_SECONDS", "10")
+            ),
+            telegram_market_close_max_posts=int(
+                os.getenv("TELEGRAM_MARKET_CLOSE_MAX_POSTS", "20")
+            ),
+            telegram_market_close_max_summary_chars=int(
+                os.getenv("TELEGRAM_MARKET_CLOSE_MAX_SUMMARY_CHARS", "12000")
+            ),
+            telegram_market_close_user_agent=os.getenv(
+                "TELEGRAM_MARKET_CLOSE_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
             daily_recommendations_enabled=_read_bool(
                 "DAILY_RECOMMENDATIONS_ENABLED", True

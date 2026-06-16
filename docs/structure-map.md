@@ -58,6 +58,7 @@
 | `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
 | `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
+| `backend\research_os\telegram_market_journal.py` | 텔레그램 @ehdwl 공개 채널 미국 시장일지 파싱/후보 선정 | `NaverResearchIngestTests` |
 | `backend\research_os\models.py` | FastAPI 요청/응답 모델 | `python -m py_compile backend\research_os_main.py` |
 | `backend\research_os\portfolio_analysis_coverage.py` | 포트폴리오별 보유 종목 분석 커버리지와 보강 큐 생성 | `check_portfolio_analysis_coverage.py` |
 | `backend\research_os\portfolio_import.py` | CSV/JSON/XLSX 포트폴리오 파일 파싱, 국내/해외 통화 추론 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |

@@ -1750,6 +1750,83 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertTrue(written_state["last_attempt_date"])
         self.assertIn("시장일지", written_state["last_attempt_message"])
 
+    def test_telegram_market_journal_parses_public_channel_html(self):
+        from research_os.telegram_market_journal import (
+            latest_telegram_us_market_close_candidate,
+            parse_telegram_public_channel_html,
+        )
+
+        html = """
+        <div class="tgme_widget_message" data-post="ehdwl/101">
+          <div class="tgme_widget_message_text">*특징 종목: 엔비디아, 마이크론 하락<br/>필라델피아 반도체 지수는 하락</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/101"><time datetime="2026-06-17T01:25:00+00:00"></time></a>
+        </div>
+        <div class="tgme_widget_message" data-post="ehdwl/100">
+          <div class="tgme_widget_message_text">06/16 미 증시, 물가와 반도체 이슈로 하락<br/>다우 -1.0%, 나스닥 -2.0%, S&amp;P500 -1.5%</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/100"><time datetime="2026-06-17T01:20:00+00:00"></time></a>
+        </div>
+        """
+
+        posts = parse_telegram_public_channel_html(html, channel_username="ehdwl", base_url="https://t.me/s/ehdwl")
+        candidate = latest_telegram_us_market_close_candidate(posts, today=date(2026, 6, 17))
+
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.source_item_id, "ehdwl/100")
+        self.assertEqual(candidate.session_date, "2026-06-16")
+        self.assertEqual(candidate.included_post_count, 2)
+        self.assertIn("특징 종목", candidate.raw_summary)
+        self.assertIn("06/16 미 증시", candidate.source_title)
+
+    def test_telegram_market_close_refresh_marks_auto_source(self):
+        import research_os_main as main
+        from research_os.models import MarketCloseEntry, MarketCloseReviewResponse
+        from research_os.settings import Settings
+        from research_os.telegram_market_journal import TelegramMarketCloseCandidate
+
+        settings = Settings(research_vault_dir="../research_vault")
+        candidate = TelegramMarketCloseCandidate(
+            source_item_id="ehdwl/100",
+            source_url="https://t.me/ehdwl/100",
+            source_title="Telegram @ehdwl: 06/16 미 증시, 반도체 하락",
+            source_published_at="2026-06-17T01:20:00+00:00",
+            session_date="2026-06-16",
+            raw_summary="06/16 미 증시, 반도체 하락\n나스닥과 S&P500 하락",
+            included_post_count=1,
+        )
+        response = MarketCloseReviewResponse(
+            entry=MarketCloseEntry(
+                entry_id="US-2026-06-16",
+                market="US",
+                session_date="2026-06-16",
+                raw_summary=candidate.raw_summary,
+                source_origin="telegram_auto",
+                source_provider="telegram_ehdwl",
+                source_title=candidate.source_title,
+                sentiment="부정",
+                risk_level="보통",
+                regime="위험 관리",
+            ),
+            recent_regime_summary="US 최근 1회 누적",
+        )
+
+        with patch.object(main, "fetch_telegram_public_channel_posts", return_value=([], [])), \
+            patch.object(main, "latest_telegram_us_market_close_candidate", return_value=candidate), \
+            patch.object(main, "read_json_store", return_value={}), \
+            patch.object(main, "write_json_store") as write_store, \
+            patch.object(main, "save_market_close_review", return_value=response) as save_review:
+            result = main.refresh_telegram_us_market_close_journal(settings, force=False)
+
+        request = save_review.call_args.args[0]
+        self.assertEqual(request.market, "US")
+        self.assertEqual(request.source_origin, "telegram_auto")
+        self.assertEqual(request.source_provider, "telegram_ehdwl")
+        self.assertEqual(request.source_title, candidate.source_title)
+        self.assertEqual(result["entry"]["source_provider"], "telegram_ehdwl")
+        written_state = write_store.call_args.args[1]
+        self.assertEqual(written_state["status"], "success")
+        self.assertEqual(written_state["source_item_id"], "ehdwl/100")
+        self.assertEqual(written_state["session_date"], "2026-06-16")
+
     def test_portfolio_risk_warning_uses_company_name(self):
         import research_os_main as main
         from research_os.models import PortfolioHolding, PortfolioRiskScanRequest
