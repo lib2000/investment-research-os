@@ -50,6 +50,37 @@ def load_code_diff_impact_tool():
     return module
 
 
+def load_write_actions_smoke_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "smoke_research_console_write_actions.py"
+    spec = spec_from_file_location("smoke_research_console_write_actions", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+class ConsoleSmokeToolTests(unittest.TestCase):
+    def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
+        import urllib.error
+
+        tool = load_write_actions_smoke_tool()
+        with patch.object(tool, "assert_project_root", return_value=None), patch.object(
+            tool.urllib.request, "urlopen", side_effect=urllib.error.URLError("connection refused")
+        ):
+            result = tool.cleanup_qa_artifacts()
+
+        self.assertFalse(result["backendReachable"])
+        self.assertEqual(result["skippedReason"], "backend_unreachable")
+        self.assertIn("connection refused", result["backendMessage"])
+        self.assertNotIn("portfolioCleanupError", result)
+        self.assertNotIn("interestCleanupError", result)
+        self.assertNotIn("newsCleanupError", result)
+        self.assertNotIn("researchArchiveError", result)
+
+
 class WebCaptureRenderingTests(unittest.TestCase):
     def test_sec_capture_headers_use_public_project_user_agent(self):
         from research_os.web_capture import capture_url_headers

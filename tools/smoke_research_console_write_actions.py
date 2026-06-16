@@ -64,6 +64,15 @@ def cleanup_qa_artifacts(api_base: str = DEFAULT_API_BASE, token: str = DEFAULT_
     }
 
     try:
+        api_request("/api/v1/health", api_base=api_base, token=token, timeout=3)
+    except Exception as exc:  # noqa: BLE001 - cleanup-only should be quiet when the backend is intentionally offline.
+        result["backendReachable"] = False
+        result["skippedReason"] = "backend_unreachable"
+        result["backendMessage"] = str(exc)
+        return result
+    result["backendReachable"] = True
+
+    try:
         portfolios_payload = api_request("/api/v1/portfolios", api_base=api_base, token=token)
         for portfolio in portfolios_payload.get("portfolios", []) if isinstance(portfolios_payload, dict) else []:
             name = str(portfolio.get("portfolio_name") or "")
