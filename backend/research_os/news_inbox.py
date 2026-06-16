@@ -166,7 +166,11 @@ def news_filter_counts(runtime: NewsInboxRuntime, items: list[dict]) -> dict:
 
 
 def build_news_inbox_payload(runtime: NewsInboxRuntime, settings, limit: int = 30, filter_key: str = "all") -> dict:
-    payload = read_news_inbox(runtime, settings)
+    runtime_reader = getattr(runtime, "read_news_inbox", None)
+    if callable(runtime_reader):
+        payload = runtime_reader(settings)
+    else:
+        payload = read_news_inbox(runtime, settings)
     items = [
         item
         for item in payload.get("items", [])

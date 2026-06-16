@@ -76,7 +76,7 @@ def _host_label(source_url: str) -> tuple[str, str, list[str]]:
 def _normalize_public_ir_source_type(source_url: str, value: str) -> str:
     host = (urlparse(source_url).hostname or "").lower()
     normalized = _safe_key(value, "other").lower()
-    if host.endswith("sec.gov") and normalized in {"sec_company_submissions", "sec", "sec_edgar", "official_filing"}:
+    if host.endswith("sec.gov") and normalized in {"sec", "sec_edgar", "official_filing"}:
         return "official_filing"
     return normalized
 

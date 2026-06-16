@@ -12158,6 +12158,7 @@ def _news_inbox_runtime() -> SimpleNamespace:
         content_fingerprint=content_fingerprint,
         current_storage_timestamp=current_storage_timestamp,
         news_inbox_path=news_inbox_path,
+        read_news_inbox=read_news_inbox,
         read_json_store=read_json_store,
         storage_quality_entry_is_policy_url_only=storage_quality_entry_is_policy_url_only,
         write_json_store=write_json_store,
