@@ -5111,6 +5111,23 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "018260",
+                            "type": "research-capture",
+                            "date": "2026-06-16",
+                            "file_name": "018260-research-capture.md",
+                            "summary": "검증된 Dossier 입력 자료입니다. 클라우드 매출 성장과 마진 개선을 확인했습니다.",
+                            "ticker_verification": {"verified": True, "official_symbol": "018260"},
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
             candidates = main.dossier_refresh_candidates_from_duplicate_review(
                 Settings(research_vault_dir=str(vault_dir)),
@@ -5118,6 +5135,55 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
             )
 
         self.assertEqual([item["ticker"] for item in candidates], ["018260"])
+
+    def test_deduped_dossier_candidates_require_verified_sources(self):
+        import json
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            system_dir = vault_dir / "_system"
+            system_dir.mkdir(parents=True)
+            (system_dir / "storage_duplicate_review.json").write_text(
+                json.dumps(
+                    {
+                        "ticker_breakdown": [
+                            {"ticker": "035420", "company_name": "NAVER", "duplicate_group_count": 2, "duplicate_entry_count": 5},
+                            {"ticker": "NBIS", "company_name": "Nebius", "duplicate_group_count": 1, "duplicate_entry_count": 1},
+                        ]
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "NBIS",
+                            "type": "research-capture",
+                            "date": "2026-06-16",
+                            "file_name": "NBIS-research-capture.md",
+                            "summary": "검증된 Dossier 입력 자료입니다. AI 인프라 수요와 매출 성장 근거를 확인했습니다.",
+                            "ticker_verification": {"verified": True, "official_symbol": "NBIS"},
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            candidates = main.dossier_refresh_candidates_from_duplicate_review(
+                Settings(research_vault_dir=str(vault_dir)),
+                limit=5,
+            )
+
+        self.assertEqual([item["ticker"] for item in candidates], ["NBIS"])
 
     def test_deduped_dossier_refresh_updates_parent_status_timestamp(self):
         import json
@@ -5146,6 +5212,23 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
             )
             (system_dir / "research_automation_status.json").write_text(
                 json.dumps({"updated_at": "2026-05-17T22:54:52+09:00", "dossier_count": 30}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "018260",
+                            "type": "research-capture",
+                            "date": "2026-06-16",
+                            "file_name": "018260-research-capture.md",
+                            "summary": "검증된 Dossier 입력 자료입니다. 클라우드 매출 성장과 마진 개선을 확인했습니다.",
+                            "ticker_verification": {"verified": True, "official_symbol": "018260"},
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
             settings = Settings(research_vault_dir=str(vault_dir))

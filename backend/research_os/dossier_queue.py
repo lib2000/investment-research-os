@@ -16,6 +16,7 @@ from research_os.dossier_text import (
     clean_dossier_signal,
     compact_representative_sentence,
     content_fingerprint,
+    is_allowed_dossier_source_entry,
     is_dossier_noise_line,
     latest_verified_entries_for_dossier,
     line_has_any,
@@ -535,6 +536,21 @@ def is_dossier_refresh_ticker_key(runtime: DossierQueueRuntime, ticker: str) -> 
     return False
 
 
+def has_verified_dossier_source(runtime: DossierQueueRuntime, settings, ticker: str) -> bool:
+    vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
+    normalized = runtime.normalize_ticker(ticker)
+    for entry in runtime.read_manifest(vault_dir):
+        if not isinstance(entry, dict):
+            continue
+        if runtime.normalize_ticker(str(entry.get("ticker") or "")) != normalized:
+            continue
+        if not is_allowed_dossier_source_entry(entry):
+            continue
+        if runtime.is_verified_manifest_entry(entry, normalized):
+            return True
+    return False
+
+
 def dossier_refresh_candidates_from_duplicate_review(runtime: DossierQueueRuntime, settings, limit: int = 8) -> list[dict]:
     review = runtime.read_json_store(runtime.storage_duplicate_review_path(settings), {})
     if not review:
@@ -544,6 +560,8 @@ def dossier_refresh_candidates_from_duplicate_review(runtime: DossierQueueRuntim
     for item in review.get("ticker_breakdown") or []:
         ticker = runtime.normalize_ticker(str(item.get("ticker") or ""))
         if not is_dossier_refresh_ticker_key(runtime, ticker) or ticker in seen:
+            continue
+        if not has_verified_dossier_source(runtime, settings, ticker):
             continue
         seen.add(ticker)
         candidates.append(
