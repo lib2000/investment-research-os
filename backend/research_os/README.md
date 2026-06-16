@@ -24,6 +24,7 @@
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_provider_core.py`: provider 공통 interface, 상태 객체, mock/empty/composite wrapper
 - `nps_data_provider.py`: 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환
+- `opendart_data_provider.py`: OpenDART corp-code/공시/재무 API client와 한국 종목 재무 provider
 - `data_providers.py`: KIS, OpenDART, 가격, NPS와 검색/보강 데이터 프로바이더 호출
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_extraction.py`: 첨부 파일명 정리, base64 디코딩, PDF/OCR/Office/텍스트/표 본문 추출 유틸

@@ -693,6 +693,8 @@ $contracts = @(
       'research_os.data_provider_core',
       'data_provider_core.py',
       'research_os.nps_data_provider',
+      'research_os.opendart_data_provider',
+      'opendart_data_provider.py',
       'nps_data_provider.py',
       'research_os.customs_data_provider',
       'customs_data_provider.py',

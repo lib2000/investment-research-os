@@ -48,6 +48,7 @@
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
 | `backend\research_os\data_provider_core.py` | provider 공통 interface, 상태 객체, mock/empty/composite wrapper | `BackendModuleBoundaryTests` |
 | `backend\research_os\nps_data_provider.py` | 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환 | `check_backend_runtime_env.py` |
+| `backend\research_os\opendart_data_provider.py` | OpenDART corp-code/공시/재무 API client와 한국 종목 재무 provider | `BackendModuleBoundaryTests` |
 | `backend\research_os\data_providers.py` | KIS/OpenDART/가격/NPS와 검색·보강 데이터 프로바이더 호출 | `check_backend_runtime_env.py` |
 | `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
