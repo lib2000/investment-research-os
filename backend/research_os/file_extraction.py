@@ -1,4 +1,3 @@
-import base64
 import csv
 import io
 import os
@@ -7,47 +6,34 @@ import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
-from re import findall, search, sub
+from re import findall, search
 from xml.etree import ElementTree
 
-from fastapi import HTTPException
+from research_os import file_attachment_utils
+
 
 def safe_attachment_file_name(file_name: str | None) -> str:
-    original = Path(file_name or "uploaded-file").name.strip() or "uploaded-file"
-    stem = sub(r"[^0-9A-Za-z가-힣._-]+", "-", Path(original).stem).strip("-_.")
-    suffix = sub(r"[^0-9A-Za-z.]+", "", Path(original).suffix)[:20]
-    if not stem:
-        stem = "uploaded-file"
-    return f"{stem[:80]}{suffix}"
+    return file_attachment_utils.safe_attachment_file_name(file_name)
 
 
 def decode_attachment_base64(content_base64: str | None) -> bytes | None:
-    if not content_base64:
-        return None
-    try:
-        return base64.b64decode(content_base64, validate=True)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail="첨부 파일 인코딩을 해석하지 못했습니다.") from exc
+    return file_attachment_utils.decode_attachment_base64(content_base64)
 
 
 PDF_TEXT_MAX_CHARS = 120_000
 PDF_OCR_TEXT_MAX_CHARS = 80_000
 PDF_OCR_MAX_PAGES = 20
 IMAGE_OCR_TEXT_MAX_CHARS = 80_000
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
-IMAGE_MIME_PREFIXES = ("image/",)
+IMAGE_EXTENSIONS = file_attachment_utils.IMAGE_EXTENSIONS
+IMAGE_MIME_PREFIXES = file_attachment_utils.IMAGE_MIME_PREFIXES
 
 
 def is_pdf_attachment(file_name: str | None, mime_type: str | None) -> bool:
-    normalized_mime = (mime_type or "").lower()
-    normalized_name = (file_name or "").lower()
-    return normalized_mime == "application/pdf" or normalized_name.endswith(".pdf")
+    return file_attachment_utils.is_pdf_attachment(file_name, mime_type)
 
 
 def is_image_attachment(file_name: str | None, mime_type: str | None) -> bool:
-    normalized_mime = (mime_type or "").lower()
-    extension = Path(str(file_name or "")).suffix.lower()
-    return normalized_mime.startswith(IMAGE_MIME_PREFIXES) or extension in IMAGE_EXTENSIONS
+    return file_attachment_utils.is_image_attachment(file_name, mime_type)
 
 
 def resolve_tesseract_executable() -> str | None:

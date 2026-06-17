@@ -3009,6 +3009,22 @@ class SectorOpportunityPresentationTests(unittest.TestCase):
         self.assertNotIn("선호 티커", rendered)
 
 
+class FileAttachmentUtilsModuleTests(unittest.TestCase):
+    def test_file_attachment_utils_sanitize_decode_and_classify(self):
+        from fastapi import HTTPException
+        from research_os import file_attachment_utils
+
+        safe_name = file_attachment_utils.safe_attachment_file_name("../위험 파일?.pdf")
+        decoded = file_attachment_utils.decode_attachment_base64(base64.b64encode(b"hello").decode("ascii"))
+
+        self.assertEqual(safe_name, "위험-파일.pdf")
+        self.assertEqual(decoded, b"hello")
+        self.assertTrue(file_attachment_utils.is_pdf_attachment("report.PDF", None))
+        self.assertTrue(file_attachment_utils.is_image_attachment("chart.png", None))
+        with self.assertRaises(HTTPException):
+            file_attachment_utils.decode_attachment_base64("not-valid-base64")
+
+
 class FileExtractionTests(unittest.TestCase):
     def test_ocr_runtime_status_exposes_processing_limits(self):
         from research_os.file_extraction import ocr_runtime_status
