@@ -6021,6 +6021,39 @@ class DailyBriefModuleTests(unittest.TestCase):
         self.assertIn("Dossier 논거 변화를 확인하세요.", rendered)
 
 
+class DossierSynthesisModuleTests(unittest.TestCase):
+    def test_dossier_synthesis_renderer_formats_payload_sections(self):
+        from research_os import dossier_synthesis
+
+        markdown = dossier_synthesis.render_dossier_markdown(
+            {
+                "ticker": "PL",
+                "company_name": "Planet Labs PBC",
+                "date": "2026-06-18",
+                "thesis_summary": "위성 데이터 수요를 핵심 논거로 추적합니다.",
+                "source_count": 3,
+                "duplicate_count": 1,
+                "confidence": 0.82,
+                "tags": ["dossier", "satellite"],
+                "consensus_facts": ["매출 성장률 확인"],
+                "bull_thesis": ["강세: 신규 계약 확대"],
+                "bear_thesis": ["약세: 현금흐름 부담"],
+                "cruxes": ["계약 성장 지속 여부"],
+                "observables": ["매출 성장률: 다음 실적에서 확인"],
+                "invalidation_conditions": ["성장률 둔화"],
+                "latest_changes": [
+                    {"date": "2026-06-18", "type": "broker-report", "summary": "계약 확대 업데이트"}
+                ],
+            }
+        )
+
+        self.assertIn("# Planet Labs PBC Dossier 합성 보고서", markdown)
+        self.assertIn("- 고유 자료: 3개", markdown)
+        self.assertIn("- 중복 제외: 1개", markdown)
+        self.assertIn("- 합성 신뢰도: 82%", markdown)
+        self.assertIn("2026-06-18 · broker-report · 계약 확대 업데이트", markdown)
+
+
 class ResearchMemoryPolicyTests(unittest.TestCase):
     def test_dossier_text_module_dedupes_exact_manifest_entries(self):
         from research_os import dossier_text

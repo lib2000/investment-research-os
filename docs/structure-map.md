@@ -48,6 +48,7 @@
 | `backend\research_os\dart_filing_metadata.py` | DART 공시명 기반 중요도/분기 label/cache key/마크다운/refresh 오류 분류 helper | `DartFilingMetadataModuleTests` |
 | `backend\research_os\dossier_capture_quality.py` | Dossier 입력 캡처 실패 판정과 본문/첨부/URL 품질 상태 helper | `ResearchMemoryPolicyTests` |
 | `backend\research_os\dossier_similarity.py` | Dossier 중복 판정용 content hash, token set, Jaccard similarity helper | `ResearchMemoryPolicyTests` |
+| `backend\research_os\dossier_synthesis.py` | Dossier 합성 payload 구성과 Markdown 렌더링 helper | `DossierSynthesisModuleTests` |
 | `backend\research_os\daily_recommendation_store.py` | 매일 추천 저장소 경로, JSON 읽기/쓰기, 실행 시각 판정, 추천 record ID 유틸 | `DailyRecommendationsTests` |
 | `backend\research_os\daily_recommendation_evidence.py` | 매일 추천 RAG 근거 문서 정규화, claim 매칭, evidence document 선별 helper | `DailyRecommendationEvidenceModuleTests` |
 | `backend\research_os\daily_recommendation_recent.py` | 매일 추천 최근 1주 자료 인덱스, evidence document 변환, 묶음 표시 helper | `DailyRecommendationRecentModuleTests` |
