@@ -89,6 +89,7 @@
 | `backend\research_os\thesis_impact.py` | 투자 논거 영향도 신뢰도 보정, 판정, watch item signal, 마크다운 렌더링 helper | `ThesisImpactModuleTests` |
 | `backend\research_os\thesis_signal_words.py` | 투자 논거 영향도/뉴스 영향 판정에 쓰는 긍정·부정 signal word helper | `ThesisSignalWordsModuleTests` |
 | `backend\research_os\web_capture.py` | 웹 URL 안전성, 네트워크 재시도/fallback, URL-only 예외 처리, 표시용 컨텍스트 | `WebCaptureRenderingTests` |
+| `backend\research_os\web_capture_translation.py` | 해외 웹 본문 언어 감지, 로컬 용어 사전 기반 한국어 분석 digest helper | `WebCaptureRenderingTests` |
 | `backend\research_os\web_text_extraction.py` | HTML/JSON-LD 기사 본문 추출, 제목 정제, 표/실적 행 텍스트화, 기사 노이즈 제거 | `WebCaptureRenderingTests` |
 
 ## 코드 지식 그래프

@@ -302,6 +302,20 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("Revenue growth", payload["preview"])
         self.assertIn("[웹사이트 입력]", payload["context"])
 
+    def test_web_capture_translation_module_builds_local_korean_digest(self):
+        from research_os import web_capture_translation
+
+        digest = web_capture_translation.foreign_text_korean_digest(
+            "Acme Bio announces it raised $12 million in Series A funding. "
+            "The company aims to accelerate drug discovery with AI.",
+            title="Acme Bio funding",
+        )
+
+        self.assertEqual(digest["language"], "en")
+        self.assertEqual(digest["status"], "local_digest")
+        self.assertIn("한국어 분석용 변환", digest["text"])
+        self.assertIn("12백만 달러", digest["text"])
+        self.assertIn("신약개발", digest["text"])
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
