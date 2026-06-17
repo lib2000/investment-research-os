@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from re import fullmatch
+from datetime import date, datetime, timedelta
+from re import fullmatch, search
 
 
 def recent_dart_cache_entries(runtime, cache: dict, ticker: str | None = None, limit: int = 5) -> list[dict]:
@@ -140,6 +140,132 @@ def refresh_dart_filing_for_ticker_if_stale(runtime, ticker: str, settings) -> d
             "ticker": normalized_ticker,
             "error": runtime.provider_error_message(exc, settings),
         }
+
+
+def dart_periodic_quarter_label(report_name: str, receipt_date: str | None) -> str | None:
+    name = str(report_name or "")
+    if not any(keyword in name for keyword in ["사업보고서", "반기보고서", "분기보고서"]):
+        return None
+    period_match = search(r"\((20\d{2})[.\-/년\s]*(0?[369]|1[012])", name)
+    report_year = None
+    report_month = None
+    if period_match:
+        report_year = int(period_match.group(1))
+        report_month = int(period_match.group(2))
+    elif receipt_date and fullmatch(r"\d{8}", receipt_date):
+        receipt_year = int(receipt_date[:4])
+        if "사업보고서" in name:
+            report_year = receipt_year - 1
+            report_month = 12
+        else:
+            report_year = receipt_year
+            report_month = 6 if "반기보고서" in name else 3
+    if not report_year or not report_month:
+        return None
+    if "사업보고서" in name or report_month == 12:
+        return f"FY{report_year} Annual"
+    if "반기보고서" in name or report_month == 6:
+        return f"FY{report_year} Q2"
+    if report_month == 9:
+        return f"FY{report_year} Q3"
+    return f"FY{report_year} Q1"
+
+
+def korean_earnings_neighbor_dates(quarter_label: str | None) -> tuple[str | None, str | None]:
+    if not quarter_label:
+        return None, None
+    match = search(r"FY(\d{4})\s+(Annual|Q[123])", quarter_label)
+    if not match:
+        return None, None
+    year = int(match.group(1))
+    period = match.group(2)
+    if period == "Annual":
+        return date(year, 11, 14).isoformat(), date(year + 1, 5, 15).isoformat()
+    if period == "Q1":
+        return date(year, 3, 31).isoformat(), date(year, 8, 14).isoformat()
+    if period == "Q2":
+        return date(year, 5, 15).isoformat(), date(year, 11, 14).isoformat()
+    if period == "Q3":
+        return date(year, 8, 14).isoformat(), date(year + 1, 3, 31).isoformat()
+    return None, None
+
+
+def merge_dart_latest_earnings_calendar(
+    runtime,
+    ticker: str,
+    profile: dict,
+    settings,
+    *,
+    refresh_if_stale: bool = True,
+) -> dict:
+    if not settings or not profile or profile.get("country") != "KR":
+        return profile
+    normalized_ticker = runtime.normalize_ticker(ticker)
+    if refresh_if_stale:
+        runtime.refresh_dart_filing_for_ticker_if_stale(normalized_ticker, settings)
+    signal = runtime.build_dart_filing_signal(normalized_ticker, settings)
+    entries = []
+    for entry in signal.get("recent_entries") or []:
+        filing = entry.get("filing") or {}
+        report_name = str(filing.get("report_name") or "")
+        quarter_label = dart_periodic_quarter_label(report_name, filing.get("receipt_date"))
+        receipt_date = str(filing.get("receipt_date") or "")
+        if quarter_label and fullmatch(r"\d{8}", receipt_date):
+            entries.append((receipt_date, quarter_label, filing))
+    if not entries:
+        return profile
+    receipt_date, quarter_label, filing = sorted(entries, key=lambda item: item[0], reverse=True)[0]
+    latest_date = datetime.strptime(receipt_date, "%Y%m%d").date().isoformat()
+    current_latest = runtime.parse_iso_date(profile.get("latest_reported_earnings_date"))
+    latest_parsed = runtime.parse_iso_date(latest_date)
+    current_source = str(profile.get("earnings_calendar_source") or "")
+    current_quarter = runtime.normalize_quarter_label(profile.get("latest_reported_quarter"))
+    dart_quarter = runtime.normalize_quarter_label(quarter_label)
+    schedule_fallback = "DART 정기보고서 제출 기한 기준" in current_source
+    if (
+        current_latest
+        and latest_parsed
+        and latest_parsed < current_latest
+        and not (schedule_fallback and current_quarter == dart_quarter)
+    ):
+        return profile
+    previous_date, next_date = korean_earnings_neighbor_dates(quarter_label)
+    enriched = dict(profile)
+    enriched["latest_reported_quarter"] = quarter_label
+    enriched["latest_reported_earnings_date"] = latest_date
+    if previous_date:
+        enriched["previous_earnings_date"] = previous_date
+    if next_date:
+        enriched["next_earnings_date"] = next_date
+    source_url = filing.get("source_url") or "https://dart.fss.or.kr/"
+    enriched["earnings_calendar_source"] = (
+        f"OpenDART 신규 공시 목록 · {filing.get('report_name') or '정기보고서'} "
+        f"접수일 {latest_date}"
+    )
+    latest_profile = dict(enriched.get("latest_earnings_profile") or {})
+    latest_profile.update(
+        {
+            "quarter": quarter_label,
+            "earnings_report_date": latest_date,
+            "previous_earnings_summary": (
+                f"DART에서 {filing.get('report_name') or '정기보고서'} 접수가 확인되어 "
+                f"최신 실적 기준을 {quarter_label}로 갱신했습니다."
+            ),
+            "next_earnings_guidance": (
+                "다음 실적 전 확인할 KPI: "
+                + ", ".join(str(item) for item in (enriched.get("watch_kpis") or [])[:5])
+            ),
+            "source_url": source_url,
+        }
+    )
+    enriched["latest_earnings_profile"] = latest_profile
+    limitations = [
+        item for item in enriched.get("data_limitations", [])
+        if "DART 정기보고서 제출 기한 기준" not in str(item)
+    ]
+    limitations.append("DART 신규 공시 목록으로 최신 실적 기준일을 보정했습니다.")
+    enriched["data_limitations"] = limitations
+    return enriched
 
 
 def dart_watch_exclusion_reason(item: dict | None) -> str | None:
