@@ -48,7 +48,8 @@
 - `file_spreadsheet_extraction.py`: XLSX shared string, inline string, 셀 좌표 기반 표 텍스트 추출 helper
 - `file_extraction_profile.py`: 첨부 본문 추출 결과의 품질/분석 준비도 profile helper
 - `file_extraction.py`: PDF/OCR/Office/텍스트/표 본문 추출과 첨부 추출 profile 유틸
-- `kcif_reports.py`: KCIF 보고서 메타데이터 수집과 시장일지 연결
+- `kcif_report_parsing.py`: KCIF 목록 HTML에서 보고서 메타데이터만 추출하는 parser
+- `kcif_reports.py`: KCIF 보고서 수집/상세 신호 분석과 시장일지 연결
 - `kiwoom_auth.py`: 키움 인증/토큰 상태 확인
 - `kis_data_provider.py`: KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper
 - `llm_bridge_status.py`: LLM 응답 저장과 RAG 연결 상태 요약

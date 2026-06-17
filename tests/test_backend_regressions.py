@@ -986,6 +986,27 @@ class KcifReportsWatchTests(unittest.TestCase):
         self.assertNotIn("body", report)
         self.assertNotIn("pdf_content", report)
 
+    def test_kcif_report_parsing_module_keeps_metadata_contract(self):
+        from research_os.kcif_report_parsing import parse_kcif_report_list
+
+        html = """
+        <article>
+          <strong>국제금융속보</strong>
+          <a href="/annual/reportView?no=2">미국 금리 변동과 달러 유동성 점검</a>
+          <span>KCIF</span>
+          <span>2026.06.18</span>
+          <span>260618-us-rates.pdf</span>
+        </article>
+        """
+
+        reports = parse_kcif_report_list(html, base_url="https://www.kcif.or.kr/annual/reportList", limit=3)
+
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]["published_at"], "2026.06.18")
+        self.assertEqual(reports[0]["file_name"], "260618-us-rates.pdf")
+        self.assertTrue(reports[0]["detail_url"].startswith("https://www.kcif.or.kr/annual/reportView"))
+        self.assertNotIn("body", reports[0])
+
     def test_kcif_detail_analysis_derives_signals_without_raw_text_or_pdf(self):
         from research_os.kcif_reports import analyze_kcif_detail_html
 
