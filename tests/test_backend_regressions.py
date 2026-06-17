@@ -3421,6 +3421,35 @@ class FileExtractionTests(unittest.TestCase):
 
 
 class ResearchWorkflowFilesModuleTests(unittest.TestCase):
+    def test_research_workflow_rendering_module_formats_file_processing(self):
+        from research_os import research_workflow_rendering
+
+        attachment = {
+            "file_name": "upload.txt",
+            "document_type": "text",
+            "relative_path": "WORKFLOW/_attachments/upload.txt",
+            "text_extraction": "extracted",
+            "extraction_quality": "high",
+            "extraction_char_count": 14,
+            "extraction_warnings": ["sample warning"],
+            "extraction_profile": {
+                "analysis_readiness": "ready",
+                "line_count": 1,
+                "numeric_token_count": 2,
+                "table_like_line_count": 0,
+                "next_action": "review",
+            },
+        }
+
+        updates = research_workflow_rendering.infer_model_update_items("Revenue and margin improved")
+        markdown = research_workflow_rendering.render_file_processing_markdown(attachment)
+
+        self.assertIn("매출", [item["item"] for item in updates])
+        self.assertIn("마진", [item["item"] for item in updates])
+        self.assertEqual(research_workflow_rendering.workflow_material_excerpt("  "), "입력 자료 없음")
+        self.assertIn("- 분석 활용도: ready", markdown)
+        self.assertIn("- 추출 경고: sample warning", markdown)
+
     def test_research_workflow_files_module_handles_attachments_and_rag_payloads(self):
         from research_os import research_workflow_files
         from research_os.research_memory import ResearchStorageInfo

@@ -88,6 +88,8 @@
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
 - `research_memory_files.py`: 저장 리포트 목록/카드 조립, manifest/sidecar 경로 해석, 마크다운 tail section 갱신 helper
+- `research_workflow_files.py`: 보고 자동화 첨부 처리, RAG 연결, 모델 업데이트/LP 보고 응답 조립 helper
+- `research_workflow_rendering.py`: 보고 자동화 파일 처리 Markdown, 모델 업데이트 신호, LP/어닝 노트 렌더링 helper
 - `security.py`: 개발 토큰과 사용자 토큰 검증
 - `settings.py`: 환경변수 기반 운영 설정
 - `state_store.py`: `_system` 상태 파일 경로, KST 기준 저장 시각, JSON/JSONL 상태 저장 헬퍼
