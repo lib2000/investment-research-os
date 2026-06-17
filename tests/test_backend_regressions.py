@@ -105,6 +105,23 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
 
 class WebCaptureRenderingTests(unittest.TestCase):
+    def test_web_article_cleaning_strips_navigation_noise(self):
+        from research_os.web_article_cleaning import clean_web_article_text
+        from research_os.web_article_cleaning import clean_web_article_title
+
+        text = clean_web_article_text(
+            "로그인\n"
+            "입력 2026.06.18 09:00\n"
+            "반도체 장비 수요가 증가했다. 매출은 12% 늘었다.\n"
+            "관련기사\n"
+            "추천기사"
+        )
+
+        self.assertEqual(clean_web_article_title("테스트 기사 제목 - 디일렉"), "테스트 기사 제목")
+        self.assertNotIn("로그인", text)
+        self.assertIn("반도체 장비 수요", text)
+        self.assertNotIn("관련기사", text)
+
     def test_sec_capture_headers_use_public_project_user_agent(self):
         from research_os.web_capture import capture_url_headers
 
