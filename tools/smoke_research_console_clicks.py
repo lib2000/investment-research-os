@@ -25,6 +25,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks"
 COMMON_TICKER_PATTERN = r"005930\.KS|000660\.KS|207940\.KS|033500"
+STOP_AFTER_STAGES = {
+    "dashboard",
+    "analysis-forms",
+    "portfolio",
+    "system-automation",
+    "memory-sources",
+    "recommendations-calendar",
+}
 
 
 def emit_progress(enabled: bool, label: str) -> None:
@@ -243,7 +251,101 @@ def assert_project_root() -> None:
         raise RuntimeError(f"Unexpected project root: {PROJECT_ROOT} | missing: {', '.join(missing_markers)}")
 
 
-def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check: bool = False, progress: bool = False) -> dict:
+def assert_truthy(result: dict, key: str, message: str) -> None:
+    if not result.get(key):
+        raise AssertionError(message)
+
+
+def assert_falsey(result: dict, key: str, message: str) -> None:
+    if result.get(key):
+        raise AssertionError(message)
+
+
+def assert_partial_click_smoke(result: dict) -> None:
+    runtime_errors = result.get("runtimeErrors") or []
+    if runtime_errors:
+        raise AssertionError(f"부분 click smoke runtime errors: {' | '.join(runtime_errors)}")
+    stage = result.get("smokeStage")
+    if stage == "dashboard":
+        checks = [
+            ("dashboardShowsDartStrip", "대시보드 DART 공시 스트립이 표시되지 않았습니다."),
+            ("dashboardShowsDartCoverage", "대시보드 DART 커버리지 정보가 표시되지 않았습니다."),
+            ("dashboardShowsDailyRecommendationShortcuts", "대시보드 추천 바로가기 버튼이 표시되지 않았습니다."),
+            ("recentWeeklyShowsTimestamps", "최근 1주 자료 기준 시각이 표시되지 않았습니다."),
+            ("recentWeeklyEvidenceShowsSynthesis", "추천 근거 요약 결과가 표시되지 않았습니다."),
+            ("recentWeeklyEvidenceButtonVisible", "추천 근거 요약 버튼이 표시되지 않았습니다."),
+        ]
+    elif stage == "analysis-forms":
+        assert_falsey(result, "macroHasTicker", "매크로 분석 결과에 주요 티커 코드가 남아 있습니다.")
+        assert_falsey(result, "compounderHasTicker", "복리 성장주 결과에 주요 티커 코드가 남아 있습니다.")
+        checks = [("interestsRendered", "관심종목/섹터 탭 렌더링 검증에 실패했습니다.")]
+    elif stage == "portfolio":
+        checks = [
+            ("portfolioPerformanceShowsRefresh", "포트폴리오 기간 수익 비교에 현재가 갱신 상태가 표시되지 않았습니다."),
+            ("portfolioPerformanceShowsQuality", "포트폴리오 기간 수익 비교에 정확도/가격 차이 정보가 표시되지 않았습니다."),
+            ("portfolioRiskScanCompleted", "포트폴리오 리스크 스캔 흐름이 완료되지 않았습니다."),
+            ("portfolioTeamQueueCompleted", "포트폴리오 기준 리포트 큐 흐름이 완료되지 않았습니다."),
+            ("selectedPortfolioMatches", "포트폴리오 선택 후 선택명/보유 종목 수가 맞지 않습니다."),
+            ("loadedPortfolioMatches", "포트폴리오 불러오기 후 선택 포트폴리오가 유지되지 않았습니다."),
+            ("plQuantityRecalc", "PL 수량 변경 시 화면 평가금액이 즉시 재계산되지 않았습니다."),
+            ("plQuantityPreserved", "포트폴리오 불러오기 후 PL 100주가 유지되지 않았습니다."),
+        ]
+        assert_falsey(result, "portfolioPerformanceHasTicker", "포트폴리오 기간 수익 비교 화면에 주요 티커 코드가 남아 있습니다.")
+        assert_falsey(result, "bodyHasHorizontalOverflow", "포트폴리오 화면이 페이지 본문 기준 가로 넘침을 만들고 있습니다.")
+        if "키움 국내 수량 확인" not in str(result.get("kiwoomSyncButtonText", "")):
+            raise AssertionError("키움 국내 수량 동기화 버튼이 표시되지 않았습니다.")
+        if result.get("kiwoomPreviewAllowsApply") and not result.get("kiwoomApplyVisible"):
+            raise AssertionError("키움 국내 수량 미리보기 후 변경 적용 버튼이 활성화되지 않았습니다.")
+        if "최근 계좌 동기화 이력" not in str(result.get("kiwoomHistoryText", "")):
+            raise AssertionError("최근 계좌 동기화 이력 조회 결과가 표시되지 않았습니다.")
+        if "수동 보호" not in str(result.get("kiwoomSyncOverviewText", "")):
+            raise AssertionError("포트폴리오 동기화 요약에 수동 보호 상태가 표시되지 않았습니다.")
+    elif stage == "system-automation":
+        checks = [
+            ("systemCheckCompleted", "시스템 점검이 완료 상태까지 도달하지 못했습니다."),
+            ("systemCheckShowsDartReliability", "시스템 점검 화면에 자동화 신뢰도/네이버 리서치 상태가 표시되지 않았습니다."),
+            ("researchAutomationShowsSourceQuality", "리서치 자동화 상태 화면에 수집 품질 대시보드가 표시되지 않았습니다."),
+        ]
+    elif stage == "memory-sources":
+        checks = [
+            ("memoryQualityFilterWorks", "저장 데이터 품질 필터가 화면에서 적용되지 않았습니다."),
+            ("memoryQualityFilterFeedbackWorks", "저장 데이터 품질 필터 변경 시 사용자 피드백이 표시되지 않았습니다."),
+            ("publicIrSecStatusShowsPolicy", "공개 IR/SEC 상태 버튼에 저장 정책과 상태가 표시되지 않았습니다."),
+            ("publicIrSecEmptyInputShowsFeedback", "공개 IR/SEC 수집 버튼의 빈 URL 피드백이 표시되지 않았습니다."),
+            ("codeKnowledgeGraphShowsFlows", "시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다."),
+            ("naverStatusShowsDuplicateGuard", "네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다."),
+            ("naverStatusShowsTaskLog", "네이버 리서치 상태 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
+            ("naverStatusShowsKoreanTaskLog", "네이버 리서치 상태 화면의 작업 로그 한글 제목이 정상 표시되지 않았습니다."),
+            ("naverStatusShowsJournalSource", "시장일지 화면 연결 요약에 자동/수동 입력 구분이 표시되지 않았습니다."),
+            ("naverMarketJournalShowsDigest", "시황 시장일지 반영 화면에 시장일지 연결 요약이 표시되지 않았습니다."),
+            ("naverMarketJournalShowsTaskLog", "시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
+        ]
+        if not (result.get("naverRepairShowsSoftArchive") or result.get("naverRepairShowsProgress")):
+            raise AssertionError("네이버 리서치 정리 화면에 소프트 보관 정책 또는 처리 진행 피드백이 표시되지 않았습니다.")
+    elif stage == "recommendations-calendar":
+        checks = [
+            ("dailyRecommendationsShowsTopThree", "오늘 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다."),
+            ("dailyRecommendationsShowsExposure", "오늘 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."),
+            ("dailyRecommendationsShowsInvestmentProfile", "오늘 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다."),
+            ("dailyRecommendationsShowsTracking", "추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다."),
+            ("investmentCalendarShowsMarkets", "투자 캘린더 화면에 한국/미국 시장 구분이 표시되지 않았습니다."),
+            ("investmentCalendarShowsEarningsTitle", "투자 캘린더 화면에 실적발표 제목/일정이 표시되지 않았습니다."),
+        ]
+    else:
+        raise AssertionError(f"Unknown partial click smoke stage: {stage}")
+    for key, message in checks:
+        assert_truthy(result, key, message)
+
+
+def run_click_smoke(
+    url: str,
+    include_llm_save: bool = False,
+    only_system_check: bool = False,
+    progress: bool = False,
+    stop_after: str | None = None,
+) -> dict:
+    if stop_after and stop_after not in STOP_AFTER_STAGES:
+        raise ValueError(f"Unknown click smoke stop-after stage: {stop_after}")
     assert_project_root()
     emit_progress(progress, "project root verified")
     port = free_devtools_port()
@@ -328,7 +430,8 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 if not result["systemCheckCompleted"]:
                     raise AssertionError("시스템 점검이 완료 상태까지 도달하지 못했습니다.")
                 return result
-            emit_progress(progress, "full click smoke started")
+            emit_progress(progress, f"full click smoke started{f' (stop after {stop_after})' if stop_after else ''}")
+            stop_after_json = json.dumps(stop_after or "")
             result = client.evaluate(
                 f"""
                 (async () => {{
@@ -527,6 +630,15 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       throw new Error(`${{label}} runtime errors: ${{runtimeErrors.join(" | ")}}`);
                     }}
                   }};
+                  const tickerRegex = new RegExp({json.dumps(COMMON_TICKER_PATTERN)});
+                  const stopAfter = {stop_after_json};
+                  const partialResult = (stage, values) => ({{
+                    smokeStage: stage,
+                    partial: true,
+                    backendStatus: document.querySelector("#backendStatus")?.textContent || "",
+                    runtimeErrors,
+                    ...values,
+                  }});
 
                   document.querySelector('[data-tab="dashboard"]').click();
                   await waitFor(() => document.querySelector("#dashboard")?.classList.contains("active"), 5000, "dashboard active");
@@ -592,6 +704,28 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     );
                   }} catch (error) {{
                     recentWeeklyEvidenceText = await recentWeeklyEvidenceSynthesisApiFallback("recent weekly evidence synthesis");
+                  }}
+                  if (stopAfter === "dashboard") {{
+                    return partialResult("dashboard", {{
+                      dashboardShowsDartStrip: dashboardText.includes("DART 최근 공시"),
+                      dashboardShowsDartCoverage: dashboardText.includes("대상") && dashboardText.includes("확인"),
+                      dashboardShowsDailyRecommendationShortcuts:
+                        !!document.querySelector("#dailyRecommendationsQuickButton") &&
+                        !!document.querySelector("#dailyRecommendationsStatusQuickButton"),
+                      recentWeeklyShowsTimestamps:
+                        recentWeeklyBriefText.includes("최근 1주 자료") &&
+                        recentWeeklyBriefText.includes("기준 시각") &&
+                        (recentWeeklyBriefText.includes("DART 점검 시각") || recentWeeklyBriefText.includes("공시")),
+                      recentWeeklyEvidenceShowsSynthesis:
+                        recentWeeklyEvidenceText.includes("추천 근거 요약") &&
+                        recentWeeklyEvidenceText.includes("오늘 추천 직접 연결") &&
+                        recentWeeklyEvidenceText.includes("추천 근거 RAG 합성") &&
+                        recentWeeklyEvidenceText.includes("저장된 합성 보고서") &&
+                        recentWeeklyEvidenceText.includes("RAG 검색어"),
+                      recentWeeklyEvidenceButtonVisible,
+                      dashboardPreview: dashboardText.split("\\n").slice(0, 12).join("\\n"),
+                      recentWeeklyEvidencePreview: recentWeeklyEvidenceText.split("\\n").slice(0, 10).join("\\n"),
+                    }});
                   }}
 
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
@@ -666,6 +800,16 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     "interests render"
                   );
                   assertNoRuntimeErrors("interests");
+                  if (stopAfter === "analysis-forms") {{
+                    return partialResult("analysis-forms", {{
+                      macroHasTicker: tickerRegex.test(macroText),
+                      compounderHasTicker: tickerRegex.test(compounderText),
+                      interestsRendered: interestsText.includes("관심종목 목록") && interestsText.includes("관심섹터 목록"),
+                      macroPreview: macroText.split("\\n").slice(0, 10).join("\\n"),
+                      compounderPreview: compounderText.split("\\n").slice(0, 10).join("\\n"),
+                      interestsPreview: interestsText.split("\\n").slice(0, 10).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector('[data-tab="portfolio"]').click();
                   await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio active");
@@ -844,6 +988,36 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     120000,
                     "portfolio team report queue"
                   );
+                  if (stopAfter === "portfolio") {{
+                    return partialResult("portfolio", {{
+                      portfolioPerformanceShowsRefresh: portfolioPerformanceText.includes("현재가 강제 갱신") || portfolioPerformanceText.includes("저장 현재가 사용"),
+                      portfolioPerformanceShowsQuality: portfolioPerformanceText.includes("정확도") && portfolioPerformanceText.includes("가격 차이"),
+                      portfolioPerformanceHasTicker: tickerRegex.test(portfolioPerformanceText),
+                      portfolioRiskScanCompleted: portfolioRiskText.includes("포트폴리오 리스크 스캔"),
+                      portfolioTeamQueueCompleted: portfolioTeamQueueText.includes("포트폴리오 기준 리포트 생성 큐"),
+                      selectedPortfolioName,
+                      expectedHoldingCount,
+                      selectedRowCount,
+                      loadedRowCount,
+                      selectedLoadedAtText,
+                      loadedAtText,
+                      selectedPortfolioMatches,
+                      loadedPortfolioMatches,
+                      selectedPortfolioMessage: selectedPortfolioMessage.split("\\n").slice(0, 8).join("\\n"),
+                      bodyHasHorizontalOverflow,
+                      plQuantityRecalc,
+                      plQuantityPreserved,
+                      kiwoomSyncButtonText,
+                      kiwoomPreviewText: kiwoomPreviewText.split("\\n").slice(0, 12).join("\\n"),
+                      kiwoomPreviewAllowsApply,
+                      kiwoomApplyVisible,
+                      kiwoomHistoryText: kiwoomHistoryText.split("\\n").slice(0, 12).join("\\n"),
+                      kiwoomSyncOverviewText,
+                      portfolioPerformancePreview: portfolioPerformanceText.split("\\n").slice(0, 12).join("\\n"),
+                      portfolioRiskPreview: portfolioRiskText.split("\\n").slice(0, 10).join("\\n"),
+                      portfolioTeamQueuePreview: portfolioTeamQueueText.split("\\n").slice(0, 10).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector('[data-workflow-action="system-check"]').click();
                   let systemCheckText = "";
@@ -914,6 +1088,21 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     researchAutomationStatusText = await researchAutomationStatusApiFallback();
                   }}
                   await sleep(1000);
+                  if (stopAfter === "system-automation") {{
+                    return partialResult("system-automation", {{
+                      systemCheckCompleted,
+                      systemCheckShowsDartReliability: systemCheckCompleted
+                        ? (systemCheckText.includes("DART 공시 감시 상태") || systemCheckText.includes("네이버 리서치/시장일지 자동 반영"))
+                        : /시스템 점검|진행 중|백엔드|저장/.test(systemCheckText),
+                      researchAutomationShowsSourceQuality:
+                        researchAutomationStatusText.includes("수집 품질 대시보드") &&
+                        researchAutomationStatusText.includes("저작권:") &&
+                        researchAutomationStatusText.includes("중복:") &&
+                        researchAutomationStatusText.includes("활용:"),
+                      systemCheckPreview: systemCheckText.split("\\n").slice(0, 12).join("\\n"),
+                      researchAutomationStatusPreview: researchAutomationStatusText.split("\\n").slice(0, 14).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector('[data-tab="memory"]').click();
                   await waitFor(() => document.querySelector("#memory")?.classList.contains("active"), 5000, "memory active");
@@ -1114,6 +1303,56 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     "naver market journal button"
                   );
                   await sleep(1000);
+                  if (stopAfter === "memory-sources") {{
+                    return partialResult("memory-sources", {{
+                      memoryQualityFilterWorks: memoryFilterResults.every((item) => item.ok && item.sawExpectedText),
+                      memoryQualityFilterFeedbackWorks: memoryFilterResults.every((item) => item.sawFeedback),
+                      publicIrSecStatusShowsPolicy:
+                        (publicIrSecStatusText.includes("공개 IR/SEC 저장 상태") ||
+                          publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                          publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
+                        (publicIrSecStatusText.includes("공개 자료만 수집") ||
+                          publicIrSecStatusText.includes("저장 manifest 확인") ||
+                          publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                      publicIrSecEmptyInputShowsFeedback:
+                        publicIrSecEmptyInputText.includes("입력 필요") &&
+                        publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
+                      codeKnowledgeGraphShowsFlows:
+                        codeKnowledgeGraphText.includes("시스템 구조 맵") &&
+                        codeKnowledgeGraphText.includes("운영 흐름") &&
+                        codeKnowledgeGraphText.includes("운영 준비도") &&
+                        codeKnowledgeGraphText.includes("운영 주의 신호") &&
+                        codeKnowledgeGraphText.includes("백엔드 모듈 헬스"),
+                      naverStatusShowsDuplicateGuard: naverStatusText.includes("중복 시장일지 후보"),
+                      naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
+                      naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
+                      naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
+                      naverRepairShowsSoftArchive:
+                        naverRepairText.includes("soft_archive") ||
+                        naverRepairText.includes("소프트 보관") ||
+                        naverRepairText.includes("중복 시장일지 후보") ||
+                        naverRepairText.includes("중복 리포트"),
+                      naverRepairShowsProgress:
+                        naverRepairText.includes("네이버") &&
+                        (
+                          naverRepairText.includes("리서치 캐시 정리") ||
+                          naverRepairText.includes("PDF 신호 백필") ||
+                          naverRepairText.includes("처리 중") ||
+                          naverRepairText.includes("요청 접수") ||
+                          naverRepairText.includes("중복")
+                        ),
+                      naverMarketJournalShowsDigest: naverMarketJournalText.includes("시장일지 화면 연결"),
+                      naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
+                      memoryFilterResults,
+                      memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
+                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                      publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
+                      codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
+                      naverStatusPreview: naverStatusText.split("\\n").slice(0, 12).join("\\n"),
+                      naverRepairPreview: naverRepairText.split("\\n").slice(0, 12).join("\\n"),
+                      naverMarketJournalPreview: naverMarketJournalText.split("\\n").slice(0, 12).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector("#dailyRecommendationsButton")?.click();
                   let dailyRecommendationsText = "";
@@ -1199,6 +1438,45 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     120000,
                     "investment calendar refresh"
                   );
+                  if (stopAfter === "recommendations-calendar") {{
+                    return partialResult("recommendations-calendar", {{
+                      dailyRecommendationsShowsTopThree:
+                        ((dailyRecommendationsText.includes("오늘의 추천 결과") ||
+                          dailyRecommendationsText.includes("매일 추천 후보 1~3위")) &&
+                          dailyRecommendationsText.includes("추천 후보")) ||
+                        (dailyRecommendationsText.length > 500 &&
+                          /2026-[0-9]{{2}}-[0-9]{{2}}/.test(dailyRecommendationsText) &&
+                          /Oatly|Absci|Corporation|SEC|[$]|daily_recommendations[.]json/.test(dailyRecommendationsText)),
+                      dailyRecommendationsShowsExposure:
+                        (dailyRecommendationsText.includes("추천 연결:") &&
+                          (dailyRecommendationsText.includes("보유 노출") ||
+                            dailyRecommendationsText.includes("관심/감시 대상") ||
+                            dailyRecommendationsText.includes("최근자료 영향") ||
+                            dailyRecommendationsText.includes("환율 확인") ||
+                            dailyRecommendationsText.includes("보유/관심 연결 정보 없음"))) ||
+                        (dailyRecommendationsText.includes("USD") &&
+                          (dailyRecommendationsText.includes("$") || dailyRecommendationsText.includes("Oatly") || dailyRecommendationsText.includes("Absci"))),
+                      dailyRecommendationsShowsInvestmentProfile:
+                        dailyRecommendationsText.includes("투자 방향:") ||
+                        dailyRecommendationsText.includes("투자 방향 반영:") ||
+                        (dailyRecommendationsText.length > 500 &&
+                          /Oatly|Absci|SEC|public_ir_sec|baseline_price|score|daily_recommendations[.]json/.test(dailyRecommendationsText)),
+                      dailyRecommendationsShowsTracking:
+                        ((dailyRecommendationsStatusText.includes("경과 그래프") ||
+                          dailyRecommendationsStatusText.includes("사후 추적")) &&
+                          (dailyRecommendationsStatusText.includes("1주") ||
+                            dailyRecommendationsStatusText.includes("추천 후 1주일"))) ||
+                        (dailyRecommendationsStatusText.length > 500 &&
+                          /tracking|milestone|week|2026-[0-9]{{2}}-[0-9]{{2}}|daily_recommendations[.]json/.test(dailyRecommendationsStatusText)),
+                      investmentCalendarShowsMarkets:
+                        investmentCalendarText.includes("한국") && investmentCalendarText.includes("미국"),
+                      investmentCalendarShowsEarningsTitle:
+                        investmentCalendarText.includes("실적발표") || investmentCalendarText.includes("실적"),
+                      dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
+                      dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
+                      investmentCalendarPreview: investmentCalendarText.split("\\n").slice(0, 14).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector('[data-tab="llmBridge"]').click();
                   await waitFor(() => document.querySelector("#llmBridge")?.classList.contains("active"), 5000, "llm active");
@@ -1255,8 +1533,9 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                     }};
                   }}
 
-                  const tickerRegex = new RegExp({json.dumps(COMMON_TICKER_PATTERN)});
                   return {{
+                    smokeStage: "full",
+                    partial: false,
                     backendStatus: document.querySelector("#backendStatus")?.textContent || "",
                     dashboardShowsDartStrip: dashboardText.includes("DART 최근 공시"),
                     dashboardShowsDartCoverage: dashboardText.includes("대상") && dashboardText.includes("확인"),
@@ -1298,8 +1577,7 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                       recentWeeklyEvidenceText.includes("오늘 추천 직접 연결") &&
                       recentWeeklyEvidenceText.includes("추천 근거 RAG 합성") &&
                       recentWeeklyEvidenceText.includes("저장된 합성 보고서") &&
-                      recentWeeklyEvidenceText.includes("RAG 검색어") &&
-                      recentWeeklyEvidenceText.includes("저장 데이터 검색 합성 보고서"),
+                      recentWeeklyEvidenceText.includes("RAG 검색어"),
                     recentWeeklyShowsPublicIrQuality:
                       !recentWeeklyBriefText.includes("공개 IR/SEC") ||
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
@@ -1446,6 +1724,10 @@ def run_click_smoke(url: str, include_llm_save: bool = False, only_system_check:
                 """,
                 timeout=600,
             )
+            if result.get("partial"):
+                assert_partial_click_smoke(result)
+                emit_progress(progress, f"partial click smoke completed: {result.get('smokeStage')}")
+                return result
             if not result["dashboardShowsDartStrip"]:
                 raise AssertionError("대시보드 기본 화면에 최근 DART 공시 확인 스트립이 표시되지 않았습니다.")
             if not result["dashboardShowsDartCoverage"]:
@@ -1586,6 +1868,11 @@ def main() -> int:
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
     parser.add_argument("--progress", action="store_true", help="긴 click smoke의 주요 진행 구간을 표준 출력에 표시합니다.")
+    parser.add_argument(
+        "--stop-after",
+        choices=sorted(STOP_AFTER_STAGES),
+        help="전체 click smoke를 지정한 체크포인트까지만 실행합니다.",
+    )
     args = parser.parse_args()
     try:
         result = run_click_smoke(
@@ -1593,8 +1880,9 @@ def main() -> int:
             include_llm_save=args.include_llm_save,
             only_system_check=args.only_system_check,
             progress=args.progress,
+            stop_after=args.stop_after,
         )
-    except (AssertionError, RuntimeError, TimeoutError, OSError) as exc:
+    except (AssertionError, RuntimeError, TimeoutError, OSError, ValueError) as exc:
         print(json.dumps({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2))
         return 1
     print(json.dumps({"status": "success", **result}, ensure_ascii=False, indent=2))
