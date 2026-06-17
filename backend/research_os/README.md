@@ -23,6 +23,7 @@
 - `customs_data_provider.py`: 관세청 품목별/총괄 수출입 API client, 응답 파싱, row 정규화/캐시
 - `dart_filing_watch.py`: DART 공시 감시 대상 universe, cache/signal, 일일 점검 상태, refresh orchestration
 - `dart_watch_exclusions.py`: DART 감시 제외 사유와 중복 제외 entry helper
+- `dart_watch_universe.py`: DART 감시 universe, 일일 점검 상태, 활성 실패 필터 helper
 - `dart_filing_metadata.py`: DART 공시명 기반 중요도/분기 label/cache key/마크다운/refresh 오류 분류 helper
 - `dossier_capture_quality.py`: Dossier 입력 캡처 실패 판정과 본문/첨부/URL 품질 상태 helper
 - `dossier_similarity.py`: Dossier 중복 판정용 content hash, token set, Jaccard similarity helper

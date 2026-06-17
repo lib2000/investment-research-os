@@ -7299,6 +7299,30 @@ class DartFilingWatchTests(unittest.TestCase):
         self.assertEqual(excluded[0]["name"], "TIGER 미국S&P500 ETF")
         self.assertIn("OpenDART", entry["message"])
 
+    def test_dart_watch_universe_helpers_filter_active_failures(self):
+        from research_os import dart_watch_universe
+
+        runtime = SimpleNamespace(normalize_ticker=lambda value: str(value or "").strip().upper())
+        cache = {
+            "last_failures": [
+                {"ticker": "003230", "error": "rate limit"},
+                {"ticker": "360750", "error": "ETF"},
+                {"ticker": "999999", "error": "stale"},
+            ]
+        }
+        target_universe = {
+            "target_tickers": ["003230"],
+            "excluded_tickers": [{"ticker": "360750", "reason": "etf_not_dart_corp"}],
+        }
+
+        failures = dart_watch_universe.active_dart_last_failures(
+            runtime,
+            cache,
+            target_universe,
+        )
+
+        self.assertEqual(failures, [{"ticker": "003230", "error": "rate limit"}])
+
     def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
         import research_os_main as main
 
