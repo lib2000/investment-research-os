@@ -5265,6 +5265,26 @@ class NewsBuilderModuleTests(unittest.TestCase):
             news_builder.build_news_item_from_payload(runtime, {}, SimpleNamespace())
 
 
+class MarketJournalAnalysisModuleTests(unittest.TestCase):
+    def test_market_journal_analysis_cleans_tags_and_actions(self):
+        from research_os import market_journal_analysis
+
+        raw = "▲ AI 반도체 상승 +1.5%, 금리 안정으로 risk-on rally"
+        sentiment, risk_level, regime = market_journal_analysis.infer_market_close_sentiment(raw)
+        tags = market_journal_analysis.infer_market_tags(raw)
+        lines = market_journal_analysis.summarize_market_lines(raw)
+        actions = market_journal_analysis.build_market_portfolio_actions(sentiment, risk_level, regime)
+        aliases = market_journal_analysis.market_tag_aliases(tags)
+
+        self.assertEqual(sentiment, "긍정")
+        self.assertEqual(regime, "위험 선호")
+        self.assertIn("AI", tags)
+        self.assertIn("반도체", tags)
+        self.assertTrue(lines[0])
+        self.assertTrue(actions)
+        self.assertTrue(market_journal_analysis.text_matches_market_tags("GPU", aliases))
+
+
 class NewsMarketJournalModuleTests(unittest.TestCase):
     def test_news_market_journal_module_reads_existing_summary(self):
         from research_os import news_market_journal

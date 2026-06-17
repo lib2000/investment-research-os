@@ -67,7 +67,8 @@
 | `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
 | `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
-| `backend\research_os\news_market_journal.py` | 시장일지 텍스트 정리/태그/행동 helper와 뉴스 인박스 시장일지 승격 | `NewsMarketJournalModuleTests` |
+| `backend\research_os\market_journal_analysis.py` | 시장일지 텍스트 정리, 감정/리스크/태그/행동 가이드 helper | `MarketJournalAnalysisModuleTests` |
+| `backend\research_os\news_market_journal.py` | 뉴스 인박스 시장일지 승격, 관심목록 영향, 저장 마크다운 helper | `NewsMarketJournalModuleTests` |
 | `backend\research_os\naver_market_close_automation.py` | 네이버 국내 마감 시황 자동 반영, 중복 방지, 작업 상태 조립 | `NaverResearchIngestTests` |
 | `backend\research_os\telegram_market_journal.py` | 텔레그램 @ehdwl 공개 채널 미국 시장일지 파싱/후보 선정 | `NaverResearchIngestTests` |
 | `backend\research_os\telegram_market_close_automation.py` | 텔레그램 미국 시장일지 자동 반영, 소급 저장, 중복 방지, 작업 상태 조립 | `NaverResearchIngestTests` |
