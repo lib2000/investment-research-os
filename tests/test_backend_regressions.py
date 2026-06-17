@@ -3175,6 +3175,28 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
         self.assertEqual(upsert_calls[0]["entry"]["source"], "test")
         self.assertEqual(upsert_calls[0]["full_text"], "# Note")
+class ThesisSignalWordsModuleTests(unittest.TestCase):
+    def test_signal_words_match_korean_and_english_terms(self):
+        from research_os import thesis_signal_words
+
+        self.assertTrue(
+            thesis_signal_words.text_has_any(
+                "매출 성장과 margin expansion이 동시에 확인됩니다.",
+                thesis_signal_words.POSITIVE_SIGNAL_WORDS,
+            )
+        )
+        self.assertTrue(
+            thesis_signal_words.text_has_any(
+                "수요 둔화와 cost pressure가 이어집니다.",
+                thesis_signal_words.NEGATIVE_SIGNAL_WORDS,
+            )
+        )
+        self.assertFalse(
+            thesis_signal_words.text_has_any(
+                "특별한 방향성 없이 보합권입니다.",
+                thesis_signal_words.POSITIVE_SIGNAL_WORDS,
+            )
+        )
 
 class DashboardHelpersModuleTests(unittest.TestCase):
     def test_dashboard_helpers_render_report_summary_and_watch_items(self):

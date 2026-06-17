@@ -61,6 +61,7 @@
 - `storage_quality.py`: 소프트 보관 정책, 저장 데이터 품질/OCR/본문 보강 판정
 - `system_health.py`: 연구 콘솔/데이터 프로바이더 상태 점검 payload 조립, OneDrive/OCR/라우트 안전 확인
 - `ticker_registry.py`: 한국/미국 티커 레지스트리 캐시와 회사명 매칭
+- `thesis_signal_words.py`: 투자 논거 영향도/뉴스 영향 판정에 쓰는 긍정·부정 signal word helper
 - `web_capture.py`: 웹 URL 안전성, 네트워크 재시도/fallback, 언어 감지, 로컬 한국어 분석 메모 변환, URL-only 보관 문구 유틸
 - `web_text_extraction.py`: HTML/JSON-LD 기사 본문 추출, 제목 정제, 표/실적 행 텍스트화, 기사 노이즈 제거
 

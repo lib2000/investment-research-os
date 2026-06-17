@@ -94,7 +94,7 @@ from research_os.daily_recommendations import (
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
-from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory
+from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, thesis_signal_words
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -9428,52 +9428,12 @@ def build_watch_items(ticker: str) -> list[WatchItem]:
     ]
 
 
-POSITIVE_SIGNAL_WORDS = {
-    "above",
-    "beat",
-    "beats",
-    "raise",
-    "raised",
-    "strong",
-    "constructive",
-    "accelerate",
-    "accelerated",
-    "growth",
-    "margin expansion",
-    "positive",
-    "상회",
-    "강세",
-    "상향",
-    "개선",
-    "성장",
-}
-
-
-NEGATIVE_SIGNAL_WORDS = {
-    "below",
-    "miss",
-    "misses",
-    "cut",
-    "lowered",
-    "weak",
-    "decelerate",
-    "decline",
-    "pressure",
-    "negative",
-    "risk",
-    "하회",
-    "약세",
-    "하향",
-    "둔화",
-    "악화",
-    "압박",
-}
+POSITIVE_SIGNAL_WORDS = thesis_signal_words.POSITIVE_SIGNAL_WORDS
+NEGATIVE_SIGNAL_WORDS = thesis_signal_words.NEGATIVE_SIGNAL_WORDS
 
 
 def text_has_any(text: str, words: set[str]) -> bool:
-    lowered = text.lower()
-    return any(word.lower() in lowered for word in words)
-
+    return thesis_signal_words.text_has_any(text, words)
 
 def translate_impact_label(impact: ThesisImpact) -> str:
     labels = {
