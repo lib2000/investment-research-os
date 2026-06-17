@@ -3882,118 +3882,23 @@ def repair_naver_research_cache(
 
 
 def naver_market_close_duplicate_key(entry: dict, payload: dict) -> tuple[str, str, str]:
-    journal_entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else {}
-    source_processing = (
-        payload.get("source_url_processing")
-        if isinstance(payload.get("source_url_processing"), dict)
-        else {}
+    return naver_market_close_automation.naver_market_close_duplicate_key(
+        _naver_market_close_automation_runtime(),
+        entry,
+        payload,
     )
-    market = clean_naver_research_text(
-        journal_entry.get("market") or entry.get("market") or "KR"
-    ).upper()
-    session_date = clean_naver_research_text(
-        journal_entry.get("session_date")
-        or entry.get("session_date")
-        or entry.get("date")
-    )
-    source_url = clean_naver_research_text(
-        source_processing.get("url")
-        or payload.get("source_url")
-        or entry.get("source_url")
-    )
-    raw_summary = clean_naver_research_text(journal_entry.get("raw_summary") or "")
-    first_summary_line = raw_summary.splitlines()[0] if raw_summary else ""
-    source_title = clean_naver_research_text(
-        source_processing.get("title")
-        or payload.get("source_title")
-        or first_summary_line
-    )
-    source_identity = source_url or source_title or clean_naver_research_text(entry.get("summary"))
-    return market, session_date, source_identity
 
 
 def naver_market_close_entry_sort_key(item: dict) -> tuple[str, str]:
-    entry = item.get("entry") if isinstance(item.get("entry"), dict) else {}
-    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
-    return (
-        str(entry.get("created_at") or entry.get("updated_at") or payload.get("updated_at") or entry.get("date") or ""),
-        str(entry.get("file_name") or ""),
-    )
+    return naver_market_close_automation.naver_market_close_entry_sort_key(item)
 
 
 def archive_duplicate_naver_market_close_reports(settings: Settings, apply: bool = False) -> dict:
-    vault_dir = resolve_vault_dir(settings.research_vault_dir)
-    groups: dict[tuple[str, str, str], list[dict]] = {}
-    skipped = 0
-    for entry in read_manifest(vault_dir):
-        if str(entry.get("type") or "") != "market-close-review":
-            continue
-        if is_archived_research_entry(entry):
-            continue
-        ticker = str(entry.get("ticker") or "")
-        if ticker not in {"MARKET-KR", "MARKET"}:
-            continue
-        payload = read_manifest_entry_payload(entry, vault_dir)
-        key = naver_market_close_duplicate_key(entry, payload)
-        if not key[1] or not key[2]:
-            skipped += 1
-            continue
-        groups.setdefault(key, []).append({"entry": entry, "payload": payload})
-
-    duplicate_groups: list[dict] = []
-    duplicate_candidates: list[dict] = []
-    archived_files: list[dict] = []
-    errors: list[dict] = []
-    for key, items in groups.items():
-        if len(items) <= 1:
-            continue
-        ordered = sorted(items, key=naver_market_close_entry_sort_key, reverse=True)
-        keep = ordered[0]["entry"]
-        candidates = [item["entry"] for item in ordered[1:]]
-        duplicate_groups.append(
-            {
-                "market": key[0],
-                "session_date": key[1],
-                "source": key[2],
-                "keep_file": keep.get("file_name"),
-                "duplicate_count": len(candidates),
-                "duplicates": [candidate.get("file_name") for candidate in candidates],
-            }
-        )
-        duplicate_candidates.extend(candidates)
-
-    if apply:
-        reason = "네이버 국내 마감 시황 자동 반영 중복 후보라 삭제하지 않고 소프트 보관 처리했습니다."
-        for candidate in duplicate_candidates:
-            try:
-                result = set_research_memory_archive_status(
-                    str(candidate.get("ticker") or ""),
-                    str(candidate.get("file_name") or ""),
-                    ResearchMemoryArchiveRequest(archived=True, reason=reason),
-                    vault_dir,
-                )
-                archived_files.append(
-                    {
-                        "file_name": result.file_name,
-                        "relative_path": result.relative_path,
-                        "archived_at": result.archived_at,
-                    }
-                )
-            except Exception as exc:
-                errors.append({"file_name": candidate.get("file_name"), "error": str(exc)})
-
-    return {
-        "status": "success" if not errors else "partial_success",
-        "policy": "soft_archive",
-        "applied": apply,
-        "duplicate_group_count": len(duplicate_groups),
-        "duplicate_candidate_count": len(duplicate_candidates),
-        "archived_count": len(archived_files),
-        "skipped_count": skipped,
-        "groups": duplicate_groups,
-        "archived_files": archived_files,
-        "errors": errors,
-    }
+    return naver_market_close_automation.archive_duplicate_naver_market_close_reports(
+        _naver_market_close_automation_runtime(),
+        settings,
+        apply=apply,
+    )
 
 
 def is_naver_domestic_market_close_report(item: dict) -> bool:
@@ -4018,6 +3923,12 @@ def _naver_market_close_automation_runtime() -> naver_market_close_automation.Na
         naver_market_close_journal_state_path=naver_market_close_journal_state_path,
         naver_market_close_journal_task_log_path=naver_market_close_journal_task_log_path,
         archive_duplicate_naver_market_close_reports=archive_duplicate_naver_market_close_reports,
+        clean_naver_research_text=clean_naver_research_text,
+        resolve_vault_dir=resolve_vault_dir,
+        read_manifest=read_manifest,
+        is_archived_research_entry=is_archived_research_entry,
+        read_manifest_entry_payload=read_manifest_entry_payload,
+        set_research_memory_archive_status=set_research_memory_archive_status,
         provider_error_message=provider_error_message,
         repair_mojibake_log_line=repair_mojibake_log_line,
         should_run_naver_market_close_journal_fn=should_run_naver_market_close_journal,

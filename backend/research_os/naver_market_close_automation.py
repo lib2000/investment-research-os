@@ -8,7 +8,7 @@ from pathlib import Path
 from re import search
 from typing import Any, Callable
 
-from research_os.models import MarketCloseReviewRequest
+from research_os.models import MarketCloseReviewRequest, ResearchMemoryArchiveRequest
 from research_os.settings import Settings
 
 
@@ -27,9 +27,138 @@ class NaverMarketCloseAutomationRuntime:
     naver_market_close_journal_state_path: Callable[[Settings], Path]
     naver_market_close_journal_task_log_path: Callable[[Settings], Path]
     archive_duplicate_naver_market_close_reports: Callable[..., dict]
+    clean_naver_research_text: Callable[[Any], str]
+    resolve_vault_dir: Callable[[str], Path]
+    read_manifest: Callable[[Path], list[dict]]
+    is_archived_research_entry: Callable[[dict], bool]
+    read_manifest_entry_payload: Callable[[dict | None, Path], dict]
+    set_research_memory_archive_status: Callable[[str, str, ResearchMemoryArchiveRequest, Path], Any]
     provider_error_message: Callable[[Exception, Settings], str]
     repair_mojibake_log_line: Callable[[str], str]
     should_run_naver_market_close_journal_fn: Callable[[Settings], bool]
+
+
+def naver_market_close_duplicate_key(
+    runtime: NaverMarketCloseAutomationRuntime,
+    entry: dict,
+    payload: dict,
+) -> tuple[str, str, str]:
+    journal_entry = payload.get("entry") if isinstance(payload.get("entry"), dict) else {}
+    source_processing = (
+        payload.get("source_url_processing")
+        if isinstance(payload.get("source_url_processing"), dict)
+        else {}
+    )
+    market = runtime.clean_naver_research_text(
+        journal_entry.get("market") or entry.get("market") or "KR"
+    ).upper()
+    session_date = runtime.clean_naver_research_text(
+        journal_entry.get("session_date")
+        or entry.get("session_date")
+        or entry.get("date")
+    )
+    source_url = runtime.clean_naver_research_text(
+        source_processing.get("url")
+        or payload.get("source_url")
+        or entry.get("source_url")
+    )
+    raw_summary = runtime.clean_naver_research_text(journal_entry.get("raw_summary") or "")
+    first_summary_line = raw_summary.splitlines()[0] if raw_summary else ""
+    source_title = runtime.clean_naver_research_text(
+        source_processing.get("title")
+        or payload.get("source_title")
+        or first_summary_line
+    )
+    source_identity = source_url or source_title or runtime.clean_naver_research_text(entry.get("summary"))
+    return market, session_date, source_identity
+
+
+def naver_market_close_entry_sort_key(item: dict) -> tuple[str, str]:
+    entry = item.get("entry") if isinstance(item.get("entry"), dict) else {}
+    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    return (
+        str(entry.get("created_at") or entry.get("updated_at") or payload.get("updated_at") or entry.get("date") or ""),
+        str(entry.get("file_name") or ""),
+    )
+
+
+def archive_duplicate_naver_market_close_reports(
+    runtime: NaverMarketCloseAutomationRuntime,
+    settings: Settings,
+    apply: bool = False,
+) -> dict:
+    vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
+    groups: dict[tuple[str, str, str], list[dict]] = {}
+    skipped = 0
+    for entry in runtime.read_manifest(vault_dir):
+        if str(entry.get("type") or "") != "market-close-review":
+            continue
+        if runtime.is_archived_research_entry(entry):
+            continue
+        ticker = str(entry.get("ticker") or "")
+        if ticker not in {"MARKET-KR", "MARKET"}:
+            continue
+        payload = runtime.read_manifest_entry_payload(entry, vault_dir)
+        key = naver_market_close_duplicate_key(runtime, entry, payload)
+        if not key[1] or not key[2]:
+            skipped += 1
+            continue
+        groups.setdefault(key, []).append({"entry": entry, "payload": payload})
+
+    duplicate_groups: list[dict] = []
+    duplicate_candidates: list[dict] = []
+    archived_files: list[dict] = []
+    errors: list[dict] = []
+    for key, items in groups.items():
+        if len(items) <= 1:
+            continue
+        ordered = sorted(items, key=naver_market_close_entry_sort_key, reverse=True)
+        keep = ordered[0]["entry"]
+        candidates = [item["entry"] for item in ordered[1:]]
+        duplicate_groups.append(
+            {
+                "market": key[0],
+                "session_date": key[1],
+                "source": key[2],
+                "keep_file": keep.get("file_name"),
+                "duplicate_count": len(candidates),
+                "duplicates": [candidate.get("file_name") for candidate in candidates],
+            }
+        )
+        duplicate_candidates.extend(candidates)
+
+    if apply:
+        reason = "네이버 국내 마감 시황 자동 반영 중복 후보라 삭제하지 않고 소프트 보관 처리했습니다."
+        for candidate in duplicate_candidates:
+            try:
+                result = runtime.set_research_memory_archive_status(
+                    str(candidate.get("ticker") or ""),
+                    str(candidate.get("file_name") or ""),
+                    ResearchMemoryArchiveRequest(archived=True, reason=reason),
+                    vault_dir,
+                )
+                archived_files.append(
+                    {
+                        "file_name": result.file_name,
+                        "relative_path": result.relative_path,
+                        "archived_at": result.archived_at,
+                    }
+                )
+            except Exception as exc:
+                errors.append({"file_name": candidate.get("file_name"), "error": str(exc)})
+
+    return {
+        "status": "success" if not errors else "partial_success",
+        "policy": "soft_archive",
+        "applied": apply,
+        "duplicate_group_count": len(duplicate_groups),
+        "duplicate_candidate_count": len(duplicate_candidates),
+        "archived_count": len(archived_files),
+        "skipped_count": skipped,
+        "groups": duplicate_groups,
+        "archived_files": archived_files,
+        "errors": errors,
+    }
 
 
 def naver_market_close_report_summary(item: dict) -> str:
