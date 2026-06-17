@@ -3044,6 +3044,38 @@ class FileImageMetadataModuleTests(unittest.TestCase):
         self.assertEqual(file_image_metadata.detect_image_dimensions(b"not-image"), {})
 
 
+class FileSpreadsheetExtractionModuleTests(unittest.TestCase):
+    def test_file_spreadsheet_extraction_reads_shared_and_inline_strings(self):
+        import io
+        import zipfile
+
+        from research_os import file_spreadsheet_extraction
+
+        shared_strings = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">
+  <si><t>매출</t></si>
+  <si><t>영업이익</t></si>
+</sst>"""
+        sheet = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">
+  <sheetData>
+    <row r=\"1\"><c r=\"A1\" t=\"s\"><v>0</v></c><c r=\"B1\" t=\"s\"><v>1</v></c></row>
+    <row r=\"2\"><c r=\"A2\" t=\"inlineStr\"><is><t>2026</t></is></c><c r=\"B2\"><v>1234</v></c></row>
+  </sheetData>
+</worksheet>"""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("xl/sharedStrings.xml", shared_strings)
+            archive.writestr("xl/worksheets/sheet1.xml", sheet)
+
+        extracted, note = file_spreadsheet_extraction.extract_xlsx_text(buffer.getvalue())
+
+        self.assertEqual(file_spreadsheet_extraction.excel_column_index("AA10"), 26)
+        self.assertIn("매출\t영업이익", extracted)
+        self.assertIn("2026\t1234", extracted)
+        self.assertIn("1개 시트", note)
+
+
 class FileExtractionTests(unittest.TestCase):
     def test_ocr_runtime_status_exposes_processing_limits(self):
         from research_os.file_extraction import ocr_runtime_status

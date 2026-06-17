@@ -37,6 +37,7 @@
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_attachment_utils.py`: 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper
 - `file_image_metadata.py`: PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper
+- `file_spreadsheet_extraction.py`: XLSX shared string, inline string, 셀 좌표 기반 표 텍스트 추출 helper
 - `file_extraction.py`: PDF/OCR/Office/텍스트/표 본문 추출과 첨부 추출 profile 유틸
 - `kcif_reports.py`: KCIF 보고서 메타데이터 수집과 시장일지 연결
 - `kiwoom_auth.py`: 키움 인증/토큰 상태 확인

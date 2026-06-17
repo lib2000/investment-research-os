@@ -61,6 +61,7 @@
 | `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
 | `backend\research_os\file_attachment_utils.py` | 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper | `FileAttachmentUtilsModuleTests` |
 | `backend\research_os\file_image_metadata.py` | PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper | `FileImageMetadataModuleTests` |
+| `backend\research_os\file_spreadsheet_extraction.py` | XLSX shared string, inline string, 셀 좌표 기반 표 텍스트 추출 helper | `FileSpreadsheetExtractionModuleTests` |
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
 | `backend\research_os\kcif_reports.py` | KCIF 보고서 메타데이터 수집/시장일지 연결 | `check_research_source_store.py` |
 | `backend\research_os\kiwoom_auth.py` | 키움 인증/토큰 상태 확인 | `smoke_kiwoom_history_live.ps1` |
