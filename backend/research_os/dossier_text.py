@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from re import findall, search, sub
 
 from research_os import dossier_capture_quality
+from research_os import dossier_similarity
 
 
 DOSSIER_POSITIVE_TERMS = {
@@ -102,27 +102,15 @@ DOSSIER_EXCLUDED_REPORT_TYPES = {
 
 
 def content_fingerprint(text: str | None) -> str:
-    normalized = " ".join(str(text or "").lower().split())
-    if not normalized:
-        return ""
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return dossier_similarity.content_fingerprint(text)
 
 
 def similarity_tokens(text: str | None) -> set[str]:
-    normalized = sub(r"[^0-9a-zA-Z가-힣]+", " ", str(text or "").lower())
-    tokens = {
-        token
-        for token in normalized.split()
-        if len(token) >= 2 and token not in {"the", "and", "for", "with", "from", "this", "that"}
-    }
-    return tokens
+    return dossier_similarity.similarity_tokens(text)
 
 
 def token_jaccard_similarity(left: set[str], right: set[str]) -> float:
-    if not left or not right:
-        return 0.0
-    return len(left & right) / max(1, len(left | right))
-
+    return dossier_similarity.token_jaccard_similarity(left, right)
 
 def manifest_similarity_text(entry: dict, text: str | None = None) -> str:
     # source_url/file_name은 exact match에는 유용하지만 유사도 토큰에 넣으면

@@ -6013,6 +6013,21 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertNotIn("com", tokens)
         self.assertNotIn("research", tokens)
         self.assertNotIn("market_info_read", tokens)
+
+    def test_dossier_similarity_module_hashes_and_scores_tokens(self):
+        from research_os import dossier_similarity
+
+        left = dossier_similarity.similarity_tokens("Revenue growth margin expansion")
+        right = dossier_similarity.similarity_tokens("growth margin risk")
+
+        self.assertEqual(
+            dossier_similarity.content_fingerprint("  SAME   Text "),
+            dossier_similarity.content_fingerprint("same text"),
+        )
+        self.assertIn("growth", left)
+        self.assertGreater(dossier_similarity.token_jaccard_similarity(left, right), 0)
+        self.assertEqual(dossier_similarity.token_jaccard_similarity(set(), right), 0.0)
+
     def test_duplicate_review_excludes_soft_archived_files(self):
         import json
         import research_os_main as main
