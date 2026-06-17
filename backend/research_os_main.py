@@ -5881,127 +5881,15 @@ def build_auto_market_utilization_focus(
     regime: str,
     settings: Settings,
 ) -> list[str]:
-    focus: list[str] = []
-    tag_terms = market_tag_aliases(tags)
-    tag_label = ", ".join(tags) or "시장 전반"
-
-    portfolio_store = read_portfolio_store(settings)
-    portfolios = [
-        SavedPortfolio.model_validate(item)
-        for item in portfolio_store.get("portfolios", {}).values()
-        if isinstance(item, dict)
-    ]
-    if portfolios:
-        portfolio_names = ", ".join(item.portfolio_name for item in portfolios[:3])
-        append_unique(
-            focus,
-            f"저장 포트폴리오({portfolio_names})의 보유 종목·섹터 노출을 오늘 시장 태그({tag_label})와 자동 대조합니다.",
-        )
-        matched_exposures: list[str] = []
-        for portfolio in portfolios:
-            for holding in portfolio.holdings:
-                candidates = [
-                    holding.ticker,
-                    holding.name or "",
-                    holding.sector,
-                    *holding.theme_tags,
-                ]
-                if any(text_matches_market_tags(item, tag_terms) for item in candidates):
-                    exposure = f"{portfolio.portfolio_name}:{holding.ticker}"
-                    if holding.sector and holding.sector != "Unknown":
-                        exposure += f"({holding.sector})"
-                    append_unique(matched_exposures, exposure, limit=6)
-        if matched_exposures:
-            append_unique(
-                focus,
-                "오늘 시장 태그와 겹치는 보유 노출: "
-                + ", ".join(matched_exposures)
-                + "를 우선 점검합니다.",
-            )
-        else:
-            append_unique(
-                focus,
-                "직접 겹치는 보유 노출이 없으면 지수·금리·환율 변화가 전체 포트폴리오 베타에 미치는 영향을 우선 확인합니다.",
-            )
-    else:
-        append_unique(
-            focus,
-            "저장 포트폴리오가 없으므로 장세 판정과 리스크 레벨을 기본 리스크 예산 가이드로 활용합니다.",
-        )
-
-    interest_store = read_interest_list(settings)
-    interest_tickers = [
-        InterestTicker.model_validate(item)
-        for item in interest_store.get("tickers", [])
-        if isinstance(item, dict)
-    ]
-    interest_sectors = [
-        InterestSector.model_validate(item)
-        for item in interest_store.get("sectors", [])
-        if isinstance(item, dict)
-    ]
-    matched_sectors = [
-        item.name
-        for item in interest_sectors
-        if text_matches_market_tags(item.name, tag_terms)
-        or any(text_matches_market_tags(tag, tag_terms) for tag in item.tags)
-    ]
-    matched_tickers = [
-        item.ticker
-        for item in interest_tickers
-        if any(text_matches_market_tags(tag, tag_terms) for tag in item.tags)
-        or text_matches_market_tags(item.thesis or "", tag_terms)
-        or text_matches_market_tags(item.notes or "", tag_terms)
-    ]
-    if matched_sectors:
-        append_unique(
-            focus,
-            "관심 섹터 중 오늘 시장 태그와 연결된 영역: "
-            + ", ".join(matched_sectors[:5])
-            + "를 다음 후보 발굴에 반영합니다.",
-        )
-    elif interest_sectors:
-        append_unique(
-            focus,
-            "관심 섹터 목록은 유지하되 오늘 태그와 직접 겹치는 섹터가 적어 상대 강도 변화만 관찰합니다.",
-        )
-
-    if matched_tickers:
-        append_unique(
-            focus,
-            "관심 종목 중 오늘 이슈와 연결된 종목: "
-            + ", ".join(matched_tickers[:8])
-            + "의 논거 변화와 다음 장 가격 반응을 우선 확인합니다.",
-        )
-    elif interest_tickers:
-        append_unique(
-            focus,
-            "관심 종목은 가격보다 오늘 장세가 기존 투자 논거를 강화/약화했는지부터 업데이트합니다.",
-        )
-
-    if risk_level == "높음":
-        append_unique(
-            focus,
-            "리스크 레벨이 높아 다음 장 신규 진입보다 기존 노출 축소·손절 기준·현금 비중 점검에 우선순위를 둡니다.",
-        )
-    elif sentiment == "긍정" and regime == "위험 선호":
-        append_unique(
-            focus,
-            "위험 선호 장세로 분류되어 관심 섹터와 주도주 확산 여부를 다음 매매 후보 필터로 사용합니다.",
-        )
-    else:
-        append_unique(
-            focus,
-            "방향성이 완전히 확정되지 않았으므로 누적 시장일지의 반복 태그와 다음 장 확인 지표를 함께 비교합니다.",
-        )
-
-    if market == "KR":
-        append_unique(focus, "한국 시장 기록은 외국인/기관 수급, 원달러 환율, 반도체 대형주 상대 강도를 자동 추적합니다.")
-    elif market == "US":
-        append_unique(focus, "미국 시장 기록은 10년물 금리, 달러, 나스닥/러셀2000 상대 강도와 연결해 누적합니다.")
-    else:
-        append_unique(focus, "글로벌 시장 기록은 지역 간 자금 이동과 달러/금리/원자재 변화의 공통 신호로 누적합니다.")
-    return focus[:8]
+    return news_market_journal.build_auto_market_utilization_focus(
+        _news_market_journal_runtime(),
+        market=market,
+        tags=tags,
+        sentiment=sentiment,
+        risk_level=risk_level,
+        regime=regime,
+        settings=settings,
+    )
 
 
 def build_market_interest_implications(
@@ -6010,100 +5898,12 @@ def build_market_interest_implications(
     tags: list[str],
     settings: Settings,
 ) -> list[str]:
-    interest_store = read_interest_list(settings)
-    interest_tickers = [
-        InterestTicker.model_validate(item)
-        for item in interest_store.get("tickers", [])
-        if isinstance(item, dict)
-    ]
-    interest_sectors = [
-        InterestSector.model_validate(item)
-        for item in interest_store.get("sectors", [])
-        if isinstance(item, dict)
-    ]
-    implications: list[str] = []
-    tag_terms = market_tag_aliases(tags)
-    summary_text = raw_summary.upper()
-
-    for item in interest_tickers[:20]:
-        profile_name = ""
-        if item.verification and item.verification.company_name:
-            profile_name = item.verification.company_name
-        candidates = [item.ticker, profile_name, item.thesis or "", item.notes or "", *item.tags]
-        direct_match = any(
-            candidate and (
-                candidate.upper() in summary_text
-                or text_matches_market_tags(candidate, tag_terms)
-            )
-            for candidate in candidates
-        )
-        if direct_match:
-            implications.append(
-                f"관심종목 {item.ticker}: 오늘 시장 태그({', '.join(tags)})와 연결됩니다. 다음 장 가격 반응보다 기존 매수 후보 논거가 강화/약화됐는지 먼저 업데이트하세요."
-            )
-
-    for item in interest_sectors[:20]:
-        candidates = [item.name, item.thesis or "", item.notes or "", *item.tags]
-        direct_match = any(
-            candidate and (
-                candidate.upper() in summary_text
-                or text_matches_market_tags(candidate, tag_terms)
-            )
-            for candidate in candidates
-        )
-        if direct_match:
-            implications.append(
-                f"관심섹터 {item.name}: 오늘 시장 태그({', '.join(tags)})와 겹칩니다. 섹터 발굴 후보와 관련 종목의 상대 강도를 다음 관찰 목록에 올리세요."
-            )
-
-    if not implications and (interest_tickers or interest_sectors):
-        implications.append(
-            "현재 관심목록과 오늘 시장 태그의 직접 연결은 약합니다. 관심종목은 개별 촉매가 확인될 때까지 관찰 상태로 유지하세요."
-        )
-    if not implications:
-        implications.append(
-            "저장된 관심종목/관심섹터가 없어 시장일지의 관심목록 영향 분석을 건너뜁니다."
-        )
-    return implications[:10]
-
-
-def build_market_portfolio_actions(sentiment: str, risk_level: str, regime: str) -> list[str]:
-    if risk_level == "높음":
-        return [
-            "신규 매수는 분할 접근하고 손절/무효화 조건을 먼저 확정하세요.",
-            "고집중 포지션과 고베타 성장주 비중이 의도한 리스크 예산 안에 있는지 확인하세요.",
-            "다음 장 시작 전 시장 폭, 금리, 환율이 악화되는지 재확인하세요.",
-        ]
-    if sentiment == "긍정":
-        return [
-            "주도 섹터가 넓어지는지 확인하면서 기존 강한 논거 종목의 추가 진입 후보를 선별하세요.",
-            "급등 추격보다 전일 저항 돌파 후 지지 확인 구간을 우선 관찰하세요.",
-        ]
-    if regime == "섹터 순환":
-        return [
-            "기존 주도주와 새로 강해지는 섹터의 상대 강도를 비교해 일부 리밸런싱 후보를 정리하세요.",
-            "순환매가 단기 기술적 반등인지 실적/수급 변화인지 분리해서 판단하세요.",
-        ]
-    return [
-        "확신이 낮은 장에서는 현금 비중과 관찰 목록을 유지하고, 다음 촉매 확인 후 행동하세요.",
-        "관심 종목은 가격보다 논거 변화와 데이터 확인 여부를 먼저 업데이트하세요.",
-    ]
-
-
-def build_market_next_watch(tags: list[str], market: str) -> list[str]:
-    items = ["시장 폭: 상승/하락 종목 수와 주도주 확산 여부"]
-    if market == "US":
-        items.extend(["미국 10년물 금리와 달러 지수", "나스닥/러셀2000 상대 강도"])
-    if market == "KR":
-        items.extend(["외국인/기관 수급과 원달러 환율", "코스피 대형주와 코스닥 성장주의 상대 강도"])
-    if "AI" in tags or "반도체" in tags:
-        items.append("AI/반도체 주도주의 거래대금과 실적 기대 변화")
-    if "에너지" in tags:
-        items.append("유가와 에너지/운송/소비재 마진 민감도")
-    if "정책" in tags:
-        items.append("중앙은행 발언, 정책 일정, 규제/관세 뉴스")
-    return items
-
+    return news_market_journal.build_market_interest_implications(
+        _news_market_journal_runtime(),
+        raw_summary=raw_summary,
+        tags=tags,
+        settings=settings,
+    )
 
 def cumulative_market_patterns(entries: list[MarketCloseEntry], market: str) -> tuple[list[str], str]:
     recent = [entry for entry in entries if entry.market == market][-20:]
@@ -11224,6 +11024,10 @@ def _news_market_journal_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         MarketCloseEntry=MarketCloseEntry,
         MarketCloseReviewResponse=MarketCloseReviewResponse,
+        read_interest_list=read_interest_list,
+        SavedPortfolio=SavedPortfolio,
+        InterestTicker=InterestTicker,
+        InterestSector=InterestSector,
         build_auto_market_utilization_focus=build_auto_market_utilization_focus,
         build_market_interest_implications=build_market_interest_implications,
         build_market_next_watch=build_market_next_watch,
@@ -11242,6 +11046,7 @@ def _news_market_journal_runtime() -> SimpleNamespace:
         market_research_key=market_research_key,
         news_item_safe_view=news_item_safe_view,
         read_market_close_journal=read_market_close_journal,
+        read_portfolio_store=read_portfolio_store,
         render_market_close_markdown=render_market_close_markdown,
         resolve_vault_dir=resolve_vault_dir,
         save_research_markdown=save_research_markdown,
