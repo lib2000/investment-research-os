@@ -67,6 +67,7 @@
 - `market_journal_rendering.py`: 시장일지 저장 Markdown 렌더링 helper
 - `naver_market_close_automation.py`: 네이버 국내 마감 시황 자동 반영, 중복 방지, 작업 상태 조립
 - `company_ir_config.py`: 공개 IR/SEC 소스 JSON 확장 설정 파싱과 중복 제거 helper
+- `company_ir_sec.py`: SEC company submissions 파싱, 공시 분류, archive URL helper
 - `telegram_market_journal.py`: 텔레그램 @ehdwl 공개 채널의 미국 시장일지 후보 파싱/선정
 - `telegram_market_close_automation.py`: 텔레그램 미국 시장일지 자동 반영, 소급 저장, 중복 방지, 작업 상태 조립
 - `web_search_data_provider.py`: Tavily/Brave 검색 기반 보강 데이터 provider와 무료 한도 guard

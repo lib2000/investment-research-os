@@ -1586,6 +1586,44 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(sources[1].ticker, "PL")
         self.assertEqual(sources[1].provider, "Planet IR")
 
+    def test_company_ir_sec_parses_financial_release(self):
+        from research_os import company_ir_sec
+        from research_os.company_ir_sources import CompanyIrItem, CompanyIrSource, company_ir_item_id, normalize_ir_date
+
+        source = CompanyIrSource(
+            source_key="absci_sec_submissions",
+            ticker="ABSI",
+            company_name="Absci Corporation",
+            provider="SEC EDGAR",
+            source_url="https://data.sec.gov/submissions/CIK0001672688.json",
+            source_scope="sec_company_submissions",
+        )
+        payload = {
+            "filings": {
+                "recent": {
+                    "form": ["8-K", "4"],
+                    "filingDate": ["2026-06-18", "2026-06-17"],
+                    "reportDate": ["2026-06-18", "2026-06-17"],
+                    "accessionNumber": ["0001672688-26-000001", "0001672688-26-000002"],
+                    "primaryDocument": ["ex991.htm", "xslF345X05/doc4.xml"],
+                    "primaryDocDescription": ["Exhibit 99.1 Earnings Release", "FORM 4"],
+                }
+            }
+        }
+
+        items = company_ir_sec.parse_sec_company_submissions(
+            payload,
+            source=source,
+            item_factory=CompanyIrItem,
+            item_id_factory=company_ir_item_id,
+            normalize_date=normalize_ir_date,
+        )
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["filing_group"], "financial_release")
+        self.assertEqual(items[0]["category"], "SEC 실적/보도자료")
+        self.assertIn("/Archives/edgar/data/1672688/000167268826000001/ex991.htm", items[0]["detail_url"])
+
 
 class ExternalSourceScheduleStatusTests(unittest.TestCase):
     def test_regional_source_failure_preserves_cached_provider_items(self):

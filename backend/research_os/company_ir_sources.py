@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ from urllib.parse import urljoin
 import httpx
 
 from research_os import company_ir_config
+from research_os import company_ir_sec
 
 
 JOBY_IR_PRESS_RELEASES_URL = "https://ir.jobyaviation.com/news-events/press-releases"
@@ -25,7 +25,6 @@ ABSI_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001672688.json"
 RXRX_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001601830.json"
 OTLY_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001843586.json"
 CPSH_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0000814676.json"
-SEC_INTERESTING_FORMS = {"8-K", "10-Q", "10-K", "20-F", "6-K", "SD", "SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A"}
 DATE_PATTERN = re.compile(r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+20\d{2}|20\d{2}[-./]\d{1,2}[-./]\d{1,2}", re.IGNORECASE)
 SKIP_LINK_TEXTS = {
     "",
@@ -302,37 +301,8 @@ def _date_from_nearby_text(tokens: list[dict], index: int) -> str:
     return ""
 
 
-def _sec_cik_from_submissions_url(url: str) -> str:
-    match = re.search(r"CIK0*(\d+)\.json", url or "", re.IGNORECASE)
-    return match.group(1) if match else ""
-
-
-def _sec_archive_url(source: CompanyIrSource, accession_number: str, primary_document: str) -> str:
-    cik = _sec_cik_from_submissions_url(source.source_url)
-    accession = re.sub(r"[^0-9]", "", accession_number or "")
-    document = clean_ir_text(primary_document)
-    if not cik or not accession or not document:
-        return source.source_url
-    return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}"
-
-
 def classify_sec_filing(form: str, description: str = "") -> tuple[str, str]:
-    form_key = clean_ir_text(form).upper()
-    description_key = clean_ir_text(description).lower()
-    if form_key in {"10-Q", "10-K", "20-F"}:
-        return "SEC 실적 공시", "financial_report"
-    if form_key == "8-K" and any(
-        keyword in description_key
-        for keyword in ["financial result", "earnings", "press release", "exhibit 99.1", "results"]
-    ):
-        return "SEC 실적/보도자료", "financial_release"
-    if form_key in {"SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A"}:
-        return "SEC 지분 공시", "ownership_filing"
-    if form_key == "6-K":
-        return "SEC 해외발행사 공시", "foreign_issuer_filing"
-    if form_key == "SD":
-        return "SEC 공급망/지속가능 공시", "specialized_disclosure"
-    return "SEC 중요 공시", "material_filing"
+    return company_ir_sec.classify_sec_filing(form, description)
 
 
 def parse_sec_company_submissions(
@@ -341,59 +311,14 @@ def parse_sec_company_submissions(
     source: CompanyIrSource,
     limit: int = 30,
 ) -> list[dict]:
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except json.JSONDecodeError:
-            return []
-    if not isinstance(payload, dict):
-        return []
-    recent = ((payload.get("filings") or {}).get("recent") or {}) if isinstance(payload.get("filings"), dict) else {}
-    forms = list(recent.get("form") or [])
-    filing_dates = list(recent.get("filingDate") or [])
-    report_dates = list(recent.get("reportDate") or [])
-    accessions = list(recent.get("accessionNumber") or [])
-    documents = list(recent.get("primaryDocument") or [])
-    descriptions = list(recent.get("primaryDocDescription") or [])
-    items: list[CompanyIrItem] = []
-    seen: set[str] = set()
-    for index, form_value in enumerate(forms):
-        form = clean_ir_text(form_value).upper()
-        if form not in SEC_INTERESTING_FORMS:
-            continue
-        filing_date = clean_ir_text(filing_dates[index] if index < len(filing_dates) else "")
-        report_date = clean_ir_text(report_dates[index] if index < len(report_dates) else "")
-        accession = clean_ir_text(accessions[index] if index < len(accessions) else "")
-        document = clean_ir_text(documents[index] if index < len(documents) else "")
-        description = clean_ir_text(descriptions[index] if index < len(descriptions) else "")
-        title_detail = description if description and description.upper() != form else "SEC filing"
-        title = f"{source.company_name} {form} {title_detail}"
-        filing_category, filing_group = classify_sec_filing(form, title_detail)
-        detail_url = _sec_archive_url(source, accession, document)
-        published_at = normalize_ir_date(filing_date) or filing_date or normalize_ir_date(report_date) or report_date
-        item_id = company_ir_item_id(source, title, published_at, detail_url)
-        if item_id in seen:
-            continue
-        seen.add(item_id)
-        items.append(
-            CompanyIrItem(
-                item_id=item_id,
-                ticker=source.ticker,
-                company_name=source.company_name,
-                title=title,
-                source_provider=source.provider,
-                source_scope=source.source_scope,
-                published_at=published_at,
-                detail_url=detail_url,
-                source_url=source.source_url,
-                category=filing_category,
-                filing_form=form,
-                filing_group=filing_group,
-            )
-        )
-        if len(items) >= max(1, limit):
-            break
-    return [asdict(item) for item in items]
+    return company_ir_sec.parse_sec_company_submissions(
+        payload,
+        source=source,
+        item_factory=CompanyIrItem,
+        item_id_factory=company_ir_item_id,
+        normalize_date=normalize_ir_date,
+        limit=limit,
+    )
 
 
 def parse_company_ir_press_releases(
