@@ -3025,6 +3025,25 @@ class FileAttachmentUtilsModuleTests(unittest.TestCase):
             file_attachment_utils.decode_attachment_base64("not-valid-base64")
 
 
+class FileImageMetadataModuleTests(unittest.TestCase):
+    def test_file_image_metadata_detects_png_dimensions(self):
+        from research_os import file_image_metadata
+
+        png_2x3 = (
+            b"\x89PNG\r\n\x1a\n"
+            b"\x00\x00\x00\rIHDR"
+            b"\x00\x00\x00\x02"
+            b"\x00\x00\x00\x03"
+            b"\x08\x06\x00\x00\x00"
+        )
+
+        self.assertEqual(
+            file_image_metadata.detect_image_dimensions(png_2x3),
+            {"format": "PNG", "width": 2, "height": 3},
+        )
+        self.assertEqual(file_image_metadata.detect_image_dimensions(b"not-image"), {})
+
+
 class FileExtractionTests(unittest.TestCase):
     def test_ocr_runtime_status_exposes_processing_limits(self):
         from research_os.file_extraction import ocr_runtime_status
