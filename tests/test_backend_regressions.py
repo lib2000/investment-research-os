@@ -3818,6 +3818,56 @@ class RecentActivityGroupsModuleTests(unittest.TestCase):
         self.assertTrue(any(item["target"] == "시장/섹터 공통" for item in digest))
 
 
+class RecentActivityNavigationModuleTests(unittest.TestCase):
+    def test_recent_activity_navigation_links_recommendations_and_dedupes_items(self):
+        from research_os import recent_activity_navigation
+
+        items = [
+            {
+                "category": "report",
+                "date": "2026-06-18",
+                "ticker": "PL",
+                "company_name": "Planet Labs",
+                "report_type": "broker-report",
+                "summary": "Planet Labs update",
+                "relative_path": "research_vault/PL/report.md",
+            },
+            {
+                "category": "report",
+                "date": "2026-06-18",
+                "ticker": "pl",
+                "company_name": "Planet Labs",
+                "report_type": "broker-report",
+                "summary": "Planet Labs update",
+                "relative_path": "research_vault/PL/report.md",
+            },
+        ]
+        evidence_index = {
+            "by_relative_path": {
+                "research_vault/pl/report.md": [
+                    {
+                        "record_id": "r1",
+                        "recommendation_date": "2026-06-18",
+                        "rank": 1,
+                        "ticker": "PL",
+                        "company_name": "Planet Labs",
+                        "is_latest": True,
+                    }
+                ]
+            }
+        }
+
+        recent_activity_navigation.annotate_recent_weekly_recommendation_links(items, evidence_index)
+        recent_activity_navigation.annotate_recent_weekly_navigation_hints(items)
+        deduped = recent_activity_navigation.dedupe_recent_activity_items(items)
+
+        self.assertEqual(len(deduped), 1)
+        self.assertEqual(items[0]["recommendation_usage_label"], "오늘 추천 근거")
+        self.assertEqual(items[0]["memory_lookup_key"], "PL")
+        self.assertIn("저장 데이터 탭", items[0]["memory_navigation_hint"])
+        self.assertIn("Planet Labs", items[0]["rag_search_query"])
+
+
 class ThesisImpactModuleTests(unittest.TestCase):
     def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
         from research_os import thesis_impact

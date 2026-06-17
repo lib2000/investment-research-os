@@ -105,6 +105,7 @@
 | `backend\research_os\rag_search_results.py` | RAG 검색 결과 중복 보고서 compact와 match strength 표시 helper | `RagSearchResultsModuleTests` |
 | `backend\research_os\rag_synthesis.py` | 전체 저장 데이터 검색 결과의 합성 payload, Markdown 보고서, 투자 논거 스냅샷 helper | `check_rag_synthesis_store.py`, `check_backend_module_health.py` |
 | `backend\research_os\recent_activity.py` | 최근 1주 자료용 출처별 compact helper, DART/추천 근거 링크, 저장 데이터 탐색 힌트 | `check_recent_weekly_brief.py`, `check_backend_module_health.py` |
+| `backend\research_os\recent_activity_navigation.py` | 최근 1주 자료 추천 근거 링크, 저장 데이터 이동 힌트, 중복 제거 helper | `RecentActivityNavigationModuleTests` |
 | `backend\research_os\recent_activity_public_ir.py` | 최근 1주 공개 IR/SEC 자료 compact와 추천 반영 품질 guard helper | `RecentActivityPublicIrModuleTests`, `check_public_ir_sec_store.py` |
 | `backend\research_os\recent_activity_groups.py` | 최근 1주 자료 category group, 출처 family, 타깃 digest 계산 helper | `RecentActivityGroupsModuleTests` |
 | `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py` |
