@@ -3217,6 +3217,82 @@ class DashboardHelpersModuleTests(unittest.TestCase):
         self.assertEqual(watch_item, "[높음] 매출 성장률: 전년 대비 20% 이상 -> 비중 유지")
         self.assertEqual(report_type, "portfolio-risk-scan")
         self.assertEqual(report_date, "2026-06-18")
+    def test_dashboard_helpers_build_reference_digests(self):
+        from research_os import dashboard_helpers
+
+        payloads = {
+            "003230-dossier-synthesis-2026-06-18.md": {
+                "company_name": "Samyang Foods",
+                "thesis_summary": "수출 성장 논거 강화",
+                "confidence": "high",
+                "source_count": 5,
+                "duplicate_count": 1,
+                "consensus_facts": ["미국 매출 증가", "채널 확장"],
+            },
+            "003230-research-capture-2026-06-18.md": {
+                "attachment": {
+                    "file_name": "ir.pdf",
+                    "document_type": "IR",
+                    "extraction_quality": "0.8",
+                    "extraction_profile": {"analysis_readiness": "ready"},
+                    "extraction_char_count": 2400,
+                }
+            },
+        }
+        runtime = SimpleNamespace(
+            read_manifest_entry_payload=lambda entry, _vault_dir: payloads.get(entry.get("file_name"), {}),
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {"market": "US", "session_date": "2026-06-17", "sentiment": "neutral"},
+                    {
+                        "market": "US",
+                        "session_date": "2026-06-18",
+                        "sentiment": "positive",
+                        "key_drivers": ["AI", "금리", "달러", "유가", "기타"],
+                    },
+                ]
+            },
+            ticker_company_name=lambda ticker: f"{ticker} Inc.",
+        )
+        entries = [
+            {
+                "type": "dossier-synthesis",
+                "file_name": "003230-dossier-synthesis-2026-06-17.md",
+                "date": "2026-06-17",
+            },
+            {
+                "type": "dossier-synthesis",
+                "file_name": "003230-dossier-synthesis-2026-06-18.md",
+                "date": "2026-06-18",
+            },
+            {
+                "type": "research-capture",
+                "file_name": "003230-research-capture-2026-06-18.md",
+                "date": "2026-06-18",
+                "relative_path": "research_vault/003230/ir.md",
+            },
+            {
+                "type": "team-report",
+                "file_name": "003230-team-report-2026-06-18.md",
+                "date": "2026-06-18",
+                "investment_thesis": {"ticker": "003230", "thesis": "수출 성장"},
+                "watch_items": [{"metric": "수출"}],
+            },
+        ]
+
+        latest = dashboard_helpers.latest_manifest_entry(entries, "dossier-synthesis")
+        dossier = dashboard_helpers.build_latest_dossier_preview(runtime, "003230", entries, Path("vault"))
+        digest = dashboard_helpers.build_document_quality_digest(runtime, "003230", entries, Path("vault"))
+        journal = dashboard_helpers.build_latest_market_journal_reference(runtime, SimpleNamespace())
+        thesis = dashboard_helpers.latest_manifest_thesis_snapshot("003230", entries)
+
+        self.assertEqual(latest["file_name"], "003230-dossier-synthesis-2026-06-18.md")
+        self.assertEqual(dossier["company_name"], "Samyang Foods")
+        self.assertEqual(digest["headline"], "추출 품질 양호")
+        self.assertEqual(digest["latest"]["document_type"], "IR")
+        self.assertEqual(journal["session_date"], "2026-06-18")
+        self.assertEqual(journal["key_drivers"], ["AI", "금리", "달러", "유가"])
+        self.assertEqual(thesis["thesis_summary"], "수출 성장")
 
 class ResearchMemoryFilesModuleTests(unittest.TestCase):
     def test_research_memory_files_module_resolves_payload_paths_and_updates_tail_sections(self):

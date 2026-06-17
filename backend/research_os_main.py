@@ -6414,21 +6414,16 @@ def supplement_research_memory_file(
     )
 
 
-def latest_manifest_entry(entries: list[dict], *report_types: str) -> dict | None:
-    wanted = set(report_types)
-    matches = [entry for entry in entries if entry.get("type") in wanted]
-    if not matches:
-        return None
-    return sorted(
-        matches,
-        key=lambda entry: (
-            entry.get("date", ""),
-            report_file_sequence(entry.get("file_name", "")),
-            entry.get("file_name", ""),
-        ),
-        reverse=True,
-    )[0]
+def _dashboard_helpers_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        read_manifest_entry_payload=read_manifest_entry_payload,
+        read_market_close_journal=read_market_close_journal,
+        ticker_company_name=ticker_company_name,
+    )
 
+
+def latest_manifest_entry(entries: list[dict], *report_types: str) -> dict | None:
+    return dashboard_helpers.latest_manifest_entry(entries, *report_types)
 
 def read_manifest_entry_payload(entry: dict | None, vault_dir: Path) -> dict:
     return research_memory_files.read_manifest_entry_payload(entry, vault_dir)
@@ -6614,169 +6609,36 @@ def rebuild_research_memory_quality_metadata(
 
 
 def build_latest_dossier_preview(ticker: str, entries: list[dict], vault_dir: Path) -> dict:
-    dossier_entry = latest_manifest_entry(entries, "dossier-synthesis")
-    if not dossier_entry:
-        return {}
-    payload = read_manifest_entry_payload(dossier_entry, vault_dir)
-    source = payload if payload else dossier_entry
-    return {
-        "ticker": ticker,
-        "company_name": source.get("company_name") or dossier_entry.get("company_name") or ticker_company_name(ticker),
-        "date": source.get("date") or dossier_entry.get("date"),
-        "file_name": dossier_entry.get("file_name"),
-        "relative_path": dossier_entry.get("relative_path"),
-        "summary": source.get("thesis_summary") or source.get("summary") or dossier_entry.get("summary"),
-        "confidence": source.get("confidence") or dossier_entry.get("source_confidence"),
-        "source_count": source.get("source_count") or dossier_entry.get("source_count") or 0,
-        "duplicate_count": source.get("duplicate_count") or dossier_entry.get("duplicate_count") or 0,
-        "consensus_facts": (source.get("consensus_facts") or [])[:3],
-        "bull_thesis": (source.get("bull_thesis") or [])[:3],
-        "bear_thesis": (source.get("bear_thesis") or [])[:3],
-        "cruxes": (source.get("cruxes") or [])[:3],
-        "observables": (source.get("observables") or [])[:4],
-    }
+    return dashboard_helpers.build_latest_dossier_preview(
+        _dashboard_helpers_runtime(),
+        ticker,
+        entries,
+        vault_dir,
+    )
 
 
 def build_document_quality_digest(ticker: str, entries: list[dict], vault_dir: Path) -> dict:
-    documents: list[dict] = []
-    for entry in entries:
-        if entry.get("type") != "research-capture":
-            continue
-        payload = read_manifest_entry_payload(entry, vault_dir)
-        attachment = entry.get("attachment") or payload.get("attachment") or {}
-        url_processing = entry.get("source_url_processing") or payload.get("source_url_processing") or {}
-        has_file = bool(attachment)
-        has_url = bool(url_processing)
-        if not (has_file or has_url):
-            continue
-        profile = attachment.get("extraction_profile") or {}
-        warnings = attachment.get("extraction_warnings") or []
-        quality = attachment.get("extraction_quality")
-        try:
-            quality_value = float(quality)
-        except (TypeError, ValueError):
-            quality_value = 0.0 if has_file else 0.55
-        char_count = int(
-            attachment.get("extraction_char_count")
-            or profile.get("char_count")
-            or len(str(payload.get("document_preview") or ""))
-            or 0
-        )
-        if not quality and char_count:
-            quality_value = min(0.95, max(0.45, char_count / 6000))
-        documents.append(
-            {
-                "date": entry.get("date"),
-                "file_name": attachment.get("file_name") or entry.get("file_name"),
-                "title": entry.get("title") or entry.get("summary") or attachment.get("file_name"),
-                "document_type": attachment.get("document_type") or ("웹 문서" if has_url else "파일"),
-                "quality": round(quality_value, 2) if quality_value else None,
-                "char_count": char_count,
-                "analysis_readiness": profile.get("analysis_readiness") or ("웹 본문 추출" if has_url else "확인 필요"),
-                "next_action": profile.get("next_action") or ("추출 본문으로 자동 분류·태깅 완료" if char_count else "본문 추출 상태를 확인하세요."),
-                "warnings": warnings[:3],
-                "source_url": url_processing.get("source_url"),
-                "relative_path": entry.get("relative_path"),
-            }
-        )
-    documents = sorted(
-        documents,
-        key=lambda item: (item.get("date") or "", item.get("file_name") or ""),
-        reverse=True,
-    )[:5]
-    if not documents:
-        return {}
-    usable = [item for item in documents if (item.get("quality") or 0) >= 0.65 or (item.get("char_count") or 0) >= 1000]
-    warning_count = sum(len(item.get("warnings") or []) for item in documents)
-    latest = documents[0]
-    return {
-        "ticker": ticker,
-        "document_count": len(documents),
-        "usable_count": len(usable),
-        "warning_count": warning_count,
-        "latest": latest,
-        "documents": documents,
-        "headline": "추출 품질 양호" if usable else "추출 품질 확인 필요",
-    }
+    return dashboard_helpers.build_document_quality_digest(
+        _dashboard_helpers_runtime(),
+        ticker,
+        entries,
+        vault_dir,
+    )
 
 
 def build_latest_market_journal_reference(settings: Settings) -> dict:
-    store = read_market_close_journal(settings)
-    entries = [
-        item
-        for item in store.get("entries", [])
-        if isinstance(item, dict)
-    ]
-    if not entries:
-        return {}
-    latest = sorted(
-        entries,
-        key=lambda item: (item.get("session_date") or "", item.get("updated_at") or item.get("created_at") or ""),
-        reverse=True,
-    )[0]
-    return {
-        "market": latest.get("market"),
-        "session_date": latest.get("session_date"),
-        "sentiment": latest.get("sentiment"),
-        "risk_level": latest.get("risk_level"),
-        "regime": latest.get("regime"),
-        "key_drivers": (latest.get("key_drivers") or [])[:4],
-        "sector_implications": (latest.get("sector_implications") or [])[:4],
-        "auto_utilization_focus": (latest.get("auto_utilization_focus") or [])[:4],
-        "portfolio_actions": (latest.get("portfolio_actions") or [])[:3],
-        "next_session_watch": (latest.get("next_session_watch") or [])[:4],
-        "tags": (latest.get("tags") or [])[:8],
-    }
+    return dashboard_helpers.build_latest_market_journal_reference(
+        _dashboard_helpers_runtime(),
+        settings,
+    )
 
 
 def latest_manifest_thesis_snapshot(ticker: str, entries: list[dict]) -> dict:
-    thesis_entries = [
-        entry
-        for entry in entries
-        if isinstance(entry, dict) and isinstance(entry.get("investment_thesis"), dict)
-    ]
-    if not thesis_entries:
-        return {}
-    latest_entry = sorted(
-        thesis_entries,
-        key=lambda entry: (
-            entry.get("date", ""),
-            report_file_sequence(entry.get("file_name", "")),
-            entry.get("file_name", ""),
-        ),
-        reverse=True,
-    )[0]
-    thesis = latest_entry.get("investment_thesis") or {}
-    watch_items = [
-        item for item in latest_entry.get("watch_items", []) if isinstance(item, dict)
-    ]
-    valuation = thesis.get("valuation_assumptions") if isinstance(thesis, dict) else {}
-    if not isinstance(valuation, dict):
-        valuation = {}
-    return {
-        "ticker": thesis.get("ticker") or ticker,
-        "company_name": latest_entry.get("company_name"),
-        "thesis_summary": thesis.get("thesis") or latest_entry.get("summary"),
-        "bull_triggers": thesis.get("bull_triggers") or [],
-        "bear_triggers": thesis.get("bear_triggers") or [],
-        "invalidation_conditions": thesis.get("invalidation_conditions") or [],
-        "watch_kpis": thesis.get("watch_kpis") or [],
-        "watch_items": watch_items,
-        "source_report_type": latest_entry.get("type"),
-        "source_file_name": latest_entry.get("file_name"),
-        "source_relative_path": latest_entry.get("relative_path"),
-        "source_date": latest_entry.get("date"),
-        "confidence": latest_entry.get("source_confidence") or valuation.get("confidence"),
-        "updated_at": latest_entry.get("updated_at") or latest_entry.get("date"),
-    }
+    return dashboard_helpers.latest_manifest_thesis_snapshot(ticker, entries)
 
 
 def report_file_sequence(file_name: str) -> int:
-    match = search(r"\d{4}-\d{2}-\d{2}-(\d+)\.(?:md|json)$", file_name)
-    if match:
-        return int(match.group(1))
-    return 1 if search(r"\d{4}-\d{2}-\d{2}\.(?:md|json)$", file_name) else 0
-
+    return dashboard_helpers.report_file_sequence(file_name)
 
 def compact_tooltip_text(value: object, limit: int = 180) -> str:
     return dashboard_helpers.compact_tooltip_text(value, limit)
