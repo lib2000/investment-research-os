@@ -3175,6 +3175,46 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
         self.assertEqual(upsert_calls[0]["entry"]["source"], "test")
         self.assertEqual(upsert_calls[0]["full_text"], "# Note")
+class ThesisImpactModuleTests(unittest.TestCase):
+    def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
+        from research_os import thesis_impact
+        from research_os.models import DataSourceType, InjectedDataPoint, InvestmentThesis, ThesisImpact, WatchItem
+
+        response = thesis_impact.evaluate_thesis_impact(
+            "003230",
+            [
+                InjectedDataPoint(
+                    source_type=DataSourceType.USER_MEMO,
+                    label="earnings",
+                    value="strong growth and margin expansion",
+                    confidence=0.9,
+                )
+            ],
+            [
+                InvestmentThesis(
+                    ticker="003230",
+                    thesis="수출 성장",
+                    time_horizon="12m",
+                    last_updated="2026-06-18",
+                )
+            ],
+            [
+                WatchItem(
+                    ticker="003230",
+                    metric="growth",
+                    condition="상승",
+                    action="비중 유지",
+                    priority="high",
+                )
+            ],
+        )
+        markdown = thesis_impact.render_thesis_impact_markdown(response, date(2026, 6, 18))
+
+        self.assertEqual(response.overall_impact, ThesisImpact.STRENGTHENS)
+        self.assertEqual(response.watch_item_signals[0].action, "비중 유지")
+        self.assertIn("overall_impact: 강화", markdown)
+        self.assertIn("투자 논거 영향도 분석", markdown)
+
 class ThesisSignalWordsModuleTests(unittest.TestCase):
     def test_signal_words_match_korean_and_english_terms(self):
         from research_os import thesis_signal_words
