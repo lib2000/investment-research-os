@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
+from research_os import rag_memory_utils
 from research_os.models import InvestmentThesis, WatchItem
 from research_os.research_memory import read_manifest
 
@@ -19,69 +19,35 @@ def rag_db_path(vault_dir: Path) -> Path:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return rag_memory_utils.utc_now_iso()
 
 
 def _json_dump(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return rag_memory_utils.json_dump(value)
 
 
 def _json_load_list(value: str | None) -> list[Any]:
-    if not value:
-        return []
-    try:
-        payload = json.loads(value)
-    except json.JSONDecodeError:
-        return []
-    return payload if isinstance(payload, list) else []
+    return rag_memory_utils.json_load_list(value)
 
 
 def _json_load_dict(value: str | None) -> dict[str, Any]:
-    if not value:
-        return {}
-    try:
-        payload = json.loads(value)
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return rag_memory_utils.json_load_dict(value)
 
 
 def _safe_text(value: Any, fallback: str = "") -> str:
-    if value is None:
-        return fallback
-    return str(value).strip()
+    return rag_memory_utils.safe_text(value, fallback)
 
 
 def _safe_float(value: Any, fallback: float = 0.7) -> float:
-    try:
-        return max(0.0, min(1.0, float(value)))
-    except (TypeError, ValueError):
-        return fallback
+    return rag_memory_utils.safe_float(value, fallback)
 
 
 def _document_id_from_entry(entry: dict[str, Any]) -> str:
-    relative_path = _safe_text(entry.get("relative_path"))
-    if relative_path:
-        return relative_path
-    return "|".join(
-        [
-            _safe_text(entry.get("ticker"), "UNKNOWN"),
-            _safe_text(entry.get("type") or entry.get("report_type"), "unknown"),
-            _safe_text(entry.get("date"), "undated"),
-            _safe_text(entry.get("file_name"), "missing-file"),
-        ]
-    )
+    return rag_memory_utils.document_id_from_entry(entry)
 
 
 def _resolve_manifest_file(vault_dir: Path, relative_path: str | None) -> Path | None:
-    if not relative_path:
-        return None
-    candidate = (vault_dir.parent / relative_path).resolve()
-    try:
-        candidate.relative_to(vault_dir.parent.resolve())
-    except ValueError:
-        return None
-    return candidate
+    return rag_memory_utils.resolve_manifest_file(vault_dir, relative_path)
 
 
 def _read_manifest_text(
@@ -89,94 +55,15 @@ def _read_manifest_text(
     entry: dict[str, Any],
     max_chars: int = 12000,
 ) -> str:
-    path = _resolve_manifest_file(vault_dir, entry.get("relative_path"))
-    if path and path.exists() and path.is_file():
-        try:
-            return path.read_text(encoding="utf-8")[:max_chars]
-        except OSError:
-            pass
-    return _safe_text(entry.get("summary") or entry.get("title") or "")
+    return rag_memory_utils.read_manifest_text(vault_dir, entry, max_chars)
 
 
 def _entry_tags(entry: dict[str, Any]) -> list[str]:
-    tags: list[str] = []
-    for key in ("tags", "theme_tags", "categories"):
-        value = entry.get(key)
-        if isinstance(value, list):
-            tags.extend(_safe_text(item) for item in value if _safe_text(item))
-    for key in ("type", "report_type", "source_type"):
-        value = _safe_text(entry.get(key))
-        if value:
-            tags.append(value)
-    return sorted(set(tags))
+    return rag_memory_utils.entry_tags(entry)
 
 
 def _document_quality(payload: dict[str, Any]) -> dict[str, Any]:
-    metadata = payload.get("metadata")
-    if not isinstance(metadata, dict):
-        metadata = _json_load_dict(payload.get("metadata_json"))
-
-    text = " ".join(
-        [
-            _safe_text(payload.get("summary")),
-            _safe_text(payload.get("content_excerpt")),
-            _safe_text(metadata.get("reaction_type")),
-            _safe_text(metadata.get("evidence_status")),
-        ]
-    )
-    flags: list[str] = []
-    score = int(round(_safe_float(payload.get("confidence"), 0.7) * 100))
-
-    if metadata.get("data_quality") == "low":
-        score -= 10
-        flags.append("low_data_quality")
-
-    missing_inputs = metadata.get("missing_inputs")
-    if isinstance(missing_inputs, list) and missing_inputs:
-        score -= min(25, 8 * len(missing_inputs))
-        flags.append("missing_inputs")
-
-    if "입력 데이터가 부족" in text or "데이터 부족" in text:
-        score -= 35
-        flags.append("insufficient_data")
-
-    if "판정 보류" in text:
-        score -= 20
-        flags.append("deferred_judgement")
-
-    if metadata.get("evidence_status") == "충분":
-        score += 25
-        flags.append("sufficient_evidence")
-
-    if metadata.get("is_deleted") or _safe_text(metadata.get("status")).lower() == "archived":
-        score -= 80
-        flags.append("archived")
-
-    report_type = _safe_text(payload.get("report_type"))
-    if report_type == "earnings-reaction":
-        if metadata.get("earnings_report_date"):
-            score += 8
-        else:
-            score -= 15
-            flags.append("missing_earnings_date")
-        if _safe_text(metadata.get("price_reaction")):
-            score += 8
-        else:
-            score -= 10
-            flags.append("missing_price_reaction")
-        if _safe_text(metadata.get("next_earnings_guidance")) and "입력되지 않았습니다" not in _safe_text(
-            metadata.get("next_earnings_guidance")
-        ):
-            score += 8
-        else:
-            score -= 10
-            flags.append("missing_next_guidance")
-
-    return {
-        "quality_score": max(0, min(150, score)),
-        "quality_flags": sorted(set(flags)),
-        "is_injectable": score >= 55 and "insufficient_data" not in flags and "archived" not in flags,
-    }
+    return rag_memory_utils.document_quality(payload)
 
 
 def _connect(vault_dir: Path) -> sqlite3.Connection:

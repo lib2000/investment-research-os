@@ -688,6 +688,38 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(summary["last_history_message"], "수량 확인 완료")
 
 
+class RagMemoryUtilsModuleTests(unittest.TestCase):
+    def test_rag_memory_utils_resolves_manifest_text_and_quality_flags(self):
+        from tempfile import TemporaryDirectory
+        from research_os import rag_memory_utils
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            vault_dir = root / "research_vault"
+            doc_path = vault_dir / "003230" / "note.md"
+            doc_path.parent.mkdir(parents=True)
+            doc_path.write_text("본문 내용", encoding="utf-8")
+            text = rag_memory_utils.read_manifest_text(
+                vault_dir,
+                {"relative_path": "research_vault/003230/note.md"},
+            )
+            escaped = rag_memory_utils.resolve_manifest_file(vault_dir, "../secret.txt")
+
+        quality = rag_memory_utils.document_quality(
+            {
+                "confidence": 0.9,
+                "summary": "입력 데이터가 부족",
+                "metadata": {"status": "archived", "missing_inputs": ["매출"]},
+            }
+        )
+
+        self.assertEqual(text, "본문 내용")
+        self.assertIsNone(escaped)
+        self.assertIn("archived", quality["quality_flags"])
+        self.assertIn("insufficient_data", quality["quality_flags"])
+        self.assertFalse(quality["is_injectable"])
+
+
 class ProviderUsageModuleTests(unittest.TestCase):
     def test_provider_usage_records_counts_and_blocks_daily_limit(self):
         from tempfile import TemporaryDirectory

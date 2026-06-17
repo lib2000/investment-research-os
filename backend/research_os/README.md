@@ -53,6 +53,7 @@
 - `portfolio_store.py`: 포트폴리오 저장 JSON 읽기, 저장 키와 정렬 정책
 - `portfolio_sync.py`: 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약
 - `rag_memory.py`: RAG 문서와 thesis snapshot 색인/검색
+- `rag_memory_utils.py`: RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper
 - `rag_synthesis.py`: 전체 저장 데이터 검색 결과 합성, Markdown 보고서 렌더링, 투자 논거 스냅샷 helper
 - `recent_activity.py`: 최근 1주 자료 compact, DART/IR/SEC/추천 근거 링크, 저장 데이터 탐색 힌트 helper
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집
