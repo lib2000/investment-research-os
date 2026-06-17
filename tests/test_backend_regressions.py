@@ -5772,6 +5772,49 @@ class NewsMarketJournalModuleTests(unittest.TestCase):
 
         self.assertEqual(result, "국내 요약")
 
+    def test_news_market_focus_builds_interest_implications(self):
+        from research_os import news_market_focus
+
+        class FakeTicker:
+            @classmethod
+            def model_validate(cls, raw_item):
+                return SimpleNamespace(
+                    ticker=raw_item["ticker"],
+                    thesis=raw_item.get("thesis"),
+                    notes=raw_item.get("notes"),
+                    tags=raw_item.get("tags", []),
+                    verification=SimpleNamespace(company_name=raw_item.get("company_name")),
+                )
+
+        class FakeSector:
+            @classmethod
+            def model_validate(cls, raw_item):
+                return SimpleNamespace(
+                    name=raw_item["name"],
+                    thesis=raw_item.get("thesis"),
+                    notes=raw_item.get("notes"),
+                    tags=raw_item.get("tags", []),
+                )
+
+        runtime = SimpleNamespace(
+            InterestTicker=FakeTicker,
+            InterestSector=FakeSector,
+            read_interest_list=lambda _settings: {
+                "tickers": [{"ticker": "NVDA", "company_name": "NVIDIA", "tags": ["AI"]}],
+                "sectors": [{"name": "반도체", "tags": ["AI", "GPU"]}],
+            },
+        )
+
+        implications = news_market_focus.build_market_interest_implications(
+            runtime,
+            raw_summary="NVIDIA GPU demand lifted AI semiconductor sentiment.",
+            tags=["AI"],
+            settings=SimpleNamespace(),
+        )
+
+        self.assertTrue(any("관심종목 NVDA" in item for item in implications))
+        self.assertTrue(any("관심섹터 반도체" in item for item in implications))
+
     def test_news_market_journal_module_saves_standard_review_payload(self):
         from research_os import news_market_journal
 
