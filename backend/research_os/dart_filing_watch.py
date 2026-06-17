@@ -3,6 +3,136 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from re import fullmatch
+
+
+def dart_watch_exclusion_reason(item: dict | None) -> str | None:
+    if not isinstance(item, dict):
+        return None
+    verification = item.get("verification")
+    tags = item.get("tags") or []
+    if (
+        isinstance(verification, dict)
+        and not verification.get("verified")
+        and (
+            "verification_pending" in tags
+            or verification.get("verification_source") == "save_first_pending_verification"
+        )
+    ):
+        return "verification_pending"
+    text_parts = [
+        item.get("name"),
+        item.get("company_name"),
+        item.get("display_name"),
+        item.get("sector"),
+        " ".join(str(tag) for tag in (item.get("theme_tags") or [])),
+    ]
+    text = " ".join(str(part or "") for part in text_parts).upper()
+    if "ETF" in text or "ETN" in text or "상장지수" in text:
+        return "etf_not_dart_corp"
+    return None
+
+
+def dart_excluded_ticker_entry(ticker: str, source: str, reason: str, item: dict | None = None) -> dict:
+    name = ""
+    if isinstance(item, dict):
+        name = str(item.get("name") or item.get("company_name") or item.get("display_name") or "").strip()
+    messages = {
+        "non_kr_ticker": "국내 6자리 종목코드가 아니어서 DART 법인 공시 감시에서 제외했습니다.",
+        "etf_not_dart_corp": "ETF/ETN/펀드는 OpenDART 법인 corp_code 대상이 아니어서 감시에서 제외했습니다.",
+        "verification_pending": "공식 티커 인증이 끝나지 않아 DART 법인 공시 감시에서 제외했습니다.",
+    }
+    return {
+        "ticker": ticker,
+        "name": name or None,
+        "source": source,
+        "reason": reason,
+        "message": messages.get(reason, "DART 법인 공시 감시 대상이 아니어서 제외했습니다."),
+    }
+
+
+def append_unique_dart_exclusion(runtime, excluded_tickers: list[dict], entry: dict) -> None:
+    key = (
+        runtime.normalize_ticker(str(entry.get("ticker") or "")),
+        str(entry.get("source") or ""),
+        str(entry.get("reason") or ""),
+    )
+    for existing in excluded_tickers:
+        existing_key = (
+            runtime.normalize_ticker(str(existing.get("ticker") or "")),
+            str(existing.get("source") or ""),
+            str(existing.get("reason") or ""),
+        )
+        if existing_key == key:
+            if not existing.get("name") and entry.get("name"):
+                existing["name"] = entry.get("name")
+            return
+    excluded_tickers.append(entry)
+
+
+def dart_watch_universe(runtime, settings) -> dict:
+    portfolio_tickers: set[str] = set()
+    interest_tickers: set[str] = set()
+    excluded_tickers: list[dict] = []
+    try:
+        store = runtime.read_portfolio_store(settings)
+        for portfolio in (store.get("portfolios") or {}).values():
+            if not isinstance(portfolio, dict):
+                continue
+            for holding in portfolio.get("holdings") or []:
+                ticker = runtime.normalize_ticker(str((holding or {}).get("ticker") or ""))
+                exclusion_reason = dart_watch_exclusion_reason(holding)
+                if fullmatch(r"\d{6}", ticker) and not exclusion_reason:
+                    portfolio_tickers.add(ticker)
+                elif ticker and ticker not in {"UNKNOWN", "CASH"}:
+                    append_unique_dart_exclusion(
+                        runtime,
+                        excluded_tickers,
+                        dart_excluded_ticker_entry(
+                            ticker,
+                            "portfolio",
+                            exclusion_reason or "non_kr_ticker",
+                            holding,
+                        ),
+                    )
+    except Exception:
+        pass
+    try:
+        interests = runtime.read_interest_list(settings)
+        for item in interests.get("tickers", []):
+            if not isinstance(item, dict):
+                continue
+            ticker = runtime.normalize_ticker(str(item.get("ticker") or ""))
+            exclusion_reason = dart_watch_exclusion_reason(item)
+            if fullmatch(r"\d{6}", ticker) and not exclusion_reason:
+                interest_tickers.add(ticker)
+            elif ticker and ticker not in {"UNKNOWN", "CASH"}:
+                append_unique_dart_exclusion(
+                    runtime,
+                    excluded_tickers,
+                    dart_excluded_ticker_entry(
+                        ticker,
+                        "interest",
+                        exclusion_reason or "non_kr_ticker",
+                        item,
+                    ),
+                )
+    except Exception:
+        pass
+    target_tickers = sorted(portfolio_tickers | interest_tickers)
+    return {
+        "target_tickers": target_tickers,
+        "portfolio_tickers": sorted(portfolio_tickers),
+        "interest_tickers": sorted(interest_tickers),
+        "excluded_tickers": excluded_tickers,
+        "target_count": len(target_tickers),
+        "portfolio_count": len(portfolio_tickers),
+        "interest_count": len(interest_tickers),
+    }
+
+
+def dart_watch_tickers(runtime, settings) -> list[str]:
+    return list(dart_watch_universe(runtime, settings).get("target_tickers") or [])
 
 
 def dart_daily_check_status(runtime, cache: dict, settings) -> dict:
