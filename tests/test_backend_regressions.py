@@ -6792,6 +6792,54 @@ class DartFilingStorageTests(unittest.TestCase):
         self.assertIn("005930", rag_calls[0]["full_text"])
 
 
+
+class DartFilingMetadataModuleTests(unittest.TestCase):
+    def test_dart_metadata_helpers_classify_render_and_cache_filing(self):
+        from research_os import dart_filing_metadata
+
+        filing = {
+            "corp_name": "삼성전자",
+            "report_name": "주요사항보고서",
+            "receipt_date": "20260613",
+            "rcept_no": "202606130001",
+            "source_url": "https://dart.example.test/filing",
+        }
+
+        importance, action, tags = dart_filing_metadata.dart_filing_importance(filing["report_name"])
+        markdown = dart_filing_metadata.render_dart_filing_markdown("005930", filing, importance, action)
+
+        self.assertEqual(importance, "높음")
+        self.assertIn("risk", tags)
+        self.assertEqual(dart_filing_metadata.dart_filing_cache_key("005930", filing), "005930:202606130001")
+        self.assertIn("삼성전자", markdown)
+        self.assertIn("주요사항보고서", markdown)
+
+    def test_dart_metadata_helpers_classify_retryable_and_mapping_errors(self):
+        from research_os import dart_filing_metadata
+
+        retryable = dart_filing_metadata.classify_dart_filing_refresh_error(TimeoutError("OpenDART timeout"))
+        mapping = dart_filing_metadata.classify_dart_filing_refresh_error(Exception("corp_code를 찾지 못했습니다: 123456"))
+
+        self.assertEqual(retryable["category"], "transient_provider_error")
+        self.assertTrue(retryable["retryable"])
+        self.assertEqual(mapping["category"], "needs_mapping_review")
+        self.assertFalse(mapping["retryable"])
+
+    def test_dart_metadata_helpers_derive_periodic_quarter_neighbors(self):
+        from research_os import dart_filing_metadata
+
+        self.assertEqual(
+            dart_filing_metadata.dart_periodic_quarter_label("분기보고서 (2026.03)", "20260515"),
+            "FY2026 Q1",
+        )
+        self.assertEqual(
+            dart_filing_metadata.dart_periodic_quarter_label("사업보고서", "20260331"),
+            "FY2025 Annual",
+        )
+        self.assertEqual(
+            dart_filing_metadata.korean_earnings_neighbor_dates("FY2026 Q2"),
+            ("2026-05-15", "2026-11-14"),
+        )
 class DartFilingWatchTests(unittest.TestCase):
     def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
         import research_os_main as main
