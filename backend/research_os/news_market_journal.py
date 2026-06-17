@@ -638,6 +638,29 @@ def hydrate_market_close_auto_focus(runtime, entry, settings):
     )
     return entry.model_copy(update=updates)
 
+
+
+def infer_policy_market_regime(runtime, market_state: str, settings) -> tuple[str, list[str]]:
+    text = clean_market_summary_text(market_state)
+    if text:
+        sentiment, risk_level, regime = infer_market_close_sentiment(text)
+        tags = infer_market_tags(text)
+        return f"{regime} / 심리 {sentiment} / 리스크 {risk_level}", tags
+
+    store = runtime.read_market_close_journal(settings)
+    entries = [
+        runtime.MarketCloseEntry.model_validate(item)
+        for item in store.get("entries", [])
+        if isinstance(item, dict)
+    ]
+    if not entries:
+        return "누적 시장 상태 부족", []
+    latest = sorted(entries, key=lambda item: (item.session_date, item.updated_at or ""), reverse=True)[0]
+    return (
+        f"{latest.market} 최근 시장일지: {latest.regime} / 심리 {latest.sentiment} / 리스크 {latest.risk_level}",
+        latest.tags,
+    )
+
 class NewsMarketJournalRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
 

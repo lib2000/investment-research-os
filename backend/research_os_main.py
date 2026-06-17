@@ -5942,26 +5942,11 @@ def render_market_close_markdown(
     )
 
 def infer_policy_market_regime(market_state: str, settings: Settings) -> tuple[str, list[str]]:
-    text = clean_market_summary_text(market_state)
-    if text:
-        sentiment, risk_level, regime = infer_market_close_sentiment(text)
-        tags = infer_market_tags(text)
-        return f"{regime} / 심리 {sentiment} / 리스크 {risk_level}", tags
-
-    store = read_market_close_journal(settings)
-    entries = [
-        MarketCloseEntry.model_validate(item)
-        for item in store.get("entries", [])
-        if isinstance(item, dict)
-    ]
-    if not entries:
-        return "누적 시장 상태 부족", []
-    latest = sorted(entries, key=lambda item: (item.session_date, item.updated_at or ""), reverse=True)[0]
-    return (
-        f"{latest.market} 최근 시장일지: {latest.regime} / 심리 {latest.sentiment} / 리스크 {latest.risk_level}",
-        latest.tags,
+    return news_market_journal.infer_policy_market_regime(
+        _news_market_journal_runtime(),
+        market_state,
+        settings,
     )
-
 
 def build_policy_state_features(
     holdings: list[PortfolioHolding],
