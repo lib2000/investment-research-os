@@ -3187,6 +3187,27 @@ class FileSpreadsheetExtractionModuleTests(unittest.TestCase):
         self.assertIn("2026\t1234", extracted)
         self.assertIn("1개 시트", note)
 
+class FileExtractionProfileModuleTests(unittest.TestCase):
+    def test_file_extraction_profile_scores_table_and_ocr_context(self):
+        from research_os import file_extraction_profile
+
+        profile = file_extraction_profile.build_file_extraction_profile(
+            "Excel 문서",
+            "매출\t100\n영업이익\t20\nFCF\t12",
+            "XLSX 표 데이터 추출 완료",
+            [],
+        )
+        ocr_profile = file_extraction_profile.build_file_extraction_profile(
+            "PDF",
+            "OCR 본문 " * 400,
+            "OCR 추출 완료",
+            [],
+        )
+
+        self.assertEqual(profile["analysis_readiness"], "보통")
+        self.assertIn("표형 데이터 감지", profile["quality_drivers"])
+        self.assertTrue(ocr_profile["used_ocr"])
+        self.assertLessEqual(ocr_profile["recommended_quality"], 0.82)
 
 class FileExtractionTests(unittest.TestCase):
     def test_ocr_runtime_status_exposes_processing_limits(self):
