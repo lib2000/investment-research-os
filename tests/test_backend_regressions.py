@@ -2309,6 +2309,73 @@ class PortfolioRiskStorageTests(unittest.TestCase):
         self.assertEqual(save_calls[1]["manifest_entry"]["risk_profile"], "balanced")
 
 
+class PortfolioPolicyModuleTests(unittest.TestCase):
+    def test_policy_adjustment_applies_risk_limits(self):
+        from research_os import portfolio_policy
+        from research_os.models import PortfolioHolding
+
+        adjustment = portfolio_policy.policy_adjustment_for_holding(
+            PortfolioHolding(
+                ticker="PL",
+                weight=0.3,
+                unrealized_return=-0.22,
+                sector="Space",
+                theme_tags=["AI", "Space"],
+            ),
+            max_position_weight=0.2,
+            risk_profile="balanced",
+            market_tags=["AI"],
+        )
+
+        self.assertEqual(adjustment.ticker, "PL")
+        self.assertEqual(adjustment.action, "리스크 축소")
+        self.assertLessEqual(adjustment.suggested_weight, 0.2)
+        self.assertIn("손실 확대", adjustment.rationale)
+
+    def test_run_policy_builds_response_without_saving(self):
+        from research_os import portfolio_policy
+        from research_os.models import (
+            PortfolioHolding,
+            ReinforcementPortfolioOptimizationRequest,
+            SavedPortfolio,
+        )
+
+        holding = PortfolioHolding(
+            ticker="OTLY",
+            weight=0.05,
+            unrealized_return=0.12,
+            sector="Consumer",
+            theme_tags=["AI", "소비"],
+        )
+        runtime = SimpleNamespace(
+            SavedPortfolio=SavedPortfolio,
+            infer_policy_market_regime=lambda market_state, settings: ("상승/위험중립", ["AI"]),
+            normalize_portfolio_holdings=lambda holdings, portfolio_value: (list(holdings), 1000.0),
+            portfolio_risk_storage_runtime=lambda: SimpleNamespace(),
+            portfolio_store_key=lambda value: str(value).strip().upper(),
+            read_portfolio_store=lambda settings: {},
+        )
+        request = ReinforcementPortfolioOptimizationRequest(
+            portfolio_name="test",
+            holdings=[holding],
+            market_state="AI 강세",
+            max_position_weight=0.2,
+            save_result=False,
+        )
+
+        response = portfolio_policy.run_reinforcement_portfolio_policy(
+            runtime,
+            request,
+            SimpleNamespace(research_vault_dir=str(PROJECT_ROOT / ".test-tmp")),
+        )
+
+        self.assertEqual(response.learning_mode, "offline_policy_scaffold")
+        self.assertFalse(response.saved_to_research_memory)
+        self.assertIn("시장 상태: 상승/위험중립", response.state_features)
+        self.assertEqual(response.allocation_adjustments[0].ticker, "OTLY")
+        self.assertEqual(response.allocation_adjustments[0].action, "관찰 후 증액 후보")
+
+
 class AnalysisModuleStorageTests(unittest.TestCase):
     def test_analysis_module_storage_saves_analysis_module_manifest_payloads(self):
         from research_os import analysis_module_storage
