@@ -228,6 +228,152 @@ def recent_activity_target_terms(runtime, settings) -> dict:
         "ticker_set": set(tickers),
     }
 
+def build_recent_weekly_research_brief(runtime, settings, days: int = 7, refresh_if_due: bool = True) -> dict:
+    normalized_days = max(1, min(int(days or 7), 30))
+    cutoff = recent_activity_cutoff(runtime.current_storage_date(), normalized_days)
+    target_terms = runtime.recent_activity_target_terms(settings)
+    if refresh_if_due and settings.dart_filing_auto_refresh and settings.dart_api_key:
+        cache = runtime.read_dart_filing_cache(settings)
+        if runtime.dart_daily_check_status(cache, settings).get("due"):
+            try:
+                runtime.refresh_dart_filing_watch(settings, force=False, save_result=True)
+            except Exception:
+                pass
+    dart_cache = runtime.read_dart_filing_cache(settings)
+    dart_items = []
+    for entry in (dart_cache.get("entries") or {}).values():
+        item = compact_recent_dart_entry(entry if isinstance(entry, dict) else {})
+        item_date = _parse_iso_date(item.get("date")) if item else None
+        if item and item_date and item_date >= cutoff:
+            dart_items.append(item)
+    vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
+    manifest_items = []
+    for entry in runtime.read_manifest(vault_dir):
+        if not isinstance(entry, dict):
+            continue
+        if is_public_ir_sec_manifest_entry(entry):
+            item = compact_recent_public_ir_sec_entry(entry, target_terms)
+        else:
+            item = compact_recent_manifest_entry(entry, target_terms)
+        item_date = _parse_iso_date(item.get("date")) if item else None
+        if item and item_date and item_date >= cutoff:
+            if item.get("category") == "filing" and item.get("source_type") == "official_filing":
+                continue
+            manifest_items.append(item)
+    all_items = dedupe_recent_activity_items(dart_items + manifest_items)
+    all_items.sort(key=lambda item: (item.get("date") or "", item.get("category") or ""), reverse=True)
+    recommendation_evidence_index = runtime.daily_recommendation_evidence_link_index(settings)
+    annotate_recent_weekly_recommendation_links(all_items, recommendation_evidence_index)
+    annotate_recent_weekly_navigation_hints(all_items)
+    filings = [item for item in all_items if item.get("category") == "filing"]
+    reports = [item for item in all_items if item.get("category") == "report"]
+    customs_exports = [item for item in all_items if item.get("category") == "customs_export"]
+    market_context = [item for item in all_items if item.get("category") == "market_context"]
+    public_ir_sec_items = [item for item in all_items if item.get("category") == "public_ir_sec"]
+    usable_public_ir_sec_items = [item for item in public_ir_sec_items if item.get("usable_for_recommendation")]
+    blocked_public_ir_sec_items = [item for item in public_ir_sec_items if item.get("needs_body_copy") or not item.get("usable_for_recommendation")]
+    important_filings = sorted(
+        [item for item in filings if recent_filing_priority(item) >= 50],
+        key=lambda item: (recent_filing_priority(item), item.get("date") or ""),
+        reverse=True,
+    )
+    ownership_filings = recent_ownership_filing_items(important_filings)
+    display_reports = sorted(
+        [
+            {**item, "display_priority": recent_report_display_priority(item)}
+            for item in reports
+            if recent_report_display_priority(item) > 0
+        ],
+        key=lambda item: (int(item.get("display_priority") or 0), item.get("date") or ""),
+        reverse=True,
+    )
+    recommendation_linked_items = sorted(
+        [item for item in all_items if item.get("used_in_recommendation")],
+        key=lambda item: (1 if item.get("used_in_latest_recommendation") else 0, item.get("date") or "", item.get("ticker") or ""),
+        reverse=True,
+    )
+    counts = {
+        "filings": len(filings),
+        "important_filings": len(important_filings),
+        "ownership_filings": len(ownership_filings),
+        "reports": len(reports),
+        "display_reports": len(display_reports),
+        "hidden_low_signal_reports": max(0, len(reports) - len(display_reports)),
+        "customs_exports": len(customs_exports),
+        "market_context": len(market_context),
+        "public_ir_sec": len(public_ir_sec_items),
+        "public_ir_sec_usable": len(usable_public_ir_sec_items),
+        "public_ir_sec_blocked": len(blocked_public_ir_sec_items),
+        "public_ir_sec_needs_body": sum(1 for item in public_ir_sec_items if item.get("needs_body_copy")),
+        "recommendation_evidence_linked": sum(1 for item in all_items if item.get("used_in_recommendation")),
+        "latest_recommendation_evidence_linked": sum(1 for item in all_items if item.get("used_in_latest_recommendation")),
+        "total": len(all_items),
+    }
+    category_groups = build_recent_weekly_category_groups(
+        ownership_filings=ownership_filings,
+        important_filings=important_filings,
+        display_reports=display_reports,
+        public_ir_sec_items=public_ir_sec_items,
+        customs_exports=customs_exports,
+        market_context=market_context,
+    )
+    target_digest = build_recent_weekly_target_digest(
+        sources=[
+            ("filing", important_filings),
+            ("report", display_reports),
+            ("public_ir_sec", public_ir_sec_items),
+            ("customs", customs_exports),
+            ("market", market_context),
+        ]
+    )
+    daily_watch = {
+        "dart": runtime.dart_daily_check_status(dart_cache, settings),
+        "source_schedule": runtime.build_external_source_schedule_status(settings),
+    }
+    payload = {
+        "status": "success",
+        "module": "recent_weekly_research_brief",
+        "as_of": runtime.current_storage_timestamp(),
+        "period_days": normalized_days,
+        "period_start": cutoff.isoformat(),
+        "period_end": runtime.current_storage_date().isoformat(),
+        "target_scope": {
+            "holding_and_interest_ticker_count": len(target_terms.get("tickers") or []),
+            "company_names": target_terms.get("names") or [],
+            "sectors": target_terms.get("sectors") or [],
+        },
+        "daily_watch": daily_watch,
+        "watch_summary": recent_watch_summary(daily_watch, counts),
+        "recommendation_evidence_summary": {
+            "latest_recommendation_date": recommendation_evidence_index.get("latest_recommendation_date"),
+            "linked_record_count": recommendation_evidence_index.get("linked_record_count"),
+            "latest_linked_record_count": recommendation_evidence_index.get("latest_linked_record_count"),
+            "recent_weekly_linked_item_count": counts.get("recommendation_evidence_linked"),
+            "latest_recent_weekly_linked_item_count": counts.get("latest_recommendation_evidence_linked"),
+        },
+        "counts": counts,
+        "category_groups": category_groups,
+        "target_digest": target_digest,
+        "recommendation_linked_items": recommendation_linked_items[:12],
+        "important_filings": important_filings[:15],
+        "ownership_filings": ownership_filings[:10],
+        "filings": filings[:30],
+        "display_reports": display_reports[:20],
+        "reports": reports[:30],
+        "public_ir_sec_items": public_ir_sec_items[:20],
+        "customs_exports": customs_exports[:20],
+        "market_context": market_context[:20],
+        "items": all_items[:80],
+        "next_actions": [
+            "DART 점검 필요 상태이면 공시 재점검을 실행하세요.",
+            "최근 리포트는 보유/관심 종목과 연결된 항목만 우선 검토하세요.",
+            "공개 IR/SEC 자료는 본문 추출이 정상인 보유/관심 종목 연결 항목만 추천 점수에 반영하세요.",
+            "URL-only 공개 IR/SEC 자료는 최근 1주 화면에 표시하되 본문 보강 전에는 추천 점수 가산에서 제외됩니다.",
+            "관세청 수출입 자료는 실제 수치가 있는 경우에만 저장/RAG에 반영됩니다.",
+        ],
+    }
+    return runtime.repair_mojibake_payload(payload)
+
 def recent_activity_cutoff(current_date: date, days: int) -> date:
     return current_date - timedelta(days=max(1, int(days or 7)) - 1)
 
