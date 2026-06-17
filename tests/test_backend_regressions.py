@@ -3254,6 +3254,56 @@ class DailyRecommendationEvidenceModuleTests(unittest.TestCase):
         self.assertEqual(claims, ["공시 확인", "RAG 연결"])
         self.assertEqual(daily_recommendation_evidence.normalize_recommendation_ticker(" 003230 "), "003230")
 
+
+class DailyRecommendationRecentModuleTests(unittest.TestCase):
+    def test_daily_recommendation_recent_module_indexes_and_renders_weekly_evidence(self):
+        from research_os import daily_recommendation_recent
+
+        recent_weekly = {
+            "important_filings": [
+                {
+                    "ticker": "003230",
+                    "title": "삼양식품 공시",
+                    "relative_path": "research_vault/003230/filing.md",
+                    "category": "filing",
+                    "recommendation_usage_summary": "공시 확인",
+                    "date": "2026-06-18",
+                }
+            ],
+            "category_groups": [
+                {
+                    "key": "public_ir_sec",
+                    "label": "공개 IR/SEC",
+                    "tickers": ["003230"],
+                    "count": 3,
+                    "visible_count": 2,
+                    "ticker_count": 1,
+                    "items": [{"ticker": "003230", "summary": "수출 성장 자료"}],
+                    "quality_summary": {
+                        "usable_for_recommendation": 2,
+                        "needs_body_copy": 1,
+                        "source_families": {"sec.gov": 2},
+                        "reliability_labels": {"신뢰 가능": 2},
+                    },
+                }
+            ],
+        }
+
+        index = daily_recommendation_recent.daily_recommendation_recent_weekly_index(recent_weekly)
+        document = daily_recommendation_recent.daily_recommendation_recent_item_evidence_document(
+            recent_weekly["important_filings"][0]
+        )
+        group_text = daily_recommendation_recent.daily_recommendation_weekly_group_evidence_text(
+            index["groups_by_ticker"]["003230"][0]
+        )
+
+        self.assertEqual(index["items_by_ticker"]["003230"][0]["category"], "filing")
+        self.assertEqual(document["citation_label"], "최근 1주 추천 영향 자료")
+        self.assertEqual(document["matched_claims"], ["공시 확인"])
+        self.assertIn("공개 IR/SEC 3건", group_text)
+        self.assertIn("추천 가능 2건", group_text)
+
+
 class ThesisImpactModuleTests(unittest.TestCase):
     def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
         from research_os import thesis_impact
