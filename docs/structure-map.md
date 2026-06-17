@@ -71,6 +71,7 @@
 | `backend\research_os\file_attachment_utils.py` | 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper | `FileAttachmentUtilsModuleTests` |
 | `backend\research_os\file_image_metadata.py` | PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper | `FileImageMetadataModuleTests` |
 | `backend\research_os\file_spreadsheet_extraction.py` | XLSX shared string, inline string, 셀 좌표 기반 표 텍스트 추출 helper | `FileSpreadsheetExtractionModuleTests` |
+| `backend\research_os\file_text_extraction.py` | 텍스트/CSV/TSV 첨부 디코딩과 표 미리보기 helper | `FileExtractionTests` |
 | `backend\research_os\file_extraction_profile.py` | 첨부 본문 추출 결과의 품질/분석 준비도 profile helper | `FileExtractionProfileModuleTests` |
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
 | `backend\research_os\kcif_report_parsing.py` | KCIF 목록 HTML에서 보고서 메타데이터만 추출하는 parser | `KcifReportsWatchTests` |

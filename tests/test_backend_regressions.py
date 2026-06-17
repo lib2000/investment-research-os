@@ -3297,6 +3297,15 @@ class FileExtractionProfileModuleTests(unittest.TestCase):
         self.assertLessEqual(ocr_profile["recommended_quality"], 0.82)
 
 class FileExtractionTests(unittest.TestCase):
+    def test_file_text_extraction_extracts_csv_preview(self):
+        from research_os.file_text_extraction import extract_text_like_file
+
+        text, note = extract_text_like_file("종목,점수\nA,10\nB,20\n".encode("utf-8-sig"), "scores.csv")
+
+        self.assertIn("종목\t점수", text)
+        self.assertIn("A\t10", text)
+        self.assertIn("CSV 표 텍스트 추출 완료", note)
+
     def test_ocr_runtime_status_exposes_processing_limits(self):
         from research_os.file_extraction import ocr_runtime_status
 
