@@ -344,6 +344,28 @@ def attach_customs_total_trend_diagnostic(
         return {**snapshot, "warnings": warnings[:5]}
 
 
+def customs_total_trend_status_payload(
+    settings,
+    *,
+    start_yymm: str | None = None,
+    end_yymm: str | None = None,
+    total_trend_fetcher=fetch_customs_total_trend_status,
+) -> dict:
+    default_start, default_end, release_cycle = customs_default_period()
+    normalized_start = start_yymm or default_start
+    normalized_end = end_yymm or default_end
+    status = total_trend_fetcher(
+        settings,
+        start_yymm=normalized_start,
+        end_yymm=normalized_end,
+    )
+    return {
+        "module": "korea_customs_trade_total_trend_status",
+        "release_cycle": release_cycle,
+        "storage_policy": "진단 전용입니다. 이 API 응답은 research_vault/CUSTOMS에 저장하지 않습니다.",
+        **status,
+    }
+
 def should_check_customs_trade_today(settings, selected_date: date | None = None, current_date_func=current_storage_date) -> bool:
     today = selected_date or current_date_func()
     try:

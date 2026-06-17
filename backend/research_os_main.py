@@ -26,6 +26,7 @@ from research_os.customs_trade import (
     build_customs_trade_snapshot as _build_customs_trade_snapshot,
     build_daily_customs_trade_reference as _build_daily_customs_trade_reference,
     customs_default_period as _customs_default_period,
+    customs_total_trend_status_payload as _customs_total_trend_status_payload,
     render_customs_trade_markdown as _render_customs_trade_markdown,
     safe_customs_number as _safe_customs_number,
     save_customs_trade_snapshot as _save_customs_trade_snapshot,
@@ -13519,20 +13520,12 @@ def read_customs_total_trend_status(
     end_yymm: str | None = Query(default=None),
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    default_start, default_end, release_cycle = customs_default_period()
-    start_yymm = start_yymm or default_start
-    end_yymm = end_yymm or default_end
-    status = fetch_customs_total_trend_status(
+    return _customs_total_trend_status_payload(
         settings,
         start_yymm=start_yymm,
         end_yymm=end_yymm,
+        total_trend_fetcher=fetch_customs_total_trend_status,
     )
-    return {
-        "module": "korea_customs_trade_total_trend_status",
-        "release_cycle": release_cycle,
-        "storage_policy": "진단 전용입니다. 이 API 응답은 research_vault/CUSTOMS에 저장하지 않습니다.",
-        **status,
-    }
 
 
 @app.post(
