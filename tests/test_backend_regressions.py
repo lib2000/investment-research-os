@@ -3394,6 +3394,65 @@ class DailyRecommendationRecentModuleTests(unittest.TestCase):
         self.assertIn("공개 IR/SEC 3건", group_text)
         self.assertIn("추천 가능 2건", group_text)
 
+class DailyRecommendationTrackingModuleTests(unittest.TestCase):
+    def test_daily_recommendation_tracking_builds_milestones_and_summary(self):
+        from datetime import date
+
+        from research_os import daily_recommendation_tracking
+
+        milestones = daily_recommendation_tracking.build_tracking_milestones(date(2026, 6, 18))
+        summary = daily_recommendation_tracking.summarize_tracking_performance(
+            [
+                {
+                    "record_id": "20260618-1-003230",
+                    "company_name": "삼양식품",
+                    "ticker": "003230",
+                    "rank": 1,
+                    "recommendation_date": "2026-06-18",
+                    "baseline_price": 100.0,
+                    "tracking_milestones": [
+                        {
+                            "key": "7d",
+                            "label": "추천 후 1주일",
+                            "target_date": "2026-06-25",
+                            "status": "complete",
+                            "price": 112.0,
+                            "price_change": 12.0,
+                            "price_change_pct": 0.12,
+                            "investment_situation": "상승",
+                        },
+                        {"key": "15d", "status": "pending"},
+                    ],
+                },
+                {
+                    "record_id": "20260618-2-071050",
+                    "ticker": "071050",
+                    "rank": 2,
+                    "recommendation_date": "2026-06-18",
+                    "baseline_price": 50.0,
+                    "tracking_milestones": [
+                        {
+                            "key": "7d",
+                            "label": "추천 후 1주일",
+                            "target_date": "2026-06-25",
+                            "status": "complete",
+                            "price": 45.0,
+                            "price_change": -5.0,
+                            "price_change_pct": -0.1,
+                        }
+                    ],
+                },
+            ]
+        )
+
+        self.assertEqual(milestones[0]["target_date"], "2026-06-25")
+        self.assertEqual(milestones[0]["status"], "pending")
+        self.assertEqual(summary["total_milestones"], 3)
+        self.assertEqual(summary["complete_count"], 2)
+        self.assertEqual(summary["pending_count"], 1)
+        self.assertEqual(summary["best"]["ticker"], "003230")
+        self.assertEqual(summary["worst"]["ticker"], "071050")
+        self.assertIn("강한 상승", daily_recommendation_tracking.investment_situation(0.16))
 
 class ThesisImpactModuleTests(unittest.TestCase):
     def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
