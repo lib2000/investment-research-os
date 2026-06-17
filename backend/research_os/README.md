@@ -60,6 +60,7 @@
 - `rag_memory_utils.py`: RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper
 - `rag_synthesis.py`: 전체 저장 데이터 검색 결과 합성, Markdown 보고서 렌더링, 투자 논거 스냅샷 helper
 - `recent_activity.py`: 최근 1주 자료 compact, DART/IR/SEC/추천 근거 링크, 저장 데이터 탐색 힌트 helper
+- `recent_activity_groups.py`: 최근 1주 자료 category group, 출처 family, 타깃 digest 계산 helper
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
 - `research_memory_files.py`: 저장 리포트 목록/카드 조립, manifest/sidecar 경로 해석, 마크다운 tail section 갱신 helper

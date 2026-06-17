@@ -3454,6 +3454,45 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
         self.assertEqual(summary["worst"]["ticker"], "071050")
         self.assertIn("강한 상승", daily_recommendation_tracking.investment_situation(0.16))
 
+
+class RecentActivityGroupsModuleTests(unittest.TestCase):
+    def test_recent_activity_groups_build_quality_summary_and_digest(self):
+        from research_os import recent_activity_groups
+
+        items = [
+            {
+                "ticker": "PL",
+                "company_name": "Planet Labs",
+                "related_targets": ["Space"],
+                "source_provider": "https://ir.planet.com/releases",
+                "source_reliability": "공식 IR",
+                "usable_for_recommendation": True,
+                "used_in_recommendation": True,
+            },
+            {
+                "ticker": "JOBY",
+                "company_name": "Joby Aviation",
+                "source_provider": "www.example.co.kr/path",
+                "needs_body_copy": True,
+                "quality_status": "보강 필요",
+            },
+        ]
+
+        group = recent_activity_groups.recent_weekly_category_group("공개 IR/SEC", "public_ir_sec", items, limit=1)
+        digest = recent_activity_groups.build_recent_weekly_target_digest(
+            sources=[("public_ir_sec", items), ("market", [{"summary": "macro"}])]
+        )
+
+        self.assertEqual(recent_activity_groups.recent_weekly_source_family("ir.jobyaviation.com"), "jobyaviation.com")
+        self.assertEqual(group["visible_count"], 1)
+        self.assertEqual(group["quality_summary"]["usable_for_recommendation"], 1)
+        self.assertEqual(group["quality_summary"]["needs_body_copy"], 1)
+        self.assertEqual(group["quality_summary"]["source_families"]["planet.com"], 1)
+        self.assertEqual(group["quality_summary"]["source_families"]["example.co.kr"], 1)
+        self.assertEqual(digest[0]["target"], "Joby Aviation")
+        self.assertTrue(any(item["target"] == "시장/섹터 공통" for item in digest))
+
+
 class ThesisImpactModuleTests(unittest.TestCase):
     def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
         from research_os import thesis_impact
