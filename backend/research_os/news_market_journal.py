@@ -540,6 +540,104 @@ tags: {", ".join(entry.tags)}
 {entry.raw_summary}
 """
 
+
+
+def build_market_close_entry(runtime, request, settings, attachment_info: dict | None = None):
+    market = runtime.normalize_market_code(request.market)
+    session_date = request.session_date or runtime.current_storage_date().isoformat()
+    raw_summary = clean_market_summary_text(request.raw_summary)
+    sentiment, risk_level, regime = infer_market_close_sentiment(raw_summary)
+    tags = infer_market_tags(raw_summary)
+    market_index_snapshot = (
+        runtime.fetch_naver_korea_index_snapshot(settings) if market == "KR" else []
+    )
+    key_drivers = summarize_market_lines(raw_summary)
+    sector_implications = build_sector_implications(raw_summary, tags)
+    auto_utilization_focus = build_auto_market_utilization_focus(
+        runtime,
+        market=market,
+        tags=tags,
+        sentiment=sentiment,
+        risk_level=risk_level,
+        regime=regime,
+        settings=settings,
+    )
+    interest_implications = build_market_interest_implications(
+        runtime,
+        raw_summary=raw_summary,
+        tags=tags,
+        settings=settings,
+    )
+    portfolio_actions = build_market_portfolio_actions(sentiment, risk_level, regime)
+    next_session_watch = build_market_next_watch(tags, market)
+    now = runtime.current_storage_timestamp()
+    entry_id = f"{market}-{session_date}"
+    entry = runtime.MarketCloseEntry(
+        entry_id=entry_id,
+        market=market,
+        session_date=session_date,
+        raw_summary=raw_summary,
+        source_origin=str(request.source_origin or "manual").strip() or "manual",
+        source_provider=str(request.source_provider or "").strip() or None,
+        source_title=str(request.source_title or "").strip() or None,
+        sentiment=sentiment,
+        risk_level=risk_level,
+        regime=regime,
+        auto_utilization_focus=auto_utilization_focus,
+        interest_implications=interest_implications,
+        market_index_snapshot=market_index_snapshot,
+        key_drivers=key_drivers,
+        sector_implications=sector_implications,
+        portfolio_actions=portfolio_actions,
+        next_session_watch=next_session_watch,
+        tags=tags,
+        attachment=attachment_info,
+        created_at=now,
+        updated_at=now,
+    )
+    store = runtime.read_market_close_journal(settings)
+    existing_entries = [
+        hydrate_market_close_auto_focus(runtime, runtime.MarketCloseEntry.model_validate(item), settings)
+        for item in store.get("entries", [])
+        if isinstance(item, dict)
+    ]
+    prior_without_same_id = [
+        item for item in existing_entries if item.entry_id != entry_id
+    ]
+    patterns, regime_summary = cumulative_market_patterns(prior_without_same_id + [entry], market)
+    return entry, prior_without_same_id, patterns, regime_summary
+
+
+def hydrate_market_close_auto_focus(runtime, entry, settings):
+    updates: dict[str, object] = {}
+    cleaned_summary = clean_market_summary_text(entry.raw_summary)
+    if cleaned_summary and cleaned_summary != entry.raw_summary:
+        updates["raw_summary"] = cleaned_summary
+        updates["key_drivers"] = summarize_market_lines(cleaned_summary)
+    if not entry.interest_implications:
+        updates["interest_implications"] = build_market_interest_implications(
+            runtime,
+            raw_summary=cleaned_summary or entry.raw_summary,
+            tags=entry.tags,
+            settings=settings,
+        )
+    if entry.market == "KR" and not entry.market_index_snapshot:
+        updates["market_index_snapshot"] = runtime.fetch_naver_korea_index_snapshot(settings)
+    if entry.auto_utilization_focus:
+        if updates:
+            return entry.model_copy(update=updates)
+        return entry
+    updates["auto_utilization_focus"] = build_auto_market_utilization_focus(
+        runtime,
+        market=entry.market,
+        tags=entry.tags,
+        sentiment=entry.sentiment,
+        risk_level=entry.risk_level,
+        regime=entry.regime,
+        settings=settings,
+    )
+    return entry.model_copy(update=updates)
+
 class NewsMarketJournalRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
 
