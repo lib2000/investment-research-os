@@ -3189,6 +3189,38 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertEqual(upsert_calls[0]["entry"]["date"], "2026-06-13")
         self.assertEqual(upsert_calls[0]["entry"]["source"], "test")
         self.assertEqual(upsert_calls[0]["full_text"], "# Note")
+class DailyRecommendationEvidenceModuleTests(unittest.TestCase):
+    def test_daily_recommendation_evidence_normalizes_and_matches_claims(self):
+        from research_os import daily_recommendation_evidence
+
+        documents = daily_recommendation_evidence.normalize_evidence_documents(
+            [
+                {
+                    "source_relative_path": "research_vault/003230/report.md",
+                    "title": "Team report",
+                    "matched_claims": ["RAG 연결", "", "공시 확인", "추가"],
+                },
+                {
+                    "relative_path": "research_vault/003230/report.md",
+                    "title": "duplicate",
+                },
+            ]
+        )
+        claims = daily_recommendation_evidence.evidence_document_claims(
+            {
+                "report_type": "dart-filing-watch",
+                "source_type": "filing",
+                "title": "삼양식품 공시",
+                "source_relative_path": "research_vault/003230/dart.md",
+            },
+            ["공시 확인", "RAG 연결", "무관한 단어"],
+        )
+
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]["matched_claims"], ["RAG 연결", "공시 확인", "추가"])
+        self.assertEqual(claims, ["공시 확인", "RAG 연결"])
+        self.assertEqual(daily_recommendation_evidence.normalize_recommendation_ticker(" 003230 "), "003230")
+
 class ThesisImpactModuleTests(unittest.TestCase):
     def test_thesis_impact_module_scores_positive_evidence_and_renders_markdown(self):
         from research_os import thesis_impact
