@@ -2376,6 +2376,60 @@ class PortfolioPolicyModuleTests(unittest.TestCase):
         self.assertEqual(response.allocation_adjustments[0].action, "관찰 후 증액 후보")
 
 
+class AnalysisContextModuleTests(unittest.TestCase):
+    def test_collect_workspace_context_adds_reports_snapshot_and_rag(self):
+        from research_os import analysis_context
+        from research_os.models import InjectedDataPoint
+
+        with TemporaryDirectory() as temp_dir:
+            vault_dir = Path(temp_dir)
+            ticker_dir = vault_dir / "OTLY"
+            ticker_dir.mkdir(parents=True)
+            (ticker_dir / "OTLY-test.md").write_text("memo", encoding="utf-8")
+
+            def fake_search(_vault_dir, ticker, limit, refresh_index):
+                if ticker == "OTLY":
+                    return {
+                        "documents": [
+                            {
+                                "source_date": "2026-06-18",
+                                "report_type": "memo",
+                                "summary": "RAG summary",
+                                "source_relative_path": "research_vault/OTLY/memo.md",
+                                "confidence": 0.9,
+                            }
+                        ]
+                    }
+                if ticker == "MARKET":
+                    return {"documents": [{"source_date": "2026-06-18", "summary": "market context"}]}
+                return {"documents": []}
+
+            runtime = SimpleNamespace(
+                current_storage_date=lambda: date(2026, 6, 18),
+                read_ticker_thesis_snapshot=lambda _vault_dir, _ticker: {
+                    "thesis_summary": "thesis",
+                    "bull_triggers": ["margin"],
+                    "bear_triggers": ["demand"],
+                    "invalidation_conditions": ["cash"],
+                    "source_date": "2026-06-17",
+                    "source_relative_path": "research_vault/OTLY/thesis.json",
+                    "confidence": 0.8,
+                },
+                search_research_memory_documents=fake_search,
+            )
+            provided = [InjectedDataPoint(source_type="user_memo", label="seed", value="seed", confidence=1.0)]
+
+            result = analysis_context.collect_workspace_context(runtime, "OTLY", vault_dir, provided)
+
+        labels = [item.label for item in result]
+        self.assertEqual(labels[0], "seed")
+        self.assertIn("linked_workspace_reports", labels)
+        self.assertIn("latest_thesis_snapshot", labels)
+        self.assertIn("rag_memory_document_1", labels)
+        self.assertIn("rag_cross_scope_market", labels)
+        self.assertTrue(any("저장 리포트 1개" in item.value for item in result))
+
+
 class AnalysisLabelsModuleTests(unittest.TestCase):
     def test_analysis_labels_translate_values_and_build_keys(self):
         from research_os import analysis_labels

@@ -94,7 +94,7 @@ from research_os.daily_recommendations import (
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
-from research_os import analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory
+from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -6052,102 +6052,25 @@ def build_checklist_statuses(checked_items: list[str]) -> list[ChecklistItemStat
     return analysis_labels.build_checklist_statuses(checked_items, RESEARCH_CHECKLIST_ITEMS)
 
 
+def _analysis_context_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        current_storage_date=current_storage_date,
+        read_ticker_thesis_snapshot=read_ticker_thesis_snapshot,
+        search_research_memory_documents=search_research_memory_documents,
+    )
+
+
 def collect_workspace_context(
     ticker: str,
     vault_dir: Path,
     provided_data: list[InjectedDataPoint],
 ) -> list[InjectedDataPoint]:
-    ticker_dir = vault_dir / ticker
-    saved_reports = []
-    if ticker_dir.exists():
-        saved_reports = sorted(ticker_dir.glob(f"{ticker}-*.md"))
-
-    workspace_context = [
-        InjectedDataPoint(
-            source_type="research_memory",
-            label="linked_workspace_reports",
-            value=f"후속 분석에 연결 가능한 저장 리포트 {len(saved_reports)}개",
-            as_of=current_storage_date().isoformat(),
-            confidence=1.0,
-        )
-    ]
-    try:
-        thesis_snapshot = read_ticker_thesis_snapshot(vault_dir, ticker)
-    except Exception:
-        thesis_snapshot = None
-    if thesis_snapshot:
-        workspace_context.append(
-            InjectedDataPoint(
-                source_type=DataSourceType.RESEARCH_MEMORY,
-                label="latest_thesis_snapshot",
-                value=(
-                    f"최신 기준 투자 논거: {thesis_snapshot.get('thesis_summary')} | "
-                    f"강세 트리거: {', '.join(thesis_snapshot.get('bull_triggers') or []) or '없음'} | "
-                    f"약세 트리거: {', '.join(thesis_snapshot.get('bear_triggers') or []) or '없음'} | "
-                    f"무효화 조건: {', '.join(thesis_snapshot.get('invalidation_conditions') or []) or '없음'}"
-                ),
-                as_of=thesis_snapshot.get("source_date") or current_storage_date().isoformat(),
-                source_url=thesis_snapshot.get("source_relative_path"),
-                confidence=float(thesis_snapshot.get("confidence") or 0.8),
-            )
-        )
-    try:
-        memory_search = search_research_memory_documents(
-            vault_dir,
-            ticker,
-            limit=4,
-            refresh_index=False,
-        )
-    except Exception:
-        memory_search = {"documents": []}
-    for index, document in enumerate(memory_search.get("documents", []), start=1):
-        summary = document.get("summary") or document.get("content_excerpt") or ""
-        if not summary:
-            continue
-        workspace_context.append(
-            InjectedDataPoint(
-                source_type=DataSourceType.RESEARCH_MEMORY,
-                label=f"rag_memory_document_{index}",
-                value=(
-                    f"{document.get('source_date') or '날짜 없음'} "
-                    f"{document.get('report_type') or 'research'}: {summary}"
-                ),
-                as_of=document.get("source_date") or current_storage_date().isoformat(),
-                source_url=document.get("source_relative_path"),
-                confidence=float(document.get("confidence") or 0.7),
-            )
-        )
-    for scope_key in ["MARKET", "MACRO", "SECTOR", "POLICY", "RATES", "FLOWS", "CUSTOMS"]:
-        if ticker.upper() == scope_key:
-            continue
-        try:
-            scope_search = search_research_memory_documents(
-                vault_dir,
-                scope_key,
-                limit=1,
-                refresh_index=False,
-            )
-        except Exception:
-            scope_search = {"documents": []}
-        for document in scope_search.get("documents", [])[:1]:
-            summary = document.get("summary") or document.get("content_excerpt") or ""
-            if not summary:
-                continue
-            workspace_context.append(
-                InjectedDataPoint(
-                    source_type=DataSourceType.RESEARCH_MEMORY,
-                    label=f"rag_cross_scope_{scope_key.lower()}",
-                    value=(
-                        f"{scope_key} 누적 자료 ({document.get('source_date') or '날짜 없음'}): "
-                        f"{summary}"
-                    ),
-                    as_of=document.get("source_date") or current_storage_date().isoformat(),
-                    source_url=document.get("source_relative_path"),
-                    confidence=float(document.get("confidence") or 0.7),
-                )
-            )
-
-    return [*provided_data, *workspace_context]
+    return analysis_context.collect_workspace_context(
+        _analysis_context_runtime(),
+        ticker,
+        vault_dir,
+        provided_data,
+    )
 
 
 def collect_analysis_input_data(

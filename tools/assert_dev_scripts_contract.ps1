@@ -554,8 +554,16 @@ $contracts = @(
   @{
     Path = "backend\research_os_main.py"
     Snippets = @(
-      'refresh_index=False',
       'request.refresh_dossier'
+    )
+  },
+
+
+  @{
+    Path = "backend\research_os\analysis_context.py"
+    Snippets = @(
+      'refresh_index=False',
+      'search_research_memory_documents'
     )
   },
 
