@@ -120,6 +120,7 @@ from research_os.kcif_reports import (
     should_refresh_kcif_cache,
 )
 from research_os.market_journal import naver_market_close_source_metadata
+import research_os.telegram_market_close_automation as telegram_market_close_automation
 from research_os.telegram_market_journal import (
     fetch_telegram_public_channel_posts,
     fetch_telegram_public_channel_posts_backfill,
@@ -4238,164 +4239,50 @@ def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20
     }
 
 
+def _telegram_market_close_automation_runtime():
+    return telegram_market_close_automation.TelegramMarketCloseAutomationRuntime(
+        current_storage_date=current_storage_date,
+        current_storage_timestamp=current_storage_timestamp,
+        current_storage_datetime=current_storage_datetime,
+        read_json_store=read_json_store,
+        write_json_store=write_json_store,
+        read_market_close_journal=read_market_close_journal,
+        save_market_close_review=save_market_close_review,
+        normalize_market_code=normalize_market_code,
+        provider_error_message=provider_error_message,
+        repair_mojibake_log_line=repair_mojibake_log_line,
+        telegram_market_close_journal_state_path=telegram_market_close_journal_state_path,
+        telegram_market_close_journal_task_log_path=telegram_market_close_journal_task_log_path,
+        fetch_telegram_public_channel_posts=fetch_telegram_public_channel_posts,
+        fetch_telegram_public_channel_posts_backfill=fetch_telegram_public_channel_posts_backfill,
+        latest_telegram_us_market_close_candidate=latest_telegram_us_market_close_candidate,
+        telegram_market_close_source_metadata=telegram_market_close_source_metadata,
+        telegram_us_market_close_candidates=telegram_us_market_close_candidates,
+    )
+
+
 def refresh_telegram_us_market_close_journal(settings: Settings, force: bool = False) -> dict:
-    state_path = telegram_market_close_journal_state_path(settings)
-    try:
-        posts, warnings = fetch_telegram_public_channel_posts(
-            channel_username=settings.telegram_market_close_channel_username,
-            channel_url=settings.telegram_market_close_channel_url,
-            timeout_seconds=settings.telegram_market_close_timeout_seconds,
-            user_agent=settings.telegram_market_close_user_agent,
-            max_posts=settings.telegram_market_close_max_posts,
-        )
-        candidate = latest_telegram_us_market_close_candidate(
-            posts,
-            today=current_storage_date(),
-            max_summary_chars=settings.telegram_market_close_max_summary_chars,
-        )
-    except Exception as exc:
-        state = {
-            **read_json_store(state_path, {}),
-            "status": "error",
-            "last_attempt_at": current_storage_timestamp(),
-            "last_attempt_date": current_storage_date().isoformat(),
-            "last_attempt_message": provider_error_message(exc, settings),
-        }
-        write_json_store(state_path, state)
-        return {
-            "status": "error",
-            "module": "telegram_market_close_journal",
-            "message": state["last_attempt_message"],
-            "state_path": str(state_path),
-        }
-    if not candidate:
-        state = {
-            **read_json_store(state_path, {}),
-            "status": "not_found",
-            "last_attempt_at": current_storage_timestamp(),
-            "last_attempt_date": current_storage_date().isoformat(),
-            "last_attempt_message": "텔레그램 @ehdwl 공개 채널에서 미국 시장일지 후보를 찾지 못했습니다.",
-            "warnings": warnings,
-        }
-        write_json_store(state_path, state)
-        return {
-            "status": "not_found",
-            "module": "telegram_market_close_journal",
-            "message": state["last_attempt_message"],
-            "warnings": warnings,
-            "state_path": str(state_path),
-        }
-    previous_state = read_json_store(state_path, {})
-    if (
-        not force
-        and previous_state.get("source_item_id") == candidate.source_item_id
-        and previous_state.get("source_published_at") == candidate.source_published_at
-        and previous_state.get("session_date") == candidate.session_date
-    ):
-        state = {
-            **previous_state,
-            "status": "skipped_duplicate",
-            "last_attempt_at": current_storage_timestamp(),
-            "last_attempt_date": current_storage_date().isoformat(),
-            "last_attempt_message": "같은 텔레그램 미국 시장일지 원본이라 중복 저장하지 않았습니다.",
-            "warnings": warnings,
-        }
-        write_json_store(state_path, state)
-        return {
-            "status": "skipped",
-            "module": "telegram_market_close_journal",
-            "message": "이미 같은 텔레그램 미국 시장일지를 반영했습니다.",
-            "source": candidate.__dict__,
-            "previous_state": state,
-            "state_path": str(state_path),
-        }
-    if not force and candidate.session_date in existing_market_close_session_dates(settings, "US"):
-        source_metadata = telegram_market_close_source_metadata(candidate.source_title)
-        state = {
-            **previous_state,
-            "status": "skipped_duplicate",
-            "last_attempt_at": current_storage_timestamp(),
-            "last_attempt_date": current_storage_date().isoformat(),
-            "last_attempt_message": "같은 미국 시장일지 날짜가 이미 있어 중복 저장하지 않았습니다.",
-            "source_item_id": candidate.source_item_id,
-            "source_url": candidate.source_url,
-            "source_title": candidate.source_title,
-            "source_origin": source_metadata["source_origin"],
-            "source_provider": source_metadata["source_provider"],
-            "source_published_at": candidate.source_published_at,
-            "session_date": candidate.session_date,
-            "included_post_count": candidate.included_post_count,
-            "warnings": warnings,
-        }
-        write_json_store(state_path, state)
-        return {
-            "status": "skipped",
-            "module": "telegram_market_close_journal",
-            "message": "이미 같은 날짜의 텔레그램 미국 시장일지를 반영했습니다.",
-            "source": candidate.__dict__,
-            "previous_state": state,
-            "state_path": str(state_path),
-        }
-    source_metadata = telegram_market_close_source_metadata(candidate.source_title)
-    response = save_telegram_us_market_close_candidate(candidate, settings)
-    run_at = current_storage_timestamp()
-    run_date = current_storage_date().isoformat()
-    state = {
-        "status": "success",
-        "last_run_at": run_at,
-        "last_run_date": run_date,
-        "last_attempt_at": run_at,
-        "last_attempt_date": run_date,
-        "last_attempt_message": "텔레그램 @ehdwl 미국 시장일지를 시장일지에 반영했습니다.",
-        "source_item_id": candidate.source_item_id,
-        "source_url": candidate.source_url,
-        "source_title": candidate.source_title,
-        "source_origin": source_metadata["source_origin"],
-        "source_provider": source_metadata["source_provider"],
-        "source_published_at": candidate.source_published_at,
-        "session_date": candidate.session_date,
-        "included_post_count": candidate.included_post_count,
-        "market_journal_entry_id": response.entry.entry_id,
-        "storage": response.storage.model_dump(mode="json") if response.storage else None,
-        "warnings": warnings,
-    }
-    write_json_store(state_path, state)
-    return {
-        "status": "success",
-        "module": "telegram_market_close_journal",
-        "source": candidate.__dict__,
-        "entry": response.entry.model_dump(mode="json"),
-        "storage": response.storage.model_dump(mode="json") if response.storage else None,
-        "warnings": warnings,
-        "state_path": str(state_path),
-    }
+    return telegram_market_close_automation.refresh_telegram_us_market_close_journal(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        force=force,
+    )
 
 
 def existing_market_close_session_dates(settings: Settings, market: str) -> set[str]:
-    normalized_market = normalize_market_code(market)
-    payload = read_market_close_journal(settings)
-    dates: set[str] = set()
-    for item in payload.get("entries", []):
-        if not isinstance(item, dict):
-            continue
-        if normalize_market_code(str(item.get("market") or "")) != normalized_market:
-            continue
-        session_date = str(item.get("session_date") or "").strip()
-        if session_date:
-            dates.add(session_date)
-    return dates
+    return telegram_market_close_automation.existing_market_close_session_dates(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        market,
+    )
 
 
 def save_telegram_us_market_close_candidate(candidate, settings: Settings):
-    source_metadata = telegram_market_close_source_metadata(candidate.source_title)
-    request = MarketCloseReviewRequest(
-        market="US",
-        session_date=candidate.session_date,
-        raw_summary=candidate.raw_summary,
-        **source_metadata,
-        save_result=True,
+    return telegram_market_close_automation.save_telegram_us_market_close_candidate(
+        _telegram_market_close_automation_runtime(),
+        candidate,
+        settings,
     )
-    return save_market_close_review(request, settings)
 
 
 def backfill_telegram_us_market_close_journal(
@@ -4404,220 +4291,40 @@ def backfill_telegram_us_market_close_journal(
     max_pages: int = 4,
     force: bool = False,
 ) -> dict:
-    state_path = telegram_market_close_journal_state_path(settings)
-    try:
-        posts, warnings = fetch_telegram_public_channel_posts_backfill(
-            channel_username=settings.telegram_market_close_channel_username,
-            channel_url=settings.telegram_market_close_channel_url,
-            timeout_seconds=settings.telegram_market_close_timeout_seconds,
-            user_agent=settings.telegram_market_close_user_agent,
-            max_pages=max_pages,
-        )
-        candidates = telegram_us_market_close_candidates(
-            posts,
-            today=current_storage_date(),
-            max_summary_chars=settings.telegram_market_close_max_summary_chars,
-        )
-    except Exception as exc:
-        state = {
-            **read_json_store(state_path, {}),
-            "status": "error",
-            "last_attempt_at": current_storage_timestamp(),
-            "last_attempt_date": current_storage_date().isoformat(),
-            "last_attempt_message": provider_error_message(exc, settings),
-        }
-        write_json_store(state_path, state)
-        return {
-            "status": "error",
-            "module": "telegram_market_close_journal_backfill",
-            "message": state["last_attempt_message"],
-            "state_path": str(state_path),
-        }
-    existing_dates = existing_market_close_session_dates(settings, "US")
-    selected = [candidate for candidate in candidates if force or candidate.session_date not in existing_dates]
-    selected.sort(key=lambda item: item.session_date)
-    stored: list[dict] = []
-    failed: list[dict] = []
-    for candidate in selected:
-        try:
-            response = save_telegram_us_market_close_candidate(candidate, settings)
-            stored.append(
-                {
-                    "session_date": candidate.session_date,
-                    "source_item_id": candidate.source_item_id,
-                    "source_url": candidate.source_url,
-                    "source_title": candidate.source_title,
-                    "source_published_at": candidate.source_published_at,
-                    "entry_id": response.entry.entry_id,
-                    "storage": response.storage.model_dump(mode="json") if response.storage else None,
-                }
-            )
-            existing_dates.add(candidate.session_date)
-        except Exception as exc:
-            failed.append(
-                {
-                    "session_date": candidate.session_date,
-                    "source_item_id": candidate.source_item_id,
-                    "error": provider_error_message(exc, settings),
-                }
-            )
-    run_at = current_storage_timestamp()
-    run_date = current_storage_date().isoformat()
-    skipped_existing = [
-        {
-            "session_date": candidate.session_date,
-            "source_item_id": candidate.source_item_id,
-            "source_url": candidate.source_url,
-            "source_title": candidate.source_title,
-            "source_published_at": candidate.source_published_at,
-        }
-        for candidate in candidates
-        if candidate.session_date not in {item["session_date"] for item in stored}
-        and candidate.session_date not in {item["session_date"] for item in failed}
-    ]
-    state = {
-        **read_json_store(state_path, {}),
-        "status": "success" if not failed else "error",
-        "last_attempt_at": run_at,
-        "last_attempt_date": run_date,
-        "last_attempt_message": (
-            f"텔레그램 @ehdwl 미국 시장일지 소급 저장 {len(stored)}건, 기존/스킵 {len(skipped_existing)}건, 실패 {len(failed)}건"
-        ),
-        "backfill_last_run_at": run_at,
-        "backfill_candidate_count": len(candidates),
-        "backfill_stored_count": len(stored),
-        "backfill_skipped_existing_count": len(skipped_existing),
-        "backfill_failed_count": len(failed),
-        "backfill_stored": stored,
-        "backfill_failed": failed,
-        "backfill_skipped_existing": skipped_existing,
-        "warnings": warnings,
-    }
-    if stored:
-        latest_stored = stored[-1]
-        state.update(
-            {
-                "last_run_at": run_at,
-                "last_run_date": run_date,
-                "source_item_id": latest_stored.get("source_item_id"),
-                "source_url": latest_stored.get("source_url"),
-                "source_title": latest_stored.get("source_title"),
-                "source_origin": "telegram_auto",
-                "source_provider": "telegram_ehdwl",
-                "source_published_at": latest_stored.get("source_published_at"),
-                "session_date": latest_stored.get("session_date"),
-                "market_journal_entry_id": latest_stored.get("entry_id"),
-                "storage": latest_stored.get("storage"),
-            }
-        )
-    write_json_store(state_path, state)
-    return {
-        "status": "success" if not failed else "error",
-        "module": "telegram_market_close_journal_backfill",
-        "candidate_count": len(candidates),
-        "stored_count": len(stored),
-        "skipped_existing_count": len(skipped_existing),
-        "failed_count": len(failed),
-        "stored": stored,
-        "skipped_existing": skipped_existing,
-        "failed": failed,
-        "warnings": warnings,
-        "state_path": str(state_path),
-    }
+    return telegram_market_close_automation.backfill_telegram_us_market_close_journal(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        max_pages=max_pages,
+        force=force,
+    )
+
 
 def parse_telegram_market_close_journal_time(settings: Settings) -> tuple[int, int]:
-    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.telegram_market_close_journal_time or "07:20").strip())
-    if not match:
-        return 7, 20
-    hour = min(max(int(match.group(1)), 0), 23)
-    minute = min(max(int(match.group(2)), 0), 59)
-    return hour, minute
+    return telegram_market_close_automation.parse_telegram_market_close_journal_time(settings)
 
 
 def should_run_telegram_us_market_close_journal(settings: Settings, now: datetime | None = None) -> bool:
-    if not settings.telegram_market_close_auto_journal:
-        return False
-    now = now or current_storage_datetime()
-    hour, minute = parse_telegram_market_close_journal_time(settings)
-    if now.time() < now.replace(hour=hour, minute=minute, second=0, microsecond=0).time():
-        return False
-    state = read_json_store(telegram_market_close_journal_state_path(settings), {})
-    today = now.date().isoformat()
-    return state.get("last_run_date") != today and state.get("last_attempt_date") != today
+    return telegram_market_close_automation.should_run_telegram_us_market_close_journal(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        now=now,
+    )
 
 
 def read_telegram_market_close_task_log(settings: Settings, limit: int = 20) -> dict:
-    log_path = telegram_market_close_journal_task_log_path(settings)
-    normalized_limit = min(max(int(limit or 20), 1), 100)
-    if not log_path.exists():
-        return {
-            "exists": False,
-            "path": str(log_path),
-            "line_count": 0,
-            "recent_lines": [],
-            "last_line": "",
-        }
-    try:
-        with log_path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-            lines = [line.rstrip("\r\n") for line in handle if line.strip()]
-    except Exception as exc:
-        return {
-            "exists": True,
-            "path": str(log_path),
-            "line_count": 0,
-            "recent_lines": [],
-            "last_line": "",
-            "read_error": provider_error_message(exc, settings),
-        }
-    recent_lines = lines[-normalized_limit:]
-    return {
-        "exists": True,
-        "path": str(log_path),
-        "line_count": len(lines),
-        "recent_lines": [repair_mojibake_log_line(line) for line in recent_lines],
-        "last_line": repair_mojibake_log_line(recent_lines[-1]) if recent_lines else "",
-    }
+    return telegram_market_close_automation.read_telegram_market_close_task_log(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        limit=limit,
+    )
 
 
 def build_telegram_market_close_task_status(settings: Settings, log_limit: int = 20) -> dict:
-    state = read_json_store(telegram_market_close_journal_state_path(settings), {})
-    log = read_telegram_market_close_task_log(settings, limit=log_limit)
-    enabled = bool(settings.telegram_market_close_auto_journal)
-    if not enabled:
-        next_action = "텔레그램 미국 시장일지 자동 반영이 비활성화되어 있습니다."
-        status = "disabled"
-    elif not log.get("exists") and not state:
-        next_action = "작업 스케줄러 첫 실행 전입니다. 07:20 이후 로그가 생성되는지 확인하세요."
-        status = "waiting_for_first_run"
-    elif should_run_telegram_us_market_close_journal(settings):
-        next_action = "오늘 텔레그램 미국 시장일지 자동 반영이 아직 실행되지 않았습니다."
-        status = "due"
-    elif state.get("status") == "skipped_duplicate":
-        next_action = "오늘 자동 점검이 실행됐고 같은 원본은 중복 저장하지 않았습니다."
-        status = "ok_duplicate_skipped"
-    elif state.get("status") == "not_found":
-        next_action = "오늘 자동 점검이 실행됐지만 신규 미국 시장일지 후보가 없어 저장하지 않았습니다."
-        status = "ok_no_new_report"
-    elif state.get("status") == "error":
-        next_action = "텔레그램 공개 채널 확인 중 오류가 발생했습니다. 네트워크 또는 t.me 접근 상태를 확인하세요."
-        status = "needs_attention"
-    else:
-        next_action = "최근 상태가 정상입니다. 같은 텔레그램 원본은 중복 저장하지 않습니다."
-        status = "ok"
-    return {
-        "status": status,
-        "module": "telegram_market_close_task_status",
-        "enabled": enabled,
-        "daily_time": settings.telegram_market_close_journal_time,
-        "channel_username": settings.telegram_market_close_channel_username,
-        "channel_url": settings.telegram_market_close_channel_url,
-        "scheduled_task_name": "InvestmentResearchOS-TelegramUSMarketCloseJournal-0720",
-        "due_now": should_run_telegram_us_market_close_journal(settings) if enabled else False,
-        "state": state,
-        "task_log": log,
-        "next_action": next_action,
-    }
-
+    return telegram_market_close_automation.build_telegram_market_close_task_status(
+        _telegram_market_close_automation_runtime(),
+        settings,
+        log_limit=log_limit,
+    )
 
 _NAVER_RESEARCH_SCHEDULER_STARTED = False
 
