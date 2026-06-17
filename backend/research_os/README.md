@@ -34,6 +34,7 @@
 - `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 추천 후보 저장 품질 점수 보정 유틸
 - `dashboard_helpers.py`: 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper
 - `automation_digest_helpers.py`: 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper
+- `automation_schedule_status.py`: 리서치 외부 소스 자동화 스케줄 상태 row 조립 helper
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_provider_status_messages.py`: KIS/FMP/외부 보강 provider 상태 표시 문구 helper
 - `financial_datasets_data_provider.py`: Financial Datasets 재무 API client와 해외 재무 snapshot provider

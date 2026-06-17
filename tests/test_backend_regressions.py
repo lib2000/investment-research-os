@@ -6149,6 +6149,48 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertTrue(any("KCIF 관련 매크로 보고서 3개" in item for item in actions))
         self.assertTrue(any("2026-06-18 추천 후보" in item for item in actions))
 
+    def test_automation_schedule_status_builds_source_rows(self):
+        from research_os import automation_schedule_status
+
+        settings = SimpleNamespace(
+            regional_business_sources_auto_refresh=True,
+            regional_business_sources_refresh_hours=24,
+            regional_business_sources_enabled=True,
+            company_ir_sources_enabled=True,
+            company_ir_sources_auto_refresh=True,
+            company_ir_sources_refresh_hours=12,
+            naver_research_enabled=True,
+            naver_research_auto_refresh=True,
+            naver_research_refresh_hours=24,
+            shinhan_research_enabled=True,
+            shinhan_research_auto_refresh=True,
+            shinhan_research_refresh_hours=24,
+            dart_api_key="dummy",
+            dart_filing_auto_refresh=True,
+            dart_filing_refresh_hours=24,
+        )
+        runtime = SimpleNamespace(
+            dart_daily_check_status=lambda _cache, _settings: {"due": True, "target_count": 3},
+            read_company_ir_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}]},
+            read_dart_filing_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "status": "success"},
+            read_kcif_reports_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_reports": [{}, {}], "source_status": "cached"},
+            read_naver_research_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "entries": {"a": {}}, "status": "success"},
+            read_regional_business_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
+            read_shinhan_research_cache=lambda _settings: {"entries": {"a": {}, "b": {}}, "status": "success"},
+            should_refresh_company_ir_cache=lambda _watch, refresh_hours=24: False,
+            should_refresh_kcif_cache=lambda _watch: False,
+            should_refresh_regional_business_cache=lambda _watch: False,
+        )
+
+        rows = automation_schedule_status.build_external_source_schedule_status(runtime, settings)
+        by_key = {row["key"]: row for row in rows}
+
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(by_key["kcif_reports_watch"]["related_count"], 2)
+        self.assertTrue(by_key["shinhan_research"]["due"])
+        self.assertEqual(by_key["dart_filing_watch"]["related_count"], 3)
+        self.assertTrue(by_key["dart_filing_watch"]["due"])
+
     def test_automation_pipeline_uses_runtime_refresh_callbacks(self):
         from research_os import automation_status
 
