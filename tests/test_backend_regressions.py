@@ -774,6 +774,38 @@ class DataProviderStatusMessagesModuleTests(unittest.TestCase):
                 SimpleNamespace(uses_external_token=False, can_issue_token=False, app_key="key", app_secret="secret")
             ),
         )
+class RagSearchResultsModuleTests(unittest.TestCase):
+    def test_rag_search_results_compacts_related_generated_reports(self):
+        from research_os import rag_search_results
+
+        documents = [
+            {
+                "ticker": "PL",
+                "report_type": "dossier-synthesis",
+                "title": "latest",
+                "source_file_name": "latest.md",
+                "source_date": "2026-06-18",
+            },
+            {
+                "ticker": "PL",
+                "report_type": "dossier-synthesis",
+                "title": "older",
+                "source_file_name": "older.md",
+                "source_date": "2026-06-17",
+                "matched_terms": ["growth"],
+            },
+            {"ticker": "PL", "report_type": "broker-report", "title": "broker"},
+        ]
+
+        compacted, grouped = rag_search_results.compact_related_search_documents(documents, limit=5)
+
+        self.assertEqual(grouped, 1)
+        self.assertEqual(len(compacted), 2)
+        self.assertEqual(compacted[0]["related_version_count"], 1)
+        self.assertEqual(compacted[0]["related_versions"][0]["title"], "older")
+        self.assertEqual(rag_search_results.match_strength(2, 2), "완전")
+        self.assertEqual(rag_search_results.match_strength(1, 2), "부분")
+        self.assertEqual(rag_search_results.match_strength(0, 0), "전체")
 
 class WebSearchDataProviderModuleTests(unittest.TestCase):
     def test_web_search_data_providers_return_quota_guard_without_network(self):
