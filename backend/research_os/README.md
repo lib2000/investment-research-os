@@ -54,7 +54,8 @@
 - `llm_bridge_status.py`: LLM 응답 저장과 RAG 연결 상태 요약
 - `market_journal.py`: 네이버 마감 시황 시장일지 출처 메타데이터
 - `market_journal_analysis.py`: 시장일지 텍스트 정리, 감정/리스크/태그/행동 가이드 helper
-- `news_market_journal.py`: 뉴스 인박스 시장일지 승격, 관심목록 영향, 저장 마크다운 helper
+- `news_market_journal.py`: 뉴스 인박스 시장일지 승격, 관심목록 영향, 저장 orchestration
+- `market_journal_rendering.py`: 시장일지 저장 Markdown 렌더링 helper
 - `naver_market_close_automation.py`: 네이버 국내 마감 시황 자동 반영, 중복 방지, 작업 상태 조립
 - `telegram_market_journal.py`: 텔레그램 @ehdwl 공개 채널의 미국 시장일지 후보 파싱/선정
 - `telegram_market_close_automation.py`: 텔레그램 미국 시장일지 자동 반영, 소급 저장, 중복 방지, 작업 상태 조립

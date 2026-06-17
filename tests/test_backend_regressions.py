@@ -5614,6 +5614,38 @@ class MarketJournalAnalysisModuleTests(unittest.TestCase):
         self.assertTrue(market_journal_analysis.text_matches_market_tags("GPU", aliases))
 
 
+
+class MarketJournalRenderingModuleTests(unittest.TestCase):
+    def test_market_journal_rendering_outputs_review_sections(self):
+        from research_os import market_journal_rendering
+
+        runtime = SimpleNamespace(market_research_key=lambda market: f"MARKET-{market}")
+        entry = SimpleNamespace(
+            market="US",
+            session_date="2026-06-17",
+            sentiment="긍정",
+            risk_level="보통",
+            regime="위험 선호",
+            tags=["AI", "금리"],
+            key_drivers=["나스닥 강세"],
+            market_index_snapshot=[],
+            sector_implications=["AI 주도주 확인"],
+            auto_utilization_focus=["포트폴리오 베타 점검"],
+            interest_implications=["관심종목 논거 업데이트"],
+            portfolio_actions=["추격 매수 자제"],
+            next_session_watch=["10년물 금리"],
+            attachment={"source": "telegram", "extracted_text": "숨김"},
+            raw_summary="미국 시장 요약",
+        )
+        response = SimpleNamespace(entry=entry, history_count=7, cumulative_patterns=["긍정 우세"])
+
+        markdown = market_journal_rendering.render_market_close_markdown(runtime, response, date(2026, 6, 18))
+
+        self.assertIn("ticker: MARKET-US", markdown)
+        self.assertIn("# US 폐장 후 시장 리뷰: 2026-06-17", markdown)
+        self.assertIn("- 누적 기록 수: 7", markdown)
+        self.assertIn("- source: telegram", markdown)
+        self.assertNotIn("숨김", markdown)
 class NewsMarketJournalModuleTests(unittest.TestCase):
     def test_news_market_journal_module_reads_existing_summary(self):
         from research_os import news_market_journal
