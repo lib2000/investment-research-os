@@ -5677,6 +5677,21 @@ class MarketJournalRenderingModuleTests(unittest.TestCase):
         self.assertIn("- source: telegram", markdown)
         self.assertNotIn("숨김", markdown)
 class NewsMarketJournalModuleTests(unittest.TestCase):
+    def test_market_journal_patterns_summarize_recent_entries(self):
+        from research_os.market_journal_patterns import cumulative_market_patterns
+
+        entries = [
+            SimpleNamespace(market="US", sentiment="긍정", risk_level="낮음", tags=["AI", "금리"]),
+            SimpleNamespace(market="US", sentiment="긍정", risk_level="보통", tags=["AI"]),
+            SimpleNamespace(market="US", sentiment="부정", risk_level="높음", tags=["달러"]),
+        ]
+
+        patterns, summary = cumulative_market_patterns(entries, "US")
+
+        self.assertIn("긍정 2회", patterns[0])
+        self.assertTrue(any("AI 2회" in item for item in patterns))
+        self.assertIn("US 최근 3회 누적", summary)
+
     def test_news_market_journal_module_reads_existing_summary(self):
         from research_os import news_market_journal
 
