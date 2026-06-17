@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 from . import thesis_signal_words
 from .models import (
@@ -41,6 +42,34 @@ def translate_severity_label(value: str) -> str:
     labels = {"high": "높음", "medium": "보통", "low": "낮음"}
     return labels.get(value, value)
 
+
+def extract_manifest_theses_and_watch_items(
+    runtime: SimpleNamespace,
+    ticker: str,
+    vault_dir,
+) -> tuple[list[InvestmentThesis], list[WatchItem]]:
+    try:
+        db_theses, db_watch_items = runtime.read_ticker_thesis_context(vault_dir, ticker)
+        if db_theses:
+            return db_theses, db_watch_items
+    except Exception:
+        pass
+
+    entries = [
+        entry for entry in runtime.read_manifest(vault_dir) if entry.get("ticker") == ticker
+    ]
+    theses = [
+        InvestmentThesis(**entry["investment_thesis"])
+        for entry in entries
+        if entry.get("investment_thesis")
+    ]
+    watch_items = [
+        WatchItem(**watch_item)
+        for entry in entries
+        for watch_item in entry.get("watch_items", [])
+        if isinstance(watch_item, dict)
+    ]
+    return theses, watch_items
 
 def clamp_confidence(value: float | None) -> float:
     if value is None:

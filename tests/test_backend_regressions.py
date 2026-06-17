@@ -3214,6 +3214,42 @@ class ThesisImpactModuleTests(unittest.TestCase):
         self.assertEqual(response.watch_item_signals[0].action, "비중 유지")
         self.assertIn("overall_impact: 강화", markdown)
         self.assertIn("투자 논거 영향도 분석", markdown)
+    def test_thesis_impact_module_extracts_manifest_fallback_context(self):
+        from research_os import thesis_impact
+
+        runtime = SimpleNamespace(
+            read_ticker_thesis_context=lambda _vault_dir, _ticker: ([], []),
+            read_manifest=lambda _vault_dir: [
+                {
+                    "ticker": "003230",
+                    "investment_thesis": {
+                        "ticker": "003230",
+                        "thesis": "수출 성장",
+                        "time_horizon": "12m",
+                        "last_updated": "2026-06-18",
+                    },
+                    "watch_items": [
+                        {
+                            "ticker": "003230",
+                            "metric": "수출",
+                            "condition": "증가",
+                            "action": "비중 유지",
+                            "priority": "high",
+                        }
+                    ],
+                },
+                {"ticker": "OTHER", "investment_thesis": {"ticker": "OTHER", "thesis": "제외", "time_horizon": "12m", "last_updated": "2026-06-18"}},
+            ],
+        )
+
+        theses, watch_items = thesis_impact.extract_manifest_theses_and_watch_items(
+            runtime,
+            "003230",
+            Path("vault"),
+        )
+
+        self.assertEqual([item.thesis for item in theses], ["수출 성장"])
+        self.assertEqual([item.metric for item in watch_items], ["수출"])
 
 class ThesisSignalWordsModuleTests(unittest.TestCase):
     def test_signal_words_match_korean_and_english_terms(self):
