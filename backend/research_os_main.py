@@ -149,6 +149,7 @@ from research_os.public_ir_sec import (
     public_ir_sec_status_payload,
 )
 from research_os.recent_activity import (
+    recent_activity_target_terms as _recent_activity_target_terms,
     annotate_recent_weekly_navigation_hints,
     annotate_recent_weekly_recommendation_links,
     build_recent_weekly_category_groups,
@@ -11713,63 +11714,18 @@ def read_latest_daily_brief(settings: Settings) -> dict:
 
 def build_external_source_schedule_status(settings: Settings) -> list[dict]:
     return automation_status.build_external_source_schedule_status(_automation_status_runtime(), settings)
+
+
+def _recent_activity_target_terms_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        normalize_ticker=normalize_ticker,
+        read_interest_list=read_interest_list,
+        read_portfolio_store=read_portfolio_store,
+    )
+
+
 def recent_activity_target_terms(settings: Settings) -> dict:
-    tickers: set[str] = set()
-    names: set[str] = set()
-    sectors: set[str] = set()
-    ticker_names: dict[str, str] = {}
-    try:
-        store = read_portfolio_store(settings)
-        for portfolio in (store.get("portfolios") or {}).values():
-            if not isinstance(portfolio, dict):
-                continue
-            for holding in portfolio.get("holdings") or []:
-                if not isinstance(holding, dict):
-                    continue
-                ticker = normalize_ticker(str(holding.get("ticker") or ""))
-                if ticker and ticker not in {"CASH", "UNKNOWN"}:
-                    tickers.add(ticker)
-                name = str(holding.get("name") or holding.get("company_name") or "").strip()
-                if name:
-                    names.add(name)
-                    if ticker:
-                        ticker_names[ticker] = name
-    except Exception:
-        pass
-    try:
-        interests = read_interest_list(settings)
-        for item in interests.get("tickers", []):
-            if not isinstance(item, dict):
-                continue
-            ticker = normalize_ticker(str(item.get("ticker") or ""))
-            if ticker and ticker not in {"CASH", "UNKNOWN"}:
-                tickers.add(ticker)
-            verification = item.get("verification") if isinstance(item.get("verification"), dict) else {}
-            name = str(
-                item.get("name")
-                or item.get("company_name")
-                or verification.get("company_name")
-                or ""
-            ).strip()
-            if name:
-                names.add(name)
-                if ticker:
-                    ticker_names[ticker] = name
-        for item in interests.get("sectors", []):
-            if not isinstance(item, dict):
-                continue
-            sector = str(item.get("name") or item.get("sector") or "").strip()
-            if sector:
-                sectors.add(sector)
-    except Exception:
-        pass
-    return {
-        "tickers": sorted(tickers),
-        "names": sorted(names),
-        "sectors": sorted(sectors),
-        "ticker_names": ticker_names,
-        "ticker_set": set(tickers),
-    }
+    return _recent_activity_target_terms(_recent_activity_target_terms_runtime(), settings)
 
 
 def build_recent_weekly_research_brief(settings: Settings, days: int = 7, refresh_if_due: bool = True) -> dict:

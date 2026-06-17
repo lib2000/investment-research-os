@@ -170,6 +170,64 @@ def recent_watch_summary(daily_watch: dict, counts: dict) -> dict:
     }
 
 
+def recent_activity_target_terms(runtime, settings) -> dict:
+    tickers: set[str] = set()
+    names: set[str] = set()
+    sectors: set[str] = set()
+    ticker_names: dict[str, str] = {}
+    try:
+        store = runtime.read_portfolio_store(settings)
+        for portfolio in (store.get("portfolios") or {}).values():
+            if not isinstance(portfolio, dict):
+                continue
+            for holding in portfolio.get("holdings") or []:
+                if not isinstance(holding, dict):
+                    continue
+                ticker = runtime.normalize_ticker(str(holding.get("ticker") or ""))
+                if ticker and ticker not in {"CASH", "UNKNOWN"}:
+                    tickers.add(ticker)
+                name = str(holding.get("name") or holding.get("company_name") or "").strip()
+                if name:
+                    names.add(name)
+                    if ticker:
+                        ticker_names[ticker] = name
+    except Exception:
+        pass
+    try:
+        interests = runtime.read_interest_list(settings)
+        for item in interests.get("tickers", []):
+            if not isinstance(item, dict):
+                continue
+            ticker = runtime.normalize_ticker(str(item.get("ticker") or ""))
+            if ticker and ticker not in {"CASH", "UNKNOWN"}:
+                tickers.add(ticker)
+            verification = item.get("verification") if isinstance(item.get("verification"), dict) else {}
+            name = str(
+                item.get("name")
+                or item.get("company_name")
+                or verification.get("company_name")
+                or ""
+            ).strip()
+            if name:
+                names.add(name)
+                if ticker:
+                    ticker_names[ticker] = name
+        for item in interests.get("sectors", []):
+            if not isinstance(item, dict):
+                continue
+            sector = str(item.get("name") or item.get("sector") or "").strip()
+            if sector:
+                sectors.add(sector)
+    except Exception:
+        pass
+    return {
+        "tickers": sorted(tickers),
+        "names": sorted(names),
+        "sectors": sorted(sectors),
+        "ticker_names": ticker_names,
+        "ticker_set": set(tickers),
+    }
+
 def recent_activity_cutoff(current_date: date, days: int) -> date:
     return current_date - timedelta(days=max(1, int(days or 7)) - 1)
 
