@@ -2429,6 +2429,56 @@ class AnalysisContextModuleTests(unittest.TestCase):
         self.assertIn("rag_cross_scope_market", labels)
         self.assertTrue(any("저장 리포트 1개" in item.value for item in result))
 
+    def test_collect_analysis_input_data_adds_profile_provider_and_mock_note(self):
+        from research_os import analysis_context
+        from research_os.models import InjectedDataPoint
+
+        provider_point = InjectedDataPoint(
+            source_type="market_price",
+            label="last_price",
+            value="10",
+            confidence=0.7,
+        )
+        runtime = SimpleNamespace(
+            build_ticker_profile=lambda ticker, settings, refresh_external=False: SimpleNamespace(
+                company_name="Oatly",
+                exchange="NASDAQ",
+                business_context="plant milk",
+                watch_kpis=["margin"],
+            ),
+            current_storage_date=lambda: date(2026, 6, 18),
+            fetch_nps_institutional_context=lambda ticker, company_name, settings: [
+                InjectedDataPoint(source_type="financial_data", label="nps", value=company_name, confidence=0.6)
+            ],
+            get_analysis_data_provider=lambda settings: SimpleNamespace(
+                fetch_analysis_context=lambda ticker: [provider_point]
+            ),
+            latest_earnings_profile_for_ticker=lambda ticker, settings, refresh_external=False: {
+                "earnings_report_date": "2026-06-17",
+                "source_url": "https://example.com/earnings",
+            },
+            latest_earnings_profile_summary=lambda latest: "earnings summary",
+            verify_ticker_symbol=lambda ticker, settings: SimpleNamespace(verified=True, verification_source="registry"),
+        )
+        settings = SimpleNamespace(auto_inject_analysis_data=True, data_provider_mode="mock")
+        provided = [InjectedDataPoint(source_type="user_memo", label="memo", value="memo", confidence=1.0)]
+
+        result = analysis_context.collect_analysis_input_data(
+            runtime,
+            ticker="OTLY",
+            provided_data=provided,
+            auto_inject_data=True,
+            settings=settings,
+        )
+
+        labels = [item.label for item in result]
+        self.assertIn("official_company_profile", labels)
+        self.assertIn("official_latest_earnings_profile", labels)
+        self.assertIn("last_price", labels)
+        self.assertIn("nps", labels)
+        self.assertIn("data_provider_limitation", labels)
+        self.assertEqual(labels[-1], "memo")
+
 
 class AnalysisLabelsModuleTests(unittest.TestCase):
     def test_analysis_labels_translate_values_and_build_keys(self):

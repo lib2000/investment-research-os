@@ -104,3 +104,71 @@ def collect_workspace_context(
             )
 
     return [*provided_data, *workspace_context]
+
+
+def collect_analysis_input_data(
+    runtime,
+    *,
+    ticker: str,
+    provided_data: list[InjectedDataPoint],
+    auto_inject_data: bool,
+    settings,
+) -> list[InjectedDataPoint]:
+    profile_points: list[InjectedDataPoint] = []
+    verification = runtime.verify_ticker_symbol(ticker, settings)
+    profile = None
+    if verification.verified:
+        profile = runtime.build_ticker_profile(ticker, settings, refresh_external=False)
+        profile_points.append(
+            InjectedDataPoint(
+                source_type=DataSourceType.OTHER,
+                label="official_company_profile",
+                value=(
+                    f"{profile.company_name} ({profile.exchange}) | "
+                    f"사업 맥락: {profile.business_context or 'n/a'} | "
+                    f"핵심 KPI: {', '.join(profile.watch_kpis) or 'n/a'}"
+                ),
+                as_of=runtime.current_storage_date().isoformat(),
+                source_url=verification.verification_source,
+                confidence=0.95,
+            )
+        )
+        latest_earnings = runtime.latest_earnings_profile_for_ticker(
+            ticker,
+            settings,
+            refresh_external=False,
+        )
+        if latest_earnings:
+            profile_points.append(
+                InjectedDataPoint(
+                    source_type=DataSourceType.EARNINGS_RELEASE,
+                    label="official_latest_earnings_profile",
+                    value=runtime.latest_earnings_profile_summary(latest_earnings),
+                    as_of=latest_earnings.get("earnings_report_date"),
+                    source_url=latest_earnings.get("source_url"),
+                    confidence=0.9,
+                )
+            )
+    if not auto_inject_data or not settings.auto_inject_analysis_data:
+        return [*profile_points, *provided_data]
+
+    if not verification.verified:
+        return [*profile_points, *provided_data]
+
+    provider = runtime.get_analysis_data_provider(settings)
+    provider_data = provider.fetch_analysis_context(ticker)
+    if verification.verified and profile:
+        provider_data.extend(
+            runtime.fetch_nps_institutional_context(ticker, profile.company_name, settings) or []
+        )
+    if settings.data_provider_mode == "mock":
+        provider_data.append(
+            InjectedDataPoint(
+                source_type=DataSourceType.OTHER,
+                label="data_provider_limitation",
+                value="현재 시장/재무 데이터 프로바이더가 mock 모드입니다. 가격과 재무 수치는 실제 투자 판단에 사용하지 마세요.",
+                as_of=runtime.current_storage_date().isoformat(),
+                confidence=0.4,
+            )
+        )
+    return [*profile_points, *provider_data, *provided_data]
