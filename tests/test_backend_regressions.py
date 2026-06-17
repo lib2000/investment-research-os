@@ -688,6 +688,39 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(summary["last_history_message"], "수량 확인 완료")
 
 
+class ProviderUsageModuleTests(unittest.TestCase):
+    def test_provider_usage_records_counts_and_blocks_daily_limit(self):
+        from tempfile import TemporaryDirectory
+        from research_os import provider_usage
+
+        with TemporaryDirectory() as temp_dir:
+            usage_file = str(Path(temp_dir) / "provider_usage.json")
+            allowed, message = provider_usage.consume_external_provider_quota(
+                provider_name="tavily",
+                usage_file=usage_file,
+                daily_limit=2,
+                monthly_limit=5,
+                units=2,
+                unit_label="credits",
+            )
+            blocked, blocked_message = provider_usage.consume_external_provider_quota(
+                provider_name="tavily",
+                usage_file=usage_file,
+                daily_limit=2,
+                monthly_limit=5,
+                units=1,
+                unit_label="credits",
+            )
+            payload = json.loads(Path(usage_file).read_text(encoding="utf-8"))
+
+        self.assertTrue(allowed)
+        self.assertIn("오늘 2/2", message)
+        self.assertFalse(blocked)
+        self.assertIn("무료 한도 보호", blocked_message)
+        self.assertEqual(payload["tavily"]["day_count"], 2)
+        self.assertEqual(payload["tavily"]["month_count"], 2)
+
+
 class KcifReportsWatchTests(unittest.TestCase):
     def test_kcif_report_list_parser_extracts_metadata_without_body(self):
         from research_os.kcif_reports import parse_kcif_report_list
