@@ -15,6 +15,7 @@
 
 운영 중인 모듈 경계의 기준 문서는 `docs/structure-map.md`입니다. 이 README는 백엔드 폴더 안에서 빠르게 역할을 확인하기 위한 요약입니다.
 
+- `analysis_labels.py`: 분석 출력 출처/데이터/매매스타일 표시 라벨과 분석 저장 키 생성 helper
 - `classification.py`: 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 유틸
 - `brokerage.py`: 증권사 연동 공통 클라이언트와 상태 추상화
 - `customs_trade.py`: 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정

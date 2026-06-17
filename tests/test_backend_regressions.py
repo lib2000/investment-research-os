@@ -2376,6 +2376,35 @@ class PortfolioPolicyModuleTests(unittest.TestCase):
         self.assertEqual(response.allocation_adjustments[0].action, "관찰 후 증액 후보")
 
 
+class AnalysisLabelsModuleTests(unittest.TestCase):
+    def test_analysis_labels_translate_values_and_build_keys(self):
+        from research_os import analysis_labels
+        from research_os.models import DataSourceType
+
+        runtime = SimpleNamespace(normalize_ticker=lambda value: str(value).strip().upper().replace(" ", "-"))
+
+        self.assertEqual(analysis_labels.enum_or_str_value(DataSourceType.NEWS), "news")
+        self.assertEqual(analysis_labels.translate_source_type_label(DataSourceType.ANALYST_REPORT), "애널리스트 리포트")
+        self.assertEqual(analysis_labels.translate_data_label("market_cap"), "시가총액")
+        self.assertEqual(analysis_labels.translate_trade_style_label("swing"), "단기 보유(며칠~몇 주)")
+        self.assertEqual(analysis_labels.sector_research_key(runtime, "한국", "균형형"), "SECTOR-KR-BALANCED")
+        self.assertEqual(
+            analysis_labels.compounder_research_key(runtime, "US", "technology", "quality growth"),
+            "COMPOUNDER-US-TECH-QUALITY-GROWTH",
+        )
+
+    def test_analysis_labels_build_checklist_statuses(self):
+        from research_os import analysis_labels
+
+        statuses = analysis_labels.build_checklist_statuses(
+            ["moat", "risk"],
+            [("moat", "경쟁 우위"), ("risk", "리스크"), ("valuation", "밸류에이션")],
+        )
+
+        self.assertEqual([item.key for item in statuses], ["moat", "risk", "valuation"])
+        self.assertEqual([item.completed for item in statuses], [True, True, False])
+
+
 class AnalysisModuleStorageTests(unittest.TestCase):
     def test_analysis_module_storage_saves_analysis_module_manifest_payloads(self):
         from research_os import analysis_module_storage

@@ -38,6 +38,7 @@
 
 | 모듈 | 역할 | 대표 회귀 테스트 |
 |---|---|---|
+| `backend\research_os\analysis_labels.py` | 분석 출력 출처/데이터/매매스타일 표시 라벨과 분석 저장 키 생성 helper | `BackendModuleBoundaryTests` |
 | `backend\research_os\classification.py` | 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 | `check_classification_quality.py` |
 | `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
 | `backend\research_os\customs_trade.py` | 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |
