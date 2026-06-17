@@ -71,7 +71,8 @@
 - `rag_memory_utils.py`: RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper
 - `rag_search_results.py`: RAG 검색 결과 중복 보고서 compact와 match strength 표시 helper
 - `rag_synthesis.py`: 전체 저장 데이터 검색 결과 합성, Markdown 보고서 렌더링, 투자 논거 스냅샷 helper
-- `recent_activity.py`: 최근 1주 자료 compact, DART/IR/SEC/추천 근거 링크, 저장 데이터 탐색 힌트 helper
+- `recent_activity.py`: 최근 1주 자료 compact, DART/추천 근거 링크, 저장 데이터 탐색 힌트 helper
+- `recent_activity_public_ir.py`: 최근 1주 공개 IR/SEC 자료 compact와 추천 반영 품질 guard helper
 - `recent_activity_groups.py`: 최근 1주 자료 category group, 출처 family, 타깃 digest 계산 helper
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸

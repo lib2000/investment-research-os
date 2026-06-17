@@ -6971,6 +6971,36 @@ class DartFilingMetadataModuleTests(unittest.TestCase):
             dart_filing_metadata.korean_earnings_neighbor_dates("FY2026 Q2"),
             ("2026-05-15", "2026-11-14"),
         )
+
+class RecentActivityPublicIrModuleTests(unittest.TestCase):
+    def test_recent_activity_public_ir_compacts_sec_entry_with_quality_guard(self):
+        from research_os import recent_activity_public_ir
+
+        item = recent_activity_public_ir.compact_recent_public_ir_sec_entry(
+            {
+                "date": "2026-06-17",
+                "ticker": "PL",
+                "title": "Planet Labs 8-K",
+                "summary": "Planet Labs filed a contract update",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/pl/8-k.htm",
+                "filing_form": "8-K",
+                "capture_quality": {"status": "정상", "needs_body_copy": False},
+                "tags": ["SEC", "contract"],
+            },
+            {
+                "tickers": ["PL"],
+                "ticker_set": {"PL"},
+                "ticker_names": {"PL": "Planet Labs PBC"},
+                "names": ["Planet Labs"],
+                "sectors": [],
+            },
+        )
+
+        self.assertEqual(item["ticker"], "PL")
+        self.assertEqual(item["source_provider"], "SEC EDGAR")
+        self.assertEqual(item["source_reliability"], "공식 SEC 8-K")
+        self.assertTrue(item["usable_for_recommendation"])
+        self.assertFalse(item["needs_body_copy"])
 class DartFilingWatchTests(unittest.TestCase):
     def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
         import research_os_main as main
