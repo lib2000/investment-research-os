@@ -5927,6 +5927,23 @@ class ResearchMemoryPolicyTests(unittest.TestCase):
         self.assertIn("웹사이트 본문 추출 실패", failed["warnings"])
         self.assertIn("이미지 OCR 미연결", failed["warnings"])
 
+    def test_dossier_capture_quality_module_flags_failed_entries(self):
+        from research_os import dossier_capture_quality
+
+        self.assertTrue(
+            dossier_capture_quality.is_failed_capture_manifest_entry(
+                {"relative_path": "research_vault/winerror-10061.md"}
+            )
+        )
+        quality = dossier_capture_quality.capture_quality_status(
+            raw_content="",
+            source_url_processing={"status": "fetch_failed"},
+        )
+
+        self.assertEqual(quality["status"], "실패")
+        self.assertEqual(quality["url_status"], "fetch_failed")
+        self.assertIn("분석 반영 제외", quality["readiness"])
+
     def test_manifest_similarity_text_drops_naver_url_noise_summary(self):
         from research_os import dossier_text
 
