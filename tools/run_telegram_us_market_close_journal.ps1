@@ -3,6 +3,8 @@ param(
   [string]$HostName = "127.0.0.1",
   [string]$AccessToken = "dev-local-token",
   [switch]$Force,
+  [switch]$Backfill,
+  [int]$BackfillMaxPages = 4,
   [switch]$StartBackendIfNeeded
 )
 
@@ -53,9 +55,15 @@ if (-not (Test-BackendReady)) {
 }
 
 $forceText = if ($Force) { "true" } else { "false" }
-$uri = "$ApiBase/api/v1/telegram-market-close-journal/refresh?force=$forceText"
-$result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $AccessToken" } -TimeoutSec 180
-$entryId = if ($result.entry) { $result.entry.entry_id } else { "none" }
-$title = if ($result.source) { $result.source.source_title } else { "none" }
-Write-TaskLog "telegram_us_market_close_journal_refresh: status=$($result.status), entry=$entryId, title=$title"
+if ($Backfill) {
+  $uri = "$ApiBase/api/v1/telegram-market-close-journal/backfill?force=$forceText&max_pages=$BackfillMaxPages"
+  $result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $AccessToken" } -TimeoutSec 240
+  Write-TaskLog "telegram_us_market_close_journal_backfill: status=$($result.status), stored=$($result.stored_count), skipped=$($result.skipped_existing_count), failed=$($result.failed_count)"
+} else {
+  $uri = "$ApiBase/api/v1/telegram-market-close-journal/refresh?force=$forceText"
+  $result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $AccessToken" } -TimeoutSec 180
+  $entryId = if ($result.entry) { $result.entry.entry_id } else { "none" }
+  $title = if ($result.source) { $result.source.source_title } else { "none" }
+  Write-TaskLog "telegram_us_market_close_journal_refresh: status=$($result.status), entry=$entryId, title=$title"
+}
 $result | ConvertTo-Json -Depth 12

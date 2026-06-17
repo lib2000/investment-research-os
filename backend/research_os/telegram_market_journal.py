@@ -7,7 +7,7 @@ from datetime import date, datetime
 from html import unescape
 from re import IGNORECASE, search, sub
 from typing import Iterable
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -121,6 +121,45 @@ def parse_telegram_public_channel_html(
     return posts
 
 
+def telegram_public_page_url(channel_url: str, before_post_id: int | None = None) -> str:
+    if before_post_id is None:
+        return channel_url
+    separator = "&" if "?" in channel_url else "?"
+    return f"{channel_url}{separator}{urlencode({'before': before_post_id})}"
+
+
+def telegram_post_sort_key(post: TelegramMarketPost) -> int:
+    try:
+        return int(post.post_id)
+    except ValueError:
+        return 0
+
+
+def fetch_telegram_public_channel_posts_page(
+    *,
+    channel_username: str,
+    channel_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+    before_post_id: int | None = None,
+) -> tuple[list[TelegramMarketPost], list[str]]:
+    warnings: list[str] = []
+    base_url = telegram_public_channel_url(channel_username, channel_url)
+    url = telegram_public_page_url(base_url, before_post_id=before_post_id)
+    headers = {"User-Agent": user_agent}
+    with httpx.Client(timeout=timeout_seconds, follow_redirects=True, trust_env=False) as client:
+        response = client.get(url, headers=headers)
+        response.raise_for_status()
+    posts = parse_telegram_public_channel_html(
+        response.text,
+        channel_username=normalize_telegram_channel_username(channel_username),
+        base_url=base_url,
+    )
+    if not posts:
+        warnings.append("텔레그램 공개 미리보기에서 게시글 본문을 찾지 못했습니다.")
+    return posts, warnings
+
+
 def fetch_telegram_public_channel_posts(
     *,
     channel_username: str,
@@ -129,20 +168,48 @@ def fetch_telegram_public_channel_posts(
     user_agent: str,
     max_posts: int,
 ) -> tuple[list[TelegramMarketPost], list[str]]:
-    warnings: list[str] = []
-    url = telegram_public_channel_url(channel_username, channel_url)
-    headers = {"User-Agent": user_agent}
-    with httpx.Client(timeout=timeout_seconds, follow_redirects=True, trust_env=False) as client:
-        response = client.get(url, headers=headers)
-        response.raise_for_status()
-    posts = parse_telegram_public_channel_html(
-        response.text,
-        channel_username=normalize_telegram_channel_username(channel_username),
-        base_url=url,
+    posts, warnings = fetch_telegram_public_channel_posts_page(
+        channel_username=channel_username,
+        channel_url=channel_url,
+        timeout_seconds=timeout_seconds,
+        user_agent=user_agent,
     )
-    if not posts:
-        warnings.append("텔레그램 공개 미리보기에서 게시글 본문을 찾지 못했습니다.")
-    return posts[: max(int(max_posts or 20), 1)], warnings
+    posts.sort(key=telegram_post_sort_key)
+    return posts[-max(int(max_posts or 20), 1):], warnings
+
+
+def fetch_telegram_public_channel_posts_backfill(
+    *,
+    channel_username: str,
+    channel_url: str,
+    timeout_seconds: float,
+    user_agent: str,
+    max_pages: int = 4,
+) -> tuple[list[TelegramMarketPost], list[str]]:
+    warnings: list[str] = []
+    by_message_id: dict[str, TelegramMarketPost] = {}
+    before_post_id: int | None = None
+    for _ in range(max(int(max_pages or 1), 1)):
+        posts, page_warnings = fetch_telegram_public_channel_posts_page(
+            channel_username=channel_username,
+            channel_url=channel_url,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+            before_post_id=before_post_id,
+        )
+        warnings.extend(page_warnings)
+        if not posts:
+            break
+        for post in posts:
+            by_message_id[post.message_id] = post
+        numeric_ids = [telegram_post_sort_key(post) for post in posts if telegram_post_sort_key(post) > 0]
+        if not numeric_ids:
+            break
+        next_before = min(numeric_ids)
+        if before_post_id is not None and next_before >= before_post_id:
+            break
+        before_post_id = next_before
+    return sorted(by_message_id.values(), key=telegram_post_sort_key), warnings
 
 
 def parse_us_market_session_date(title: str, *, today: date | None = None, published_at: str | None = None) -> str | None:
@@ -171,6 +238,8 @@ def is_us_market_close_anchor(post: TelegramMarketPost) -> bool:
     title = post.title
     text = post.text
     if not search(r"\b\d{1,2}/\d{1,2}\b", title):
+        return False
+    if "한국 증시" in title:
         return False
     if "미 증시" in title or "미증시" in title:
         return True
@@ -228,23 +297,25 @@ def render_telegram_market_summary(posts: Iterable[TelegramMarketPost], *, max_c
     return rendered[:limit].rstrip() + "\n\n[원문 길이 제한으로 이후 텔레그램 본문은 생략됨]"
 
 
-def latest_telegram_us_market_close_candidate(
+def telegram_us_market_close_candidates(
     posts: list[TelegramMarketPost],
     *,
     today: date | None = None,
     max_related_posts: int = 4,
     max_summary_chars: int = 12000,
-) -> TelegramMarketCloseCandidate | None:
-    for index, post in enumerate(posts):
+) -> list[TelegramMarketCloseCandidate]:
+    sorted_posts = sorted(posts, key=telegram_post_sort_key)
+    by_session_date: dict[str, TelegramMarketCloseCandidate] = {}
+    for index, post in enumerate(sorted_posts):
         if not is_us_market_close_anchor(post):
             continue
         session_date = parse_us_market_session_date(post.title, today=today, published_at=post.published_at)
         if not session_date:
             continue
-        selected = _candidate_posts_for_anchor(posts, index, max(max_related_posts, 1))
-        selected.sort(key=lambda item: int(item.post_id) if item.post_id.isdigit() else 0)
+        selected = _candidate_posts_for_anchor(sorted_posts, index, max(max_related_posts, 1))
+        selected.sort(key=telegram_post_sort_key)
         source_title = f"Telegram @{DEFAULT_TELEGRAM_MARKET_CHANNEL_USERNAME}: {post.title}"
-        return TelegramMarketCloseCandidate(
+        candidate = TelegramMarketCloseCandidate(
             source_item_id=post.message_id,
             source_url=post.url,
             source_title=source_title,
@@ -253,4 +324,29 @@ def latest_telegram_us_market_close_candidate(
             raw_summary=render_telegram_market_summary(selected, max_chars=max_summary_chars),
             included_post_count=len(selected),
         )
-    return None
+        previous = by_session_date.get(session_date)
+        previous_sort_key = 0
+        if previous:
+            try:
+                previous_sort_key = int(previous.source_item_id.rsplit("/", 1)[-1])
+            except ValueError:
+                previous_sort_key = 0
+        if previous is None or telegram_post_sort_key(post) > previous_sort_key:
+            by_session_date[session_date] = candidate
+    return sorted(by_session_date.values(), key=lambda item: item.session_date, reverse=True)
+
+
+def latest_telegram_us_market_close_candidate(
+    posts: list[TelegramMarketPost],
+    *,
+    today: date | None = None,
+    max_related_posts: int = 4,
+    max_summary_chars: int = 12000,
+) -> TelegramMarketCloseCandidate | None:
+    candidates = telegram_us_market_close_candidates(
+        posts,
+        today=today,
+        max_related_posts=max_related_posts,
+        max_summary_chars=max_summary_chars,
+    )
+    return candidates[0] if candidates else None

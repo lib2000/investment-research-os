@@ -1757,9 +1757,9 @@ class NaverResearchIngestTests(unittest.TestCase):
         )
 
         html = """
-        <div class="tgme_widget_message" data-post="ehdwl/101">
+        <div class="tgme_widget_message" data-post="ehdwl/99">
           <div class="tgme_widget_message_text">*특징 종목: 엔비디아, 마이크론 하락<br/>필라델피아 반도체 지수는 하락</div>
-          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/101"><time datetime="2026-06-17T01:25:00+00:00"></time></a>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/99"><time datetime="2026-06-17T01:25:00+00:00"></time></a>
         </div>
         <div class="tgme_widget_message" data-post="ehdwl/100">
           <div class="tgme_widget_message_text">06/16 미 증시, 물가와 반도체 이슈로 하락<br/>다우 -1.0%, 나스닥 -2.0%, S&amp;P500 -1.5%</div>
@@ -1811,6 +1811,7 @@ class NaverResearchIngestTests(unittest.TestCase):
 
         with patch.object(main, "fetch_telegram_public_channel_posts", return_value=([], [])), \
             patch.object(main, "latest_telegram_us_market_close_candidate", return_value=candidate), \
+            patch.object(main, "read_market_close_journal", return_value={"entries": []}), \
             patch.object(main, "read_json_store", return_value={}), \
             patch.object(main, "write_json_store") as write_store, \
             patch.object(main, "save_market_close_review", return_value=response) as save_review:
@@ -1826,6 +1827,102 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(written_state["status"], "success")
         self.assertEqual(written_state["source_item_id"], "ehdwl/100")
         self.assertEqual(written_state["session_date"], "2026-06-16")
+
+    def test_telegram_market_close_refresh_skips_existing_session_date(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+        from research_os.telegram_market_journal import TelegramMarketCloseCandidate
+
+        settings = Settings(research_vault_dir="../research_vault")
+        candidate = TelegramMarketCloseCandidate(
+            source_item_id="ehdwl/10818",
+            source_url="https://t.me/ehdwl/10818",
+            source_title="Telegram @ehdwl: 06/16 미 증시",
+            source_published_at="2026-06-16T20:30:00+00:00",
+            session_date="2026-06-16",
+            raw_summary="06/16 미 증시",
+            included_post_count=1,
+        )
+        existing = {"entries": [{"market": "US", "session_date": "2026-06-16"}]}
+
+        with patch.object(main, "fetch_telegram_public_channel_posts", return_value=([], [])), \
+            patch.object(main, "latest_telegram_us_market_close_candidate", return_value=candidate), \
+            patch.object(main, "read_market_close_journal", return_value=existing), \
+            patch.object(main, "read_json_store", return_value={}), \
+            patch.object(main, "write_json_store") as write_store, \
+            patch.object(main, "save_market_close_review") as save_review:
+            result = main.refresh_telegram_us_market_close_journal(settings, force=False)
+
+        self.assertEqual(result["status"], "skipped")
+        save_review.assert_not_called()
+        written_state = write_store.call_args.args[1]
+        self.assertEqual(written_state["status"], "skipped_duplicate")
+        self.assertEqual(written_state["source_published_at"], candidate.source_published_at)
+        self.assertEqual(written_state["session_date"], "2026-06-16")
+
+    def test_telegram_market_close_backfill_skips_existing_dates(self):
+        import research_os_main as main
+        from research_os.models import MarketCloseEntry, MarketCloseReviewResponse
+        from research_os.settings import Settings
+        from research_os.telegram_market_journal import TelegramMarketCloseCandidate
+
+        settings = Settings(research_vault_dir="../research_vault")
+        existing = {
+            "entries": [
+                {"market": "US", "session_date": "2026-06-11", "raw_summary": "already saved"}
+            ]
+        }
+        candidates = [
+            TelegramMarketCloseCandidate(
+                source_item_id="ehdwl/10806",
+                source_url="https://t.me/ehdwl/10806",
+                source_title="Telegram @ehdwl: 06/11 미 증시",
+                source_published_at="2026-06-11T20:30:00+00:00",
+                session_date="2026-06-11",
+                raw_summary="06/11 미 증시",
+                included_post_count=1,
+            ),
+            TelegramMarketCloseCandidate(
+                source_item_id="ehdwl/10818",
+                source_url="https://t.me/ehdwl/10818",
+                source_title="Telegram @ehdwl: 06/16 미 증시",
+                source_published_at="2026-06-16T20:30:00+00:00",
+                session_date="2026-06-16",
+                raw_summary="06/16 미 증시",
+                included_post_count=1,
+            ),
+        ]
+        response = MarketCloseReviewResponse(
+            entry=MarketCloseEntry(
+                entry_id="US-2026-06-16",
+                market="US",
+                session_date="2026-06-16",
+                raw_summary="06/16 미 증시",
+                source_origin="telegram_auto",
+                source_provider="telegram_ehdwl",
+                source_title="Telegram @ehdwl: 06/16 미 증시",
+                sentiment="중립",
+                risk_level="보통",
+                regime="혼조",
+            ),
+            recent_regime_summary="US 최근 1회 누적",
+        )
+
+        with patch.object(main, "fetch_telegram_public_channel_posts_backfill", return_value=([], [])), \
+            patch.object(main, "telegram_us_market_close_candidates", return_value=candidates), \
+            patch.object(main, "read_market_close_journal", return_value=existing), \
+            patch.object(main, "read_json_store", return_value={}), \
+            patch.object(main, "write_json_store") as write_store, \
+            patch.object(main, "save_market_close_review", return_value=response) as save_review:
+            result = main.backfill_telegram_us_market_close_journal(settings, max_pages=2)
+
+        self.assertEqual(result["stored_count"], 1)
+        self.assertEqual(result["skipped_existing_count"], 1)
+        request = save_review.call_args.args[0]
+        self.assertEqual(request.session_date, "2026-06-16")
+        written_state = write_store.call_args.args[1]
+        self.assertEqual(written_state["backfill_stored_count"], 1)
+        self.assertEqual(written_state["backfill_skipped_existing_count"], 1)
 
     def test_portfolio_risk_warning_uses_company_name(self):
         import research_os_main as main

@@ -122,8 +122,10 @@ from research_os.kcif_reports import (
 from research_os.market_journal import naver_market_close_source_metadata
 from research_os.telegram_market_journal import (
     fetch_telegram_public_channel_posts,
+    fetch_telegram_public_channel_posts_backfill,
     latest_telegram_us_market_close_candidate,
     telegram_market_close_source_metadata,
+    telegram_us_market_close_candidates,
 )
 from research_os.llm_bridge_status import build_llm_bridge_storage_status
 from research_os.regional_sources import (
@@ -4307,15 +4309,35 @@ def refresh_telegram_us_market_close_journal(settings: Settings, force: bool = F
             "previous_state": state,
             "state_path": str(state_path),
         }
+    if not force and candidate.session_date in existing_market_close_session_dates(settings, "US"):
+        source_metadata = telegram_market_close_source_metadata(candidate.source_title)
+        state = {
+            **previous_state,
+            "status": "skipped_duplicate",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": "같은 미국 시장일지 날짜가 이미 있어 중복 저장하지 않았습니다.",
+            "source_item_id": candidate.source_item_id,
+            "source_url": candidate.source_url,
+            "source_title": candidate.source_title,
+            "source_origin": source_metadata["source_origin"],
+            "source_provider": source_metadata["source_provider"],
+            "source_published_at": candidate.source_published_at,
+            "session_date": candidate.session_date,
+            "included_post_count": candidate.included_post_count,
+            "warnings": warnings,
+        }
+        write_json_store(state_path, state)
+        return {
+            "status": "skipped",
+            "module": "telegram_market_close_journal",
+            "message": "이미 같은 날짜의 텔레그램 미국 시장일지를 반영했습니다.",
+            "source": candidate.__dict__,
+            "previous_state": state,
+            "state_path": str(state_path),
+        }
     source_metadata = telegram_market_close_source_metadata(candidate.source_title)
-    request = MarketCloseReviewRequest(
-        market="US",
-        session_date=candidate.session_date,
-        raw_summary=candidate.raw_summary,
-        **source_metadata,
-        save_result=True,
-    )
-    response = save_market_close_review(request, settings)
+    response = save_telegram_us_market_close_candidate(candidate, settings)
     run_at = current_storage_timestamp()
     run_date = current_storage_date().isoformat()
     state = {
@@ -4348,6 +4370,160 @@ def refresh_telegram_us_market_close_journal(settings: Settings, force: bool = F
         "state_path": str(state_path),
     }
 
+
+def existing_market_close_session_dates(settings: Settings, market: str) -> set[str]:
+    normalized_market = normalize_market_code(market)
+    payload = read_market_close_journal(settings)
+    dates: set[str] = set()
+    for item in payload.get("entries", []):
+        if not isinstance(item, dict):
+            continue
+        if normalize_market_code(str(item.get("market") or "")) != normalized_market:
+            continue
+        session_date = str(item.get("session_date") or "").strip()
+        if session_date:
+            dates.add(session_date)
+    return dates
+
+
+def save_telegram_us_market_close_candidate(candidate, settings: Settings):
+    source_metadata = telegram_market_close_source_metadata(candidate.source_title)
+    request = MarketCloseReviewRequest(
+        market="US",
+        session_date=candidate.session_date,
+        raw_summary=candidate.raw_summary,
+        **source_metadata,
+        save_result=True,
+    )
+    return save_market_close_review(request, settings)
+
+
+def backfill_telegram_us_market_close_journal(
+    settings: Settings,
+    *,
+    max_pages: int = 4,
+    force: bool = False,
+) -> dict:
+    state_path = telegram_market_close_journal_state_path(settings)
+    try:
+        posts, warnings = fetch_telegram_public_channel_posts_backfill(
+            channel_username=settings.telegram_market_close_channel_username,
+            channel_url=settings.telegram_market_close_channel_url,
+            timeout_seconds=settings.telegram_market_close_timeout_seconds,
+            user_agent=settings.telegram_market_close_user_agent,
+            max_pages=max_pages,
+        )
+        candidates = telegram_us_market_close_candidates(
+            posts,
+            today=current_storage_date(),
+            max_summary_chars=settings.telegram_market_close_max_summary_chars,
+        )
+    except Exception as exc:
+        state = {
+            **read_json_store(state_path, {}),
+            "status": "error",
+            "last_attempt_at": current_storage_timestamp(),
+            "last_attempt_date": current_storage_date().isoformat(),
+            "last_attempt_message": provider_error_message(exc, settings),
+        }
+        write_json_store(state_path, state)
+        return {
+            "status": "error",
+            "module": "telegram_market_close_journal_backfill",
+            "message": state["last_attempt_message"],
+            "state_path": str(state_path),
+        }
+    existing_dates = existing_market_close_session_dates(settings, "US")
+    selected = [candidate for candidate in candidates if force or candidate.session_date not in existing_dates]
+    selected.sort(key=lambda item: item.session_date)
+    stored: list[dict] = []
+    failed: list[dict] = []
+    for candidate in selected:
+        try:
+            response = save_telegram_us_market_close_candidate(candidate, settings)
+            stored.append(
+                {
+                    "session_date": candidate.session_date,
+                    "source_item_id": candidate.source_item_id,
+                    "source_url": candidate.source_url,
+                    "source_title": candidate.source_title,
+                    "source_published_at": candidate.source_published_at,
+                    "entry_id": response.entry.entry_id,
+                    "storage": response.storage.model_dump(mode="json") if response.storage else None,
+                }
+            )
+            existing_dates.add(candidate.session_date)
+        except Exception as exc:
+            failed.append(
+                {
+                    "session_date": candidate.session_date,
+                    "source_item_id": candidate.source_item_id,
+                    "error": provider_error_message(exc, settings),
+                }
+            )
+    run_at = current_storage_timestamp()
+    run_date = current_storage_date().isoformat()
+    skipped_existing = [
+        {
+            "session_date": candidate.session_date,
+            "source_item_id": candidate.source_item_id,
+            "source_url": candidate.source_url,
+            "source_title": candidate.source_title,
+            "source_published_at": candidate.source_published_at,
+        }
+        for candidate in candidates
+        if candidate.session_date not in {item["session_date"] for item in stored}
+        and candidate.session_date not in {item["session_date"] for item in failed}
+    ]
+    state = {
+        **read_json_store(state_path, {}),
+        "status": "success" if not failed else "error",
+        "last_attempt_at": run_at,
+        "last_attempt_date": run_date,
+        "last_attempt_message": (
+            f"텔레그램 @ehdwl 미국 시장일지 소급 저장 {len(stored)}건, 기존/스킵 {len(skipped_existing)}건, 실패 {len(failed)}건"
+        ),
+        "backfill_last_run_at": run_at,
+        "backfill_candidate_count": len(candidates),
+        "backfill_stored_count": len(stored),
+        "backfill_skipped_existing_count": len(skipped_existing),
+        "backfill_failed_count": len(failed),
+        "backfill_stored": stored,
+        "backfill_failed": failed,
+        "backfill_skipped_existing": skipped_existing,
+        "warnings": warnings,
+    }
+    if stored:
+        latest_stored = stored[-1]
+        state.update(
+            {
+                "last_run_at": run_at,
+                "last_run_date": run_date,
+                "source_item_id": latest_stored.get("source_item_id"),
+                "source_url": latest_stored.get("source_url"),
+                "source_title": latest_stored.get("source_title"),
+                "source_origin": "telegram_auto",
+                "source_provider": "telegram_ehdwl",
+                "source_published_at": latest_stored.get("source_published_at"),
+                "session_date": latest_stored.get("session_date"),
+                "market_journal_entry_id": latest_stored.get("entry_id"),
+                "storage": latest_stored.get("storage"),
+            }
+        )
+    write_json_store(state_path, state)
+    return {
+        "status": "success" if not failed else "error",
+        "module": "telegram_market_close_journal_backfill",
+        "candidate_count": len(candidates),
+        "stored_count": len(stored),
+        "skipped_existing_count": len(skipped_existing),
+        "failed_count": len(failed),
+        "stored": stored,
+        "skipped_existing": skipped_existing,
+        "failed": failed,
+        "warnings": warnings,
+        "state_path": str(state_path),
+    }
 
 def parse_telegram_market_close_journal_time(settings: Settings) -> tuple[int, int]:
     match = search(r"^(\d{1,2}):(\d{2})$", str(settings.telegram_market_close_journal_time or "07:20").strip())
@@ -14508,6 +14684,18 @@ def refresh_telegram_us_market_close_journal_endpoint(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return refresh_telegram_us_market_close_journal(settings, force=force)
+
+
+@app.post(
+    "/api/v1/telegram-market-close-journal/backfill",
+    dependencies=[Depends(verify_user_token)],
+)
+def backfill_telegram_us_market_close_journal_endpoint(
+    max_pages: int = 4,
+    force: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return backfill_telegram_us_market_close_journal(settings, max_pages=max_pages, force=force)
 
 
 @app.get(
