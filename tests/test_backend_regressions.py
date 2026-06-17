@@ -839,6 +839,31 @@ class FinancialDatasetsDataProviderModuleTests(unittest.TestCase):
         self.assertEqual(points[0].value, "100")
         self.assertEqual(points[-1].label, "financial_datasets_free_cash_flow")
         self.assertEqual(FinancialDatasetsFinancialDataProvider(FakeClient()).fetch_financial_snapshot("005930"), [])
+class FinnhubDataProviderModuleTests(unittest.TestCase):
+    def test_finnhub_providers_map_quote_news_and_earnings_without_network(self):
+        from research_os.finnhub_data_provider import FinnhubMarketDataProvider, FinnhubSupplementalDataProvider
+
+        class FakeClient:
+            is_configured = True
+            base_url = "https://finnhub.test"
+
+            def get(self, endpoint, params=None):
+                if endpoint == "quote":
+                    return {"c": 10.5, "pc": 9.8}
+                if endpoint == "calendar/earnings":
+                    return {"earningsCalendar": [{"date": "2026-07-20", "epsEstimate": 0.1}]}
+                if endpoint == "company-news":
+                    return [{"datetime": 1, "headline": "Planet launches new contract"}]
+                return {}
+
+        market_points = FinnhubMarketDataProvider(FakeClient()).fetch_market_snapshot("PL")
+        supplemental_points = FinnhubSupplementalDataProvider(FakeClient()).fetch_supplemental_snapshot("PL")
+
+        self.assertEqual([point.label for point in market_points], ["finnhub_last_price", "finnhub_previous_close"])
+        self.assertEqual(market_points[0].value, "10.5")
+        self.assertIn("finnhub_next_earnings_event", [point.label for point in supplemental_points])
+        self.assertIn("finnhub_recent_news", [point.label for point in supplemental_points])
+        self.assertEqual(FinnhubMarketDataProvider(FakeClient()).fetch_market_snapshot("005930"), [])
 
 class WebSearchDataProviderModuleTests(unittest.TestCase):
     def test_web_search_data_providers_return_quota_guard_without_network(self):

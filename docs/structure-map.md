@@ -57,6 +57,7 @@
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
 | `backend\research_os\data_provider_status_messages.py` | KIS/FMP/외부 보강 provider 상태 표시 문구 helper | `DataProviderStatusMessagesModuleTests` |
 | `backend\research_os\financial_datasets_data_provider.py` | Financial Datasets 재무 API client와 해외 재무 snapshot provider | `FinancialDatasetsDataProviderModuleTests` |
+| `backend\research_os\finnhub_data_provider.py` | Finnhub 현재가, 실적 캘린더, 회사 뉴스 provider | `FinnhubDataProviderModuleTests` |
 | `backend\research_os\provider_usage.py` | Tavily/Brave 등 외부 프로바이더 무료 한도 사용량 파일 기록 helper | `ProviderUsageModuleTests` |
 | `backend\research_os\data_provider_core.py` | provider 공통 interface, 상태 객체, mock/empty/composite wrapper | `BackendModuleBoundaryTests` |
 | `backend\research_os\nps_data_provider.py` | 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환 | `check_backend_runtime_env.py` |
