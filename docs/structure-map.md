@@ -56,6 +56,7 @@
 | `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
 | `backend\research_os\dashboard_helpers.py` | 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper | `DashboardHelpersModuleTests` |
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
+| `backend\research_os\automation_digest_helpers.py` | 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper | `AutomationStatusModuleTests` |
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
 | `backend\research_os\data_provider_status_messages.py` | KIS/FMP/외부 보강 provider 상태 표시 문구 helper | `DataProviderStatusMessagesModuleTests` |
 | `backend\research_os\financial_datasets_data_provider.py` | Financial Datasets 재무 API client와 해외 재무 snapshot provider | `FinancialDatasetsDataProviderModuleTests` |

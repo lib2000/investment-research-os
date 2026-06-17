@@ -5,6 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from .automation_digest_helpers import automation_board_targets
+from .automation_digest_helpers import automation_tone
+from .automation_digest_helpers import build_dashboard_next_actions
+from .automation_digest_helpers import build_source_quality_dashboard
+from .automation_digest_helpers import project_priority_targets
+from .automation_digest_helpers import select_priority_targets
+
 
 class AutomationStatusRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
@@ -265,19 +272,8 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         brief_payload = {}
     rag_status_payload = safe_rag_memory_status(runtime, vault_dir)
 
-    targets = [
-        *[item for item in board.get("ticker_targets", []) if isinstance(item, dict)],
-        *[item for item in board.get("sector_targets", []) if isinstance(item, dict)],
-    ]
-    priority_targets = sorted(
-        targets,
-        key=lambda item: (
-            {"high": 3, "medium": 2, "low": 1}.get(str(item.get("priority")), 2),
-            int(item.get("recent_document_count") or 0),
-            int(item.get("rag_document_count") or 0),
-        ),
-        reverse=True,
-    )[:5]
+    targets = automation_board_targets(board)
+    priority_targets = select_priority_targets(targets)
     duplicate_count = max(
         int(board.get("duplicate_suspected_count") or 0),
         int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0,
@@ -318,91 +314,39 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         int(news_payload.get("quality_issue_count") or 0) if isinstance(news_payload, dict) else 0
     )
     daily_brief_date = status.get("daily_brief_date") or brief_payload.get("date")
-    source_quality_dashboard = [
-        {
-            "source": "DART 공시",
-            "status": "점검 필요" if dart_daily.get("due") else ("주의" if dart_daily.get("failure_count") else "정상"),
-            "copyright_policy": "공시 원문/메타데이터 저장",
-            "duplicate_guard": "공시번호 기준 중복 제외",
-            "related_count": int(dart_daily.get("target_count") or dart_daily.get("coverage_count") or 0),
-            "last_checked_at": dart_daily.get("last_checked_at") or dart_daily.get("checked_at"),
-            "detail": dart_daily.get("summary") or f"실패 {dart_daily.get('failure_count') or 0}건",
-        },
-        {
-            "source": "네이버 리서치/시장일지",
-            "status": "주의" if news_quality_issue_count else "정상",
-            "copyright_policy": "저작권 안전 요약/메타데이터 중심",
-            "duplicate_guard": "source_url/content_hash/제목 유사도 중복 제외",
-            "related_count": len(news_items),
-            "last_checked_at": status.get("naver_research_checked_at") or status.get("updated_at"),
-            "detail": f"뉴스 인박스 {len(news_items)}개 · 품질 확인 {news_quality_issue_count}개",
-        },
-        {
-            "source": "KIEP/KCIF 매크로",
-            "status": "점검 필요" if kcif_due else "정상",
-            "copyright_policy": "제목·발행일·링크·요약 메타데이터 활용",
-            "duplicate_guard": "보고서 URL/제목 기준 중복 제외",
-            "related_count": kcif_related_count,
-            "last_checked_at": kcif_watch.get("updated_at") if isinstance(kcif_watch, dict) else None,
-            "detail": "매크로 보고서 일일 점검",
-        },
-        {
-            "source": "EMERiCs/CSF/지역자료",
-            "status": "점검 필요" if regional_sources_due else "정상",
-            "copyright_policy": "제목·링크·발행기관·요약 메타데이터 활용",
-            "duplicate_guard": "URL/제목 기준 중복 제외",
-            "related_count": regional_sources_related_count,
-            "last_checked_at": regional_sources_watch.get("updated_at")
-            if isinstance(regional_sources_watch, dict)
-            else None,
-            "detail": "지역·중국·신흥국 리스크 소스 일일 점검",
-        },
-    ]
-
-    tone = "ok"
-    headline = "자동화 정상"
-    if failed_count or news_quality_issue_count:
-        tone = "warning"
-        headline = "확인 필요"
-    if not target_count or not daily_brief_date:
-        tone = "needs_action"
-        headline = "업데이트 필요"
-
-    next_actions = []
-    if not target_count:
-        next_actions.append("포트폴리오나 관심목록을 저장해 자동 수집 대상을 먼저 구성하세요.")
-    if not daily_brief_date:
-        next_actions.append("오늘 리서치 업데이트를 실행해 일일 브리핑을 생성하세요.")
-    if duplicate_count:
-        next_actions.append(f"중복 의심 자료 {duplicate_count}개를 Dossier 합성에서 묶어 확인하세요.")
-    if failed_count:
-        next_actions.append(f"자동화 실패 {failed_count}건의 API/소스 상태를 점검하세요.")
-    if news_unpromoted_count:
-        next_actions.append(f"뉴스 인박스 미승격 자료 {news_unpromoted_count}개를 논거/시장일지 반영 여부로 분류하세요.")
-    if news_quality_issue_count:
-        next_actions.append(f"뉴스 본문 추출 품질 경고 {news_quality_issue_count}개를 원문 링크나 본문 붙여넣기로 보강하세요.")
-    if kcif_due:
-        next_actions.append("KCIF 매크로 보고서 목록 일일 점검이 필요합니다.")
-    elif kcif_related_count:
-        next_actions.append(f"KCIF 관련 매크로 보고서 {kcif_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요.")
-    if regional_sources_due:
-        next_actions.append("EMERiCs/CSF/KIEP 지역·매크로 자료 일일 점검이 필요합니다.")
-    elif regional_sources_related_count:
-        next_actions.append(
-            f"EMERiCs/CSF/KIEP 관련 자료 {regional_sources_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요."
-        )
-    if dart_daily.get("due"):
-        next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")
-    elif dart_daily.get("failure_count"):
-        next_actions.append(f"DART 공시 점검 실패 {dart_daily.get('failure_count')}개 종목을 확인하세요.")
-    if daily_recommendations_due:
-        next_actions.append("오늘의 추천 후보 1~3위 생성과 사후 추적 저장이 필요합니다.")
-    elif daily_recommendations.get("latest_recommendation_date"):
-        next_actions.append(
-            f"{daily_recommendations.get('latest_recommendation_date')} 추천 후보 1~3위가 별도 항목에 저장되어 있습니다."
-        )
-    if not next_actions:
-        next_actions.append("보유·관심 대상의 새 자료를 수집하고 Dossier/일일 브리핑에 반영할 준비가 되어 있습니다.")
+    source_quality_dashboard = build_source_quality_dashboard(
+        dart_daily=dart_daily,
+        news_quality_issue_count=news_quality_issue_count,
+        news_items=news_items,
+        status=status,
+        kcif_due=kcif_due,
+        kcif_related_count=kcif_related_count,
+        kcif_watch=kcif_watch,
+        regional_sources_due=regional_sources_due,
+        regional_sources_related_count=regional_sources_related_count,
+        regional_sources_watch=regional_sources_watch,
+    )
+    tone, headline = automation_tone(
+        failed_count=failed_count,
+        news_quality_issue_count=news_quality_issue_count,
+        target_count=target_count,
+        daily_brief_date=daily_brief_date,
+    )
+    next_actions = build_dashboard_next_actions(
+        target_count=target_count,
+        daily_brief_date=daily_brief_date,
+        duplicate_count=duplicate_count,
+        failed_count=failed_count,
+        news_unpromoted_count=news_unpromoted_count,
+        news_quality_issue_count=news_quality_issue_count,
+        kcif_due=kcif_due,
+        kcif_related_count=kcif_related_count,
+        regional_sources_due=regional_sources_due,
+        regional_sources_related_count=regional_sources_related_count,
+        dart_daily=dart_daily,
+        daily_recommendations_due=daily_recommendations_due,
+        daily_recommendations=daily_recommendations,
+    )
 
     return {
         "status": "success",
@@ -452,19 +396,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
             "state": daily_recommendation_state,
         },
         "last_run_at": status.get("updated_at"),
-        "priority_targets": [
-            {
-                "label": item.get("company_name") or item.get("name") or item.get("ticker") or "대상 미확인",
-                "key": item.get("ticker") or item.get("name") or "",
-                "source": item.get("source") or item.get("scope") or "interest",
-                "priority": item.get("priority") or "medium",
-                "recent_document_count": item.get("recent_document_count") or 0,
-                "rag_document_count": item.get("rag_document_count") or 0,
-                "duplicate_suspected_count": item.get("duplicate_suspected_count") or 0,
-                "next_action": item.get("next_action"),
-            }
-            for item in priority_targets
-        ],
+        "priority_targets": project_priority_targets(priority_targets),
         "next_actions": next_actions[:5],
         "automation_steps": board.get("automation_steps") or [
             "Pulls: 보유·관심 대상의 뉴스, 공시, 리포트, 시장일지를 수집합니다.",

@@ -5937,6 +5937,37 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertEqual(result["document_count"], 0)
         self.assertIn("index unavailable", result["warning"])
 
+    def test_automation_digest_helpers_rank_targets_and_next_actions(self):
+        from research_os.automation_digest_helpers import build_dashboard_next_actions
+        from research_os.automation_digest_helpers import select_priority_targets
+
+        targets = [
+            {"ticker": "LOW", "priority": "low", "recent_document_count": 10, "rag_document_count": 10},
+            {"ticker": "HIGH", "priority": "high", "recent_document_count": 1, "rag_document_count": 1},
+        ]
+
+        ranked = select_priority_targets(targets)
+        actions = build_dashboard_next_actions(
+            target_count=1,
+            daily_brief_date="2026-06-18",
+            duplicate_count=2,
+            failed_count=0,
+            news_unpromoted_count=0,
+            news_quality_issue_count=0,
+            kcif_due=False,
+            kcif_related_count=3,
+            regional_sources_due=False,
+            regional_sources_related_count=0,
+            dart_daily={"due": False, "failure_count": 0},
+            daily_recommendations_due=False,
+            daily_recommendations={"latest_recommendation_date": "2026-06-18"},
+        )
+
+        self.assertEqual(ranked[0]["ticker"], "HIGH")
+        self.assertIn("중복 의심 자료 2개", actions[0])
+        self.assertTrue(any("KCIF 관련 매크로 보고서 3개" in item for item in actions))
+        self.assertTrue(any("2026-06-18 추천 후보" in item for item in actions))
+
     def test_automation_pipeline_uses_runtime_refresh_callbacks(self):
         from research_os import automation_status
 
