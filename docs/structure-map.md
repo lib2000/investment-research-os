@@ -97,6 +97,7 @@
 | `backend\research_os\portfolio_policy.py` | 강화학습형 포트폴리오 정책 상태/행동/보상 scaffold와 비중 조정 helper | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_store.py` | 포트폴리오 저장 키/정렬 정책 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
+| `backend\research_os\company_ir_config.py` | 공개 IR/SEC 소스 JSON 확장 설정 파싱과 중복 제거 helper | `CompanyIrSourcesWatchTests` |
 | `backend\research_os\public_ir_sec.py` | 공개 IR/SEC URL 수집, URL-only 보강 필요 판정, 저장 데이터/RAG 색인 연결, 상태 payload 조립 | `check_public_ir_sec_store.py`, `check_backend_module_health.py` |
 | `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
 | `backend\research_os\rag_memory_utils.py` | RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper | `RagMemoryUtilsModuleTests` |

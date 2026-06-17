@@ -1553,6 +1553,39 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(by_ticker["PL"].company_name, "Planet Labs PBC")
         self.assertEqual(by_ticker["PL"].source_scope, "company_ir_press_releases")
 
+    def test_company_ir_config_dedupes_custom_sources(self):
+        from research_os import company_ir_config
+        from research_os.company_ir_sources import CompanyIrSource
+
+        base = [
+            CompanyIrSource(
+                source_key="joby_ir_press_releases",
+                ticker="JOBY",
+                company_name="Joby Aviation",
+                provider="Joby IR",
+                source_url="https://ir.jobyaviation.com/news-events/press-releases",
+            )
+        ]
+        config = json.dumps(
+            [
+                {
+                    "ticker": "JOBY",
+                    "source_url": "https://ir.jobyaviation.com/news-events/press-releases",
+                },
+                {
+                    "ticker": "PL",
+                    "company_name": "Planet",
+                    "source_url": "https://investors.planet.com/news",
+                },
+            ]
+        )
+
+        sources = company_ir_config.configured_company_ir_sources(base, config, CompanyIrSource)
+
+        self.assertEqual(len(sources), 2)
+        self.assertEqual(sources[1].ticker, "PL")
+        self.assertEqual(sources[1].provider, "Planet IR")
+
 
 class ExternalSourceScheduleStatusTests(unittest.TestCase):
     def test_regional_source_failure_preserves_cached_provider_items(self):
