@@ -7063,6 +7063,28 @@ class RecentActivityPublicIrModuleTests(unittest.TestCase):
         self.assertTrue(item["usable_for_recommendation"])
         self.assertFalse(item["needs_body_copy"])
 class DartFilingWatchTests(unittest.TestCase):
+    def test_dart_watch_exclusion_helpers_keep_reason_and_dedupe(self):
+        from research_os import dart_watch_exclusions
+
+        runtime = SimpleNamespace(normalize_ticker=lambda value: str(value).strip().upper())
+        excluded = [{"ticker": "360750", "source": "portfolio", "reason": "etf_not_dart_corp"}]
+        reason = dart_watch_exclusions.dart_watch_exclusion_reason(
+            {"ticker": "360750", "name": "TIGER 미국S&P500 ETF"}
+        )
+        entry = dart_watch_exclusions.dart_excluded_ticker_entry(
+            "360750",
+            "portfolio",
+            reason,
+            {"name": "TIGER 미국S&P500 ETF"},
+        )
+
+        dart_watch_exclusions.append_unique_dart_exclusion(runtime, excluded, entry)
+
+        self.assertEqual(reason, "etf_not_dart_corp")
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]["name"], "TIGER 미국S&P500 ETF")
+        self.assertIn("OpenDART", entry["message"])
+
     def test_recent_dart_entries_sort_by_receipt_date_before_detection_time(self):
         import research_os_main as main
 
