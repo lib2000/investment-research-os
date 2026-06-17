@@ -1989,11 +1989,22 @@ def dart_watch_tickers(settings: Settings) -> list[str]:
 
 def _dart_filing_watch_runtime() -> SimpleNamespace:
     return SimpleNamespace(
+        OpenDartClient=OpenDartClient,
+        classify_dart_filing_refresh_error=classify_dart_filing_refresh_error,
         current_storage_date=current_storage_date,
+        current_storage_timestamp=current_storage_timestamp,
+        dart_daily_check_status=dart_daily_check_status,
+        dart_filing_cache_path=dart_filing_cache_path,
+        dart_filing_cache_key=dart_filing_cache_key,
+        dart_filing_importance=dart_filing_importance,
         dart_watch_universe=dart_watch_universe,
         normalize_ticker=normalize_ticker,
+        provider_error_message=provider_error_message,
+        read_dart_filing_cache=read_dart_filing_cache,
         read_interest_list=read_interest_list,
         read_portfolio_store=read_portfolio_store,
+        save_dart_filing_watch_item=save_dart_filing_watch_item,
+        write_dart_filing_cache=write_dart_filing_cache,
     )
 
 
@@ -2053,116 +2064,13 @@ def refresh_dart_filing_watch(
     force: bool = False,
     save_result: bool = True,
 ) -> dict:
-    cache = read_dart_filing_cache(settings)
-    entries = cache.setdefault("entries", {})
-    full_universe_refresh = tickers is None
-    target_universe = dart_watch_universe(settings)
-    selected_tickers = [
-        normalize_ticker(item)
-        for item in (tickers or target_universe.get("target_tickers") or [])
-        if fullmatch(r"\d{6}", normalize_ticker(item))
-    ]
-    selected_tickers = list(dict.fromkeys(selected_tickers))
-    client = OpenDartClient(settings)
-    saved: list[dict] = []
-    skipped: list[dict] = []
-    failed: list[dict] = []
-    if not client.is_configured:
-        return {
-            "status": "skipped",
-            "module": "dart_filing_watch",
-            "reason": "DART_API_KEY가 없어 DART 신규 공시 자동 감시를 건너뜁니다.",
-            "target_count": len(selected_tickers),
-            "target_universe": target_universe,
-            "daily_check": dart_daily_check_status(cache, settings),
-            "cache_path": str(dart_filing_cache_path(settings)),
-        }
-
-    for ticker in selected_tickers:
-        attempts = 0
-        try:
-            while True:
-                attempts += 1
-                try:
-                    corp, filings = client.fetch_recent_filings(
-                        ticker,
-                        lookback_days=settings.dart_filing_lookback_days,
-                        page_count=settings.dart_filing_max_items_per_ticker,
-                    )
-                    break
-                except Exception as exc:
-                    failure_info = classify_dart_filing_refresh_error(exc)
-                    if attempts < 2 and failure_info.get("retryable"):
-                        continue
-                    raise
-            for filing in filings:
-                key = dart_filing_cache_key(ticker, filing)
-                if key in entries and not force:
-                    skipped.append({"ticker": ticker, "rcept_no": filing.get("rcept_no")})
-                    continue
-                importance, action, tags = dart_filing_importance(str(filing.get("report_name") or ""))
-                storage = save_dart_filing_watch_item(ticker, filing, settings) if save_result else None
-                entry = {
-                    "ticker": ticker,
-                    "corp_name": corp.get("corp_name"),
-                    "filing": filing,
-                    "importance": importance,
-                    "action": action,
-                    "tags": tags,
-                    "detected_at": current_storage_timestamp(),
-                    "storage": storage.model_dump(mode="json") if storage else None,
-                }
-                entries[key] = entry
-                saved.append(entry)
-        except Exception as exc:
-            failure_info = classify_dart_filing_refresh_error(exc)
-            failed.append(
-                {
-                    "ticker": ticker,
-                    "error": provider_error_message(exc, settings),
-                    "category": failure_info.get("category"),
-                    "retryable": failure_info.get("retryable"),
-                    "attempts": attempts or 1,
-                    "next_action": failure_info.get("next_action"),
-                }
-            )
-
-    cache["updated_at"] = current_storage_timestamp()
-    cache["last_run"] = current_storage_timestamp()
-    cache["target_tickers"] = selected_tickers
-    cache["target_universe"] = target_universe
-    cache["source"] = "OpenDART list.json"
-    cache["last_failures"] = failed
-    cache["entries"] = dict(list(entries.items())[-800:])
-    if full_universe_refresh:
-        cache["daily_check"] = {
-            "date": current_storage_date().isoformat(),
-            "checked_at": current_storage_timestamp(),
-            "target_count": len(selected_tickers),
-            "checked_tickers": selected_tickers,
-            "failed_tickers": [item.get("ticker") for item in failed if item.get("ticker")],
-            "excluded_tickers": target_universe.get("excluded_tickers") or [],
-            "saved_count": len(saved),
-            "skipped_count": len(skipped),
-            "lookback_days": settings.dart_filing_lookback_days,
-            "source": "portfolio_and_interest_daily_watch",
-        }
-    write_dart_filing_cache(settings, cache)
-    return {
-        "status": "success" if not failed else "partial_success",
-        "module": "dart_filing_watch",
-        "target_count": len(selected_tickers),
-        "target_universe": target_universe,
-        "daily_check": dart_daily_check_status(cache, settings),
-        "saved_count": len(saved),
-        "skipped_count": len(skipped),
-        "failed_count": len(failed),
-        "saved": saved,
-        "skipped": skipped[:20],
-        "failed": failed,
-        "cache_path": str(dart_filing_cache_path(settings)),
-    }
-
+    return dart_filing_watch.refresh_dart_filing_watch(
+        _dart_filing_watch_runtime(),
+        settings,
+        tickers,
+        force=force,
+        save_result=save_result,
+    )
 
 _DART_FILING_SCHEDULER_STARTED = False
 
