@@ -806,6 +806,39 @@ class RagSearchResultsModuleTests(unittest.TestCase):
         self.assertEqual(rag_search_results.match_strength(2, 2), "완전")
         self.assertEqual(rag_search_results.match_strength(1, 2), "부분")
         self.assertEqual(rag_search_results.match_strength(0, 0), "전체")
+class FinancialDatasetsDataProviderModuleTests(unittest.TestCase):
+    def test_financial_datasets_provider_maps_financial_payload_without_network(self):
+        from research_os.financial_datasets_data_provider import FinancialDatasetsFinancialDataProvider
+
+        class FakeClient:
+            is_configured = True
+            base_url = "https://financial.test"
+
+            def get(self, endpoint, params):
+                self.endpoint = endpoint
+                self.params = params
+                return {
+                    "financials": {
+                        "income_statements": [
+                            {
+                                "report_period": "2026-Q1",
+                                "revenue": 100,
+                                "gross_profit": 60,
+                                "operating_income": 30,
+                            }
+                        ],
+                        "balance_sheets": [{"cash_and_equivalents": 25}],
+                        "cash_flow_statements": [{"free_cash_flow": 12}],
+                    }
+                }
+
+        points = FinancialDatasetsFinancialDataProvider(FakeClient()).fetch_financial_snapshot("PL")
+
+        self.assertEqual(len(points), 5)
+        self.assertEqual(points[0].label, "financial_datasets_revenue")
+        self.assertEqual(points[0].value, "100")
+        self.assertEqual(points[-1].label, "financial_datasets_free_cash_flow")
+        self.assertEqual(FinancialDatasetsFinancialDataProvider(FakeClient()).fetch_financial_snapshot("005930"), [])
 
 class WebSearchDataProviderModuleTests(unittest.TestCase):
     def test_web_search_data_providers_return_quota_guard_without_network(self):
