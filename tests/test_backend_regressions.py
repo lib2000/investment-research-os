@@ -839,6 +839,72 @@ class FinancialDatasetsDataProviderModuleTests(unittest.TestCase):
         self.assertEqual(points[0].value, "100")
         self.assertEqual(points[-1].label, "financial_datasets_free_cash_flow")
         self.assertEqual(FinancialDatasetsFinancialDataProvider(FakeClient()).fetch_financial_snapshot("005930"), [])
+
+class FmpDataProviderModuleTests(unittest.TestCase):
+    def test_fmp_providers_map_quote_and_financial_payload_without_network(self):
+        from research_os.data_provider_core import EmptyFinancialDataProvider, EmptyMarketDataProvider
+        from research_os.fmp_data_provider import FmpFinancialDataProvider, FmpMarketDataProvider
+
+        class FakeClient:
+            is_configured = True
+            base_url = "https://fmp.test"
+
+            def get(self, endpoint, params=None):
+                if endpoint == "quote":
+                    return [{"price": 10.5, "marketCap": 1000000, "volume": 12345}]
+                if endpoint == "income-statement":
+                    return [
+                        {
+                            "date": "2026-03-31",
+                            "revenue": 100,
+                            "grossProfit": 60,
+                            "operatingIncome": 25,
+                            "netIncome": 10,
+                        }
+                    ]
+                if endpoint == "ratios":
+                    return [{"priceEarningsRatio": 14.2}]
+                return {}
+
+        market_points = FmpMarketDataProvider(FakeClient(), EmptyMarketDataProvider()).fetch_market_snapshot("PL")
+        financial_points = FmpFinancialDataProvider(FakeClient(), EmptyFinancialDataProvider()).fetch_financial_snapshot("PL")
+
+        self.assertEqual([point.label for point in market_points], ["last_price", "market_cap", "volume"])
+        self.assertEqual(market_points[0].value, "10.5")
+        self.assertEqual(financial_points[0].label, "revenue")
+        self.assertEqual(financial_points[1].value, "60.0%")
+        self.assertEqual(financial_points[-1].label, "pe_ratio")
+
+    def test_fmp_market_provider_uses_fallback_and_warning_on_quote_failure(self):
+        from research_os.data_provider_core import MarketDataProvider
+        from research_os.fmp_data_provider import FmpMarketDataProvider
+        from research_os.models import DataSourceType, InjectedDataPoint
+
+        class FailingClient:
+            base_url = "https://fmp.test"
+
+            def get(self, endpoint, params=None):
+                raise RuntimeError("empty quote")
+
+        class FallbackMarket(MarketDataProvider):
+            def fetch_market_snapshot(self, ticker):
+                return [
+                    InjectedDataPoint(
+                        source_type=DataSourceType.MARKET_PRICE,
+                        label="fallback_price",
+                        value="9.5",
+                        as_of="2026-06-18T00:00:00Z",
+                        confidence=0.7,
+                    )
+                ]
+
+        points = FmpMarketDataProvider(FailingClient(), FallbackMarket()).fetch_market_snapshot("PL")
+
+        self.assertEqual(points[0].label, "fallback_price")
+        self.assertEqual(points[-1].label, "market_data_provider_warning")
+        self.assertIn("대체 프로바이더", points[-1].value)
+
+
 class FinnhubDataProviderModuleTests(unittest.TestCase):
     def test_finnhub_providers_map_quote_news_and_earnings_without_network(self):
         from research_os.finnhub_data_provider import FinnhubMarketDataProvider, FinnhubSupplementalDataProvider
