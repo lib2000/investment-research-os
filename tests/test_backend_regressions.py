@@ -3176,6 +3176,47 @@ class ResearchWorkflowFilesModuleTests(unittest.TestCase):
         self.assertEqual(upsert_calls[0]["entry"]["source"], "test")
         self.assertEqual(upsert_calls[0]["full_text"], "# Note")
 
+class DashboardHelpersModuleTests(unittest.TestCase):
+    def test_dashboard_helpers_render_report_summary_and_watch_items(self):
+        from research_os import dashboard_helpers
+
+        summary = dashboard_helpers.dashboard_report_summary(
+            {
+                "type": "thesis-impact-review",
+                "file_name": "003230-thesis-impact-review-2026-06-18.md",
+                "relative_path": "research_vault/003230/report.md",
+                "date": "2026-06-18",
+                "summary": "기존 논거를 강화하는 신규 수출 데이터",
+                "overall_impact": "strengthens",
+                "findings": [
+                    {
+                        "thesis_reference": "수출 성장",
+                        "rationale": "미국 채널 주문 증가",
+                    }
+                ],
+                "next_actions": ["다음 실적 발표 확인"],
+            }
+        )
+        watch_item = dashboard_helpers.render_dashboard_watch_item(
+            {
+                "metric": "매출 성장률",
+                "condition": "전년 대비 20% 이상",
+                "action": "비중 유지",
+                "priority": "high",
+            }
+        )
+        report_type = dashboard_helpers.infer_report_type_from_file(
+            "003230-portfolio-risk-scan-2026-06-18.md"
+        )
+        report_date = dashboard_helpers.infer_report_date_from_file(
+            "003230-portfolio-risk-scan-2026-06-18.md"
+        )
+
+        self.assertEqual(summary.impact_label, "strengthens")
+        self.assertIn("수출 성장", summary.impact_reason)
+        self.assertEqual(watch_item, "[높음] 매출 성장률: 전년 대비 20% 이상 -> 비중 유지")
+        self.assertEqual(report_type, "portfolio-risk-scan")
+        self.assertEqual(report_date, "2026-06-18")
 
 class ResearchMemoryFilesModuleTests(unittest.TestCase):
     def test_research_memory_files_module_resolves_payload_paths_and_updates_tail_sections(self):

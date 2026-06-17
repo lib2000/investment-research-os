@@ -47,6 +47,7 @@
 | `backend\research_os\dart_filing_watch.py` | DART 공시 감시 대상 universe, cache/signal, 일일 점검 상태, refresh, 저장 마크다운 helper | `DartFilingWatchTests` |
 | `backend\research_os\daily_recommendation_store.py` | 매일 추천 저장소 경로, JSON 읽기/쓰기, 실행 시각 판정, 추천 record ID 유틸 | `DailyRecommendationsTests` |
 | `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 사후 추적표, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
+| `backend\research_os\dashboard_helpers.py` | 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper | `DashboardHelpersModuleTests` |
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
 | `backend\research_os\data_provider_core.py` | provider 공통 interface, 상태 객체, mock/empty/composite wrapper | `BackendModuleBoundaryTests` |

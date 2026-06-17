@@ -24,6 +24,7 @@
 - `dart_filing_watch.py`: DART 공시 감시 대상 universe, cache/signal, 일일 점검 상태, refresh, 저장 마크다운 helper
 - `daily_recommendation_store.py`: 매일 추천 저장소 경로, JSON 읽기/쓰기, 실행 시각 판정, 추천 record ID 유틸
 - `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 사후 추적표, 추천 후보 저장 품질 점수 보정 유틸
+- `dashboard_helpers.py`: 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_provider_core.py`: provider 공통 interface, 상태 객체, mock/empty/composite wrapper
 - `nps_data_provider.py`: 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환
