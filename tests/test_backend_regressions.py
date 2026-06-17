@@ -752,6 +752,28 @@ class ProviderUsageModuleTests(unittest.TestCase):
         self.assertEqual(payload["tavily"]["day_count"], 2)
         self.assertEqual(payload["tavily"]["month_count"], 2)
 
+class DataProviderStatusMessagesModuleTests(unittest.TestCase):
+    def test_data_provider_status_messages_cover_kis_and_external_modes(self):
+        from types import SimpleNamespace
+
+        from research_os import data_provider_status_messages
+
+        self.assertIn("FMP 무료 API", data_provider_status_messages.provider_status_message("fmp", True))
+        self.assertIn("FMP_API_KEY", data_provider_status_messages.provider_status_message("fmp", False))
+        self.assertIn("프로바이더가 설정", data_provider_status_messages.external_provider_status_message("Brave", True))
+        self.assertIn("API 키가 없어", data_provider_status_messages.external_provider_status_message("Brave", False))
+        self.assertIn(
+            "기존 접근 토큰 재사용",
+            data_provider_status_messages.kis_status_message(
+                SimpleNamespace(uses_external_token=True, can_issue_token=False, app_key=None, app_secret=None)
+            ),
+        )
+        self.assertIn(
+            "자동매매 보호",
+            data_provider_status_messages.kis_status_message(
+                SimpleNamespace(uses_external_token=False, can_issue_token=False, app_key="key", app_secret="secret")
+            ),
+        )
 
 class WebSearchDataProviderModuleTests(unittest.TestCase):
     def test_web_search_data_providers_return_quota_guard_without_network(self):

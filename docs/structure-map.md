@@ -54,6 +54,7 @@
 | `backend\research_os\dashboard_helpers.py` | 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper | `DashboardHelpersModuleTests` |
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
+| `backend\research_os\data_provider_status_messages.py` | KIS/FMP/외부 보강 provider 상태 표시 문구 helper | `DataProviderStatusMessagesModuleTests` |
 | `backend\research_os\provider_usage.py` | Tavily/Brave 등 외부 프로바이더 무료 한도 사용량 파일 기록 helper | `ProviderUsageModuleTests` |
 | `backend\research_os\data_provider_core.py` | provider 공통 interface, 상태 객체, mock/empty/composite wrapper | `BackendModuleBoundaryTests` |
 | `backend\research_os\nps_data_provider.py` | 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환 | `check_backend_runtime_env.py` |
