@@ -3297,6 +3297,20 @@ class FileExtractionProfileModuleTests(unittest.TestCase):
         self.assertLessEqual(ocr_profile["recommended_quality"], 0.82)
 
 class FileExtractionTests(unittest.TestCase):
+    def test_file_ocr_runtime_status_exposes_limits_without_secret_paths(self):
+        from research_os import file_ocr_runtime
+
+        with (
+            patch.object(file_ocr_runtime, "resolve_tesseract_executable", return_value=None),
+            patch.object(file_ocr_runtime, "resolve_tessdata_dir", return_value=None),
+        ):
+            status = file_ocr_runtime.ocr_runtime_status()
+
+        self.assertEqual(status["status"], "warning")
+        self.assertFalse(status["ready"])
+        self.assertIn("pdf_ocr_max_pages", status["limits"])
+        self.assertIn("Tesseract OCR 실행 파일", status["message"])
+
     def test_file_text_extraction_extracts_csv_preview(self):
         from research_os.file_text_extraction import extract_text_like_file
 

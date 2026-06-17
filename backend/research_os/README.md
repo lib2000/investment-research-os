@@ -47,6 +47,7 @@
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_attachment_utils.py`: 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper
 - `file_image_metadata.py`: PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper
+- `file_ocr_runtime.py`: Tesseract OCR 실행 파일/언어팩 탐지와 OCR 처리 제한 상태 helper
 - `file_spreadsheet_extraction.py`: XLSX shared string, inline string, 셀 좌표 기반 표 텍스트 추출 helper
 - `file_text_extraction.py`: 텍스트/CSV/TSV 첨부 디코딩과 표 미리보기 helper
 - `file_extraction_profile.py`: 첨부 본문 추출 결과의 품질/분석 준비도 profile helper
