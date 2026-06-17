@@ -721,6 +721,30 @@ class ProviderUsageModuleTests(unittest.TestCase):
         self.assertEqual(payload["tavily"]["month_count"], 2)
 
 
+class WebSearchDataProviderModuleTests(unittest.TestCase):
+    def test_web_search_data_providers_return_quota_guard_without_network(self):
+        from tempfile import TemporaryDirectory
+        from research_os.settings import Settings
+        from research_os.web_search_data_provider import BraveSupplementalDataProvider, TavilySupplementalDataProvider
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(
+                research_vault_dir="research_vault",
+                tavily_api_key="test-tavily-key",
+                tavily_daily_credit_limit=0,
+                brave_api_key="test-brave-key",
+                brave_daily_request_limit=0,
+                provider_usage_file=str(Path(temp_dir) / "provider_usage.json"),
+            )
+            tavily_points = TavilySupplementalDataProvider(settings).fetch_supplemental_snapshot("PL")
+            brave_points = BraveSupplementalDataProvider(settings).fetch_supplemental_snapshot("PL")
+
+        self.assertEqual(tavily_points[0].label, "tavily_quota_guard")
+        self.assertIn("무료 한도 보호", tavily_points[0].value)
+        self.assertEqual(brave_points[0].label, "brave_quota_guard")
+        self.assertIn("무료 한도 보호", brave_points[0].value)
+
+
 class KcifReportsWatchTests(unittest.TestCase):
     def test_kcif_report_list_parser_extracts_metadata_without_body(self):
         from research_os.kcif_reports import parse_kcif_report_list
