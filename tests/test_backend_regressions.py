@@ -3231,6 +3231,88 @@ class ResearchMemoryFilesModuleTests(unittest.TestCase):
         self.assertEqual(resolved_attachment, attachment_path.resolve())
         self.assertIsNone(escaped_attachment)
 
+    def test_research_memory_files_module_lists_visible_and_archived_entries(self):
+        from research_os import research_memory_files
+
+        quality_metadata = {
+            "tags": ["market-journal"],
+            "source_url_processing": {},
+            "capture_quality": {"status": "complete"},
+            "data_quality_status": "ready",
+            "needs_body_copy": False,
+            "url_text_unavailable": False,
+        }
+        runtime = SimpleNamespace(
+            infer_report_type_from_file=lambda _name: "saved-report",
+            is_archived_research_entry=lambda entry, payload=None: bool(
+                (entry or {}).get("status") == "archived"
+                or (isinstance(payload, dict) and payload.get("is_deleted"))
+            ),
+            is_verified_manifest_entry=lambda entry, ticker: bool(
+                (entry.get("ticker_verification") or {}).get("official_symbol") == ticker
+                and (entry.get("ticker_verification") or {}).get("verified") is True
+            ),
+            normalize_ticker=lambda value: str(value or "").upper(),
+            read_manifest=lambda _vault_dir: manifest_entries,
+            research_memory_entry_quality_metadata=lambda *_args: quality_metadata,
+            special_research_keys={"MARKET-US"},
+        )
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "MARKET-US"
+            ticker_dir.mkdir(parents=True)
+            active_path = ticker_dir / "MARKET-US-research-capture-2026-06-16.md"
+            active_json_path = active_path.with_suffix(".json")
+            archived_path = ticker_dir / "MARKET-US-research-capture-2026-06-15.md"
+            archived_json_path = archived_path.with_suffix(".json")
+            active_path.write_text("# 미국 시장일지", encoding="utf-8")
+            active_json_path.write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "module": "research_quick_capture",
+                        "captured_item": {"ticker": "market-us", "summary": "미국장 마감"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            archived_path.write_text("# 이전 시장일지", encoding="utf-8")
+            archived_json_path.write_text(
+                json.dumps({"captured_item": {"ticker": "MARKET-US"}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            manifest_entries = [
+                {
+                    "ticker": "MARKET-US",
+                    "file_name": archived_path.name,
+                    "type": "research-capture",
+                    "status": "archived",
+                    "archive_reason": "duplicate",
+                    "archived_at": "2026-06-16T00:00:00+09:00",
+                }
+            ]
+
+            visible = research_memory_files.list_research_memory_files(runtime, "MARKET-US", vault_dir)
+            all_files = research_memory_files.list_research_memory_files(
+                runtime,
+                "MARKET-US",
+                vault_dir,
+                include_archived=True,
+            )
+
+        self.assertEqual([file.file_name for file in visible], [active_path.name])
+        self.assertTrue(visible[0].verified)
+        self.assertEqual(visible[0].status_label, "저장 메타 확인")
+        self.assertEqual(visible[0].report_type, "research-capture")
+        self.assertEqual(len(all_files), 2)
+        archived = next(file for file in all_files if file.file_name == archived_path.name)
+        self.assertTrue(archived.archived)
+        self.assertTrue(archived.is_deleted)
+        self.assertEqual(archived.archive_reason, "duplicate")
 
 class ResearchMemoryQualityRebuildModuleTests(unittest.TestCase):
     def test_quality_rebuild_module_updates_manifest_sidecar_markdown_and_rag(self):

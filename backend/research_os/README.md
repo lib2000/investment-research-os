@@ -52,6 +52,7 @@
 - `recent_activity.py`: 최근 1주 자료 compact, DART/IR/SEC/추천 근거 링크, 저장 데이터 탐색 힌트 helper
 - `regional_sources.py`: EMERiCs, CSF, KIEP 지역/중국/대외 자료 수집
 - `research_memory.py`: Markdown/manifest 기반 리서치 저장소 유틸
+- `research_memory_files.py`: 저장 리포트 목록/카드 조립, manifest/sidecar 경로 해석, 마크다운 tail section 갱신 helper
 - `security.py`: 개발 토큰과 사용자 토큰 검증
 - `settings.py`: 환경변수 기반 운영 설정
 - `state_store.py`: `_system` 상태 파일 경로, KST 기준 저장 시각, JSON/JSONL 상태 저장 헬퍼

@@ -78,6 +78,7 @@
 | `backend\research_os\recent_activity.py` | 최근 1주 자료용 출처별 compact helper, DART/IR/SEC/추천 근거 링크, 저장 데이터 탐색 힌트 | `check_recent_weekly_brief.py`, `check_public_ir_sec_store.py`, `check_backend_module_health.py` |
 | `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py` |
 | `backend\research_os\research_memory.py` | 저장 데이터 마크다운/JSON 기록과 manifest 관리 | `check_storage_quality_store.py` |
+| `backend\research_os\research_memory_files.py` | 저장 리포트 목록/카드 조립, manifest/sidecar 경로 해석, 마크다운 tail section 갱신 helper | `ResearchMemoryFilesModuleTests` |
 | `backend\research_os\security.py` | 개발 토큰/사용자 토큰 검증 | `status_research_console.ps1` |
 | `backend\research_os\settings.py` | 환경변수 기반 운영 설정 | `check_backend_runtime_env.py` |
 | `backend\research_os\source_url_preview.py` | 웹 본문 미리보기 응답 조립 | `WebCaptureRenderingTests` |

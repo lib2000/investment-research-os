@@ -1,9 +1,131 @@
-"""Research-memory file path and markdown update helpers."""
+"""Research-memory file listing, path, and markdown update helpers."""
 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
+
+from .models import ResearchMemoryFile
+
+
+def list_research_memory_files(
+    runtime: SimpleNamespace,
+    ticker: str,
+    vault_dir: Path,
+    include_archived: bool = False,
+    manifest_entries: list[dict] | None = None,
+) -> list[ResearchMemoryFile]:
+    ticker_dir = vault_dir / ticker
+    if not ticker_dir.exists():
+        return []
+    manifest_source = manifest_entries if manifest_entries is not None else runtime.read_manifest(vault_dir)
+    manifest_by_file = {
+        entry.get("file_name"): entry
+        for entry in manifest_source
+        if entry.get("ticker") == ticker and entry.get("file_name")
+    }
+
+    files = sorted(
+        ticker_dir.glob(f"{ticker}-*.md"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+    memory_files = [
+        build_research_memory_file(runtime, file_path, ticker, vault_dir, manifest_by_file.get(file_path.name))
+        for file_path in files
+    ]
+    if include_archived:
+        return memory_files
+    return [file for file in memory_files if not file.archived and not file.is_deleted]
+
+
+def build_research_memory_file(
+    runtime: SimpleNamespace,
+    file_path: Path,
+    ticker: str,
+    vault_dir: Path,
+    manifest_entry: dict | None,
+) -> ResearchMemoryFile:
+    json_path = file_path.with_suffix(".json")
+    json_payload = {}
+    if json_path.exists():
+        try:
+            json_payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            json_payload = {}
+    captured_item = json_payload.get("captured_item") if isinstance(json_payload, dict) else {}
+    if not isinstance(captured_item, dict):
+        captured_item = {}
+    archived = runtime.is_archived_research_entry(manifest_entry, json_payload)
+    archive_reason = (
+        manifest_entry.get("archive_reason")
+        if manifest_entry
+        else json_payload.get("archive_reason")
+    )
+    archived_at = (
+        manifest_entry.get("archived_at")
+        if manifest_entry
+        else json_payload.get("archived_at")
+    )
+    sidecar_verified = bool(
+        ticker in runtime.special_research_keys
+        and isinstance(json_payload, dict)
+        and json_payload.get("status") == "success"
+        and runtime.normalize_ticker(captured_item.get("ticker") or ticker) == ticker
+    )
+    verified = bool(
+        (manifest_entry and runtime.is_verified_manifest_entry(manifest_entry, ticker))
+        or sidecar_verified
+    )
+    status_label = "보관됨" if archived else "저장 메타 확인" if sidecar_verified else "공식 인증" if verified else "레거시/검증 전"
+    quality_metadata = runtime.research_memory_entry_quality_metadata(
+        manifest_entry,
+        json_payload,
+        captured_item,
+    )
+    return ResearchMemoryFile(
+        file_name=file_path.name,
+        relative_path=file_path.relative_to(vault_dir.parent).as_posix(),
+        absolute_path=str(file_path),
+        json_file_name=json_path.name if json_path.exists() else None,
+        json_relative_path=json_path.relative_to(vault_dir.parent).as_posix()
+        if json_path.exists()
+        else None,
+        modified_at=datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
+        report_type=(
+            manifest_entry.get("type")
+            if manifest_entry
+            else "research-capture"
+            if json_payload.get("module") == "research_quick_capture"
+            else runtime.infer_report_type_from_file(file_path.name)
+        ),
+        summary=(
+            manifest_entry.get("summary")
+            if manifest_entry
+            else captured_item.get("summary") or json_payload.get("summary")
+        ),
+        verified=verified,
+        legacy=not verified,
+        status_label=status_label,
+        tags=quality_metadata["tags"],
+        source_url_processing=quality_metadata["source_url_processing"],
+        capture_quality=quality_metadata["capture_quality"],
+        data_quality_status=quality_metadata["data_quality_status"],
+        needs_body_copy=quality_metadata["needs_body_copy"],
+        url_text_unavailable=quality_metadata["url_text_unavailable"],
+        attachment=(
+            manifest_entry.get("attachment")
+            if manifest_entry and manifest_entry.get("attachment")
+            else json_payload.get("attachment")
+        ),
+        archived=archived,
+        is_deleted=archived,
+        archived_at=archived_at,
+        archive_reason=archive_reason,
+    )
 
 
 def read_manifest_entry_payload(entry: dict | None, vault_dir: Path) -> dict:
