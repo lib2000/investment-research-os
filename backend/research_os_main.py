@@ -5862,39 +5862,15 @@ def build_market_next_watch(tags: list[str], market: str) -> list[str]:
     return news_market_journal.build_market_next_watch(tags, market)
 
 def market_tag_aliases(tags: list[str]) -> list[str]:
-    aliases = {
-        "AI": ["AI", "GPU", "데이터센터", "DATACENTER", "DATA CENTER", "TECHNOLOGY", "CLOUD"],
-        "반도체": ["반도체", "SEMICONDUCTOR", "CHIP", "GPU", "TECHNOLOGY"],
-        "금리": ["금리", "국채", "YIELD", "TREASURY", "BANK", "FINANCIAL"],
-        "환율": ["환율", "달러", "FX", "USD", "EXPORT", "수출"],
-        "에너지": ["에너지", "ENERGY", "OIL", "GAS", "운송", "항공"],
-        "금융": ["금융", "BANK", "FINANCIAL", "CREDIT"],
-        "헬스케어": ["헬스케어", "HEALTHCARE", "BIO", "제약"],
-        "중국": ["중국", "CHINA", "수출"],
-        "한국 수출": ["한국 수출", "수출", "반도체", "EXPORT", "KOREA"],
-        "정책": ["정책", "FOMC", "연준", "규제", "관세", "POLICY"],
-    }
-    terms = set(tags)
-    for tag in tags:
-        terms.update(aliases.get(tag, []))
-    return [term for term in terms if term]
+    return news_market_journal.market_tag_aliases(tags)
 
 
 def text_matches_market_tags(value: str, tag_terms: list[str]) -> bool:
-    normalized = value.strip().upper()
-    if not normalized:
-        return False
-    for term in tag_terms:
-        tag = term.strip().upper()
-        if tag and (tag in normalized or normalized in tag):
-            return True
-    return False
+    return news_market_journal.text_matches_market_tags(value, tag_terms)
 
 
 def append_unique(items: list[str], value: str, limit: int = 8) -> None:
-    if value and value not in items and len(items) < limit:
-        items.append(value)
-
+    news_market_journal.append_unique(items, value, limit=limit)
 
 def build_auto_market_utilization_focus(
     *,
