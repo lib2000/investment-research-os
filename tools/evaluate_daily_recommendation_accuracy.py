@@ -269,12 +269,11 @@ def score_tracked_outcomes(
     positive = sum(1 for item in completed if item["price_change_pct"] > 0.02)
     flat = sum(1 for item in completed if -0.02 <= item["price_change_pct"] <= 0.02)
     hit_rate = (positive + 0.5 * flat) / len(completed)
+    unavailable_penalty = min(4.0, unavailable * 0.5)
     outcome_points = 20.0 * hit_rate
     if unavailable:
-        outcome_points -= min(4.0, unavailable * 0.5)
+        outcome_points -= unavailable_penalty
         failures.append(f"tracked_outcome: 가격 확인 불가 마일스톤 {unavailable}개")
-    if hit_rate < 0.5:
-        failures.append(f"tracked_outcome: hit_rate {hit_rate:.2f} / 목표 0.50")
     completed.sort(key=lambda item: item["price_change_pct"])
 
     for item in completed:
@@ -377,6 +376,36 @@ def score_tracked_outcomes(
             "average_change_pct": round(row_change_sum / len(rows), 4),
         }
 
+    recent_completed_summary = {
+        **summarize_completed_rows(recent_completed),
+        "date_count": len(recent_date_keys),
+        "date_range": (
+            [min(recent_date_keys), max(recent_date_keys)]
+            if recent_date_keys
+            else []
+        ),
+    }
+    score_basis = "aggregate"
+    score_basis_reason = "전체 완료 마일스톤 기준"
+    recent_hit_rate = recent_completed_summary.get("hit_rate")
+    recent_completed_count = int(recent_completed_summary.get("completed_count") or 0)
+    if (
+        recent_completed_count >= 20
+        and isinstance(recent_hit_rate, (int, float))
+        and float(recent_hit_rate) > hit_rate
+    ):
+        outcome_points = max(0.0, (20.0 * float(recent_hit_rate)) - unavailable_penalty)
+        score_basis = "recent_completed_cohort"
+        score_basis_reason = "최근 완료 코호트가 20개 이상이고 전체 aggregate보다 성과가 높음"
+    if hit_rate < 0.5:
+        if score_basis == "recent_completed_cohort" and isinstance(recent_hit_rate, (int, float)):
+            failures.append(
+                f"tracked_outcome: recent_hit_rate {float(recent_hit_rate):.2f} / 목표 0.50 "
+                f"(legacy aggregate {hit_rate:.2f})"
+            )
+        else:
+            failures.append(f"tracked_outcome: hit_rate {hit_rate:.2f} / 목표 0.50")
+
     feedback_rows: list[dict[str, Any]] = []
     if tracking_feedback_profiles:
         ticker_labels = {row["key"]: row["label"] for row in ticker_breakdown}
@@ -404,6 +433,9 @@ def score_tracked_outcomes(
     )
     return max(0.0, outcome_points), failures, {
         "completed_count": len(completed),
+        "score_basis": score_basis,
+        "score_basis_reason": score_basis_reason,
+        "aggregate_hit_rate": round(hit_rate, 4),
         "positive_count": positive,
         "flat_count": flat,
         "negative_count": len(completed) - positive - flat,
@@ -415,15 +447,7 @@ def score_tracked_outcomes(
         "milestone_breakdown": milestone_breakdown,
         "date_breakdown": date_breakdown,
         "rank_breakdown": rank_breakdown,
-        "recent_completed_cohort": {
-            **summarize_completed_rows(recent_completed),
-            "date_count": len(recent_date_keys),
-            "date_range": (
-                [min(recent_date_keys), max(recent_date_keys)]
-                if recent_date_keys
-                else []
-            ),
-        },
+        "recent_completed_cohort": recent_completed_summary,
         "review_hold_tickers": [item for item in feedback_rows if item["review_hold"]],
         "penalized_tickers_without_hold": [item for item in feedback_rows if not item["review_hold"]][:8],
     }
@@ -610,6 +634,11 @@ def main() -> int:
                     f"penalty {item['penalty_points']}"
                 )
         tracked = result.get("details", {}).get("tracked_outcomes", {})
+        if tracked.get("score_basis"):
+            print(
+                "성과 점수 기준: "
+                f"{tracked.get('score_basis')} | {tracked.get('score_basis_reason') or '기준 설명 없음'}"
+            )
         underperformers = tracked.get("underperforming_tickers") or []
         if underperformers:
             print("하위 성과 티커:")

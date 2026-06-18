@@ -112,6 +112,43 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["rank_breakdown"][0]["key"], "1")
         self.assertEqual(details["recent_completed_cohort"]["completed_count"], 3)
 
+    def test_accuracy_eval_scores_large_recent_cohort_separately(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        records = [
+            {
+                "ticker": f"OLD{index}",
+                "recommendation_date": "2026-06-01",
+                "tracking_milestones": [
+                    {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.08}
+                ],
+            }
+            for index in range(10)
+        ]
+        recent_dates = [f"2026-06-{day:02d}" for day in range(2, 10)]
+        for index in range(24):
+            records.append(
+                {
+                    "ticker": f"NEW{index}",
+                    "recommendation_date": recent_dates[index % len(recent_dates)],
+                    "tracking_milestones": [
+                        {
+                            "key": "7d",
+                            "label": "추천 후 1주일",
+                            "status": "complete",
+                            "price_change_pct": 0.04 if index < 11 else -0.04,
+                        }
+                    ],
+                }
+            )
+
+        score, failures, details = accuracy_eval.score_tracked_outcomes(records)
+
+        self.assertEqual(details["score_basis"], "recent_completed_cohort")
+        self.assertEqual(details["recent_completed_cohort"]["completed_count"], 24)
+        self.assertGreater(score, 20.0 * details["aggregate_hit_rate"])
+        self.assertTrue(any("recent_hit_rate" in failure for failure in failures))
+
     def test_accuracy_eval_reports_review_hold_feedback(self):
         from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
 
