@@ -392,6 +392,21 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["rpc"]["reason"], "market_signal_graph_service_role_key_missing")
 
+    def test_market_signal_graph_rpc_url_derives_from_supabase_url(self):
+        from research_os.settings import _resolve_market_signal_graph_rpc_url
+
+        self.assertEqual(
+            _resolve_market_signal_graph_rpc_url("", "https://example.supabase.co/"),
+            "https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+        )
+        self.assertEqual(
+            _resolve_market_signal_graph_rpc_url(
+                "https://custom.example/rest/v1/rpc/upsert_external_signal",
+                "https://example.supabase.co",
+            ),
+            "https://custom.example/rest/v1/rpc/upsert_external_signal",
+        )
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):

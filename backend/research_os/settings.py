@@ -20,6 +20,19 @@ def _read_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y"}
 
 
+def _resolve_market_signal_graph_rpc_url(
+    explicit_rpc_url: str | None = None,
+    supabase_url: str | None = None,
+) -> str:
+    explicit = str(explicit_rpc_url or "").strip()
+    if explicit:
+        return explicit
+    base_url = str(supabase_url or "").strip().rstrip("/")
+    if not base_url:
+        return ""
+    return f"{base_url}/rest/v1/rpc/upsert_external_signal"
+
+
 class Settings(BaseModel):
     app_name: str = "Investment Journal API Gateway"
     default_broker: str = "KIWOOM"
@@ -429,7 +442,10 @@ class Settings(BaseModel):
             firecrawl_ir_dry_run=_read_bool("FIRECRAWL_IR_DRY_RUN", True),
             firecrawl_ir_mcp_version=os.getenv("FIRECRAWL_IR_MCP_VERSION", "3.17.0"),
             market_signal_graph_enabled=_read_bool("MARKET_SIGNAL_GRAPH_ENABLED", False),
-            market_signal_graph_rpc_url=os.getenv("MARKET_SIGNAL_GRAPH_RPC_URL", ""),
+            market_signal_graph_rpc_url=_resolve_market_signal_graph_rpc_url(
+                os.getenv("MARKET_SIGNAL_GRAPH_RPC_URL", ""),
+                os.getenv("MARKET_SIGNAL_GRAPH_SUPABASE_URL", os.getenv("SUPABASE_URL", "")),
+            ),
             market_signal_graph_service_role_key=os.getenv(
                 "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY",
                 os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),

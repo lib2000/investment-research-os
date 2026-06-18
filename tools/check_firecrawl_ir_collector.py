@@ -81,6 +81,8 @@ def main() -> int:
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
         "rpc_enabled": rpc_enabled,
+        "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
+        "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
         "dry_run": not args.submit,
         "payload": payload,
         "errors": errors,
@@ -102,6 +104,8 @@ def main() -> int:
         print(f"- external_id: {payload['external_id']}")
         print(f"- canonical_hash: {payload['canonical_hash']}")
         print(f"- rpc_enabled: {rpc_enabled}")
+        print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
+        print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
         print(f"- dry_run: {not args.submit}")
         if result.get("rpc"):
             print(f"- rpc_status: {result['rpc'].get('status')}")
