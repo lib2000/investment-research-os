@@ -900,6 +900,60 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("- batch_status: skipped", completed.stdout)
         self.assertIn("- batch_counts: success=0 failed=0 skipped=2 dry_run=0", completed.stdout)
 
+    def test_firecrawl_ir_check_tool_writes_submit_batch_status_to_output_json(self):
+        with TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "firecrawl-ir-items.json"
+            output_path = Path(tmpdir) / "firecrawl-ir-submit.json"
+            input_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+                            {"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FIRECRAWL_IR_ENABLED": "true",
+                    "FIRECRAWL_IR_DRY_RUN": "false",
+                    "MARKET_SIGNAL_GRAPH_ENABLED": "true",
+                    "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
+                    "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
+                    "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
+                    "SUPABASE_URL": "",
+                    "SUPABASE_SERVICE_ROLE_KEY": "",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_ir_collector.py"),
+                    "--input-json",
+                    str(input_path),
+                    "--submit",
+                    "--output-json",
+                    str(output_path),
+                    "--json",
+                ],
+                cwd=PROJECT_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            saved = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(saved["status"], "skipped")
+        self.assertEqual(saved["batch"]["status"], "skipped")
+        self.assertEqual(saved["batch"]["skipped_count"], 2)
+        self.assertEqual(saved["batch"]["status_counts"]["skipped"], 2)
+
     def test_firecrawl_ir_check_tool_summarizes_batch_payloads(self):
         tool = load_firecrawl_ir_check_tool()
 
