@@ -4458,6 +4458,48 @@ class DailyRecommendationEvidenceModuleTests(unittest.TestCase):
         )
 
 
+class DailyRecommendationCandidateModuleTests(unittest.TestCase):
+    def test_daily_recommendation_candidates_normalize_and_score_rows(self):
+        from research_os import daily_recommendation_candidates
+
+        candidates: dict[str, dict] = {}
+        domestic = daily_recommendation_candidates.ensure_daily_recommendation_candidate(
+            candidates,
+            " 003230 ",
+            "삼양식품",
+        )
+        overseas = daily_recommendation_candidates.ensure_daily_recommendation_candidate(
+            candidates,
+            "joby",
+            "Joby Aviation",
+        )
+
+        daily_recommendation_candidates.add_daily_recommendation_score(domestic, "5", "리포트")
+        daily_recommendation_candidates.add_daily_recommendation_score(domestic, 0, "무시")
+        daily_recommendation_candidates.add_daily_recommendation_penalty(domestic, "현재가 미확인", "2")
+        normalized = daily_recommendation_candidates.normalize_candidate(
+            {
+                **domestic,
+                "reasons": [" 이유 ", "", "추가"],
+                "evidence_sources": [" 근거 ", None],
+                "score_components": [{"label": "리포트", "points": 5}, {"points": 99}],
+                "score_penalties": domestic["score_penalties"] + [""],
+                "quality_flags": [" 점검 "],
+            }
+        )
+
+        self.assertEqual(domestic["currency"], "KRW")
+        self.assertEqual(overseas["currency"], "USD")
+        self.assertEqual(domestic["score"], 3)
+        self.assertEqual(normalized["ticker"], "003230")
+        self.assertEqual(normalized["reasons"], ["이유", "추가"])
+        self.assertEqual(normalized["evidence_sources"], ["근거"])
+        self.assertEqual(normalized["score_components"], [{"label": "리포트", "points": 5}])
+        self.assertEqual(normalized["score_penalties"], ["현재가 미확인 (-2)"])
+        self.assertTrue(daily_recommendation_candidates.daily_recommendation_candidate_is_valid("003230", "삼양식품"))
+        self.assertFalse(daily_recommendation_candidates.daily_recommendation_candidate_is_valid("123", "삼양식품"))
+
+
 class DailyRecommendationRecentModuleTests(unittest.TestCase):
     def test_daily_recommendation_recent_module_indexes_and_renders_weekly_evidence(self):
         from research_os import daily_recommendation_recent
