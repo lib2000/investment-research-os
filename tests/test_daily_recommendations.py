@@ -152,7 +152,12 @@ class DailyRecommendationsTests(unittest.TestCase):
                     {
                         "rank": 1,
                         "ticker": "WEAK",
-                        "tracking_feedback_profile": {"review_hold": True},
+                        "tracking_feedback_profile": {
+                            "review_hold": True,
+                            "hit_rate": 0.0,
+                            "average_change_pct": -0.12,
+                            "penalty_points": 16,
+                        },
                     },
                     {"rank": 2, "ticker": "OK"},
                 ],
@@ -165,6 +170,8 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertIn("top3_review_hold: WEAK", failures)
         self.assertEqual(details["top_candidates"][0]["ticker"], "WEAK")
+        self.assertEqual(details["top_candidates"][0]["tracking_hit_rate"], 0.0)
+        self.assertEqual(details["top_candidates"][0]["tracking_penalty_points"], 16)
 
     def test_candidate_policy_eval_requires_expected_hold_warning(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check

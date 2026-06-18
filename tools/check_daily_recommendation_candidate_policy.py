@@ -67,6 +67,21 @@ def validate_candidate_policy(
                     isinstance(candidate.get("tracking_feedback_profile"), dict)
                     and candidate["tracking_feedback_profile"].get("review_hold")
                 ),
+                "tracking_hit_rate": (
+                    candidate.get("tracking_feedback_profile", {}).get("hit_rate")
+                    if isinstance(candidate.get("tracking_feedback_profile"), dict)
+                    else None
+                ),
+                "tracking_average_change_pct": (
+                    candidate.get("tracking_feedback_profile", {}).get("average_change_pct")
+                    if isinstance(candidate.get("tracking_feedback_profile"), dict)
+                    else None
+                ),
+                "tracking_penalty_points": (
+                    candidate.get("tracking_feedback_profile", {}).get("penalty_points")
+                    if isinstance(candidate.get("tracking_feedback_profile"), dict)
+                    else None
+                ),
             }
             for candidate in top_candidates
         ],
@@ -114,9 +129,15 @@ def main() -> int:
         print("추천 후보 정책 가드:", "실패" if failures else "정상")
         for candidate in details["top_candidates"]:
             marker = " | 보류대상" if candidate["review_hold"] else ""
+            tracking_note = ""
+            if candidate.get("tracking_penalty_points") is not None:
+                tracking_note = (
+                    f" | 추적 hit {float(candidate.get('tracking_hit_rate') or 0) * 100:.1f}%"
+                    f" / 감점 {candidate.get('tracking_penalty_points')}"
+                )
             print(
                 f"{candidate.get('rank')}위 {candidate.get('ticker')} {candidate.get('company_name')} "
-                f"| 점수 {candidate.get('score')}{marker}"
+                f"| 점수 {candidate.get('score')}{tracking_note}{marker}"
             )
         for warning in details["warnings"][:3]:
             print(f"경고: {warning}")
