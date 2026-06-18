@@ -5509,6 +5509,23 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
         self.assertEqual(candidate["score"], 4)
         self.assertIn("반복 부진 후보 top3 보류", candidate["quality_flags"])
 
+    def test_daily_recommendation_tracking_hold_includes_low_hit_rate_repeat_underperformer(self):
+        from research_os import daily_recommendation_tracking
+
+        candidate = {"score": 30, "score_penalties": [], "risk_notes": [], "quality_flags": [], "evidence_sources": []}
+        feedback = {
+            "completed_count": 5,
+            "hit_rate": 0.1,
+            "average_change_pct": -0.085,
+            "penalty_points": 12,
+            "horizon_penalty_points": 0,
+        }
+
+        daily_recommendation_tracking.apply_daily_recommendation_tracking_feedback(candidate, feedback)
+
+        self.assertTrue(candidate["tracking_feedback_profile"]["review_hold"])
+        self.assertTrue(daily_recommendation_tracking.daily_recommendation_candidate_review_hold(candidate))
+
     def test_daily_recommendation_price_lookup_falls_back_to_naver_domestic_basic(self):
         import research_os_main as main
         from research_os.settings import Settings
@@ -5543,6 +5560,38 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
 
         self.assertEqual(price, 233000.0)
         self.assertEqual(source, "https://m.stock.naver.com/api/stock/071050/basic")
+
+    def test_daily_recommendation_price_lookup_prefers_saved_over_ambiguous_overseas_provider(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings()
+
+        with (
+            patch.object(main, "latest_provider_price", return_value=(378.5, "data_provider")),
+            patch.object(
+                main,
+                "read_portfolio_store",
+                return_value={
+                    "portfolios": {
+                        "MAIN": {
+                            "holdings": [
+                                {
+                                    "ticker": "OTLY",
+                                    "current_price": 8.19,
+                                    "price_source": "https://openapi.koreainvestment.com/overseas",
+                                    "price_checked_at": "2026-06-18T16:23:39+09:00",
+                                }
+                            ]
+                        }
+                    }
+                },
+            ),
+        ):
+            price, source = main._daily_recommendation_price_lookup(settings)("OTLY")
+
+        self.assertEqual(price, 8.19)
+        self.assertEqual(source, "saved_portfolio:https://openapi.koreainvestment.com/overseas")
 
 
 class RecentActivityGroupsModuleTests(unittest.TestCase):

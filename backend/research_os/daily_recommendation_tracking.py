@@ -16,6 +16,10 @@ TRACKING_MILESTONES = [
     {"key": "3m", "label": "추천 후 3달", "days": 90},
     {"key": "6m", "label": "추천 후 6달", "days": 180},
 ]
+REVIEW_HOLD_MAX_HIT_RATE = 0.15
+REVIEW_HOLD_MAX_AVERAGE_CHANGE_PCT = -0.05
+REVIEW_HOLD_MIN_COMPLETED = 3
+REVIEW_HOLD_MIN_PENALTY = 12
 
 
 def build_tracking_milestones(recommendation_date: date) -> list[dict]:
@@ -274,7 +278,12 @@ def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict
     average_change_pct = float(feedback.get("average_change_pct") or 0)
     penalty = int(feedback.get("penalty_points") or 0)
     weakest = feedback.get("weakest_milestone") if isinstance(feedback.get("weakest_milestone"), dict) else None
-    review_hold = completed >= 3 and penalty >= 12 and hit_rate <= 0.05 and average_change_pct <= -0.05
+    review_hold = (
+        completed >= REVIEW_HOLD_MIN_COMPLETED
+        and penalty >= REVIEW_HOLD_MIN_PENALTY
+        and hit_rate <= REVIEW_HOLD_MAX_HIT_RATE
+        and average_change_pct <= REVIEW_HOLD_MAX_AVERAGE_CHANGE_PCT
+    )
     candidate["tracking_feedback_profile"] = {
         "completed_count": completed,
         "hit_rate": round(hit_rate, 4),

@@ -14492,8 +14492,16 @@ def _daily_recommendation_naver_domestic_price(ticker: str, settings: Settings) 
 def _daily_recommendation_price_lookup(settings: Settings):
     saved_prices: dict[str, tuple[float, str]] | None = None
 
-    def lookup(ticker: str) -> tuple[float | None, str | None]:
+    def saved_portfolio_fallback(ticker: str) -> tuple[float, str] | None:
         nonlocal saved_prices
+        if saved_prices is None:
+            try:
+                saved_prices = _saved_portfolio_price_lookup(read_portfolio_store(settings))
+            except Exception:
+                saved_prices = {}
+        return saved_prices.get(normalize_ticker(ticker))
+
+    def lookup(ticker: str) -> tuple[float | None, str | None]:
         price, source = latest_provider_price(ticker, settings, force_refresh=True)
         naver_price: float | None = None
         naver_source: str | None = None
@@ -14502,14 +14510,13 @@ def _daily_recommendation_price_lookup(settings: Settings):
             naver_price, naver_source = _daily_recommendation_naver_domestic_price(ticker, settings)
             if naver_price is not None:
                 return naver_price, naver_source
+        if source == "data_provider":
+            fallback = saved_portfolio_fallback(ticker)
+            if fallback:
+                return fallback
         if price is not None:
             return price, source
-        if saved_prices is None:
-            try:
-                saved_prices = _saved_portfolio_price_lookup(read_portfolio_store(settings))
-            except Exception:
-                saved_prices = {}
-        fallback = saved_prices.get(normalize_ticker(ticker))
+        fallback = saved_portfolio_fallback(ticker)
         if fallback:
             return fallback
         if use_naver_domestic and naver_price is None:

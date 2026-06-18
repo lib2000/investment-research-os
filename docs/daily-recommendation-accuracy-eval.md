@@ -134,3 +134,26 @@ Post-change failures:
 
 Remaining risk:
 - No-op RAG synthesis files remain in the vault as historical records; future work should prevent saving empty synthesis reports rather than only skipping them in validation.
+
+Iteration 11 - overseas tracking fallback for ambiguous provider prices:
+- Bottleneck: eval regressed to `81.74/100` because six newly due milestones were `price_unavailable`; overseas tickers could accept ambiguous `data_provider` mock-like prices instead of retrying saved portfolio prices.
+- Change: daily recommendation tracking price lookup now treats `data_provider` as ambiguous and prefers saved portfolio current prices when available, matching the existing Naver preference for domestic tickers.
+- Operational refresh: reran tracking for `2026-06-19`; `price_unavailable` `6 -> 0`.
+- Result: score `85.24/100`, subscores `latest_quality=80.0`, `tracked_outcomes=5.24`.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- Historical hit rate is still below target; further score movement should come from future recommendation selection quality, not by rewriting stored outcomes.
+
+Iteration 12 - keep repeat-underperformer hold after tracking refresh:
+- Bottleneck: after the 2026-06-19 tracking refresh, `OTLY` moved from `0.00` to `0.10` hit rate but still averaged `-8.5%`; the candidate policy guard no longer held it out of top 3.
+- Change: severe repeat-underperformer hold now uses `hit_rate <= 0.15`, `average_change_pct <= -5.0%`, at least 3 completed outcomes, and at least 12 feedback penalty points.
+- Result: candidate policy guard is normal again; generated top 3 are `ABSI`, `033500`, `105630`, with `OTLY, 112610` held.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- The guard remains a future-selection safeguard; realized historical hit rate still needs future recommendations and completed milestones to improve.
