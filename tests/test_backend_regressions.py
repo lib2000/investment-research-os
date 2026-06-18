@@ -3506,11 +3506,13 @@ class NaverResearchIngestTests(unittest.TestCase):
 
         self.assertEqual(summary["target_count"], 3)
         self.assertEqual(summary["linked_target_count"], 2)
+        self.assertAlmostEqual(summary["linked_target_ratio"], 2 / 3)
         self.assertEqual(summary["match_count"], 3)
         self.assertEqual(summary["market_counts"], {"KR": 1, "US": 2})
         self.assertEqual(summary["latest_session_date"], "2026-06-18")
         self.assertEqual(summary["sample_targets"], ["AAPL", "AI"])
         self.assertIn("매칭 3건", check_research_source_store.format_market_journal_impact(summary))
+        self.assertIn("연결률 66.7%", check_research_source_store.format_market_journal_impact(summary))
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main

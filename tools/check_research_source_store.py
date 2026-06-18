@@ -205,9 +205,11 @@ def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
             session_date = str(match.get("session_date") or "").strip()
             if session_date > latest_session_date:
                 latest_session_date = session_date
+    target_count = len(target_rows)
     return {
-        "target_count": len(target_rows),
+        "target_count": target_count,
         "linked_target_count": linked_target_count,
+        "linked_target_ratio": linked_target_count / target_count if target_count else 0.0,
         "match_count": match_count,
         "market_counts": dict(sorted(market_counts.items())),
         "latest_session_date": latest_session_date,
@@ -220,8 +222,10 @@ def format_market_journal_impact(summary: dict[str, Any]) -> str:
     market_label = ", ".join(f"{market}={count}" for market, count in market_counts.items()) or "시장 미확인"
     samples = summary.get("sample_targets") if isinstance(summary.get("sample_targets"), list) else []
     sample_label = ", ".join(str(item) for item in samples[:5]) or "없음"
+    ratio = float(summary.get("linked_target_ratio") or 0.0)
     return (
-        f"대상 {summary.get('target_count', 0)}개 중 {summary.get('linked_target_count', 0)}개 연결 | "
+        f"대상 {summary.get('target_count', 0)}개 중 {summary.get('linked_target_count', 0)}개 연결"
+        f"(연결률 {ratio:.1%}) | "
         f"매칭 {summary.get('match_count', 0)}건({market_label}) | "
         f"최신 세션 {summary.get('latest_session_date') or '미확인'} | 샘플 {sample_label}"
     )
@@ -484,7 +488,11 @@ def main() -> int:
         format_market_journal_summary(market, summary)
         for market, summary in market_journal_by_market.items()
     )
-    print(f"마감 시황 시장별 커버리지: {market_summary or '없음'}")
+    required_market_label = ", ".join(required_market_journal_markets) or "없음"
+    print(
+        f"마감 시황 시장별 커버리지: {market_summary or '없음'} | "
+        f"필수 {required_market_label} | 최신 세션 허용 {max(1, int(args.max_market_journal_session_age_days))}일"
+    )
     print(f"시장일지 시스템 반영: {format_market_journal_impact(market_journal_impact)}")
 
     if issues:
