@@ -899,6 +899,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(saved["rpc"]["status"], "skipped")
         self.assertEqual(saved["rpc"]["reason"], "rpc_not_ready")
+        self.assertFalse(saved["rpc_submit_ready"])
+        self.assertTrue(saved["rpc_readiness_errors"])
         self.assertTrue(saved["rpc"]["readiness_errors"])
 
     def test_firecrawl_ir_check_tool_writes_output_json(self):
@@ -963,6 +965,34 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("- batch_status: skipped", completed.stdout)
         self.assertIn("- batch_counts: success=0 failed=0 skipped=2 dry_run=0", completed.stdout)
 
+    def test_firecrawl_ir_check_tool_prints_rpc_readiness_errors(self):
+        env = os.environ.copy()
+        env.update(
+            {
+                "FIRECRAWL_IR_ENABLED": "false",
+                "FIRECRAWL_IR_DRY_RUN": "true",
+                "MARKET_SIGNAL_GRAPH_ENABLED": "false",
+                "MARKET_SIGNAL_GRAPH_RPC_URL": "",
+                "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
+                "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "",
+                "SUPABASE_URL": "",
+                "SUPABASE_SERVICE_ROLE_KEY": "",
+            }
+        )
+        completed = subprocess.run(
+            [sys.executable, str(PROJECT_ROOT / "tools" / "check_firecrawl_ir_collector.py")],
+            cwd=PROJECT_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertIn("- rpc_submit_ready: False", completed.stdout)
+        self.assertIn("- rpc_readiness_errors: 5", completed.stdout)
+        self.assertIn("FIRECRAWL_IR_DRY_RUN must be false for RPC readiness", completed.stdout)
+
     def test_firecrawl_ir_check_tool_writes_submit_batch_status_to_output_json(self):
         with TemporaryDirectory() as tmpdir:
             input_path = self.write_firecrawl_submit_items(tmpdir)
@@ -989,6 +1019,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(saved["status"], "skipped")
+        self.assertTrue(saved["rpc_submit_ready"])
+        self.assertEqual(saved["rpc_readiness_errors"], [])
         self.assertEqual(saved["batch"]["status"], "skipped")
         self.assertEqual(saved["batch"]["skipped_count"], 2)
         self.assertEqual(saved["batch"]["status_counts"]["skipped"], 2)

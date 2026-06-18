@@ -222,6 +222,7 @@ def main() -> int:
     errors.extend(_mark_duplicate_payload_errors(payload_results))
 
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
+    rpc_readiness_errors = _rpc_submit_readiness_errors(settings, purpose="RPC readiness")
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
     rpc_ready_errors = (
         _rpc_submit_readiness_errors(settings, purpose="--require-rpc-ready")
@@ -240,6 +241,8 @@ def main() -> int:
         "firecrawl_ir_dry_run": bool(settings.firecrawl_ir_dry_run),
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
+        "rpc_submit_ready": not rpc_readiness_errors,
+        "rpc_readiness_errors": rpc_readiness_errors,
         "require_env_registry": args.require_env_registry,
         "require_rpc_ready": args.require_rpc_ready,
         "dry_run": not args.submit,
@@ -296,6 +299,11 @@ def main() -> int:
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
+        print(f"- rpc_submit_ready: {not rpc_readiness_errors}")
+        if rpc_readiness_errors:
+            print(f"- rpc_readiness_errors: {len(rpc_readiness_errors)}")
+            for error in rpc_readiness_errors:
+                print(f"  - {error}")
         print(f"- require_env_registry: {args.require_env_registry}")
         print(f"- require_rpc_ready: {args.require_rpc_ready}")
         print(f"- dry_run: {not args.submit}")
