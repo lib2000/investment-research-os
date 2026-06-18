@@ -89,6 +89,22 @@ def load_clicks_smoke_tool():
 
 
 class ConsoleSmokeToolTests(unittest.TestCase):
+    def test_click_smoke_exposes_ordered_partial_stages(self):
+        tool = load_clicks_smoke_tool()
+
+        self.assertEqual(
+            tool.STOP_AFTER_STAGE_ORDER,
+            (
+                "dashboard",
+                "analysis-forms",
+                "portfolio",
+                "system-automation",
+                "memory-sources",
+                "recommendations-calendar",
+            ),
+        )
+        self.assertEqual(tool.STOP_AFTER_STAGES, set(tool.STOP_AFTER_STAGE_ORDER))
+
     def test_smoke_tools_allocate_bindable_devtools_port(self):
         import socket
 

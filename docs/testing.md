@@ -93,7 +93,10 @@ node --check mobile_app\research_console\console.js
 
 ```powershell
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks --progress
+python tools\smoke_research_console_clicks.py --list-stages
 ```
+
+부분 실행은 `--list-stages`로 가능한 체크포인트를 확인한 뒤 `--stop-after <stage>`를 붙여 사용합니다.
 
 
 Windows PowerShell에서 실제 Chrome을 이용해 메뉴/클릭 스모크를 함께 돌릴 때는 아래 래퍼를 사용합니다. WSL/Codex 격리에서 DevTools localhost 접근이 막혀도 Windows `Start-Process -Wait` 경로로 검증합니다.

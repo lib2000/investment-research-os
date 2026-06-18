@@ -348,6 +348,8 @@ $contracts = @(
     Snippets = @(
       '--only-system-check',
       '--progress',
+      '--list-stages',
+      '--stop-after',
       '[smoke]',
       'system check completion',
       '전체 시스템 점검 완료',

@@ -25,14 +25,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=clicks"
 COMMON_TICKER_PATTERN = r"005930\.KS|000660\.KS|207940\.KS|033500"
-STOP_AFTER_STAGES = {
+STOP_AFTER_STAGE_ORDER = (
     "dashboard",
     "analysis-forms",
     "portfolio",
     "system-automation",
     "memory-sources",
     "recommendations-calendar",
-}
+)
+STOP_AFTER_STAGES = set(STOP_AFTER_STAGE_ORDER)
 
 
 def emit_progress(enabled: bool, label: str) -> None:
@@ -1868,12 +1869,16 @@ def main() -> int:
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
     parser.add_argument("--progress", action="store_true", help="긴 click smoke의 주요 진행 구간을 표준 출력에 표시합니다.")
+    parser.add_argument("--list-stages", action="store_true", help="--stop-after에서 사용할 수 있는 부분 실행 단계를 출력합니다.")
     parser.add_argument(
         "--stop-after",
-        choices=sorted(STOP_AFTER_STAGES),
+        choices=STOP_AFTER_STAGE_ORDER,
         help="전체 click smoke를 지정한 체크포인트까지만 실행합니다.",
     )
     args = parser.parse_args()
+    if args.list_stages:
+        print(json.dumps({"status": "success", "stages": list(STOP_AFTER_STAGE_ORDER)}, ensure_ascii=False, indent=2))
+        return 0
     try:
         result = run_click_smoke(
             args.url,
