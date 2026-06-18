@@ -4500,6 +4500,35 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertFalse(daily_recommendation_candidates.daily_recommendation_candidate_is_valid("123", "삼양식품"))
 
 
+class DailyRecommendationQualityModuleTests(unittest.TestCase):
+    def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):
+        from research_os import daily_recommendation_quality
+
+        quality = daily_recommendation_quality.daily_recommendation_manifest_quality_by_ticker(
+            [
+                {"ticker": " 003230 ", "summary": "정상 리포트", "date": "2026-06-18"},
+                {"ticker": "003230", "duplicate_count": 1},
+                {"ticker": "003230", "tags": ["url_text_unavailable", "needs_body_copy"]},
+                {"ticker": "003230", "attachment": {"ocr_required": True}},
+                {"ticker": "003230", "status": "archived"},
+            ]
+        )["003230"]
+        candidate = {"score": 10, "score_components": [], "score_penalties": [], "quality_flags": [], "evidence_sources": []}
+
+        daily_recommendation_quality.apply_daily_recommendation_storage_quality(candidate, quality)
+
+        self.assertEqual(quality["active_count"], 4)
+        self.assertEqual(quality["archived_count"], 1)
+        self.assertEqual(quality["high_quality_count"], 1)
+        self.assertEqual(quality["duplicate_suspected_count"], 1)
+        self.assertEqual(quality["body_missing_count"], 1)
+        self.assertEqual(quality["ocr_needed_count"], 1)
+        self.assertEqual(candidate["score"], 5)
+        self.assertEqual(candidate["score_components"][0]["label"], "검증 저장자료 품질")
+        self.assertTrue(candidate["evidence_sources"][0].startswith("저장 품질:"))
+        self.assertIn("중복 의심 자료는 대표 자료만 근거로 사용", candidate["quality_flags"])
+
+
 class DailyRecommendationRecentModuleTests(unittest.TestCase):
     def test_daily_recommendation_recent_module_indexes_and_renders_weekly_evidence(self):
         from research_os import daily_recommendation_recent
