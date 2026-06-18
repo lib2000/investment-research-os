@@ -143,6 +143,13 @@ class Settings(BaseModel):
     company_ir_sources_max_items: int = 20
     company_ir_sources_json: str = ""
     company_ir_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    firecrawl_ir_enabled: bool = False
+    firecrawl_ir_dry_run: bool = True
+    firecrawl_ir_mcp_version: str = "3.17.0"
+    market_signal_graph_enabled: bool = False
+    market_signal_graph_rpc_url: str = ""
+    market_signal_graph_service_role_key: str = Field(default="")
+    market_signal_graph_timeout_seconds: float = 10.0
     nps_odcloud_enabled: bool = True
     nps_odcloud_api_key: str = Field(default="")
     nps_odcloud_base_url: str = "https://api.odcloud.kr/api"
@@ -417,6 +424,18 @@ class Settings(BaseModel):
             company_ir_sources_user_agent=os.getenv(
                 "COMPANY_IR_SOURCES_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            firecrawl_ir_enabled=_read_bool("FIRECRAWL_IR_ENABLED", False),
+            firecrawl_ir_dry_run=_read_bool("FIRECRAWL_IR_DRY_RUN", True),
+            firecrawl_ir_mcp_version=os.getenv("FIRECRAWL_IR_MCP_VERSION", "3.17.0"),
+            market_signal_graph_enabled=_read_bool("MARKET_SIGNAL_GRAPH_ENABLED", False),
+            market_signal_graph_rpc_url=os.getenv("MARKET_SIGNAL_GRAPH_RPC_URL", ""),
+            market_signal_graph_service_role_key=os.getenv(
+                "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY",
+                os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+            ),
+            market_signal_graph_timeout_seconds=float(
+                os.getenv("MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS", "10")
             ),
             nps_odcloud_enabled=_read_bool("NPS_ODCLOUD_ENABLED", True),
             nps_odcloud_api_key=os.getenv(

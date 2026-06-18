@@ -334,6 +334,65 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("12백만 달러", digest["text"])
         self.assertIn("신약개발", digest["text"])
 
+
+class FirecrawlIrCollectorTests(unittest.TestCase):
+    def test_firecrawl_ir_payload_matches_market_signal_graph_contract(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload, sha256_hex
+
+        payload = build_firecrawl_ir_signal_payload(
+            {
+                "company": "Apple",
+                "ticker": "AAPL",
+                "raw_url": "https://investor.apple.com/",
+                "resolved_url": "https://investor.apple.com/",
+                "page_title": "Apple Investor Relations",
+                "markdown": "Apple Investor Relations provides earnings releases and shareholder information.",
+            }
+        )
+
+        self.assertEqual(payload["source_name"], "Apple_ir")
+        self.assertEqual(payload["source_platform"], "firecrawl_ir")
+        self.assertEqual(payload["source_kind"], "ir")
+        self.assertEqual(payload["channel"], "web")
+        self.assertEqual(payload["external_id"], sha256_hex("https://investor.apple.com/"))
+        self.assertEqual(
+            payload["canonical_hash"],
+            sha256_hex("firecrawl_irhttps://investor.apple.com/Apple Investor Relations"),
+        )
+        self.assertTrue(payload["needs_enrichment"])
+        self.assertEqual(payload["analysis_status"], "pending")
+        self.assertEqual(payload["metadata"]["collector"], "firecrawl")
+        self.assertEqual(payload["metadata"]["target_type"], "company_ir")
+        self.assertEqual(payload["metadata"]["ticker"], "AAPL")
+
+    def test_firecrawl_ir_collection_skips_rpc_when_key_missing(self):
+        from types import SimpleNamespace
+
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_collection_result
+
+        settings = SimpleNamespace(
+            firecrawl_ir_dry_run=False,
+            market_signal_graph_rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+            market_signal_graph_service_role_key="",
+            market_signal_graph_timeout_seconds=1,
+        )
+
+        result = build_firecrawl_ir_collection_result(
+            {
+                "company": "Apple",
+                "ticker": "AAPL",
+                "raw_url": "https://investor.apple.com/",
+                "page_title": "Apple Investor Relations",
+                "markdown": "Apple IR.",
+            },
+            settings,
+            dry_run=False,
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["rpc"]["reason"], "market_signal_graph_service_role_key_missing")
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state
