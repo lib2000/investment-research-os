@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -59,8 +60,52 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-json", type=Path, help="Write the non-secret validation result JSON to this path.")
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        help="Load KEY=VALUE settings from a local secret env file before readiness checks. Values are not printed.",
+    )
+    parser.add_argument(
+        "--env-override",
+        action="store_true",
+        help="Allow --env-file values to replace variables already set in the current process.",
+    )
     parser.add_argument("--json", action="store_true", help="Print full non-secret validation JSON.")
     return parser
+
+
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        return None
+    key, value = stripped.split("=", 1)
+    key = key.strip()
+    if key.startswith("export "):
+        key = key[len("export "):].strip()
+    if not key:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    return key, value
+
+
+def _load_env_file(path: Path, *, override: bool = False) -> dict[str, int | str]:
+    if not path.exists():
+        raise FileNotFoundError(f"env file not found: {path}")
+    loaded = 0
+    skipped = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parsed = _parse_env_line(line)
+        if parsed is None:
+            continue
+        key, value = parsed
+        if not override and key in os.environ:
+            skipped += 1
+            continue
+        os.environ[key] = value
+        loaded += 1
+    return {"path": str(path), "loaded_count": loaded, "skipped_existing_count": skipped}
 
 
 def _load_items(args: argparse.Namespace, settings) -> tuple[list[dict], str]:
@@ -204,6 +249,11 @@ def _refresh_result_status(result: dict) -> str:
 
 def main() -> int:
     args = _build_parser().parse_args()
+    env_file_result = None
+    if args.env_file:
+        env_file_result = _load_env_file(args.env_file, override=args.env_override)
+        if hasattr(get_settings, "cache_clear"):
+            get_settings.cache_clear()
     settings = get_settings()
     items, input_source = _load_items(args, settings)
     payload_results: list[dict] = []
@@ -245,6 +295,9 @@ def main() -> int:
         "rpc_readiness_errors": rpc_readiness_errors,
         "require_env_registry": args.require_env_registry,
         "require_rpc_ready": args.require_rpc_ready,
+        "env_file_loaded": bool(env_file_result),
+        "env_file_loaded_count": int((env_file_result or {}).get("loaded_count") or 0),
+        "env_file_skipped_existing_count": int((env_file_result or {}).get("skipped_existing_count") or 0),
         "dry_run": not args.submit,
         "payload": payload_results[0]["payload"] if len(payload_results) == 1 else None,
         "payloads": payload_results,
@@ -306,6 +359,10 @@ def main() -> int:
                 print(f"  - {error}")
         print(f"- require_env_registry: {args.require_env_registry}")
         print(f"- require_rpc_ready: {args.require_rpc_ready}")
+        print(
+            f"- env_file_loaded: {result['env_file_loaded']} "
+            f"(loaded={result['env_file_loaded_count']}, skipped_existing={result['env_file_skipped_existing_count']})"
+        )
         print(f"- dry_run: {not args.submit}")
         if result.get("batch"):
             print(f"- batch_status: {result['batch'].get('status')}")

@@ -77,6 +77,7 @@ python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecraw
 python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecrawl_ir_registry.sample.json --output-json output\firecrawl-ir-payloads.json
 python tools\check_firecrawl_ir_collector.py --use-env-registry
 python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rpc-ready
+python tools\check_firecrawl_ir_collector.py --env-file path\to\firecrawl.env --require-env-registry --require-rpc-ready
 python tools\check_firecrawl_earnings_collector.py
 python tools\check_deepseek_ir_analysis.py
 python tools\check_portfolio_change_detection.py

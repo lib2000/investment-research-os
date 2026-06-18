@@ -795,6 +795,33 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["ticker"], "AAPL")
 
+    def test_firecrawl_ir_check_tool_loads_env_file_without_printing_values(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / "firecrawl.env"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_IR_ENABLED=true",
+                        "export FIRECRAWL_IR_DRY_RUN=false",
+                        "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY='test-secret'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"FIRECRAWL_IR_ENABLED": "false"}, clear=False):
+                loaded = tool._load_env_file(env_path, override=False)
+                self.assertEqual(os.environ["FIRECRAWL_IR_ENABLED"], "false")
+                self.assertEqual(os.environ["FIRECRAWL_IR_DRY_RUN"], "false")
+                self.assertEqual(os.environ["MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY"], "test-secret")
+                self.assertEqual(loaded["loaded_count"], 2)
+                self.assertEqual(loaded["skipped_existing_count"], 1)
+
+                overridden = tool._load_env_file(env_path, override=True)
+                self.assertEqual(os.environ["FIRECRAWL_IR_ENABLED"], "true")
+                self.assertEqual(overridden["loaded_count"], 3)
+
     def test_firecrawl_ir_check_tool_requires_env_registry_input(self):
         from types import SimpleNamespace
 
