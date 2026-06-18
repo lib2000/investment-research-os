@@ -194,6 +194,15 @@ def upsert_external_signal_payload(
         }
 
 
+def collection_status_from_rpc_result(rpc_result: dict[str, Any] | None) -> str:
+    rpc_status = str((rpc_result or {}).get("status") or "")
+    if rpc_status == "success":
+        return "success"
+    if rpc_status == "failed":
+        return "failed"
+    return "skipped"
+
+
 def build_firecrawl_ir_collection_result(
     item: FirecrawlIrInput | dict[str, Any],
     settings: Any,
@@ -218,8 +227,7 @@ def build_firecrawl_ir_collection_result(
         service_role_key=settings.market_signal_graph_service_role_key,
         timeout_seconds=settings.market_signal_graph_timeout_seconds,
     )
-    rpc_status = (result["rpc"] or {}).get("status")
-    result["status"] = "success" if rpc_status == "success" else "skipped"
+    result["status"] = collection_status_from_rpc_result(result["rpc"])
     return result
 
 

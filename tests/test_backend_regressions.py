@@ -404,6 +404,88 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["rpc"]["reason"], "market_signal_graph_service_role_key_missing")
 
+    def test_firecrawl_ir_rpc_posts_payload_wrapper_and_reports_success(self):
+        from research_os import firecrawl_ir_collector
+
+        captured = {}
+
+        class FakeResponse:
+            status_code = 200
+            content = b'{"id": 12}'
+            text = '{"id": 12}'
+
+            def json(self):
+                return {"id": 12}
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                captured["init"] = kwargs
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def post(self, url, headers, json):
+                captured["url"] = url
+                captured["headers"] = headers
+                captured["json"] = json
+                return FakeResponse()
+
+        payload = {"source_platform": "firecrawl_ir", "external_id": "x"}
+        with patch.object(firecrawl_ir_collector.httpx, "Client", FakeClient):
+            result = firecrawl_ir_collector.upsert_external_signal_payload(
+                payload,
+                rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+                service_role_key="service-secret",
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["result"], {"id": 12})
+        self.assertEqual(captured["json"], {"payload": payload})
+        self.assertEqual(captured["headers"]["apikey"], "service-secret")
+        self.assertEqual(captured["headers"]["authorization"], "Bearer service-secret")
+        self.assertTrue(captured["init"]["trust_env"] is False)
+
+    def test_firecrawl_ir_rpc_paused_project_is_skipped(self):
+        from research_os import firecrawl_ir_collector
+
+        class FakeResponse:
+            status_code = 503
+            content = b"project paused"
+            text = "project paused"
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def post(self, url, headers, json):
+                return FakeResponse()
+
+        with patch.object(firecrawl_ir_collector.httpx, "Client", FakeClient):
+            result = firecrawl_ir_collector.upsert_external_signal_payload(
+                {"source_platform": "firecrawl_ir"},
+                rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+                service_role_key="service-secret",
+            )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "supabase_project_paused")
+
+    def test_firecrawl_ir_collection_propagates_rpc_failure(self):
+        from research_os.firecrawl_ir_collector import collection_status_from_rpc_result
+
+        self.assertEqual(collection_status_from_rpc_result({"status": "success"}), "success")
+        self.assertEqual(collection_status_from_rpc_result({"status": "skipped"}), "skipped")
+        self.assertEqual(collection_status_from_rpc_result({"status": "failed"}), "failed")
+
     def test_market_signal_graph_rpc_url_derives_from_supabase_url(self):
         from research_os.settings import _resolve_market_signal_graph_rpc_url
 
