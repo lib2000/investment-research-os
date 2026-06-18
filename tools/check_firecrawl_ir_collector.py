@@ -32,6 +32,7 @@ APPLE_IR_SAMPLE = {
     "markdown": "Apple Investor Relations provides earnings releases, SEC filings, governance materials, and shareholder information.",
     "language": "en",
 }
+EXPECTED_FIRECRAWL_MCP_VERSION = "3.17.0"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -163,6 +164,16 @@ def _rpc_submit_readiness_errors(settings, *, purpose: str = "--submit") -> list
     return errors
 
 
+def _mcp_version_errors(settings) -> list[str]:
+    configured = str(getattr(settings, "firecrawl_ir_mcp_version", "") or "").strip()
+    if configured == EXPECTED_FIRECRAWL_MCP_VERSION:
+        return []
+    return [
+        f"FIRECRAWL_IR_MCP_VERSION must be {EXPECTED_FIRECRAWL_MCP_VERSION} "
+        f"(configured: {configured or 'missing'})"
+    ]
+
+
 def _write_output_json(result: dict, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -272,6 +283,7 @@ def main() -> int:
     errors.extend(_mark_duplicate_payload_errors(payload_results))
 
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
+    mcp_version_errors = _mcp_version_errors(settings)
     rpc_readiness_errors = _rpc_submit_readiness_errors(settings, purpose="RPC readiness")
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
     rpc_ready_errors = (
@@ -279,6 +291,7 @@ def main() -> int:
         if args.require_rpc_ready and not args.submit
         else []
     )
+    errors.extend(mcp_version_errors)
     errors.extend(submit_readiness_errors)
     errors.extend(rpc_ready_errors)
     result = {
@@ -289,9 +302,11 @@ def main() -> int:
         "rpc_enabled": rpc_enabled,
         "firecrawl_ir_enabled": bool(settings.firecrawl_ir_enabled),
         "firecrawl_ir_dry_run": bool(settings.firecrawl_ir_dry_run),
+        "firecrawl_ir_mcp_version": str(settings.firecrawl_ir_mcp_version or ""),
+        "expected_firecrawl_ir_mcp_version": EXPECTED_FIRECRAWL_MCP_VERSION,
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
-        "rpc_submit_ready": not rpc_readiness_errors,
+        "rpc_submit_ready": not (mcp_version_errors or rpc_readiness_errors),
         "rpc_readiness_errors": rpc_readiness_errors,
         "require_env_registry": args.require_env_registry,
         "require_rpc_ready": args.require_rpc_ready,
@@ -349,6 +364,8 @@ def main() -> int:
                 )
         print(f"- firecrawl_ir_enabled: {bool(settings.firecrawl_ir_enabled)}")
         print(f"- firecrawl_ir_dry_run: {bool(settings.firecrawl_ir_dry_run)}")
+        print(f"- firecrawl_ir_mcp_version: {settings.firecrawl_ir_mcp_version}")
+        print(f"- expected_firecrawl_ir_mcp_version: {EXPECTED_FIRECRAWL_MCP_VERSION}")
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")

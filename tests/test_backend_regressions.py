@@ -421,6 +421,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             {
                 "FIRECRAWL_IR_ENABLED": "true",
                 "FIRECRAWL_IR_DRY_RUN": "false",
+                "FIRECRAWL_IR_MCP_VERSION": "3.17.0",
                 "MARKET_SIGNAL_GRAPH_ENABLED": "true",
                 "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
                 "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
@@ -670,6 +671,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "exit 0",
             "exit 1",
             "`skipped`/`failed`",
+            "FIRECRAWL_IR_MCP_VERSION=3.17.0",
             "batch_counts: success=N failed=N skipped=N dry_run=N",
         ]:
             self.assertIn(expected, operations_doc)
@@ -885,6 +887,20 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertTrue(all("--require-rpc-ready" in error for error in missing))
 
+    def test_firecrawl_ir_check_tool_enforces_pinned_mcp_version(self):
+        from types import SimpleNamespace
+
+        tool = load_firecrawl_ir_check_tool()
+
+        self.assertEqual(
+            tool._mcp_version_errors(SimpleNamespace(firecrawl_ir_mcp_version="3.17.0")),
+            [],
+        )
+        self.assertIn(
+            "FIRECRAWL_IR_MCP_VERSION must be 3.17.0",
+            tool._mcp_version_errors(SimpleNamespace(firecrawl_ir_mcp_version="3.18.0"))[0],
+        )
+
     def test_firecrawl_ir_check_tool_reports_rpc_preflight_status(self):
         tool = load_firecrawl_ir_check_tool()
 
@@ -907,6 +923,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                 {
                     "FIRECRAWL_IR_ENABLED": "false",
                     "FIRECRAWL_IR_DRY_RUN": "true",
+                    "FIRECRAWL_IR_MCP_VERSION": "3.17.0",
                     "MARKET_SIGNAL_GRAPH_ENABLED": "false",
                     "MARKET_SIGNAL_GRAPH_RPC_URL": "",
                     "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
@@ -1010,6 +1027,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             {
                 "FIRECRAWL_IR_ENABLED": "false",
                 "FIRECRAWL_IR_DRY_RUN": "true",
+                "FIRECRAWL_IR_MCP_VERSION": "3.17.0",
                 "MARKET_SIGNAL_GRAPH_ENABLED": "false",
                 "MARKET_SIGNAL_GRAPH_RPC_URL": "",
                 "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
@@ -1028,6 +1046,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0)
+        self.assertIn("- firecrawl_ir_mcp_version: 3.17.0", completed.stdout)
         self.assertIn("- rpc_submit_ready: False", completed.stdout)
         self.assertIn("- rpc_readiness_errors: 5", completed.stdout)
         self.assertIn("FIRECRAWL_IR_DRY_RUN must be false for RPC readiness", completed.stdout)
