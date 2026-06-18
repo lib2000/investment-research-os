@@ -102,6 +102,7 @@
 - `thesis_impact.py`: 투자 논거 영향도 신뢰도 보정, 판정, watch item signal, 마크다운 렌더링 helper
 - `thesis_signal_words.py`: 투자 논거 영향도/뉴스 영향 판정에 쓰는 긍정·부정 signal word helper
 - `web_capture.py`: 웹 URL 안전성, 네트워크 재시도/fallback, URL-only 보관 문구 유틸
+- `web_capture_fallbacks.py`: 직접 수집 실패 시 공식 URL별 보조 요약 payload helper
 - `web_capture_translation.py`: 해외 웹 본문 언어 감지, 로컬 용어 사전 기반 한국어 분석 digest helper
 - `web_article_cleaning.py`: 웹 기사 제목/본문 노이즈 제거와 중복 라인 정리 helper
 - `web_text_extraction.py`: HTML/JSON-LD 기사 본문 추출, 제목 정제, 표/실적 행 텍스트화, 기사 노이즈 제거

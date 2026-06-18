@@ -135,6 +135,7 @@
 | `backend\research_os\thesis_impact.py` | 투자 논거 영향도 신뢰도 보정, 판정, watch item signal, 마크다운 렌더링 helper | `ThesisImpactModuleTests` |
 | `backend\research_os\thesis_signal_words.py` | 투자 논거 영향도/뉴스 영향 판정에 쓰는 긍정·부정 signal word helper | `ThesisSignalWordsModuleTests` |
 | `backend\research_os\web_capture.py` | 웹 URL 안전성, 네트워크 재시도/fallback, URL-only 예외 처리, 표시용 컨텍스트 | `WebCaptureRenderingTests` |
+| `backend\research_os\web_capture_fallbacks.py` | 직접 수집 실패 시 공식 URL별 보조 요약 payload helper | `WebCaptureRenderingTests` |
 | `backend\research_os\web_capture_translation.py` | 해외 웹 본문 언어 감지, 로컬 용어 사전 기반 한국어 분석 digest helper | `WebCaptureRenderingTests` |
 | `backend\research_os\web_search_data_provider.py` | Tavily/Brave 검색 기반 보강 데이터 provider와 무료 한도 guard | `WebSearchDataProviderModuleTests` |
 | `backend\research_os\web_article_cleaning.py` | 웹 기사 제목/본문 노이즈 제거와 중복 라인 정리 helper | `WebCaptureRenderingTests` |

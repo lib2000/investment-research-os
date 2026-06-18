@@ -61,6 +61,7 @@ EXPECTED_MODULES = {
     "system_health.py",
     "ticker_registry.py",
     "web_capture.py",
+    "web_capture_fallbacks.py",
     "web_text_extraction.py",
 }
 EXPECTED_MAIN_IMPORTS = {
@@ -109,6 +110,7 @@ EXPECTED_MAIN_IMPORTS = {
     "research_os.system_health",
     "research_os.ticker_registry",
     "research_os.web_capture",
+    "research_os.web_capture_fallbacks",
     "research_os.web_text_extraction",
 }
 BANNED_TERMS = ("bigkinds", "빅카인즈")

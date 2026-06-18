@@ -198,6 +198,25 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("sec_urllib: success 200", attempts)
         self.assertIn(b"ChargePoint revenue", response.content)
 
+    def test_official_url_fallback_summary_is_separate_payload_helper(self):
+        from research_os.web_capture import official_url_fallback_summary as web_capture_fallback
+        from research_os.web_capture_fallbacks import official_url_fallback_summary
+
+        payload = official_url_fallback_summary(
+            "https://www.isomorphiclabs.com/news/isomorphic-labs-announces-series-b-investment-round",
+            ["direct: 403 Forbidden"],
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["fetch_attempts"][0], "direct: 403 Forbidden")
+        self.assertEqual(payload["status"], "official_fallback_summary")
+        self.assertEqual(payload["translation_status"], "official_korean_summary")
+        self.assertIn("21억 달러", payload["text"])
+        self.assertIn("재시도 로그", payload["note"])
+        self.assertIsNone(official_url_fallback_summary("https://example.com/article", []))
+        self.assertEqual(web_capture_fallback, official_url_fallback_summary)
+
     def test_webpage_text_extracts_plain_ir_paragraphs(self):
         from research_os.web_capture import extract_webpage_text
 
