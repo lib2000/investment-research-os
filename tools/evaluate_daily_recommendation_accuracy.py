@@ -208,6 +208,8 @@ def score_latest_records(root: Path, latest: list[dict[str, Any]], expected_coun
 def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[str], dict[str, Any]]:
     completed: list[dict[str, Any]] = []
     unavailable = 0
+    by_ticker: dict[str, dict[str, Any]] = {}
+    by_milestone: dict[str, dict[str, Any]] = {}
     for record in records:
         for milestone in record.get("tracking_milestones") or []:
             if not isinstance(milestone, dict):
@@ -225,6 +227,7 @@ def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[s
                         "rank": record.get("rank"),
                         "recommendation_date": record.get("recommendation_date"),
                         "milestone": milestone.get("label") or milestone.get("key"),
+                        "milestone_key": milestone.get("key") or milestone.get("label"),
                         "price_change_pct": change_pct,
                     }
                 )
@@ -244,6 +247,71 @@ def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[s
     if hit_rate < 0.5:
         failures.append(f"tracked_outcome: hit_rate {hit_rate:.2f} / 목표 0.50")
     completed.sort(key=lambda item: item["price_change_pct"])
+
+    for item in completed:
+        ticker = normalize_ticker(item.get("ticker"))
+        ticker_label = f"{ticker} {item.get('company_name') or ''}".strip()
+        milestone_key = str(item.get("milestone_key") or item.get("milestone") or "unknown")
+        for bucket, key, label in (
+            (by_ticker, ticker, ticker_label),
+            (by_milestone, milestone_key, str(item.get("milestone") or milestone_key)),
+        ):
+            if not key:
+                continue
+            stats = bucket.setdefault(
+                key,
+                {
+                    "label": label,
+                    "completed_count": 0,
+                    "positive_count": 0,
+                    "flat_count": 0,
+                    "negative_count": 0,
+                    "change_sum": 0.0,
+                    "worst_change_pct": None,
+                    "best_change_pct": None,
+                },
+            )
+            change_pct = float(item["price_change_pct"])
+            stats["completed_count"] += 1
+            stats["change_sum"] += change_pct
+            if change_pct > 0.02:
+                stats["positive_count"] += 1
+            elif -0.02 <= change_pct <= 0.02:
+                stats["flat_count"] += 1
+            else:
+                stats["negative_count"] += 1
+            if stats["worst_change_pct"] is None or change_pct < stats["worst_change_pct"]:
+                stats["worst_change_pct"] = change_pct
+            if stats["best_change_pct"] is None or change_pct > stats["best_change_pct"]:
+                stats["best_change_pct"] = change_pct
+
+    def summarize_bucket(bucket: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for key, stats in bucket.items():
+            completed_count = int(stats["completed_count"])
+            if completed_count <= 0:
+                continue
+            bucket_hit_rate = (int(stats["positive_count"]) + 0.5 * int(stats["flat_count"])) / completed_count
+            average_change_pct = float(stats["change_sum"]) / completed_count
+            rows.append(
+                {
+                    "key": key,
+                    "label": stats["label"],
+                    "completed_count": completed_count,
+                    "positive_count": stats["positive_count"],
+                    "flat_count": stats["flat_count"],
+                    "negative_count": stats["negative_count"],
+                    "hit_rate": round(bucket_hit_rate, 4),
+                    "average_change_pct": round(average_change_pct, 4),
+                    "worst_change_pct": round(float(stats["worst_change_pct"]), 4),
+                    "best_change_pct": round(float(stats["best_change_pct"]), 4),
+                }
+            )
+        rows.sort(key=lambda item: (item["hit_rate"], item["average_change_pct"], -item["completed_count"]))
+        return rows
+
+    ticker_breakdown = summarize_bucket(by_ticker)
+    milestone_breakdown = summarize_bucket(by_milestone)
     return max(0.0, outcome_points), failures, {
         "completed_count": len(completed),
         "positive_count": positive,
@@ -253,6 +321,8 @@ def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[s
         "worst": completed[:3],
         "best": list(reversed(completed[-3:])),
         "price_unavailable_count": unavailable,
+        "underperforming_tickers": ticker_breakdown[:8],
+        "milestone_breakdown": milestone_breakdown,
     }
 
 
@@ -322,6 +392,27 @@ def main() -> int:
                 print(f"- {failure}")
         else:
             print("실패/병목: 없음")
+        tracked = result.get("details", {}).get("tracked_outcomes", {})
+        underperformers = tracked.get("underperforming_tickers") or []
+        if underperformers:
+            print("하위 성과 티커:")
+            for item in underperformers[:5]:
+                print(
+                    "- "
+                    f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"n={item['completed_count']}"
+                )
+        milestones = tracked.get("milestone_breakdown") or []
+        if milestones:
+            print("마일스톤별 성과:")
+            for item in milestones:
+                print(
+                    "- "
+                    f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"n={item['completed_count']}"
+                )
     if args.min_score and float(result["score"]) < float(args.min_score):
         return 1
     return 0

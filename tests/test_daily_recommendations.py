@@ -73,6 +73,35 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(positive, 14)
         self.assertEqual(penalty, 5)
 
+    def test_accuracy_eval_reports_outcome_breakdowns(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        score, failures, details = accuracy_eval.score_tracked_outcomes(
+            [
+                {
+                    "ticker": "AAA",
+                    "company_name": "Alpha",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.1},
+                        {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.04},
+                    ],
+                },
+                {
+                    "ticker": "BBB",
+                    "company_name": "Beta",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": 0.08}
+                    ],
+                },
+            ]
+        )
+
+        self.assertGreater(score, 0)
+        self.assertTrue(any("hit_rate" in failure for failure in failures))
+        self.assertEqual(details["underperforming_tickers"][0]["key"], "AAA")
+        self.assertEqual(details["underperforming_tickers"][0]["completed_count"], 2)
+        self.assertEqual(details["milestone_breakdown"][0]["key"], "15d")
+
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
             {

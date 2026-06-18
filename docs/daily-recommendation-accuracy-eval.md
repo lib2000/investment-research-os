@@ -61,3 +61,16 @@ Post-change failures:
 
 Remaining risk:
 - The next score move now depends on future recommendations avoiding repeat underperformers and subsequent milestones completing with stronger outcomes.
+
+Iteration 5 - outcome breakdown diagnostics:
+- Bottleneck: the eval reported aggregate `hit_rate` failure but did not show enough structure to choose the next bottleneck.
+- Change: `evaluate_daily_recommendation_accuracy.py` now reports underperforming tickers and milestone-level outcome breakdowns in both JSON and text output.
+- Current worst ticker groups: `112610 씨에스윈드` hit rate `0.00`, average `-14.7%`, `n=10`; `OTLY` hit rate `0.00`, average `-13.2%`, `n=3`.
+- Current worst horizon: `15d` hit rate `0.11`, average `-7.4%`, `n=18`.
+- Result: score remains `84.74/100`; diagnostics now identify the next optimization target.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- The likely next fix should target 15-day deterioration and repeated weak tickers, but changing the scoring rule should be validated with replay/backtest rather than by rewriting past outcomes.
