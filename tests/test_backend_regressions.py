@@ -1985,6 +1985,62 @@ class DataProviderStatusMessagesModuleTests(unittest.TestCase):
                 SimpleNamespace(uses_external_token=False, can_issue_token=False, app_key="key", app_secret="secret")
             ),
         )
+
+
+class DataProviderStatusModuleTests(unittest.TestCase):
+    def test_supplemental_provider_statuses_include_quota_and_customs_total_trend(self):
+        from types import SimpleNamespace
+
+        from research_os.data_provider_status import (
+            build_kis_market_status,
+            build_supplemental_provider_statuses,
+        )
+        from research_os.settings import Settings
+
+        settings = Settings(
+            tavily_daily_credit_limit=7,
+            tavily_monthly_credit_limit=70,
+            brave_daily_request_limit=9,
+            brave_monthly_request_limit=90,
+            naver_finance_enabled=True,
+        )
+        statuses = {
+            status.name: status.to_dict()
+            for status in build_supplemental_provider_statuses(
+                settings,
+                finnhub_client=SimpleNamespace(is_configured=False),
+                alpha_supplemental=SimpleNamespace(is_configured=True),
+                tavily_supplemental=SimpleNamespace(is_configured=True),
+                brave_supplemental=SimpleNamespace(is_configured=True),
+                nps_client=SimpleNamespace(is_configured=False, status_message=lambda: "nps disabled"),
+                customs_client=SimpleNamespace(
+                    is_configured=True,
+                    is_total_trend_configured=True,
+                    status_message=lambda: "품목별 수출입 사용 가능",
+                    total_trend_status_message=lambda: "수출입총괄 사용 가능",
+                ),
+            )
+        }
+
+        self.assertIn("일 7 credits", statuses["tavily_finance_search"]["message"])
+        self.assertIn("월 90 requests", statuses["brave_search"]["message"])
+        self.assertTrue(statuses["naver_finance_korea_indices"]["ready"])
+        self.assertTrue(statuses["korea_customs_trade_total_trend"]["ready"])
+        self.assertIn("수출입총괄", statuses["korea_customs_trade_total_trend"]["message"])
+
+        kis_status = build_kis_market_status(
+            SimpleNamespace(
+                is_configured=False,
+                uses_external_token=False,
+                can_issue_token=False,
+                app_key="key",
+                app_secret="secret",
+            )
+        ).to_dict()
+        self.assertEqual(kis_status["name"], "kis_overseas_market_data")
+        self.assertIn("자동매매 보호", kis_status["message"])
+
+
 class RagSearchResultsModuleTests(unittest.TestCase):
     def test_rag_search_results_compacts_related_generated_reports(self):
         from research_os import rag_search_results

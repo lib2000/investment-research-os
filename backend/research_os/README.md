@@ -38,6 +38,7 @@
 - `automation_schedule_status.py`: 리서치 외부 소스 자동화 스케줄 상태 row 조립 helper
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_provider_status_messages.py`: KIS/FMP/외부 보강 provider 상태 표시 문구 helper
+- `data_provider_status.py`: KIS/OpenDART/검색/관세청 등 data provider 상태 row 조립 helper
 - `financial_datasets_data_provider.py`: Financial Datasets 재무 API client와 해외 재무 snapshot provider
 - `fmp_data_provider.py`: Financial Modeling Prep API client와 시장/재무 provider
 - `finnhub_data_provider.py`: Finnhub 현재가, 실적 캘린더, 회사 뉴스 provider

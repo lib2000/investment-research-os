@@ -17,6 +17,7 @@ EXPECTED_MODULES = {
     "daily_recommendations.py",
     "data_provider_utils.py",
     "data_provider_core.py",
+    "data_provider_status.py",
     "data_providers.py",
     "deepseek_ir_analysis.py",
     "nps_data_provider.py",
