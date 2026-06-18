@@ -69,6 +69,17 @@ CHECKS = [
     ("RAG 합성 저장 상태", ["tools/check_rag_synthesis_store.py", "--require-latest-rag"]),
     ("매일 추천 저장/추적", ["tools/check_daily_recommendations_store.py", "--require-milestones", "--require-quality"]),
     ("매일 추천 RAG 근거 문서", ["tools/check_daily_recommendation_citations.py", "--strict"]),
+    (
+        "매일 추천 후보 정책",
+        [
+            "tools/check_daily_recommendation_candidate_policy.py",
+            "--require-hold-warning",
+            "--expected-held-ticker",
+            "OTLY",
+            "--expected-held-ticker",
+            "112610",
+        ],
+    ),
 ]
 
 

@@ -110,3 +110,15 @@ Post-change failures:
 
 Remaining risk:
 - The guard validates current generation behavior, not realized future returns; the next score move still depends on new saved recommendations and completed milestones.
+
+Iteration 9 - promote candidate policy guard into bundled verification:
+- Bottleneck: the generated-candidate policy guard existed, but a standard console/store verification could still pass without running it.
+- Change: `verify_research_console.ps1 -CheckDailyRecommendationStore` now runs `check_daily_recommendation_candidate_policy.py`, and `check_offline_readiness.py` includes the same guard in its daily recommendation checks.
+- Verification result: bundled store verification now reports both saved-record health and candidate-policy health; the policy guard still shows `ABSI`, `033500`, `105630` as generated top 3 with `OTLY, 112610` held.
+- Result: historical eval score remains `84.74/100`; candidate-policy regressions are now caught in the normal verification path instead of a separate manual step.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- Full offline readiness includes git sync and broad repo checks, so it is best run after committing local work; the focused console/store verification now covers the new policy path.

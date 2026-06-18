@@ -155,6 +155,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os\system_health.py `
     tools\smoke_research_console_clicks.py `
     tools\check_daily_recommendations_store.py `
+    tools\check_daily_recommendation_candidate_policy.py `
     tools\check_research_source_store.py `
     tools\check_investment_calendar_store.py `
     tools\check_portfolio_store.py `
@@ -345,6 +346,9 @@ if ($CheckDailyRecommendations) {
 if ($CheckDailyRecommendationStore) {
   Invoke-VerifyStep "일일 추천 저장 파일 오프라인 확인" {
     python tools\check_daily_recommendations_store.py --require-milestones
+  }
+  Invoke-VerifyStep "일일 추천 후보 정책 오프라인 확인" {
+    python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker OTLY --expected-held-ticker 112610
   }
 }
 
