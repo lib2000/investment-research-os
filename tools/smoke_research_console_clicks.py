@@ -347,12 +347,17 @@ def run_click_smoke(
 ) -> dict:
     if stop_after and stop_after not in STOP_AFTER_STAGES:
         raise ValueError(f"Unknown click smoke stop-after stage: {stop_after}")
+    started_at = time.monotonic()
+
+    def progress_step(label: str) -> None:
+        emit_progress(progress, f"+{time.monotonic() - started_at:.1f}s {label}")
+
     assert_project_root()
-    emit_progress(progress, "project root verified")
+    progress_step("project root verified")
     port = free_devtools_port()
-    emit_progress(progress, f"devtools port selected: {port}")
+    progress_step(f"devtools port selected: {port}")
     with tempfile.TemporaryDirectory(prefix="research-console-chrome-", ignore_cleanup_errors=True) as profile_dir:
-        emit_progress(progress, "launching headless browser")
+        progress_step("launching headless browser")
         process = subprocess.Popen(
             [
                 chrome_path(),
@@ -370,13 +375,13 @@ def run_click_smoke(
         client: CdpClient | None = None
         try:
             page = wait_for_page(port)
-            emit_progress(progress, "devtools page ready")
+            progress_step("devtools page ready")
             client = CdpClient(page["webSocketDebuggerUrl"])
             client.call("Runtime.enable")
             client.call("Page.enable")
-            emit_progress(progress, "cdp runtime enabled")
+            progress_step("cdp runtime enabled")
             if only_system_check:
-                emit_progress(progress, "system-check smoke started")
+                progress_step("system-check smoke started")
                 result = client.evaluate(
                     """
                     (async () => {
@@ -427,11 +432,12 @@ def run_click_smoke(
                     """,
                     timeout=180,
                 )
-                emit_progress(progress, "system-check smoke completed")
+                result["elapsedSeconds"] = round(time.monotonic() - started_at, 2)
+                progress_step("system-check smoke completed")
                 if not result["systemCheckCompleted"]:
                     raise AssertionError("시스템 점검이 완료 상태까지 도달하지 못했습니다.")
                 return result
-            emit_progress(progress, f"full click smoke started{f' (stop after {stop_after})' if stop_after else ''}")
+            progress_step(f"full click smoke started{f' (stop after {stop_after})' if stop_after else ''}")
             stop_after_json = json.dumps(stop_after or "")
             result = client.evaluate(
                 f"""
@@ -1736,9 +1742,10 @@ def run_click_smoke(
                 """,
                 timeout=600,
             )
+            result["elapsedSeconds"] = round(time.monotonic() - started_at, 2)
             if result.get("partial"):
                 assert_partial_click_smoke(result)
-                emit_progress(progress, f"partial click smoke completed: {result.get('smokeStage')}")
+                progress_step(f"partial click smoke completed: {result.get('smokeStage')}")
                 return result
             if not result["dashboardShowsDartStrip"]:
                 raise AssertionError("대시보드 기본 화면에 최근 DART 공시 확인 스트립이 표시되지 않았습니다.")
@@ -1861,10 +1868,10 @@ def run_click_smoke(
                 raise AssertionError("LLM 저장/RAG 상태 화면에 불필요한 '회사명 확인 필요' 표시가 남아 있습니다.")
             if include_llm_save and result["llmReset"] != {"target": "", "sourceContext": "", "prompt": "", "result": ""}:
                 raise AssertionError(f"LLM 저장 후 초기화 검증 실패: {result['llmReset']}")
-            emit_progress(progress, "full click smoke assertions completed")
+            progress_step("full click smoke assertions completed")
             return result
         finally:
-            emit_progress(progress, "cleaning up browser")
+            progress_step("cleaning up browser")
             if client:
                 client.close()
             process.terminate()
