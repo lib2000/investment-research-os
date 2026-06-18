@@ -4562,6 +4562,44 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(second["status"], "skipped_existing")
         self.assertEqual(second["records"][0]["ticker"], "003230")
 
+    def test_daily_recommendation_store_updates_tracking_and_summary(self):
+        from datetime import date
+        from tempfile import TemporaryDirectory
+
+        from research_os import daily_recommendation_store
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))
+            daily_recommendation_store.upsert_daily_recommendations(
+                settings,
+                candidates=[
+                    {
+                        "ticker": "003230",
+                        "company_name": "삼양식품",
+                        "score": 88,
+                        "baseline_price": 100000,
+                        "reasons": ["추적 테스트"],
+                    }
+                ],
+                recommendation_date=date(2026, 6, 1),
+                generated_at="2026-06-01T08:00:00+09:00",
+            )
+
+            tracking = daily_recommendation_store.update_recommendation_tracking(
+                settings,
+                as_of=date(2026, 6, 8),
+                checked_at="2026-06-08T09:00:00+09:00",
+                price_lookup=lambda _ticker: (110000, "unit_test"),
+            )
+            summary = daily_recommendation_store.summarize_daily_recommendation_store(settings)
+
+        self.assertEqual(tracking["due_count"], 1)
+        self.assertEqual(tracking["pending_count"], 4)
+        self.assertEqual(summary["performance_summary"]["complete_count"], 1)
+        self.assertEqual(summary["performance_summary"]["positive_count"], 1)
+        self.assertEqual(summary["latest_records"][0]["tracking_milestones"][0]["status"], "complete")
+
 
 class DailyRecommendationQualityModuleTests(unittest.TestCase):
     def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):

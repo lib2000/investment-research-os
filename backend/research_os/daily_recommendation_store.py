@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 from re import search
+from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from research_os import daily_recommendation_candidates
@@ -199,5 +200,136 @@ def upsert_daily_recommendations(
         "recommendation_date": recommendation_date.isoformat(),
         "saved_count": len(new_records),
         "records": new_records,
+        "storage_path": str(daily_recommendation_store_path(settings)),
+    }
+
+
+PriceLookup = Callable[[str], tuple[float | None, str | None]]
+
+
+def update_recommendation_tracking(
+    settings: Settings,
+    *,
+    as_of: date,
+    checked_at: str,
+    price_lookup: PriceLookup,
+) -> dict:
+    store = read_daily_recommendation_store(settings)
+    records = [item for item in store.get("records", []) if isinstance(item, dict)]
+    updated: list[dict] = []
+    due_count = 0
+    pending_count = 0
+    unavailable_count = 0
+    for record in records:
+        baseline_price = record.get("baseline_price")
+        try:
+            baseline = float(baseline_price) if baseline_price is not None else None
+        except (TypeError, ValueError):
+            baseline = None
+        milestones = []
+        for milestone in record.get("tracking_milestones", []):
+            if not isinstance(milestone, dict):
+                continue
+            target_date = parse_date(milestone.get("target_date"))
+            if not target_date or target_date > as_of:
+                pending_count += 1
+                milestones.append(milestone)
+                continue
+            if milestone.get("status") == "complete" and milestone.get("price") is not None:
+                milestones.append(milestone)
+                continue
+            due_count += 1
+            price, source = price_lookup(str(record.get("ticker") or ""))
+            if price is None or baseline is None or baseline <= 0:
+                unavailable_count += 1
+                milestones.append(
+                    {
+                        **milestone,
+                        "status": "price_unavailable",
+                        "price_checked_at": checked_at,
+                        "price_source": source,
+                        "investment_situation": "추적일이 도래했지만 현재가 또는 기준가를 확인하지 못했습니다.",
+                    }
+                )
+                continue
+            change = price - baseline
+            change_pct = change / baseline
+            milestones.append(
+                {
+                    **milestone,
+                    "status": "complete",
+                    "price": round(price, 4),
+                    "price_checked_at": checked_at,
+                    "price_source": source,
+                    "price_change": round(change, 4),
+                    "price_change_pct": round(change_pct, 4),
+                    "investment_situation": daily_recommendation_tracking.investment_situation(change_pct),
+                }
+            )
+        record["tracking_milestones"] = milestones
+        updated.append(record)
+
+    store["records"] = updated
+    store["tracking_updated_at"] = checked_at
+    write_daily_recommendation_store(settings, store)
+    return {
+        "status": "success",
+        "module": "daily_recommendation_tracking",
+        "as_of": as_of.isoformat(),
+        "checked_at": checked_at,
+        "record_count": len(updated),
+        "due_count": due_count,
+        "pending_count": pending_count,
+        "price_unavailable_count": unavailable_count,
+        "storage_path": str(daily_recommendation_store_path(settings)),
+    }
+
+
+def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30) -> dict[str, Any]:
+    store = read_daily_recommendation_store(settings)
+    records = [item for item in store.get("records", []) if isinstance(item, dict)]
+    latest_date = store.get("latest_recommendation_date")
+    latest_records = [
+        item for item in records if item.get("recommendation_date") == latest_date
+    ] if latest_date else []
+    recommendation_dates = sorted(
+        {
+            str(item.get("recommendation_date"))
+            for item in records
+            if item.get("recommendation_date")
+        },
+        reverse=True,
+    )
+    due_milestones = []
+    for record in records:
+        for milestone in record.get("tracking_milestones", []):
+            if not isinstance(milestone, dict):
+                continue
+            if milestone.get("status") in {"price_unavailable", "complete"}:
+                continue
+            due_milestones.append(
+                {
+                    "record_id": record.get("record_id"),
+                    "company_name": record.get("company_name"),
+                    "ticker": record.get("ticker"),
+                    "rank": record.get("rank"),
+                    "recommendation_date": record.get("recommendation_date"),
+                    "milestone": milestone.get("label"),
+                    "target_date": milestone.get("target_date"),
+                    "status": milestone.get("status"),
+                }
+            )
+    return {
+        "status": "success",
+        "module": "daily_stock_recommendations",
+        "updated_at": store.get("updated_at"),
+        "tracking_updated_at": store.get("tracking_updated_at"),
+        "latest_recommendation_date": latest_date,
+        "record_count": len(records),
+        "recommendation_dates": recommendation_dates[:30],
+        "latest_records": sorted(latest_records, key=lambda item: int(item.get("rank") or 999))[:3],
+        "records": records[: max(1, min(limit, 200))],
+        "due_or_pending_milestones": due_milestones[:30],
+        "performance_summary": daily_recommendation_tracking.summarize_tracking_performance(records),
         "storage_path": str(daily_recommendation_store_path(settings)),
     }
