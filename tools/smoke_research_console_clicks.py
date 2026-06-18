@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import os
+import select
 import shutil
 import socket
 import struct
@@ -20,6 +21,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Callable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +41,14 @@ STOP_AFTER_STAGES = set(STOP_AFTER_STAGE_ORDER)
 def emit_progress(enabled: bool, label: str) -> None:
     if enabled:
         print(f"[smoke] {time.strftime('%Y-%m-%dT%H:%M:%S')} {label}", flush=True)
+
+
+def normalize_progress_heartbeat_seconds(value: float | int | str | None) -> float:
+    try:
+        seconds = float(value if value is not None else 30.0)
+    except (TypeError, ValueError):
+        seconds = 30.0
+    return max(1.0, seconds)
 
 
 def is_wsl_like() -> bool:
@@ -140,15 +150,33 @@ class CdpClient:
             return self._read_frame()
         return json.loads(payload.decode("utf-8"))
 
-    def call(self, method: str, params: dict | None = None, timeout: float = 30) -> dict:
+    def call(
+        self,
+        method: str,
+        params: dict | None = None,
+        timeout: float = 30,
+        heartbeat: Callable[[str], None] | None = None,
+        heartbeat_interval: float = 30.0,
+        heartbeat_label: str | None = None,
+    ) -> dict:
         command_id = self.next_id
         self.next_id += 1
         self._send_frame(json.dumps({"id": command_id, "method": method, "params": params or {}}).encode("utf-8"))
         previous_timeout = self.sock.gettimeout()
         self.sock.settimeout(max(timeout + 15, previous_timeout or 0))
-        deadline = time.time() + timeout
+        deadline = time.monotonic() + timeout
+        next_heartbeat = time.monotonic() + max(1.0, heartbeat_interval)
         try:
-            while time.time() < deadline:
+            while time.monotonic() < deadline:
+                wait_seconds = max(0.05, min(1.0, deadline - time.monotonic()))
+                if heartbeat:
+                    wait_seconds = max(0.05, min(wait_seconds, next_heartbeat - time.monotonic()))
+                readable, _, _ = select.select([self.sock], [], [], wait_seconds)
+                if not readable:
+                    if heartbeat and time.monotonic() >= next_heartbeat:
+                        heartbeat(heartbeat_label or f"waiting for {method}")
+                        next_heartbeat = time.monotonic() + max(1.0, heartbeat_interval)
+                    continue
                 message = self._read_frame()
                 if message.get("id") != command_id:
                     continue
@@ -159,7 +187,14 @@ class CdpClient:
             self.sock.settimeout(previous_timeout)
         raise TimeoutError(f"CDP command timed out: {method}")
 
-    def evaluate(self, expression: str, timeout: float = 30) -> object:
+    def evaluate(
+        self,
+        expression: str,
+        timeout: float = 30,
+        heartbeat: Callable[[str], None] | None = None,
+        heartbeat_interval: float = 30.0,
+        heartbeat_label: str | None = None,
+    ) -> object:
         params = {
             "expression": expression,
             "awaitPromise": True,
@@ -169,7 +204,14 @@ class CdpClient:
         last_error: RuntimeError | None = None
         for _ in range(5):
             try:
-                result = self.call("Runtime.evaluate", params, timeout=timeout + 5)
+                result = self.call(
+                    "Runtime.evaluate",
+                    params,
+                    timeout=timeout + 5,
+                    heartbeat=heartbeat,
+                    heartbeat_interval=heartbeat_interval,
+                    heartbeat_label=heartbeat_label,
+                )
                 break
             except RuntimeError as error:
                 last_error = error
@@ -343,10 +385,12 @@ def run_click_smoke(
     include_llm_save: bool = False,
     only_system_check: bool = False,
     progress: bool = False,
+    progress_heartbeat_seconds: float = 30.0,
     stop_after: str | None = None,
 ) -> dict:
     if stop_after and stop_after not in STOP_AFTER_STAGES:
         raise ValueError(f"Unknown click smoke stop-after stage: {stop_after}")
+    progress_heartbeat_seconds = normalize_progress_heartbeat_seconds(progress_heartbeat_seconds)
     started_at = time.monotonic()
 
     def progress_step(label: str) -> None:
@@ -431,6 +475,9 @@ def run_click_smoke(
                     })()
                     """,
                     timeout=180,
+                    heartbeat=progress_step if progress else None,
+                    heartbeat_interval=progress_heartbeat_seconds,
+                    heartbeat_label="system-check browser flow still running",
                 )
                 result["elapsedSeconds"] = round(time.monotonic() - started_at, 2)
                 progress_step("system-check smoke completed")
@@ -1744,6 +1791,11 @@ def run_click_smoke(
                 }})()
                 """,
                 timeout=600,
+                heartbeat=progress_step if progress else None,
+                heartbeat_interval=progress_heartbeat_seconds,
+                heartbeat_label=(
+                    f"browser click flow still running{f' (stop after {stop_after})' if stop_after else ''}"
+                ),
             )
             result["elapsedSeconds"] = round(time.monotonic() - started_at, 2)
             if result.get("partial"):
@@ -1890,6 +1942,12 @@ def main() -> int:
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
     parser.add_argument("--progress", action="store_true", help="긴 click smoke의 주요 진행 구간을 표준 출력에 표시합니다.")
+    parser.add_argument(
+        "--progress-heartbeat-seconds",
+        type=float,
+        default=30.0,
+        help="--progress 사용 시 브라우저 응답 대기 heartbeat 간격입니다.",
+    )
     parser.add_argument("--list-stages", action="store_true", help="--stop-after에서 사용할 수 있는 부분 실행 단계를 출력합니다.")
     parser.add_argument(
         "--stop-after",
@@ -1906,6 +1964,7 @@ def main() -> int:
             include_llm_save=args.include_llm_save,
             only_system_check=args.only_system_check,
             progress=args.progress,
+            progress_heartbeat_seconds=args.progress_heartbeat_seconds,
             stop_after=args.stop_after,
         )
     except (AssertionError, RuntimeError, TimeoutError, OSError, ValueError) as exc:

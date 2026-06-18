@@ -129,6 +129,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.bind(("127.0.0.1", port))
 
+    def test_click_smoke_normalizes_progress_heartbeat_interval(self):
+        tool = load_clicks_smoke_tool()
+
+        self.assertEqual(tool.normalize_progress_heartbeat_seconds(None), 30.0)
+        self.assertEqual(tool.normalize_progress_heartbeat_seconds("0"), 1.0)
+        self.assertEqual(tool.normalize_progress_heartbeat_seconds("2.5"), 2.5)
+        self.assertEqual(tool.normalize_progress_heartbeat_seconds("bad"), 30.0)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
