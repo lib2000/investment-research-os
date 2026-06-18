@@ -13,6 +13,7 @@ EXPECTED_MODULES = {
     "customs_trade.py",
     "customs_data_provider.py",
     "dart_filing_watch.py",
+    "daily_recommendation_ranking.py",
     "daily_recommendation_store.py",
     "daily_recommendations.py",
     "data_provider_utils.py",

@@ -31,6 +31,7 @@
 - `daily_recommendation_store.py`: 매일 추천 저장소 경로, JSON 읽기/쓰기, 실행 시각 판정, 추천 record ID 유틸
 - `daily_recommendation_evidence.py`: 매일 추천 RAG 근거 문서 정규화, claim 매칭, evidence document 선별 helper
 - `daily_recommendation_recent.py`: 매일 추천 최근 1주 자료 인덱스, evidence document 변환, 묶음 표시 helper
+- `daily_recommendation_ranking.py`: 매일 추천 후보 정렬, 반복 부진 후보 보류, rank/warning payload helper
 - `daily_recommendation_tracking.py`: 매일 추천 사후 추적 milestone, 성과 요약, 투자 상황 문구 helper
 - `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 추천 후보 저장 품질 점수 보정 유틸
 - `dashboard_helpers.py`: 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper

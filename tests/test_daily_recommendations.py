@@ -565,6 +565,8 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(missing["risk_notes"][0].startswith("기준 현재가를 확인하지 못해"))
 
     def test_finalize_daily_recommendation_ranking_limits_and_ranks_candidates(self):
+        from research_os import daily_recommendation_ranking
+
         result = finalize_daily_recommendation_ranking(
             {
                 "A": {"ticker": "A", "company_name": "알파", "score": 70, "baseline_price": None},
@@ -584,6 +586,18 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(result["warnings"], ["w1", "w2"])
         self.assertEqual([item["ticker"] for item in result["candidates"]], ["B", "C"])
         self.assertEqual([item["rank"] for item in result["candidates"]], [1, 2])
+        direct_result = daily_recommendation_ranking.finalize_daily_recommendation_ranking(
+            {
+                "A": {"ticker": "A", "company_name": "알파", "score": 70, "baseline_price": None},
+                "B": {"ticker": "B", "company_name": "베타", "score": 90, "baseline_price": 10},
+                "C": {"ticker": "C", "company_name": "감마", "score": 90, "baseline_price": None},
+            },
+            limit=2,
+            as_of="2026-06-14T08:00:00+09:00",
+            consensus_summary="테스트 요약",
+            warnings=["w1", "w2"],
+        )
+        self.assertEqual(direct_result, result)
 
     def test_finalize_daily_recommendation_ranking_holds_severe_repeat_underperformers(self):
         result = finalize_daily_recommendation_ranking(
