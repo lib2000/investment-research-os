@@ -4565,6 +4565,32 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
         self.assertEqual(summary["best"]["ticker"], "003230")
         self.assertEqual(summary["worst"]["ticker"], "071050")
         self.assertIn("강한 상승", daily_recommendation_tracking.investment_situation(0.16))
+        self.assertEqual(
+            daily_recommendation_tracking.saved_portfolio_price_lookup(
+                {
+                    "portfolios": [
+                        {
+                            "holdings": [
+                                {
+                                    "ticker": "absi",
+                                    "current_price": "6.10",
+                                    "price_source": "stale",
+                                    "price_checked_at": "2026-06-17T08:00:00+09:00",
+                                },
+                                {
+                                    "ticker": "ABSI",
+                                    "current_price": "6.40",
+                                    "price_source": "finnhub",
+                                    "price_checked_at": "2026-06-18T08:00:00+09:00",
+                                },
+                                {"ticker": "PL", "current_price": ""},
+                            ]
+                        }
+                    ]
+                }
+            ),
+            {"ABSI": (6.4, "saved_portfolio:finnhub")},
+        )
 
     def test_daily_recommendation_price_lookup_falls_back_to_naver_domestic_basic(self):
         import research_os_main as main

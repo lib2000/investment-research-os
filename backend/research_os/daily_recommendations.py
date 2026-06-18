@@ -966,32 +966,7 @@ PriceLookup = Callable[[str], tuple[float | None, str | None]]
 
 
 def saved_portfolio_price_lookup(portfolio_store: dict[str, Any]) -> dict[str, tuple[float, str]]:
-    """Build a latest saved-current-price lookup from the portfolio store."""
-    portfolios = portfolio_store.get("portfolios") if isinstance(portfolio_store, dict) else {}
-    portfolio_values = portfolios.values() if isinstance(portfolios, dict) else portfolios if isinstance(portfolios, list) else []
-    latest_by_ticker: dict[str, tuple[float, str, str]] = {}
-    for portfolio in portfolio_values:
-        if not isinstance(portfolio, dict):
-            continue
-        for holding in portfolio.get("holdings") or []:
-            if not isinstance(holding, dict):
-                continue
-            ticker = str(holding.get("ticker") or "").strip().upper()
-            if not ticker:
-                continue
-            try:
-                price = float(str(holding.get("current_price") or "").replace(",", ""))
-            except (TypeError, ValueError):
-                continue
-            if price <= 0:
-                continue
-            checked_at = str(holding.get("price_checked_at") or "")
-            source = str(holding.get("price_source") or "saved_portfolio").strip() or "saved_portfolio"
-            lookup_source = source if source.startswith("saved_portfolio") else f"saved_portfolio:{source}"
-            existing = latest_by_ticker.get(ticker)
-            if existing is None or checked_at >= existing[2]:
-                latest_by_ticker[ticker] = (price, lookup_source, checked_at)
-    return {ticker: (price, source) for ticker, (price, source, _checked_at) in latest_by_ticker.items()}
+    return daily_recommendation_tracking.saved_portfolio_price_lookup(portfolio_store)
 
 
 def update_recommendation_tracking(
