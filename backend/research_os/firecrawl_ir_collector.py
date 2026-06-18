@@ -124,6 +124,18 @@ def build_firecrawl_ir_signal_payload(item: FirecrawlIrInput | dict[str, Any]) -
     }
 
 
+def normalize_firecrawl_ir_inputs(data: Any) -> list[FirecrawlIrInput | dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        for key in ["items", "sources", "results", "payloads"]:
+            value = data.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        return [data]
+    return []
+
+
 def upsert_external_signal_payload(
     payload: dict[str, Any],
     *,
@@ -209,3 +221,44 @@ def build_firecrawl_ir_collection_result(
     rpc_status = (result["rpc"] or {}).get("status")
     result["status"] = "success" if rpc_status == "success" else "skipped"
     return result
+
+
+def build_firecrawl_ir_batch_result(
+    items: list[FirecrawlIrInput | dict[str, Any]],
+    settings: Any,
+    *,
+    dry_run: bool | None = None,
+) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    for item in items:
+        try:
+            results.append(build_firecrawl_ir_collection_result(item, settings, dry_run=dry_run))
+        except Exception as exc:
+            results.append(
+                {
+                    "status": "failed",
+                    "design": DESIGN_NAME,
+                    "source_platform": SOURCE_PLATFORM,
+                    "error": str(exc),
+                    "payload": None,
+                    "rpc": None,
+                    "collected_at": _utc_now_iso(),
+                }
+            )
+    status_counts: dict[str, int] = {}
+    for result in results:
+        status = str(result.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    failed_count = status_counts.get("failed", 0)
+    success_count = status_counts.get("success", 0)
+    return {
+        "status": "failed" if failed_count else "success",
+        "design": DESIGN_NAME,
+        "source_platform": SOURCE_PLATFORM,
+        "item_count": len(items),
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "status_counts": status_counts,
+        "results": results,
+        "checked_at": _utc_now_iso(),
+    }

@@ -407,6 +407,48 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "https://custom.example/rest/v1/rpc/upsert_external_signal",
         )
 
+    def test_firecrawl_ir_registry_inputs_support_items_wrappers(self):
+        from research_os.firecrawl_ir_collector import normalize_firecrawl_ir_inputs
+
+        wrapped = normalize_firecrawl_ir_inputs(
+            {
+                "items": [
+                    {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+                    "skip-me",
+                    {"company": "Joby", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
+                ]
+            }
+        )
+
+        self.assertEqual(len(wrapped), 2)
+        self.assertEqual(wrapped[0]["ticker"], "AAPL")
+        self.assertEqual(wrapped[1]["ticker"], "JOBY")
+
+    def test_firecrawl_ir_batch_result_summarizes_dry_run_items(self):
+        from types import SimpleNamespace
+
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_batch_result
+
+        settings = SimpleNamespace(
+            firecrawl_ir_dry_run=True,
+            market_signal_graph_rpc_url="",
+            market_signal_graph_service_role_key="",
+            market_signal_graph_timeout_seconds=1,
+        )
+        result = build_firecrawl_ir_batch_result(
+            [
+                {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+                {"company": "Bad URL", "ticker": "BAD", "raw_url": "not-a-url"},
+            ],
+            settings,
+            dry_run=True,
+        )
+
+        self.assertEqual(result["item_count"], 2)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["status_counts"]["dry_run"], 1)
+        self.assertEqual(result["status_counts"]["failed"], 1)
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):

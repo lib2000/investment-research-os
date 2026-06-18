@@ -14,8 +14,10 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.firecrawl_ir_collector import (  # noqa: E402
     DESIGN_NAME,
     SOURCE_PLATFORM,
+    build_firecrawl_ir_batch_result,
     build_firecrawl_ir_collection_result,
     build_firecrawl_ir_signal_payload,
+    normalize_firecrawl_ir_inputs,
 )
 from research_os.settings import get_settings  # noqa: E402
 
@@ -39,14 +41,17 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolved-url", default=APPLE_IR_SAMPLE["resolved_url"])
     parser.add_argument("--title", default=APPLE_IR_SAMPLE["page_title"])
     parser.add_argument("--text", default=APPLE_IR_SAMPLE["markdown"])
+    parser.add_argument("--input-json", type=Path, help="Optional Firecrawl IR item/list JSON file.")
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
     parser.add_argument("--json", action="store_true", help="Print full non-secret validation JSON.")
     return parser
 
 
-def main() -> int:
-    args = _build_parser().parse_args()
-    item = {
+def _load_items(args: argparse.Namespace) -> list[dict]:
+    if args.input_json:
+        data = json.loads(args.input_json.read_text(encoding="utf-8"))
+        return normalize_firecrawl_ir_inputs(data)
+    return [{
         "company": args.company,
         "ticker": args.ticker,
         "raw_url": args.url,
@@ -54,8 +59,10 @@ def main() -> int:
         "page_title": args.title,
         "markdown": args.text,
         "language": "en",
-    }
-    payload = build_firecrawl_ir_signal_payload(item)
+    }]
+
+
+def _validate_payload(payload: dict) -> list[str]:
     errors: list[str] = []
     if payload.get("source_platform") != SOURCE_PLATFORM:
         errors.append("source_platform must be firecrawl_ir")
@@ -74,17 +81,36 @@ def main() -> int:
     metadata = payload.get("metadata") or {}
     if metadata.get("collector") != "firecrawl" or metadata.get("target_type") != "company_ir":
         errors.append("metadata collector/target_type contract mismatch")
+    return errors
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
+    items = _load_items(args)
+    payload_results: list[dict] = []
+    errors: list[str] = [] if items else ["no firecrawl IR items found"]
+    for index, item in enumerate(items, start=1):
+        try:
+            payload = build_firecrawl_ir_signal_payload(item)
+            item_errors = _validate_payload(payload)
+            payload_results.append({"index": index, "payload": payload, "errors": item_errors})
+            errors.extend(f"item {index}: {error}" for error in item_errors)
+        except Exception as exc:
+            payload_results.append({"index": index, "payload": None, "errors": [str(exc)]})
+            errors.append(f"item {index}: {exc}")
 
     settings = get_settings()
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
     result = {
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
+        "item_count": len(items),
         "rpc_enabled": rpc_enabled,
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
         "dry_run": not args.submit,
-        "payload": payload,
+        "payload": payload_results[0]["payload"] if len(payload_results) == 1 else None,
+        "payloads": payload_results,
         "errors": errors,
     }
     if args.submit:
@@ -94,19 +120,28 @@ def main() -> int:
                 "reason": "FIRECRAWL_IR_ENABLED and MARKET_SIGNAL_GRAPH_ENABLED must both be true",
             }
         else:
-            result["rpc"] = build_firecrawl_ir_collection_result(item, settings, dry_run=False).get("rpc")
+            if len(items) == 1:
+                result["rpc"] = build_firecrawl_ir_collection_result(items[0], settings, dry_run=False).get("rpc")
+            else:
+                result["batch"] = build_firecrawl_ir_batch_result(items, settings, dry_run=False)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         print(f"[{result['status']}] {DESIGN_NAME}")
-        print(f"- source_platform: {payload['source_platform']}")
-        print(f"- external_id: {payload['external_id']}")
-        print(f"- canonical_hash: {payload['canonical_hash']}")
+        print(f"- item_count: {len(items)}")
+        if len(payload_results) == 1 and payload_results[0]["payload"]:
+            payload = payload_results[0]["payload"]
+            print(f"- source_platform: {payload['source_platform']}")
+            print(f"- external_id: {payload['external_id']}")
+            print(f"- canonical_hash: {payload['canonical_hash']}")
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
         print(f"- dry_run: {not args.submit}")
+        if result.get("batch"):
+            print(f"- batch_status: {result['batch'].get('status')}")
+            print(f"- batch_counts: {result['batch'].get('status_counts')}")
         if result.get("rpc"):
             print(f"- rpc_status: {result['rpc'].get('status')}")
             if result["rpc"].get("reason"):
