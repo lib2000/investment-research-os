@@ -57,6 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Require RPC settings without submitting data.",
     )
+    parser.add_argument("--output-json", type=Path, help="Write the non-secret validation result JSON to this path.")
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
     parser.add_argument("--json", action="store_true", help="Print full non-secret validation JSON.")
     return parser
@@ -115,6 +116,11 @@ def _rpc_submit_readiness_errors(settings, *, purpose: str = "--submit") -> list
     return errors
 
 
+def _write_output_json(result: dict, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -171,6 +177,10 @@ def main() -> int:
                 result["rpc"] = build_firecrawl_ir_collection_result(items[0], settings, dry_run=False).get("rpc")
             else:
                 result["batch"] = build_firecrawl_ir_batch_result(items, settings, dry_run=False)
+
+    if args.output_json:
+        result["output_json"] = str(args.output_json)
+        _write_output_json(result, args.output_json)
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

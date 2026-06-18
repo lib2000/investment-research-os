@@ -619,6 +619,18 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertTrue(all("--require-rpc-ready" in error for error in missing))
 
+    def test_firecrawl_ir_check_tool_writes_output_json(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "nested" / "firecrawl-ir-result.json"
+            tool._write_output_json({"status": "success", "payload": {"ticker": "AAPL"}}, output_path)
+
+            saved = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(saved["status"], "success")
+        self.assertEqual(saved["payload"]["ticker"], "AAPL")
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
