@@ -521,6 +521,11 @@ label {
   background: #fff8e7;
 }
 
+.daily-recommendation-top-panel.warning .daily-recommendation-top-rank.is-leader {
+  border-color: #f59e0b;
+  box-shadow: 0 10px 26px rgba(146, 64, 14, 0.12);
+}
+
 .daily-recommendation-top-head {
   display: flex;
   align-items: flex-start;

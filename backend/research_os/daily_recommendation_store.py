@@ -10,6 +10,7 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from research_os import daily_recommendation_candidates
+from research_os import daily_recommendation_evidence
 from research_os import daily_recommendation_tracking
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
@@ -285,6 +286,43 @@ def update_recommendation_tracking(
     }
 
 
+def latest_daily_recommendation_policy_alignment(records: list[dict], latest_records: list[dict]) -> dict[str, Any]:
+    feedback_by_ticker = daily_recommendation_tracking.daily_recommendation_tracking_feedback(records)
+    review_hold_records: list[dict[str, Any]] = []
+    for record in sorted(latest_records, key=lambda item: int(item.get("rank") or 999)):
+        ticker = daily_recommendation_evidence.normalize_recommendation_ticker(record.get("ticker"))
+        if not ticker:
+            continue
+        profile = daily_recommendation_tracking.daily_recommendation_tracking_feedback_profile(
+            feedback_by_ticker.get(ticker)
+        )
+        if not profile.get("review_hold"):
+            continue
+        review_hold_records.append(
+            {
+                "rank": record.get("rank"),
+                "ticker": ticker,
+                "company_name": record.get("company_name") or ticker,
+                "completed_count": profile.get("completed_count"),
+                "hit_rate": profile.get("hit_rate"),
+                "average_change_pct": profile.get("average_change_pct"),
+                "penalty_points": profile.get("penalty_points"),
+                "horizon_penalty_points": profile.get("horizon_penalty_points"),
+                "weakest_milestone": profile.get("weakest_milestone"),
+            }
+        )
+    return {
+        "status": "drift" if review_hold_records else "ok",
+        "review_hold_count": len(review_hold_records),
+        "review_hold_records": review_hold_records,
+        "message": (
+            "최신 추천에 반복 부진 보류 후보가 포함되어 다음 추천 갱신에서 재정렬이 필요합니다."
+            if review_hold_records
+            else "최신 추천은 현재 추적 피드백 보류 기준과 정렬되어 있습니다."
+        ),
+    }
+
+
 def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30) -> dict[str, Any]:
     store = read_daily_recommendation_store(settings)
     records = [item for item in store.get("records", []) if isinstance(item, dict)]
@@ -331,5 +369,6 @@ def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30)
         "records": records[: max(1, min(limit, 200))],
         "due_or_pending_milestones": due_milestones[:30],
         "performance_summary": daily_recommendation_tracking.summarize_tracking_performance(records),
+        "latest_policy_alignment": latest_daily_recommendation_policy_alignment(records, latest_records),
         "storage_path": str(daily_recommendation_store_path(settings)),
     }

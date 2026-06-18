@@ -8168,6 +8168,11 @@ function dailyRecommendationTopRecords(payload = {}) {
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
   const schedule = payload?.daily_time || "08:00";
   const records = dailyRecommendationTopRecords(payload || {});
+  const policyAlignment = payload?.latest_policy_alignment || {};
+  const policyDriftRecords = Array.isArray(policyAlignment.review_hold_records)
+    ? policyAlignment.review_hold_records
+    : [];
+  const policyDriftTickers = policyDriftRecords.map((item) => item.ticker).filter(Boolean).slice(0, 3);
   const todayDate = payload?.today_recommendation_date || "오늘";
   const state = payload?.state || {};
   const runStatus = dailyRecommendationStatusLabel(state.status || payload?.status);
@@ -8179,7 +8184,10 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
     : records.length
       ? `매일 ${schedule} 자동 실행 · 최신 상태 ${runStatus}`
       : `매일 ${schedule} 자동 실행 대기${staleText}`;
-  const tone = !payload || payload?.due_now || !records.length ? "warning" : "ok";
+  const driftText = policyDriftTickers.length
+    ? ` · 정책 이탈 ${policyDriftTickers.join(", ")} 재정렬 필요`
+    : "";
+  const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length ? "warning" : "ok";
   const rows = records.length
     ? records
         .map((record, index) => {
@@ -8228,7 +8236,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
         <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
       </div>
       <ul>${rows}</ul>
-      <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}</p>
+      <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}${escapeHtml(driftText)}</p>
     </section>
   `;
 }
@@ -8409,6 +8417,17 @@ function renderDailyRecommendationCards(payload) {
     {}
   );
   const performance = payload.performance_summary || {};
+  const policyAlignment = payload.latest_policy_alignment || {};
+  const policyDriftRecords = Array.isArray(policyAlignment.review_hold_records)
+    ? policyAlignment.review_hold_records
+    : [];
+  const policyDriftText = policyDriftRecords
+    .map((item) => {
+      const hitRate = Number.isFinite(Number(item.hit_rate)) ? `${Math.round(Number(item.hit_rate) * 100)}%` : "n/a";
+      const avg = Number.isFinite(Number(item.average_change_pct)) ? `${(Number(item.average_change_pct) * 100).toFixed(1)}%` : "n/a";
+      return `${item.ticker || item.company_name} hit ${hitRate}, 평균 ${avg}, 감점 ${formatNumber(item.penalty_points || 0)}`;
+    })
+    .join(" · ");
   const recommendationDates = Array.isArray(payload.recommendation_dates)
     ? payload.recommendation_dates.slice(0, 6)
     : [];
@@ -8545,6 +8564,7 @@ function renderDailyRecommendationCards(payload) {
       <span>오늘의 추천 결과</span>
       <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
       <p>1~3위 추천 후보를 한 줄 카드로 정렬했습니다 · 저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
+      ${policyDriftRecords.length ? `<p class="daily-recommendation-warning">최신 추천 정책 이탈: ${escapeHtml(policyDriftText)} · 다음 자동 추천에서 재정렬 필요</p>` : ""}
       <small>${escapeHtml(
         `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
       )}</small>

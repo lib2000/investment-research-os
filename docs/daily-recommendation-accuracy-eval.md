@@ -204,3 +204,15 @@ Post-change failures:
 
 Remaining risk:
 - One no-op synthesis was created by the old still-running backend before restart; it remains a legacy skipped entry and is not committed.
+
+Iteration 17 - latest policy drift API and console visibility:
+- Bottleneck: `latest_policy_drift` was visible in the eval CLI, but the running console/status API did not surface that the latest saved top slot can now conflict with the current review-hold policy.
+- Change: daily recommendation tracking now exposes a pure feedback profile helper; the store summary adds `latest_policy_alignment`; the console dashboard and daily recommendation cards show a warning when latest saved recommendations include current review-hold tickers.
+- Baseline after change: score unchanged at `85.24/100`; this iteration is operational visibility, not a historical outcome rewrite.
+
+Post-change failures:
+- `latest_policy_drift: 최신 추천에 반복 부진 보류 후보 포함: OTLY`
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- The existing 2026-06-18 saved set is not rewritten. The warning should disappear after the next successful recommendation generation under the current hold policy.

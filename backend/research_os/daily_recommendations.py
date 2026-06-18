@@ -222,6 +222,10 @@ def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dic
     return daily_recommendation_tracking.daily_recommendation_tracking_feedback(records)
 
 
+def daily_recommendation_tracking_feedback_profile(feedback: dict | None) -> dict:
+    return daily_recommendation_tracking.daily_recommendation_tracking_feedback_profile(feedback)
+
+
 def build_daily_recommendation_tracking_feedback(settings: Settings) -> dict[str, dict]:
     store = read_daily_recommendation_store(settings)
     records = [item for item in store.get("records", []) if isinstance(item, dict)]

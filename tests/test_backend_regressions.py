@@ -5254,6 +5254,65 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(summary["performance_summary"]["complete_count"], 1)
         self.assertEqual(summary["performance_summary"]["positive_count"], 1)
         self.assertEqual(summary["latest_records"][0]["tracking_milestones"][0]["status"], "complete")
+        self.assertEqual(summary["latest_policy_alignment"]["status"], "ok")
+
+    def test_daily_recommendation_store_reports_latest_policy_drift(self):
+        from datetime import date
+        from tempfile import TemporaryDirectory
+
+        from research_os import daily_recommendation_store
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))
+            daily_recommendation_store.upsert_daily_recommendations(
+                settings,
+                candidates=[
+                    {
+                        "ticker": "WEAK",
+                        "company_name": "Weak Co",
+                        "score": 80,
+                        "baseline_price": 100,
+                        "reasons": ["반복 추적 테스트"],
+                    }
+                ],
+                recommendation_date=date(2026, 1, 1),
+                generated_at="2026-01-01T08:00:00+09:00",
+            )
+            daily_recommendation_store.update_recommendation_tracking(
+                settings,
+                as_of=date(2026, 7, 1),
+                checked_at="2026-07-01T09:00:00+09:00",
+                price_lookup=lambda _ticker: (90, "unit_test"),
+            )
+            daily_recommendation_store.upsert_daily_recommendations(
+                settings,
+                candidates=[
+                    {
+                        "ticker": "WEAK",
+                        "company_name": "Weak Co",
+                        "score": 82,
+                        "baseline_price": 91,
+                        "reasons": ["최신 추천에 재진입"],
+                    },
+                    {
+                        "ticker": "OK",
+                        "company_name": "Okay Co",
+                        "score": 76,
+                        "baseline_price": 50,
+                        "reasons": ["대체 후보"],
+                    },
+                ],
+                recommendation_date=date(2026, 6, 18),
+                generated_at="2026-06-18T08:00:00+09:00",
+            )
+            summary = daily_recommendation_store.summarize_daily_recommendation_store(settings)
+
+        alignment = summary["latest_policy_alignment"]
+        self.assertEqual(alignment["status"], "drift")
+        self.assertEqual(alignment["review_hold_count"], 1)
+        self.assertEqual(alignment["review_hold_records"][0]["ticker"], "WEAK")
+        self.assertEqual(alignment["review_hold_records"][0]["penalty_points"], 12)
 
 
 class DailyRecommendationQualityModuleTests(unittest.TestCase):

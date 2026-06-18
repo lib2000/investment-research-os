@@ -36,6 +36,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_priority_target,
     apply_daily_recommendation_recent_weekly_evidence,
     apply_daily_recommendation_tracking_feedback,
+    daily_recommendation_tracking_feedback_profile,
     daily_recommendation_state_path,
     daily_recommendation_consensus_label,
     daily_recommendation_target_label,
@@ -200,6 +201,22 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["top_candidates"][0]["ticker"], "WEAK")
         self.assertEqual(details["top_candidates"][0]["tracking_hit_rate"], 0.0)
         self.assertEqual(details["top_candidates"][0]["tracking_penalty_points"], 16)
+
+    def test_tracking_feedback_profile_matches_review_hold_policy(self):
+        profile = daily_recommendation_tracking_feedback_profile(
+            {
+                "completed_count": 3,
+                "hit_rate": 0.0,
+                "average_change_pct": -0.08,
+                "penalty_points": 16,
+                "horizon_penalty_points": 4,
+                "weakest_milestone": {"key": "15d", "label": "추천 후 15일"},
+            }
+        )
+
+        self.assertTrue(profile["review_hold"])
+        self.assertEqual(profile["penalty_points"], 16)
+        self.assertEqual(profile["weakest_milestone"]["key"], "15d")
 
     def test_candidate_policy_eval_requires_expected_hold_warning(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check

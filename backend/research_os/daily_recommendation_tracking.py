@@ -270,9 +270,9 @@ def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dic
     return actionable
 
 
-def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict | None) -> dict:
+def daily_recommendation_tracking_feedback_profile(feedback: dict | None) -> dict:
     if not feedback:
-        return candidate
+        return {}
     completed = int(feedback.get("completed_count") or 0)
     hit_rate = float(feedback.get("hit_rate") or 0)
     average_change_pct = float(feedback.get("average_change_pct") or 0)
@@ -284,7 +284,7 @@ def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict
         and hit_rate <= REVIEW_HOLD_MAX_HIT_RATE
         and average_change_pct <= REVIEW_HOLD_MAX_AVERAGE_CHANGE_PCT
     )
-    candidate["tracking_feedback_profile"] = {
+    return {
         "completed_count": completed,
         "hit_rate": round(hit_rate, 4),
         "average_change_pct": round(average_change_pct, 4),
@@ -293,6 +293,19 @@ def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict
         "weakest_milestone": weakest,
         "review_hold": review_hold,
     }
+
+
+def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict | None) -> dict:
+    if not feedback:
+        return candidate
+    profile = daily_recommendation_tracking_feedback_profile(feedback)
+    completed = int(profile.get("completed_count") or 0)
+    hit_rate = float(profile.get("hit_rate") or 0)
+    average_change_pct = float(profile.get("average_change_pct") or 0)
+    penalty = int(profile.get("penalty_points") or 0)
+    weakest = profile.get("weakest_milestone") if isinstance(profile.get("weakest_milestone"), dict) else None
+    review_hold = bool(profile.get("review_hold"))
+    candidate["tracking_feedback_profile"] = profile
     daily_recommendation_candidates.add_daily_recommendation_penalty(candidate, "최근 추천 성과 부진 피드백", penalty)
     candidate.setdefault("risk_notes", []).append(
         f"최근 추천 추적 {completed}건 hit rate {hit_rate * 100:.1f}%, 평균 수익률 {average_change_pct * 100:.1f}%로 재추천 전 논거 재검증이 필요합니다."
