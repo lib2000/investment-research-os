@@ -350,6 +350,40 @@ class WebCaptureRenderingTests(unittest.TestCase):
 
 
 class FirecrawlIrCollectorTests(unittest.TestCase):
+    @staticmethod
+    def write_firecrawl_submit_items(tmpdir: str) -> Path:
+        input_path = Path(tmpdir) / "firecrawl-ir-items.json"
+        input_path.write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+                        {"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        return input_path
+
+    @staticmethod
+    def firecrawl_submit_test_env() -> dict[str, str]:
+        env = os.environ.copy()
+        env.update(
+            {
+                "FIRECRAWL_IR_ENABLED": "true",
+                "FIRECRAWL_IR_DRY_RUN": "false",
+                "MARKET_SIGNAL_GRAPH_ENABLED": "true",
+                "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
+                "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
+                "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
+                "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS": "0.2",
+                "SUPABASE_URL": "",
+                "SUPABASE_SERVICE_ROLE_KEY": "",
+            }
+        )
+        return env
+
     def test_firecrawl_ir_payload_matches_market_signal_graph_contract(self):
         from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload, sha256_hex
 
@@ -855,32 +889,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
     def test_firecrawl_ir_check_tool_prints_stable_batch_counts(self):
         with TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "firecrawl-ir-items.json"
-            input_path.write_text(
-                json.dumps(
-                    {
-                        "items": [
-                            {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
-                            {"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-            env = os.environ.copy()
-            env.update(
-                {
-                    "FIRECRAWL_IR_ENABLED": "true",
-                    "FIRECRAWL_IR_DRY_RUN": "false",
-                    "MARKET_SIGNAL_GRAPH_ENABLED": "true",
-                    "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
-                    "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
-                    "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
-                    "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS": "0.2",
-                    "SUPABASE_URL": "",
-                    "SUPABASE_SERVICE_ROLE_KEY": "",
-                }
-            )
+            input_path = self.write_firecrawl_submit_items(tmpdir)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -890,7 +899,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                     "--submit",
                 ],
                 cwd=PROJECT_ROOT,
-                env=env,
+                env=self.firecrawl_submit_test_env(),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -903,33 +912,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
     def test_firecrawl_ir_check_tool_writes_submit_batch_status_to_output_json(self):
         with TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "firecrawl-ir-items.json"
+            input_path = self.write_firecrawl_submit_items(tmpdir)
             output_path = Path(tmpdir) / "firecrawl-ir-submit.json"
-            input_path.write_text(
-                json.dumps(
-                    {
-                        "items": [
-                            {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
-                            {"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-            env = os.environ.copy()
-            env.update(
-                {
-                    "FIRECRAWL_IR_ENABLED": "true",
-                    "FIRECRAWL_IR_DRY_RUN": "false",
-                    "MARKET_SIGNAL_GRAPH_ENABLED": "true",
-                    "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
-                    "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
-                    "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
-                    "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS": "0.2",
-                    "SUPABASE_URL": "",
-                    "SUPABASE_SERVICE_ROLE_KEY": "",
-                }
-            )
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -942,7 +926,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                     "--json",
                 ],
                 cwd=PROJECT_ROOT,
-                env=env,
+                env=self.firecrawl_submit_test_env(),
                 capture_output=True,
                 text=True,
                 check=False,
