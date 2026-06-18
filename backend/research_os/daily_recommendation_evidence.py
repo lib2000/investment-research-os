@@ -63,6 +63,15 @@ def normalize_evidence_documents(value: object, limit: int = 5) -> list[dict[str
     return rows[: max(1, min(limit, 10))]
 
 
+def unique_text_items(values: list | tuple | None, limit: int) -> list[str]:
+    seen: dict[str, None] = {}
+    for value in values or []:
+        text = str(value or "").strip()
+        if text:
+            seen.setdefault(text, None)
+    return list(seen.keys())[:limit]
+
+
 def safe_float(value: object, default: float = 0.7) -> float:
     try:
         return float(value)

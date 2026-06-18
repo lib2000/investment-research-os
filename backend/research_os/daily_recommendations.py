@@ -795,12 +795,7 @@ def build_daily_recommendation_evidence_documents(
     )
 
 def unique_text_items(values: list | tuple | None, limit: int) -> list[str]:
-    seen: dict[str, None] = {}
-    for value in values or []:
-        text = str(value or "").strip()
-        if text:
-            seen.setdefault(text, None)
-    return list(seen.keys())[:limit]
+    return daily_recommendation_evidence.unique_text_items(values, limit)
 
 
 def finalize_daily_recommendation_candidate(candidate: dict) -> dict:

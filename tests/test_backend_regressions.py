@@ -4452,6 +4452,10 @@ class DailyRecommendationEvidenceModuleTests(unittest.TestCase):
         self.assertEqual(documents[0]["matched_claims"], ["RAG 연결", "공시 확인", "추가"])
         self.assertEqual(claims, ["공시 확인", "RAG 연결"])
         self.assertEqual(daily_recommendation_evidence.normalize_recommendation_ticker(" 003230 "), "003230")
+        self.assertEqual(
+            daily_recommendation_evidence.unique_text_items([" A ", "A", "", None, "B", "C"], 2),
+            ["A", "B"],
+        )
 
 
 class DailyRecommendationRecentModuleTests(unittest.TestCase):
