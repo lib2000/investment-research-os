@@ -8178,8 +8178,8 @@ def build_earnings_reaction(
     reaction_pct = parse_price_reaction_pct(request.price_reaction)
     guidance_assessment = assess_guidance_change(request.guidance_change)
     evidence_text = current_earnings_signal_text(request)
-    has_positive = text_has_any(evidence_text, POSITIVE_SIGNAL_WORDS)
-    has_negative = text_has_any(evidence_text, NEGATIVE_SIGNAL_WORDS)
+    has_positive = thesis_signal_words.text_has_any(evidence_text, POSITIVE_SIGNAL_WORDS)
+    has_negative = thesis_signal_words.text_has_any(evidence_text, NEGATIVE_SIGNAL_WORDS)
 
     metric_surprises = [
         metric
@@ -9360,24 +9360,6 @@ def build_watch_items(ticker: str) -> list[WatchItem]:
 POSITIVE_SIGNAL_WORDS = thesis_signal_words.POSITIVE_SIGNAL_WORDS
 NEGATIVE_SIGNAL_WORDS = thesis_signal_words.NEGATIVE_SIGNAL_WORDS
 
-
-def text_has_any(text: str, words: set[str]) -> bool:
-    return thesis_signal_words.text_has_any(text, words)
-
-def translate_impact_label(impact: ThesisImpact) -> str:
-    return thesis_impact.translate_impact_label(impact)
-
-
-def translate_quality_label(value: str) -> str:
-    return thesis_impact.translate_quality_label(value)
-
-
-def translate_priority_label(value: str) -> str:
-    return thesis_impact.translate_priority_label(value)
-
-
-def translate_severity_label(value: str) -> str:
-    return thesis_impact.translate_severity_label(value)
 
 def _thesis_impact_runtime() -> SimpleNamespace:
     return SimpleNamespace(
@@ -10974,7 +10956,7 @@ def render_portfolio_risk_markdown(
         for item in scan.theme_concentration
     )
     warnings = "\n".join(
-        f"- [{translate_severity_label(item.severity)}] {item.message} 조치: {item.action}"
+        f"- [{thesis_impact.translate_severity_label(item.severity)}] {item.message} 조치: {item.action}"
         for item in scan.warnings
     )
     next_actions = "\n".join(f"- {item}" for item in scan.next_actions)
@@ -11048,7 +11030,7 @@ def render_team_analysis_markdown(
                 f"- 긍정 관점: {item.positive_view}",
                 f"- 주의 관점: {item.caution_view}",
                 f"- 정리: {item.resolution}",
-                f"- 심각도: {translate_severity_label(item.severity)}",
+                f"- 심각도: {thesis_impact.translate_severity_label(item.severity)}",
             ]
         )
         for item in report.conflicts
@@ -11059,7 +11041,7 @@ def render_team_analysis_markdown(
         f"- {item}" for item in report.invalidation_conditions
     )
     watch_items = "\n".join(
-        f"- {item.metric}: {item.condition}이면 {item.action} ({translate_priority_label(item.priority)})"
+        f"- {item.metric}: {item.condition}이면 {item.action} ({thesis_impact.translate_priority_label(item.priority)})"
         for item in report.watch_items
     )
     next_actions = "\n".join(f"- {item}" for item in report.next_actions)
@@ -11090,7 +11072,7 @@ style: {report.style}
 
 ## 데이터 품질
 
-- 품질: {translate_quality_label(report.data_quality.data_quality)}
+- 품질: {thesis_impact.translate_quality_label(report.data_quality.data_quality)}
 - 출처 신뢰도: {report.data_quality.source_confidence:.0%}
 - 오래된 데이터 경고: {report.data_quality.stale_data_warning}
 - 부족한 데이터: {", ".join(report.data_quality.missing_data) or "없음"}
