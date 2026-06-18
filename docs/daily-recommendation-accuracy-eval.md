@@ -192,3 +192,15 @@ Post-change failures:
 
 Remaining risk:
 - This is diagnostic-only; it does not rewrite the existing 2026-06-18 recommendation store. The next scheduled recommendation generation should produce a fresh set under the current hold policy.
+
+Iteration 16 - no-op RAG synthesis UI state:
+- Bottleneck: after storage-layer no-op skipping, the console still displayed empty synthesis as `RAG 연결 확인 필요` and `저장 위치 미확인`, which made intentional non-storage look like a failed RAG write.
+- Change: the recent weekly recommendation evidence synthesis panel now reads `storage_skipped/storage_skip_reason` and displays `후보 없음 · 저장/RAG 생략` plus `저장 생략 (검색 후보 없음)`.
+- Verification: dashboard partial click smoke passed after backend restart, and RAG synthesis store count stayed at 30 manifest entries / 34 RAG documents instead of creating another no-op report.
+
+Post-change failures:
+- `latest_policy_drift: 최신 추천에 반복 부진 보류 후보 포함: OTLY`
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- One no-op synthesis was created by the old still-running backend before restart; it remains a legacy skipped entry and is not committed.
