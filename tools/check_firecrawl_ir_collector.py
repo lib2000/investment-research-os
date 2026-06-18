@@ -47,6 +47,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read FIRECRAWL_IR_SOURCES_JSON instead of the built-in Apple sample.",
     )
+    parser.add_argument(
+        "--require-env-registry",
+        action="store_true",
+        help="Require FIRECRAWL_IR_SOURCES_JSON and fail instead of using sample input.",
+    )
+    parser.add_argument(
+        "--require-rpc-ready",
+        action="store_true",
+        help="Require RPC settings without submitting data.",
+    )
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
     parser.add_argument("--json", action="store_true", help="Print full non-secret validation JSON.")
     return parser
@@ -56,7 +66,7 @@ def _load_items(args: argparse.Namespace, settings) -> tuple[list[dict], str]:
     if args.input_json:
         data = json.loads(args.input_json.read_text(encoding="utf-8"))
         return normalize_firecrawl_ir_inputs(data), "input_json"
-    if args.use_env_registry:
+    if args.use_env_registry or args.require_env_registry:
         data = json.loads(settings.firecrawl_ir_sources_json or "[]")
         return normalize_firecrawl_ir_inputs(data), "env_registry"
     return ([{
@@ -92,16 +102,16 @@ def _validate_payload(payload: dict) -> list[str]:
     return errors
 
 
-def _rpc_submit_readiness_errors(settings) -> list[str]:
+def _rpc_submit_readiness_errors(settings, *, purpose: str = "--submit") -> list[str]:
     errors: list[str] = []
     if not getattr(settings, "firecrawl_ir_enabled", False):
-        errors.append("FIRECRAWL_IR_ENABLED must be true for --submit")
+        errors.append(f"FIRECRAWL_IR_ENABLED must be true for {purpose}")
     if not getattr(settings, "market_signal_graph_enabled", False):
-        errors.append("MARKET_SIGNAL_GRAPH_ENABLED must be true for --submit")
+        errors.append(f"MARKET_SIGNAL_GRAPH_ENABLED must be true for {purpose}")
     if not getattr(settings, "market_signal_graph_rpc_url", ""):
-        errors.append("MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL must be configured for --submit")
+        errors.append(f"MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL must be configured for {purpose}")
     if not getattr(settings, "market_signal_graph_service_role_key", ""):
-        errors.append("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY must be configured for --submit")
+        errors.append(f"MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY must be configured for {purpose}")
     return errors
 
 
@@ -111,6 +121,8 @@ def main() -> int:
     items, input_source = _load_items(args, settings)
     payload_results: list[dict] = []
     errors: list[str] = [] if items else ["no firecrawl IR items found"]
+    if args.require_env_registry and input_source != "env_registry":
+        errors.append("FIRECRAWL_IR_SOURCES_JSON must be used for --require-env-registry")
     for index, item in enumerate(items, start=1):
         try:
             payload = build_firecrawl_ir_signal_payload(item)
@@ -123,7 +135,13 @@ def main() -> int:
 
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
+    rpc_ready_errors = (
+        _rpc_submit_readiness_errors(settings, purpose="--require-rpc-ready")
+        if args.require_rpc_ready and not args.submit
+        else []
+    )
     errors.extend(submit_readiness_errors)
+    errors.extend(rpc_ready_errors)
     result = {
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
@@ -132,6 +150,8 @@ def main() -> int:
         "rpc_enabled": rpc_enabled,
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
+        "require_env_registry": args.require_env_registry,
+        "require_rpc_ready": args.require_rpc_ready,
         "dry_run": not args.submit,
         "payload": payload_results[0]["payload"] if len(payload_results) == 1 else None,
         "payloads": payload_results,
@@ -166,6 +186,8 @@ def main() -> int:
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
+        print(f"- require_env_registry: {args.require_env_registry}")
+        print(f"- require_rpc_ready: {args.require_rpc_ready}")
         print(f"- dry_run: {not args.submit}")
         if result.get("batch"):
             print(f"- batch_status: {result['batch'].get('status')}")

@@ -68,6 +68,7 @@ python tools\check_public_ir_sec_store.py --require-any
 python tools\check_firecrawl_ir_collector.py
 python tools\check_firecrawl_ir_collector.py --input-json path\to\firecrawl_ir_registry.json
 python tools\check_firecrawl_ir_collector.py --use-env-registry
+python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rpc-ready
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary

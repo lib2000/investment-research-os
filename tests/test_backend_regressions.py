@@ -547,7 +547,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         from types import SimpleNamespace
 
         tool = load_firecrawl_ir_check_tool()
-        args = SimpleNamespace(input_json=None, use_env_registry=True)
+        args = SimpleNamespace(input_json=None, use_env_registry=True, require_env_registry=False)
         settings = SimpleNamespace(
             firecrawl_ir_sources_json=json.dumps(
                 {"items": [{"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"}]}
@@ -559,6 +559,22 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(source, "env_registry")
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["ticker"], "AAPL")
+
+    def test_firecrawl_ir_check_tool_requires_env_registry_input(self):
+        from types import SimpleNamespace
+
+        tool = load_firecrawl_ir_check_tool()
+        args = SimpleNamespace(input_json=None, use_env_registry=False, require_env_registry=True)
+        settings = SimpleNamespace(
+            firecrawl_ir_sources_json=json.dumps(
+                {"items": [{"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"}]}
+            )
+        )
+
+        items, source = tool._load_items(args, settings)
+
+        self.assertEqual(source, "env_registry")
+        self.assertEqual(len(items), 1)
 
     def test_firecrawl_ir_check_tool_requires_rpc_config_for_submit(self):
         from types import SimpleNamespace
@@ -584,6 +600,24 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertEqual(len(missing), 4)
         self.assertEqual(ready, [])
+        self.assertTrue(all("--submit" in error for error in missing))
+
+    def test_firecrawl_ir_check_tool_labels_rpc_preflight_errors(self):
+        from types import SimpleNamespace
+
+        tool = load_firecrawl_ir_check_tool()
+
+        missing = tool._rpc_submit_readiness_errors(
+            SimpleNamespace(
+                firecrawl_ir_enabled=False,
+                market_signal_graph_enabled=False,
+                market_signal_graph_rpc_url="",
+                market_signal_graph_service_role_key="",
+            ),
+            purpose="--require-rpc-ready",
+        )
+
+        self.assertTrue(all("--require-rpc-ready" in error for error in missing))
 
 
 class BackendModuleBoundaryTests(unittest.TestCase):
