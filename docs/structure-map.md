@@ -106,6 +106,7 @@
 | `backend\research_os\company_ir_sec.py` | SEC company submissions 파싱, 공시 분류, archive URL helper | `CompanyIrSourcesWatchTests` |
 | `backend\research_os\public_ir_sec.py` | 공개 IR/SEC URL 수집, URL-only 보강 필요 판정, 저장 데이터/RAG 색인 연결, 상태 payload 조립 | `check_public_ir_sec_store.py`, `check_backend_module_health.py` |
 | `backend\research_os\firecrawl_ir_collector.py` | Firecrawl IR 수집 결과를 Market Signal Graph `upsert_external_signal` payload로 정규화하고 Supabase RPC 적재 상태를 분리 | `FirecrawlIrCollectorTests`, `check_firecrawl_ir_collector.py` |
+| `backend\research_os\earnings_transcript_collector.py` | Earnings call transcript를 Market Signal Graph payload로 정규화하는 dry-run collector | `EarningsTranscriptCollectorTests`, `check_earnings_transcript_collector.py` |
 | `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
 | `backend\research_os\rag_memory_utils.py` | RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper | `RagMemoryUtilsModuleTests` |
 | `backend\research_os\rag_search_results.py` | RAG 검색 결과 중복 보고서 compact와 match strength 표시 helper | `RagSearchResultsModuleTests` |

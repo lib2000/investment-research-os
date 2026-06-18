@@ -65,6 +65,7 @@ CHECKS = [
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
     ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
     ("Telegram Portfolio Brief dry-run", ["tools/check_telegram_brief_sender.py"]),
+    ("Earnings Transcript payload", ["tools/check_earnings_transcript_collector.py"]),
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
     ("자동 분류 태그/RAG 품질", ["tools/check_classification_quality.py", "--strict"]),
     ("저장/RAG 실패 진단", ["tools/check_rag_failure_diagnostics.py", "--strict"]),

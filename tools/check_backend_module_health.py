@@ -22,6 +22,7 @@ EXPECTED_MODULES = {
     "opendart_data_provider.py",
     "export_routes.py",
     "export_utils.py",
+    "earnings_transcript_collector.py",
     "file_extraction.py",
     "kcif_reports.py",
     "kiwoom_auth.py",

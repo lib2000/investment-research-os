@@ -1199,6 +1199,67 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertTrue(all(len(message["text"]) <= 500 for message in payload["messages"]))
 
 
+class EarningsTranscriptCollectorTests(unittest.TestCase):
+    def test_earnings_transcript_payload_matches_market_signal_contract(self):
+        from research_os.earnings_transcript_collector import build_earnings_transcript_signal_payload, sha256_hex
+
+        payload = build_earnings_transcript_signal_payload(
+            {
+                "company": "Planet Labs",
+                "ticker": "PL",
+                "raw_url": "https://investors.planet.com/events-and-presentations/",
+                "title": "Planet Labs Q1 FY2027 earnings call transcript",
+                "fiscal_period": "Q1 FY2027",
+                "event_date": "2026-06-04",
+                "transcript_text": "Revenue growth and margin discipline were discussed.",
+                "speaker_count": 4,
+            }
+        )
+
+        self.assertEqual(payload["source_platform"], "earnings_transcript")
+        self.assertEqual(payload["source_kind"], "earnings_transcript")
+        self.assertEqual(payload["channel"], "web")
+        self.assertEqual(
+            payload["external_id"],
+            sha256_hex("https://investors.planet.com/events-and-presentations/|Q1 FY2027|2026-06-04"),
+        )
+        self.assertTrue(payload["needs_enrichment"])
+        self.assertEqual(payload["analysis_status"], "pending")
+        self.assertEqual(payload["metadata"]["collector_design"], "earnings_transcript_collector_v1")
+        self.assertEqual(payload["metadata"]["target_type"], "earnings_call_transcript")
+        self.assertEqual(payload["metadata"]["ticker"], "PL")
+        self.assertEqual(payload["metadata"]["fiscal_period"], "Q1 FY2027")
+
+    def test_earnings_transcript_inputs_accept_wrappers_and_report_failures(self):
+        from research_os.earnings_transcript_collector import (
+            build_earnings_transcript_batch_result,
+            normalize_earnings_transcript_inputs,
+        )
+
+        items = normalize_earnings_transcript_inputs(
+            {
+                "transcripts": [
+                    {
+                        "company": "Absci",
+                        "ticker": "ABSI",
+                        "raw_url": "https://ir.absci.com/events",
+                        "quarter": "Q1 2026",
+                        "markdown": "Transcript body",
+                    },
+                    {"company": "Broken", "ticker": "BAD", "raw_url": "not-a-url"},
+                ]
+            }
+        )
+        result = build_earnings_transcript_batch_result(items)
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["valid_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["results"][0]["payload"]["metadata"]["ticker"], "ABSI")
+        self.assertIn("public http/https URL", result["results"][1]["errors"][0])
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state
