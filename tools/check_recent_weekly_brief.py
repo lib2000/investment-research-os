@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -25,6 +25,7 @@ RECENT_ACTIVITY_IMPORTS = (
     "annotate_recent_weekly_navigation_hints",
     "dedupe_recent_activity_items",
     "compact_recent_dart_entry",
+    "recent_activity_cutoff",
     "recent_filing_priority",
     "recent_ownership_filing_items",
     "recent_report_display_priority",
@@ -184,7 +185,12 @@ def main() -> int:
     parser.add_argument("--min-total", type=int, default=1, help="최근 자료 최소 건수")
     parser.add_argument("--min-category-groups", type=int, default=4, help="표시 가능한 자료 묶음 최소 수")
     parser.add_argument("--min-recommendation-documents", type=int, default=3, help="최신 추천 근거 문서 최소 수")
-    parser.add_argument("--min-linked-recent-items", type=int, default=1, help="최근 1주 자료와 추천 근거 경로가 직접 만나는 최소 건수")
+    parser.add_argument(
+        "--min-linked-recent-items",
+        type=int,
+        default=0,
+        help="운영 브리프 기간 안에서 최신 추천 근거 경로가 직접 만나는 최소 건수. 0이면 정보로만 보고합니다.",
+    )
     parser.add_argument("--min-target-digest", type=int, default=1, help="종목별 자료 묶음 최소 수")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
     args = parser.parse_args()
@@ -197,7 +203,7 @@ def main() -> int:
         load_json(root / DEFAULT_PORTFOLIOS, {"portfolios": {}}),
         load_json(root / DEFAULT_INTERESTS, {"tickers": [], "sectors": []}),
     )
-    cutoff = (datetime.now(LOCAL_TIMEZONE).date() - timedelta(days=max(1, args.days))).isoformat()
+    cutoff = recent_activity.recent_activity_cutoff(datetime.now(LOCAL_TIMEZONE).date(), args.days).isoformat()
     recent_items: list[dict[str, Any]] = []
     for entry in manifest_entries(load_json(root / DEFAULT_MANIFEST, [])):
         entry_date = parse_date(entry.get("date"))
@@ -288,9 +294,7 @@ def main() -> int:
         issues.append(f"종목별 자료 묶음 부족: {len(target_digest)}개 / 최소 {args.min_target_digest}개")
     if len(existing_evidence) < args.min_recommendation_documents:
         issues.append(f"최신 추천 근거 문서 부족: {len(existing_evidence)}개 / 최소 {args.min_recommendation_documents}개")
-    if len(linked_recent_paths) == 0:
-        warnings.append("최근 1주 자료와 오늘 추천 근거 직접 연결 0건")
-    elif len(linked_recent_paths) < args.min_linked_recent_items:
+    if len(linked_recent_paths) < args.min_linked_recent_items:
         warnings.append(f"최근 1주 자료와 최신 추천 근거 직접 연결 적음: {len(linked_recent_paths)}개 / 기준 {args.min_linked_recent_items}개")
     if linked_items_missing_rag:
         issues.append(f"추천 연결 자료 RAG 검색어 누락: {len(linked_items_missing_rag)}개")
