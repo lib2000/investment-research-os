@@ -769,6 +769,36 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(payload_results[1]["errors"], errors)
         self.assertEqual(tool._payload_summary(payload_results[1])["status"], "failed")
 
+    def test_firecrawl_ir_check_tool_marks_canonical_hash_fallback_duplicates(self):
+        tool = load_firecrawl_ir_check_tool()
+        payload_results = [
+            {
+                "index": 1,
+                "payload": {
+                    "source_platform": "firecrawl_ir",
+                    "external_id": "a" * 64,
+                    "canonical_hash": "c" * 64,
+                },
+                "errors": [],
+            },
+            {
+                "index": 2,
+                "payload": {
+                    "source_platform": "firecrawl_ir",
+                    "external_id": "b" * 64,
+                    "canonical_hash": "c" * 64,
+                },
+                "errors": [],
+            },
+        ]
+
+        errors = tool._mark_duplicate_payload_errors(payload_results)
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("duplicate source_platform/canonical_hash with item 1", errors[0])
+        self.assertEqual(payload_results[0]["errors"], [])
+        self.assertEqual(payload_results[1]["errors"], errors)
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
