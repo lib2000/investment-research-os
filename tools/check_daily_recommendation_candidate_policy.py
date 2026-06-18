@@ -26,6 +26,12 @@ def normalize_ticker(value: object) -> str:
 
 
 def candidate_soft_tracking_hold(candidate: dict[str, Any]) -> bool:
+    try:
+        from research_os.daily_recommendation_tracking import daily_recommendation_candidate_soft_tracking_hold  # noqa: PLC0415
+    except Exception:
+        daily_recommendation_candidate_soft_tracking_hold = None
+    if daily_recommendation_candidate_soft_tracking_hold:
+        return daily_recommendation_candidate_soft_tracking_hold(candidate)
     profile = candidate.get("tracking_feedback_profile")
     if not isinstance(profile, dict) or profile.get("review_hold"):
         return False

@@ -259,6 +259,32 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertEqual(failures, [])
 
+    def test_candidate_policy_eval_marks_soft_tracking_hold(self):
+        from tools import check_daily_recommendation_candidate_policy as policy_check
+
+        failures, details = policy_check.validate_candidate_policy(
+            {
+                "candidates": [
+                    {
+                        "rank": 1,
+                        "ticker": "SOFT",
+                        "tracking_feedback_profile": {
+                            "completed_count": 8,
+                            "hit_rate": 0.25,
+                            "average_change_pct": -0.03,
+                            "penalty_points": 6,
+                            "review_hold": False,
+                        },
+                    }
+                ],
+                "warnings": [],
+            },
+            top_limit=3,
+        )
+
+        self.assertEqual(failures, [])
+        self.assertTrue(details["top_candidates"][0]["soft_tracking_hold"])
+
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
             {
