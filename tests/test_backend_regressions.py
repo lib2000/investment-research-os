@@ -4529,6 +4529,64 @@ class DailyRecommendationQualityModuleTests(unittest.TestCase):
         self.assertIn("중복 의심 자료는 대표 자료만 근거로 사용", candidate["quality_flags"])
 
 
+class DailyRecommendationScoringModuleTests(unittest.TestCase):
+    def test_daily_recommendation_scoring_applies_consensus_priority_and_price(self):
+        from research_os import daily_recommendation_scoring
+
+        candidate = {
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "reasons": [],
+            "evidence_sources": [],
+            "portfolio_context": [],
+            "risk_notes": [],
+            "quality_flags": [],
+        }
+
+        daily_recommendation_scoring.apply_daily_recommendation_consensus_row(
+            candidate,
+            {
+                "currency": "KRW",
+                "current_price": 100000,
+                "price_source": "consensus",
+                "target_upside": 0.24,
+                "valuation_signal": "저평가",
+                "source_count": 3,
+                "market_value": 12_000_000,
+                "interest": True,
+            },
+            as_of="2026-06-18T08:00:00+09:00",
+        )
+        daily_recommendation_scoring.apply_daily_recommendation_priority_target(
+            candidate,
+            {
+                "priority": "high",
+                "recent_document_count": 4,
+                "rag_document_count": 6,
+                "thesis_snapshot_connected": True,
+                "market_journal_matches": [{"summary": "미국 시장일지 AI 전력 병목 점검"}],
+                "next_action": "목표가 재확인",
+            },
+        )
+        daily_recommendation_scoring.apply_daily_recommendation_price_check(
+            candidate,
+            price=None,
+            source="provider-missing",
+        )
+
+        labels = [component["label"] for component in candidate["score_components"]]
+        self.assertIn("증권사 목표가 상승여력", labels)
+        self.assertIn("보유/관심 우선순위", labels)
+        self.assertEqual(candidate["baseline_price"], 100000)
+        self.assertEqual(candidate["baseline_price_source"], "consensus")
+        self.assertEqual(candidate["portfolio_risk_connection"]["priority"], "high")
+        self.assertTrue(any("시장일지 연결" in reason for reason in candidate["reasons"]))
+        self.assertIn("목표가 재확인", candidate["risk_notes"])
+        self.assertIn("현재가 미확인 (-5)", candidate["score_penalties"])
+        self.assertIn("기준 현재가 미확인", candidate["quality_flags"])
+
+
 class DailyRecommendationRecentModuleTests(unittest.TestCase):
     def test_daily_recommendation_recent_module_indexes_and_renders_weekly_evidence(self):
         from research_os import daily_recommendation_recent
