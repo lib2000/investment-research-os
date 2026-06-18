@@ -354,9 +354,21 @@ def score_tracked_outcomes(
         if str(item.get("recommendation_date") or "") in recent_date_keys
     ]
     current_policy_recent_completed = []
+    current_policy_excluded_recent = []
     for item in recent_completed:
         profile = (tracking_feedback_profiles or {}).get(normalize_ticker(item.get("ticker")))
         if isinstance(profile, dict) and (profile.get("review_hold") or profile.get("soft_tracking_hold")):
+            current_policy_excluded_recent.append(
+                {
+                    "ticker": normalize_ticker(item.get("ticker")),
+                    "company_name": item.get("company_name") or normalize_ticker(item.get("ticker")),
+                    "recommendation_date": item.get("recommendation_date"),
+                    "milestone": item.get("milestone"),
+                    "milestone_key": item.get("milestone_key"),
+                    "price_change_pct": round(float(item.get("price_change_pct") or 0.0), 4),
+                    "reason": "review_hold" if profile.get("review_hold") else "soft_tracking_hold",
+                }
+            )
             continue
         current_policy_recent_completed.append(item)
 
@@ -394,6 +406,8 @@ def score_tracked_outcomes(
     current_policy_recent_summary = {
         **summarize_completed_rows(current_policy_recent_completed),
         "excluded_count": len(recent_completed) - len(current_policy_recent_completed),
+        "excluded_by_reason": dict(sorted(Counter(item["reason"] for item in current_policy_excluded_recent).items())),
+        "excluded_samples": current_policy_excluded_recent[:8],
         "exclusion_policy": "review_hold_or_soft_tracking_hold",
     }
     score_basis = "aggregate"
@@ -742,13 +756,28 @@ def main() -> int:
             )
         current_policy_cohort = tracked.get("current_policy_eligible_recent_cohort") or {}
         if current_policy_cohort.get("completed_count"):
+            excluded_by_reason = current_policy_cohort.get("excluded_by_reason") or {}
+            reason_text = ", ".join(
+                f"{reason}={count}" for reason, count in excluded_by_reason.items()
+            ) or "사유 없음"
             print(
                 "현재 정책 eligible 최근 코호트: "
                 f"hit_rate {float(current_policy_cohort['hit_rate']):.2f}, "
                 f"avg {float(current_policy_cohort['average_change_pct']) * 100:.1f}%, "
                 f"n={current_policy_cohort['completed_count']}, "
-                f"제외 {current_policy_cohort.get('excluded_count', 0)}"
+                f"제외 {current_policy_cohort.get('excluded_count', 0)}({reason_text})"
             )
+            excluded_samples = current_policy_cohort.get("excluded_samples") or []
+            if excluded_samples:
+                print("현재 정책 제외 샘플:")
+                for item in excluded_samples[:5]:
+                    print(
+                        "- "
+                        f"{item['ticker']} {item.get('company_name') or ''}: "
+                        f"{item.get('reason')}, {item.get('recommendation_date')}, "
+                        f"{item.get('milestone') or item.get('milestone_key')}, "
+                        f"{float(item.get('price_change_pct') or 0.0) * 100:.1f}%"
+                    )
         date_breakdown = tracked.get("date_breakdown") or []
         if date_breakdown:
             weakest_dates = sorted(

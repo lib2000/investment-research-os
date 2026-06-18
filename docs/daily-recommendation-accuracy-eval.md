@@ -283,3 +283,14 @@ Post-change warnings:
 
 Remaining risk:
 - The eligible cohort is smaller than the full recent cohort, so it is better for current-policy validation but still needs more matured recommendations to become statistically sturdier. The 08:00 scheduled recommendation run must also clear the stale `OTLY` latest-policy warning.
+
+Iteration 24 - current policy exclusion diagnostics:
+- Bottleneck: the eval showed `제외 15` for the current-policy eligible recent cohort, but did not explain which exclusion rule accounted for those removed samples.
+- Change: `evaluate_daily_recommendation_accuracy.py` now stores `excluded_by_reason` and `excluded_samples` under `current_policy_eligible_recent_cohort`, and the text output prints the exclusion split plus representative samples.
+- Result: score remains `90.83/100`; failures are empty. The eval now prints `현재 정책 eligible 최근 코호트: hit_rate 0.54, avg 0.8%, n=12, 제외 15(review_hold=3, soft_tracking_hold=12)` and shows excluded sample rows such as `033500`, `OTLY`, and `003230`.
+
+Post-change warnings:
+- `tracked_outcome_legacy_aggregate: hit_rate 0.26 / 목표 0.50 (current_policy_recent 0.54)`
+
+Remaining risk:
+- This is diagnostic-only. The active policy looks healthier than the legacy aggregate, but the eligible cohort is still small and should be monitored as more post-policy recommendations mature.

@@ -215,6 +215,17 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["score_basis"], "current_policy_eligible_recent_cohort")
         self.assertEqual(details["current_policy_eligible_recent_cohort"]["completed_count"], 12)
         self.assertEqual(details["current_policy_eligible_recent_cohort"]["excluded_count"], 12)
+        self.assertEqual(
+            details["current_policy_eligible_recent_cohort"]["excluded_by_reason"],
+            {"review_hold": 4, "soft_tracking_hold": 8},
+        )
+        self.assertEqual(
+            {
+                item["reason"]
+                for item in details["current_policy_eligible_recent_cohort"]["excluded_samples"]
+            },
+            {"review_hold", "soft_tracking_hold"},
+        )
         self.assertEqual(failures, [])
         self.assertTrue(any("legacy_aggregate" in warning for warning in details["warnings"]))
         self.assertGreaterEqual(score, 10.0)
