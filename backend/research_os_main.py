@@ -5981,6 +5981,10 @@ def _analysis_labels_runtime() -> SimpleNamespace:
     return SimpleNamespace(normalize_ticker=normalize_ticker)
 
 
+def enum_or_str_value(value: object) -> str:
+    return analysis_labels.enum_or_str_value(value)
+
+
 def _analysis_context_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         build_ticker_profile=build_ticker_profile,

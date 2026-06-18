@@ -98,6 +98,12 @@ python tools\smoke_research_console_clicks.py --list-stages
 
 부분 실행은 `--list-stages`로 가능한 체크포인트를 확인한 뒤 `--stop-after <stage>`를 붙여 사용합니다.
 
+`verify_research_console.ps1`에서 라이브 클릭 스모크를 같이 돌릴 때도 같은 부분 실행 옵션을 전달할 수 있습니다.
+
+```powershell
+.\tools\verify_research_console.ps1 -ClickSmokeProgress -ClickSmokeStopAfter portfolio
+```
+
 
 Windows PowerShell에서 실제 Chrome을 이용해 메뉴/클릭 스모크를 함께 돌릴 때는 아래 래퍼를 사용합니다. WSL/Codex 격리에서 DevTools localhost 접근이 막혀도 Windows `Start-Process -Wait` 경로로 검증합니다.
 

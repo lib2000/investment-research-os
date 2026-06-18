@@ -14,6 +14,8 @@
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckPortfolioStore,
   [switch]$CheckStorageQualitySafeguards,
+  [string]$ClickSmokeStopAfter = "",
+  [switch]$ClickSmokeProgress,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
   [string]$CustomsDevUserToken = "dev-local-token",
   [string]$CustomsStartYymm = "202605",
@@ -364,7 +366,14 @@ if (-not $SkipLiveSmoke) {
   }
 
   Invoke-VerifyStep "클래식 콘솔 클릭 회귀 스모크" {
-    python tools\smoke_research_console_clicks.py --url $ConsoleUrl
+    $clickSmokeArgs = @("tools\smoke_research_console_clicks.py", "--url", $ConsoleUrl)
+    if ($ClickSmokeProgress) {
+      $clickSmokeArgs += "--progress"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ClickSmokeStopAfter)) {
+      $clickSmokeArgs += @("--stop-after", $ClickSmokeStopAfter)
+    }
+    python @clickSmokeArgs
   }
 
   if (-not $SkipWriteSmoke) {
