@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,17 @@ def age_hours(value: Any) -> float | None:
     if not parsed:
         return None
     return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600
+
+
+def market_journal_session_age_days(value: Any, now: date | None = None) -> int | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        session_date = date.fromisoformat(value.strip()[:10])
+    except ValueError:
+        return None
+    today = now or date.today()
+    return (today - session_date).days
 
 
 def add_issue(issues: list[str], condition: bool, message: str) -> None:
@@ -147,6 +158,16 @@ def market_journal_market_summaries(rows: list[dict[str, Any]]) -> dict[str, dic
     return dict(sorted(summaries.items()))
 
 
+def format_market_journal_summary(market: str, summary: dict[str, Any]) -> str:
+    latest_session_date = str(summary.get("latest_session_date") or "").strip()
+    age_days = market_journal_session_age_days(latest_session_date)
+    age_label = f", 경과 {age_days}일" if age_days is not None else ""
+    return (
+        f"{market}={summary['entry_count']}개"
+        f"(auto {summary['auto_entry_count']}개, latest {latest_session_date or '미확인'}{age_label})"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -159,6 +180,7 @@ def main() -> int:
     parser.add_argument("--min-market-journal-entries", type=int, default=1, help="시장일지 최소 저장 건수")
     parser.add_argument("--max-naver-missing-storage", type=int, default=0, help="네이버 리서치 캐시의 저장 경로 누락 허용 건수")
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
+    parser.add_argument("--max-market-journal-session-age-days", type=int, default=7, help="시장별 최신 세션일 허용 경과일")
     parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
     parser.add_argument(
@@ -349,6 +371,14 @@ def main() -> int:
             int(summary.get("auto_entry_count") or 0) < 1,
             f"마감 시황 시장일지 {market} 자동 출처 항목 누락",
         )
+        latest_session_date = str(summary.get("latest_session_date") or "").strip()
+        latest_session_age_days = market_journal_session_age_days(latest_session_date)
+        add_issue(
+            issues,
+            latest_session_age_days is None
+            or latest_session_age_days > max(1, int(args.max_market_journal_session_age_days)),
+            f"마감 시황 시장일지 {market} 최신 세션 확인 필요: {latest_session_date or '미확인'}",
+        )
 
     print(f"소스 상태 폴더: {system_dir}")
     print(f"KCIF 관련 보고서: {kcif_related}개 | 상태 {kcif.get('source_status')} | 갱신 {kcif.get('updated_at')}")
@@ -376,7 +406,7 @@ def main() -> int:
     print(f"텔레그램 미국 시장일지 자동 시도: 상태 {telegram_market_close_status or '미확인'} | 시도일 {telegram_market_close_state.get('last_attempt_date') or '미확인'} | 시각 {telegram_market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
     market_summary = ", ".join(
-        f"{market}={summary['entry_count']}개(auto {summary['auto_entry_count']}개, latest {summary['latest_session_date'] or '미확인'})"
+        format_market_journal_summary(market, summary)
         for market, summary in market_journal_by_market.items()
     )
     print(f"마감 시황 시장별 커버리지: {market_summary or '없음'}")

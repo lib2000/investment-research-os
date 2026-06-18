@@ -3386,6 +3386,11 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(summaries["US"]["entry_count"], 2)
         self.assertEqual(summaries["US"]["auto_entry_count"], 1)
         self.assertEqual(summaries["US"]["latest_session_date"], "2026-06-17")
+        self.assertEqual(
+            check_research_source_store.market_journal_session_age_days("2026-06-17", date(2026, 6, 19)),
+            2,
+        )
+        self.assertIsNone(check_research_source_store.market_journal_session_age_days("날짜아님", date(2026, 6, 19)))
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main
