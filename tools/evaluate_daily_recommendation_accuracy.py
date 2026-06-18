@@ -237,6 +237,8 @@ def score_tracked_outcomes(
     unavailable = 0
     by_ticker: dict[str, dict[str, Any]] = {}
     by_milestone: dict[str, dict[str, Any]] = {}
+    by_date: dict[str, dict[str, Any]] = {}
+    by_rank: dict[str, dict[str, Any]] = {}
     for record in records:
         for milestone in record.get("tracking_milestones") or []:
             if not isinstance(milestone, dict):
@@ -279,9 +281,13 @@ def score_tracked_outcomes(
         ticker = normalize_ticker(item.get("ticker"))
         ticker_label = f"{ticker} {item.get('company_name') or ''}".strip()
         milestone_key = str(item.get("milestone_key") or item.get("milestone") or "unknown")
+        date_key = str(item.get("recommendation_date") or "unknown")
+        rank_key = str(item.get("rank") or "unknown")
         for bucket, key, label in (
             (by_ticker, ticker, ticker_label),
             (by_milestone, milestone_key, str(item.get("milestone") or milestone_key)),
+            (by_date, date_key, date_key),
+            (by_rank, rank_key, f"{rank_key}위" if rank_key != "unknown" else "순위 미확인"),
         ):
             if not key:
                 continue
@@ -339,6 +345,38 @@ def score_tracked_outcomes(
 
     ticker_breakdown = summarize_bucket(by_ticker)
     milestone_breakdown = summarize_bucket(by_milestone)
+    date_breakdown = summarize_bucket(by_date)
+    rank_breakdown = summarize_bucket(by_rank)
+    completed_dates = sorted(item["key"] for item in date_breakdown if item["key"] != "unknown")
+    recent_date_keys = set(completed_dates[-8:])
+    recent_completed = [
+        item
+        for item in completed
+        if str(item.get("recommendation_date") or "") in recent_date_keys
+    ]
+
+    def summarize_completed_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        if not rows:
+            return {
+                "completed_count": 0,
+                "positive_count": 0,
+                "flat_count": 0,
+                "negative_count": 0,
+                "hit_rate": None,
+                "average_change_pct": None,
+            }
+        row_positive = sum(1 for row in rows if row["price_change_pct"] > 0.02)
+        row_flat = sum(1 for row in rows if -0.02 <= row["price_change_pct"] <= 0.02)
+        row_change_sum = sum(float(row["price_change_pct"]) for row in rows)
+        return {
+            "completed_count": len(rows),
+            "positive_count": row_positive,
+            "flat_count": row_flat,
+            "negative_count": len(rows) - row_positive - row_flat,
+            "hit_rate": round((row_positive + 0.5 * row_flat) / len(rows), 4),
+            "average_change_pct": round(row_change_sum / len(rows), 4),
+        }
+
     feedback_rows: list[dict[str, Any]] = []
     if tracking_feedback_profiles:
         ticker_labels = {row["key"]: row["label"] for row in ticker_breakdown}
@@ -375,6 +413,17 @@ def score_tracked_outcomes(
         "price_unavailable_count": unavailable,
         "underperforming_tickers": ticker_breakdown[:8],
         "milestone_breakdown": milestone_breakdown,
+        "date_breakdown": date_breakdown,
+        "rank_breakdown": rank_breakdown,
+        "recent_completed_cohort": {
+            **summarize_completed_rows(recent_completed),
+            "date_count": len(recent_date_keys),
+            "date_range": (
+                [min(recent_date_keys), max(recent_date_keys)]
+                if recent_date_keys
+                else []
+            ),
+        },
         "review_hold_tickers": [item for item in feedback_rows if item["review_hold"]],
         "penalized_tickers_without_hold": [item for item in feedback_rows if not item["review_hold"]][:8],
     }
@@ -598,6 +647,30 @@ def main() -> int:
                 print(
                     "- "
                     f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"n={item['completed_count']}"
+                )
+        recent_cohort = tracked.get("recent_completed_cohort") or {}
+        if recent_cohort.get("completed_count"):
+            date_range = recent_cohort.get("date_range") or []
+            range_text = " ~ ".join(date_range) if len(date_range) == 2 else "최근 완료일"
+            print(
+                "최근 완료 코호트: "
+                f"{range_text} | hit_rate {float(recent_cohort['hit_rate']):.2f}, "
+                f"avg {float(recent_cohort['average_change_pct']) * 100:.1f}%, "
+                f"n={recent_cohort['completed_count']}"
+            )
+        date_breakdown = tracked.get("date_breakdown") or []
+        if date_breakdown:
+            weakest_dates = sorted(
+                date_breakdown,
+                key=lambda item: (item["hit_rate"], item["average_change_pct"], -item["completed_count"]),
+            )[:3]
+            print("취약 추천일 코호트:")
+            for item in weakest_dates:
+                print(
+                    "- "
+                    f"{item['key']}: hit_rate {item['hit_rate']:.2f}, "
                     f"avg {item['average_change_pct'] * 100:.1f}%, "
                     f"n={item['completed_count']}"
                 )

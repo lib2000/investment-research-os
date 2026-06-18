@@ -83,6 +83,8 @@ class DailyRecommendationsTests(unittest.TestCase):
                 {
                     "ticker": "AAA",
                     "company_name": "Alpha",
+                    "rank": 1,
+                    "recommendation_date": "2026-06-01",
                     "tracking_milestones": [
                         {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.1},
                         {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.04},
@@ -91,6 +93,8 @@ class DailyRecommendationsTests(unittest.TestCase):
                 {
                     "ticker": "BBB",
                     "company_name": "Beta",
+                    "rank": 2,
+                    "recommendation_date": "2026-06-02",
                     "tracking_milestones": [
                         {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": 0.08}
                     ],
@@ -103,6 +107,9 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["underperforming_tickers"][0]["key"], "AAA")
         self.assertEqual(details["underperforming_tickers"][0]["completed_count"], 2)
         self.assertEqual(details["milestone_breakdown"][0]["key"], "15d")
+        self.assertEqual(details["date_breakdown"][0]["key"], "2026-06-01")
+        self.assertEqual(details["rank_breakdown"][0]["key"], "1")
+        self.assertEqual(details["recent_completed_cohort"]["completed_count"], 3)
 
     def test_accuracy_eval_reports_review_hold_feedback(self):
         from tools import evaluate_daily_recommendation_accuracy as accuracy_eval

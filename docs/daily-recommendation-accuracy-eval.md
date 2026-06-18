@@ -238,3 +238,14 @@ Post-change failures:
 
 Remaining risk:
 - This improves future selection policy but cannot change historical tracked outcomes until new recommendations mature through 7-day and 15-day milestones.
+
+Iteration 20 - tracked outcome cohort diagnostics:
+- Bottleneck: the remaining `tracked_outcome` failure reported only the aggregate hit rate, making it hard to distinguish whether the weakness came from old recommendation dates, rank positions, or specific tracking horizons.
+- Change: `evaluate_daily_recommendation_accuracy.py` now includes recommendation-date, rank, and recent-completed cohort breakdowns in the tracked outcome details and text output.
+- Result: score unchanged at `85.24/100`; the eval now shows recent completed cohort `2026-06-04 ~ 2026-06-12` with hit rate `0.46`, and weakest recommendation-date cohorts `2026-06-01`, `2026-05-31`, and `2026-06-02`.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This is diagnostic-only. The next improvement should either improve future candidate policy further or wait for newer post-policy cohorts to mature.
