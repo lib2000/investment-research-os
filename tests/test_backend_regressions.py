@@ -176,7 +176,7 @@ class WebCaptureRenderingTests(unittest.TestCase):
         self.assertIn("text/html", headers["Accept"])
 
     def test_sec_fetch_falls_back_to_urllib_after_httpx_failure(self):
-        from research_os import web_capture
+        from research_os import web_fetch
 
         class FailingClient:
             def __init__(self, *args, **kwargs):
@@ -214,12 +214,12 @@ class WebCaptureRenderingTests(unittest.TestCase):
             def read(self, limit):
                 return b"<html><title>SEC fallback</title><body>ChargePoint revenue 101.8 million</body></html>"
 
-        with patch.object(web_capture.httpx, "Client", FailingClient), patch.object(
-            web_capture.urllib.request,
+        with patch.object(web_fetch.httpx, "Client", FailingClient), patch.object(
+            web_fetch.urllib.request,
             "urlopen",
             return_value=FakeUrlopenResponse(),
         ):
-            response, attempts = web_capture.fetch_url_with_retry("https://www.sec.gov/Archives/example.htm")
+            response, attempts = web_fetch.fetch_url_with_retry("https://www.sec.gov/Archives/example.htm")
 
         self.assertIsNotNone(response)
         assert response is not None
