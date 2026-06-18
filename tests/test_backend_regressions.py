@@ -3424,6 +3424,40 @@ class NaverResearchIngestTests(unittest.TestCase):
         )
         self.assertIsNone(check_research_source_store.market_journal_session_age_days("날짜아님", date(2026, 6, 19)))
 
+    def test_research_source_store_summarizes_market_journal_impact(self):
+        from tools import check_research_source_store
+
+        summary = check_research_source_store.market_journal_impact_summary(
+            {
+                "ticker_targets": [
+                    {
+                        "ticker": "AAPL",
+                        "market_journal_matches": [
+                            {"market": "US", "session_date": "2026-06-18"},
+                            {"market": "KR", "session_date": "2026-06-17"},
+                        ],
+                    },
+                    {"ticker": "MSFT", "market_journal_matches": []},
+                ],
+                "sector_targets": [
+                    {
+                        "name": "AI",
+                        "market_journal_matches": [
+                            {"market": "US", "session_date": "2026-06-16"},
+                        ],
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(summary["target_count"], 3)
+        self.assertEqual(summary["linked_target_count"], 2)
+        self.assertEqual(summary["match_count"], 3)
+        self.assertEqual(summary["market_counts"], {"KR": 1, "US": 2})
+        self.assertEqual(summary["latest_session_date"], "2026-06-18")
+        self.assertEqual(summary["sample_targets"], ["AAPL", "AI"])
+        self.assertIn("매칭 3건", check_research_source_store.format_market_journal_impact(summary))
+
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main
         from research_os.settings import Settings

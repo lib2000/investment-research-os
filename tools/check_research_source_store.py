@@ -35,6 +35,13 @@ def load_json(system_dir: Path, name: str) -> dict[str, Any]:
     return data
 
 
+def load_optional_json(system_dir: Path, name: str) -> dict[str, Any]:
+    path = system_dir / name
+    if not path.exists():
+        return {}
+    return load_json(system_dir, name)
+
+
 def parse_dt(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -168,6 +175,58 @@ def format_market_journal_summary(market: str, summary: dict[str, Any]) -> str:
     )
 
 
+def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    target_rows = [
+        row
+        for row in [
+            *(payload.get("ticker_targets") or []),
+            *(payload.get("sector_targets") or []),
+        ]
+        if isinstance(row, dict)
+    ]
+    market_counts: Counter[str] = Counter()
+    latest_session_date = ""
+    linked_target_count = 0
+    match_count = 0
+    samples: list[str] = []
+    for row in target_rows:
+        matches = [match for match in (row.get("market_journal_matches") or []) if isinstance(match, dict)]
+        if not matches:
+            continue
+        linked_target_count += 1
+        match_count += len(matches)
+        label = str(row.get("ticker") or row.get("name") or "").strip()
+        if label and len(samples) < 5:
+            samples.append(label)
+        for match in matches:
+            market = normalize_market(match.get("market"))
+            if market:
+                market_counts[market] += 1
+            session_date = str(match.get("session_date") or "").strip()
+            if session_date > latest_session_date:
+                latest_session_date = session_date
+    return {
+        "target_count": len(target_rows),
+        "linked_target_count": linked_target_count,
+        "match_count": match_count,
+        "market_counts": dict(sorted(market_counts.items())),
+        "latest_session_date": latest_session_date,
+        "sample_targets": samples,
+    }
+
+
+def format_market_journal_impact(summary: dict[str, Any]) -> str:
+    market_counts = summary.get("market_counts") if isinstance(summary.get("market_counts"), dict) else {}
+    market_label = ", ".join(f"{market}={count}" for market, count in market_counts.items()) or "시장 미확인"
+    samples = summary.get("sample_targets") if isinstance(summary.get("sample_targets"), list) else []
+    sample_label = ", ".join(str(item) for item in samples[:5]) or "없음"
+    return (
+        f"대상 {summary.get('target_count', 0)}개 중 {summary.get('linked_target_count', 0)}개 연결 | "
+        f"매칭 {summary.get('match_count', 0)}건({market_label}) | "
+        f"최신 세션 {summary.get('latest_session_date') or '미확인'} | 샘플 {sample_label}"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -182,6 +241,8 @@ def main() -> int:
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
     parser.add_argument("--max-market-journal-session-age-days", type=int, default=7, help="시장별 최신 세션일 허용 경과일")
     parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
+    parser.add_argument("--min-market-journal-impact-links", type=int, default=1, help="관심/보유 자동화 보드에 필요한 시장일지 연결 최소 건수")
+    parser.add_argument("--min-market-journal-linked-targets", type=int, default=1, help="시장일지가 연결되어야 하는 관심/보유 자동화 대상 최소 수")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
     parser.add_argument(
         "--required-market-journal-market",
@@ -380,6 +441,20 @@ def main() -> int:
             f"마감 시황 시장일지 {market} 최신 세션 확인 필요: {latest_session_date or '미확인'}",
         )
 
+    interest_targets = load_optional_json(system_dir, "interest_collection_targets.json")
+    interest_payload = interest_targets.get("payload") if isinstance(interest_targets.get("payload"), dict) else interest_targets
+    market_journal_impact = market_journal_impact_summary(interest_payload if isinstance(interest_payload, dict) else {})
+    add_issue(
+        issues,
+        int(market_journal_impact.get("match_count") or 0) < args.min_market_journal_impact_links,
+        "시장일지 관심/보유 자동화 연결 건수 부족",
+    )
+    add_issue(
+        issues,
+        int(market_journal_impact.get("linked_target_count") or 0) < args.min_market_journal_linked_targets,
+        "시장일지 관심/보유 자동화 연결 대상 부족",
+    )
+
     print(f"소스 상태 폴더: {system_dir}")
     print(f"KCIF 관련 보고서: {kcif_related}개 | 상태 {kcif.get('source_status')} | 갱신 {kcif.get('updated_at')}")
     provider_summary = ", ".join(
@@ -410,6 +485,7 @@ def main() -> int:
         for market, summary in market_journal_by_market.items()
     )
     print(f"마감 시황 시장별 커버리지: {market_summary or '없음'}")
+    print(f"시장일지 시스템 반영: {format_market_journal_impact(market_journal_impact)}")
 
     if issues:
         for issue in issues:
