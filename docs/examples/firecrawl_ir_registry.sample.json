@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "company": "Apple",
+      "ticker": "AAPL",
+      "raw_url": "https://investor.apple.com/",
+      "resolved_url": "https://investor.apple.com/",
+      "page_title": "Apple Investor Relations",
+      "markdown": "Apple Investor Relations page for earnings releases, SEC filings, governance materials, and shareholder information.",
+      "language": "en"
+    },
+    {
+      "company": "Joby Aviation",
+      "ticker": "JOBY",
+      "raw_url": "https://ir.jobyaviation.com/",
+      "resolved_url": "https://ir.jobyaviation.com/",
+      "page_title": "Joby Aviation Investor Relations",
+      "markdown": "Joby Aviation Investor Relations page for company news, events, filings, and shareholder information.",
+      "language": "en"
+    }
+  ]
+}

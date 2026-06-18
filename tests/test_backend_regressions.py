@@ -590,6 +590,24 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(wrapped[0]["ticker"], "AAPL")
         self.assertEqual(wrapped[1]["ticker"], "JOBY")
 
+    def test_firecrawl_ir_registry_sample_builds_valid_payloads(self):
+        from research_os.firecrawl_ir_collector import (
+            build_firecrawl_ir_signal_payload,
+            normalize_firecrawl_ir_inputs,
+        )
+
+        sample_path = PROJECT_ROOT / "docs" / "examples" / "firecrawl_ir_registry.sample.json"
+        sample = json.loads(sample_path.read_text(encoding="utf-8"))
+        items = normalize_firecrawl_ir_inputs(sample)
+        payloads = [build_firecrawl_ir_signal_payload(item) for item in items]
+
+        self.assertGreaterEqual(len(payloads), 2)
+        self.assertEqual({payload["source_platform"] for payload in payloads}, {"firecrawl_ir"})
+        self.assertEqual({payload["source_kind"] for payload in payloads}, {"ir"})
+        self.assertTrue(all(payload["needs_enrichment"] for payload in payloads))
+        self.assertTrue(all(payload["analysis_status"] == "pending" for payload in payloads))
+        self.assertTrue(all(len(payload["external_id"]) == 64 for payload in payloads))
+
     def test_firecrawl_ir_batch_result_summarizes_dry_run_items(self):
         from types import SimpleNamespace
 

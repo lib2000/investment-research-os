@@ -66,8 +66,8 @@ python tools\check_console_asset_and_js.py
 python tools\check_storage_quality_store.py --strict
 python tools\check_public_ir_sec_store.py --require-any
 python tools\check_firecrawl_ir_collector.py
-python tools\check_firecrawl_ir_collector.py --input-json path\to\firecrawl_ir_registry.json
-python tools\check_firecrawl_ir_collector.py --input-json path\to\firecrawl_ir_registry.json --output-json output\firecrawl-ir-payloads.json
+python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecrawl_ir_registry.sample.json
+python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecrawl_ir_registry.sample.json --output-json output\firecrawl-ir-payloads.json
 python tools\check_firecrawl_ir_collector.py --use-env-registry
 python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rpc-ready
 python tools\check_rag_failure_diagnostics.py --strict
