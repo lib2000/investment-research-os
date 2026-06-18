@@ -828,6 +828,19 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertEqual(summary, "success=1 failed=0 skipped=2 dry_run=3")
 
+    def test_firecrawl_ir_check_tool_refreshes_top_level_submit_status(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        skipped = {"status": "success", "errors": [], "batch": {"status": "skipped"}}
+        failed = {"status": "success", "errors": [], "rpc": {"status": "failed"}}
+        success = {"status": "success", "errors": [], "batch": {"status": "success"}}
+
+        self.assertEqual(tool._refresh_result_status(skipped), "skipped")
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertEqual(tool._refresh_result_status(failed), "failed")
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(tool._refresh_result_status(success), "success")
+
     def test_firecrawl_ir_check_tool_prints_stable_batch_counts(self):
         with TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "firecrawl-ir-items.json"
@@ -870,7 +883,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("[skipped] firecrawl_ir_collector_v1", completed.stdout)
         self.assertIn("- batch_status: skipped", completed.stdout)
         self.assertIn("- batch_counts: success=0 failed=0 skipped=2 dry_run=0", completed.stdout)
 

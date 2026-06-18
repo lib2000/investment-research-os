@@ -188,6 +188,20 @@ def _batch_counts_summary(batch_result: dict) -> str:
     )
 
 
+def _refresh_result_status(result: dict) -> str:
+    if result.get("errors"):
+        result["status"] = "failed"
+        return result["status"]
+    if result.get("batch"):
+        result["status"] = str(result["batch"].get("status") or result.get("status") or "success")
+        return result["status"]
+    if result.get("rpc"):
+        rpc_status = str(result["rpc"].get("status") or "")
+        if rpc_status in {"success", "skipped", "failed"}:
+            result["status"] = rpc_status
+    return str(result.get("status") or "success")
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -252,6 +266,8 @@ def main() -> int:
     if args.require_rpc_ready and not args.submit:
         result["rpc"] = _rpc_preflight_result(rpc_ready_errors)
 
+    _refresh_result_status(result)
+
     if args.output_json:
         result["output_json"] = str(args.output_json)
         _write_output_json(result, args.output_json)
@@ -292,7 +308,7 @@ def main() -> int:
                 print(f"- rpc_reason: {result['rpc'].get('reason')}")
         for error in errors:
             print(f"ERROR: {error}")
-    return 1 if errors else 0
+    return 0 if result["status"] == "success" else 1
 
 
 if __name__ == "__main__":
