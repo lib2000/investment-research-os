@@ -36,6 +36,7 @@ EXPECTED_MODULES = {
     "telegram_brief_sender.py",
     "models.py",
     "portfolio_change_detection.py",
+    "portfolio_signal_score.py",
     "portfolio_analysis_coverage.py",
     "portfolio_import.py",
     "portfolio_performance.py",

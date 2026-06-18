@@ -102,6 +102,7 @@
 | `backend\research_os\portfolio_store.py` | 포트폴리오 저장 키/정렬 정책 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_change_detection.py` | OpenClaw `portfolio_health` brief의 전일 대비 health score, stance, confidence 변화 감지 | `PortfolioChangeDetectionTests`, `check_portfolio_change_detection.py` |
+| `backend\research_os\portfolio_signal_score.py` | IR/Earnings/SEC/DART signal을 종목별 통합 포트폴리오 점수로 집계 | `PortfolioSignalScoreTests`, `check_portfolio_signal_score.py` |
 | `backend\research_os\company_ir_config.py` | 공개 IR/SEC 소스 JSON 확장 설정 파싱과 중복 제거 helper | `CompanyIrSourcesWatchTests` |
 | `backend\research_os\company_ir_sec.py` | SEC company submissions 파싱, 공시 분류, archive URL helper | `CompanyIrSourcesWatchTests` |
 | `backend\research_os\public_ir_sec.py` | 공개 IR/SEC URL 수집, URL-only 보강 필요 판정, 저장 데이터/RAG 색인 연결, 상태 payload 조립 | `check_public_ir_sec_store.py`, `check_backend_module_health.py` |

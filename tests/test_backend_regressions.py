@@ -1260,6 +1260,52 @@ class EarningsTranscriptCollectorTests(unittest.TestCase):
         self.assertIn("public http/https URL", result["results"][1]["errors"][0])
 
 
+class PortfolioSignalScoreTests(unittest.TestCase):
+    def test_portfolio_signal_score_integrates_ir_earnings_sec_and_dart(self):
+        from research_os.portfolio_signal_score import build_portfolio_signal_scores
+
+        result = build_portfolio_signal_scores(
+            [
+                {"ticker": "PL", "company": "Planet Labs", "source_platform": "firecrawl_ir", "source_kind": "ir", "stance": "positive", "confidence": 0.82, "score": 7.4},
+                {"ticker": "PL", "company": "Planet Labs", "source_platform": "earnings_transcript", "source_kind": "earnings_transcript", "stance": "positive", "confidence": 0.72, "score": 7.1},
+                {"ticker": "PL", "company": "Planet Labs", "source_platform": "sec_edgar", "source_kind": "8-k", "stance": "neutral", "confidence": 0.56, "score": 5.6},
+                {"ticker": "JOBY", "company": "Joby Aviation", "source_platform": "sec_edgar", "source_kind": "10-q", "stance": "risk", "confidence": 0.8, "score": 3.1},
+                {"ticker": "005930", "company": "삼성전자", "source_platform": "opendart", "source_kind": "dart_quarterly", "stance": "positive", "confidence": 0.74, "score": 6.8},
+            ]
+        )
+
+        self.assertEqual(result["design"], "portfolio_signal_score_v1")
+        self.assertEqual(result["signal_count"], 5)
+        self.assertEqual(result["ticker_count"], 3)
+        self.assertEqual(result["source_family_counts"]["ir"], 1)
+        self.assertEqual(result["source_family_counts"]["earnings"], 1)
+        self.assertEqual(result["source_family_counts"]["sec"], 2)
+        self.assertEqual(result["source_family_counts"]["dart"], 1)
+        by_ticker = {item["ticker"]: item for item in result["tickers"]}
+        self.assertEqual(by_ticker["PL"]["source_families"], ["earnings", "ir", "sec"])
+        self.assertEqual(by_ticker["JOBY"]["label"], "watch")
+        self.assertEqual(by_ticker["005930"]["label"], "strengthened")
+        self.assertGreater(by_ticker["PL"]["score"], by_ticker["JOBY"]["score"])
+        self.assertTrue(result["watch_items"])
+
+    def test_portfolio_signal_score_uses_metadata_and_numeric_scores(self):
+        from research_os.portfolio_signal_score import normalize_signal_item, source_family
+
+        item = {
+            "metadata": {"ticker": "RXRX", "company": "Recursion", "target_type": "company_ir"},
+            "source_platform": "deepseek_ir_analysis",
+            "score": 82,
+            "confidence_score": "0.7",
+        }
+
+        self.assertEqual(source_family(item), "ir")
+        normalized = normalize_signal_item(item)
+        self.assertEqual(normalized["ticker"], "RXRX")
+        self.assertEqual(normalized["company_name"], "Recursion")
+        self.assertEqual(normalized["confidence"], 0.7)
+        self.assertGreater(normalized["signal_score"], 0)
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state

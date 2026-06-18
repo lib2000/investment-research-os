@@ -76,6 +76,7 @@ python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rp
 python tools\check_portfolio_change_detection.py
 python tools\check_telegram_brief_sender.py
 python tools\check_earnings_transcript_collector.py
+python tools\check_portfolio_signal_score.py
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary
