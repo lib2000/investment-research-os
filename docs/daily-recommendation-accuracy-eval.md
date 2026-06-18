@@ -122,3 +122,15 @@ Post-change failures:
 
 Remaining risk:
 - Full offline readiness includes git sync and broad repo checks, so it is best run after committing local work; the focused console/store verification now covers the new policy path.
+
+Iteration 10 - full offline readiness no-op RAG synthesis handling:
+- Bottleneck: full offline readiness was blocked by RAG synthesis reports that had `candidate_count=0` and `source_count=0`; these are no-op searches, not failed evidence-bearing syntheses.
+- Change: `check_rag_synthesis_store.py` now reports no-op synthesis entries as skipped for the source-count threshold while still failing entries that had candidates but no sources.
+- Operational refresh: saved portfolio prices were refreshed before re-running full offline readiness; operational JSON remains uncommitted.
+- Result: `python tools/check_offline_readiness.py` now runs through the newly bundled recommendation candidate policy guard and passes.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- No-op RAG synthesis files remain in the vault as historical records; future work should prevent saving empty synthesis reports rather than only skipping them in validation.

@@ -51,6 +51,18 @@ class RagSynthesisEntry:
             return 0
 
     @property
+    def candidate_count(self) -> int:
+        value = self.entry.get("candidate_count", self.payload.get("candidate_count", 0))
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def is_noop(self) -> bool:
+        return self.source_count == 0 and self.candidate_count == 0
+
+    @property
     def has_next_actions(self) -> bool:
         actions = self.payload.get("next_actions")
         return isinstance(actions, list) and any(str(item).strip() for item in actions)
@@ -172,6 +184,7 @@ def main() -> int:
     if latest and args.require_latest_rag and not latest.rag_connected:
         failures.append(f"최신 RAG 합성 RAG 연결 누락: {latest.relative_path}")
 
+    skipped_noop = 0
     for item in entries:
         if not item.markdown_path.exists():
             failures.append(f"Markdown 파일 누락: {item.relative_path}")
@@ -180,7 +193,10 @@ def main() -> int:
         if not item.query:
             failures.append(f"검색어 누락: {item.relative_path}")
         if item.source_count < args.min_source_count:
-            failures.append(f"원천 문서 부족: {item.relative_path} | {item.source_count} < {args.min_source_count}")
+            if item.is_noop:
+                skipped_noop += 1
+            else:
+                failures.append(f"원천 문서 부족: {item.relative_path} | {item.source_count} < {args.min_source_count}")
         if not item.has_next_actions:
             failures.append(f"다음 액션 누락: {item.relative_path}")
         if not item.rag_connected:
@@ -196,12 +212,15 @@ def main() -> int:
     print("최근 RAG 합성 항목")
     for item in entries[: max(0, args.limit)]:
         rag_status = "RAG 연결" if item.rag_connected else "RAG 연결 누락"
+        noop_status = " · no-op 제외" if item.is_noop else ""
         print(
             f"- {item.date} {item.ticker or 'SEARCH'} · {item.file_name} · "
-            f"원천 {item.source_count}개 · {rag_status} · query={item.query[:80]}"
+            f"원천 {item.source_count}개 · 후보 {item.candidate_count}개 · {rag_status}{noop_status} · query={item.query[:80]}"
         )
     for warning in warnings:
         print(f"참고: {warning}")
+    if skipped_noop:
+        print(f"참고: 검색 후보가 0개인 no-op RAG 합성 {skipped_noop}개는 원천 문서 기준에서 제외했습니다.")
 
     if failures:
         print("RAG 합성 저장 상태 확인 필요")
