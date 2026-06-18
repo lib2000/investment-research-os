@@ -74,3 +74,15 @@ Post-change failures:
 
 Remaining risk:
 - The likely next fix should target 15-day deterioration and repeated weak tickers, but changing the scoring rule should be validated with replay/backtest rather than by rewriting past outcomes.
+
+Iteration 6 - horizon-aware underperformance penalty:
+- Bottleneck: the `15d` horizon was the weakest completed milestone group, but recommendation feedback used only ticker-wide averages.
+- Change: tracking feedback now stores milestone breakdowns per ticker and adds a `+4` penalty when the `15d` group has at least 2 completed outcomes, hit rate below `0.25`, and average return at or below `-5.0%`.
+- Current affected feedback totals from the store: `112610=-16`, `033500=-10`, `003230=-10`; `OTLY` remains `-12` because it has only one completed `15d` sample.
+- Result: historical eval score remains `84.74/100`; future ranking now penalizes repeat 15-day deterioration more directly.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- The penalty is deliberately conservative; stronger exclusion rules should wait for replay/backtest evidence that they improve future hit rate without overfitting to a small sample.

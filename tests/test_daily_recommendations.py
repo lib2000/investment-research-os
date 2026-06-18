@@ -165,6 +165,32 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(any("hit rate" in item for item in candidate["risk_notes"]))
         self.assertIn("최근 추천 성과 피드백 감점", candidate["quality_flags"])
 
+    def test_tracking_feedback_adds_horizon_penalty_for_weak_15d(self):
+        feedback = daily_recommendation_tracking_feedback(
+            [
+                {
+                    "ticker": "WIND",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.02},
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.01},
+                        {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.08},
+                        {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.12},
+                    ],
+                }
+            ]
+        )
+
+        self.assertEqual(feedback["WIND"]["base_penalty_points"], 6)
+        self.assertEqual(feedback["WIND"]["horizon_penalty_points"], 4)
+        self.assertEqual(feedback["WIND"]["penalty_points"], 10)
+        self.assertEqual(feedback["WIND"]["weakest_milestone"]["key"], "15d")
+
+        candidate = {"score": 40, "score_penalties": [], "risk_notes": [], "quality_flags": [], "evidence_sources": []}
+        apply_daily_recommendation_tracking_feedback(candidate, feedback["WIND"])
+
+        self.assertEqual(candidate["score"], 30)
+        self.assertTrue(any("추천 후 15일" in item for item in candidate["risk_notes"]))
+
     def test_daily_recommendation_consensus_label_uses_company_or_ticker(self):
         self.assertEqual(
             daily_recommendation_consensus_label({"company_name": "삼양식품"}, "003230"),

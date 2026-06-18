@@ -523,6 +523,37 @@ def apply_daily_recommendation_price_check(
 
 
 def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dict]:
+    def update_stats(stats: dict, change_pct: float) -> None:
+        stats["completed_count"] += 1
+        stats["change_sum"] += change_pct
+        if change_pct > 0.02:
+            stats["positive_count"] += 1
+        elif -0.02 <= change_pct <= 0.02:
+            stats["flat_count"] += 1
+        else:
+            stats["negative_count"] += 1
+        if stats["worst_change_pct"] is None or change_pct < stats["worst_change_pct"]:
+            stats["worst_change_pct"] = change_pct
+        if stats["best_change_pct"] is None or change_pct > stats["best_change_pct"]:
+            stats["best_change_pct"] = change_pct
+
+    def summarize_stats(key: str, stats: dict) -> dict:
+        completed = int(stats["completed_count"])
+        hit_rate = (int(stats["positive_count"]) + 0.5 * int(stats["flat_count"])) / completed
+        average_change_pct = float(stats["change_sum"]) / completed
+        return {
+            "key": key,
+            "label": stats.get("label") or key,
+            "completed_count": completed,
+            "positive_count": stats["positive_count"],
+            "flat_count": stats["flat_count"],
+            "negative_count": stats["negative_count"],
+            "hit_rate": round(hit_rate, 4),
+            "average_change_pct": round(average_change_pct, 4),
+            "worst_change_pct": round(float(stats["worst_change_pct"]), 4),
+            "best_change_pct": round(float(stats["best_change_pct"]), 4),
+        }
+
     feedback: dict[str, dict] = {}
     for record in records:
         ticker = normalize_recommendation_ticker(record.get("ticker"))
@@ -538,6 +569,8 @@ def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dic
                 "negative_count": 0,
                 "change_sum": 0.0,
                 "worst_change_pct": None,
+                "best_change_pct": None,
+                "milestones": {},
             },
         )
         for milestone in record.get("tracking_milestones") or []:
@@ -547,16 +580,22 @@ def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dic
                 change_pct = float(milestone.get("price_change_pct"))
             except (TypeError, ValueError):
                 continue
-            stats["completed_count"] += 1
-            stats["change_sum"] += change_pct
-            if change_pct > 0.02:
-                stats["positive_count"] += 1
-            elif -0.02 <= change_pct <= 0.02:
-                stats["flat_count"] += 1
-            else:
-                stats["negative_count"] += 1
-            if stats["worst_change_pct"] is None or change_pct < stats["worst_change_pct"]:
-                stats["worst_change_pct"] = change_pct
+            update_stats(stats, change_pct)
+            milestone_key = str(milestone.get("key") or milestone.get("label") or "unknown")
+            milestone_stats = stats["milestones"].setdefault(
+                milestone_key,
+                {
+                    "label": str(milestone.get("label") or milestone_key),
+                    "completed_count": 0,
+                    "positive_count": 0,
+                    "flat_count": 0,
+                    "negative_count": 0,
+                    "change_sum": 0.0,
+                    "worst_change_pct": None,
+                    "best_change_pct": None,
+                },
+            )
+            update_stats(milestone_stats, change_pct)
 
     actionable: dict[str, dict] = {}
     for ticker, stats in feedback.items():
@@ -565,18 +604,40 @@ def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dic
             continue
         hit_rate = (int(stats["positive_count"]) + 0.5 * int(stats["flat_count"])) / completed
         average_change_pct = float(stats["change_sum"]) / completed
+        milestone_breakdown = [
+            summarize_stats(key, value)
+            for key, value in stats.get("milestones", {}).items()
+            if int(value.get("completed_count") or 0) > 0
+        ]
+        milestone_breakdown.sort(key=lambda item: (item["hit_rate"], item["average_change_pct"], -item["completed_count"]))
+        weakest_milestone = milestone_breakdown[0] if milestone_breakdown else None
         penalty = 0
         if hit_rate < 0.25 and average_change_pct <= -0.05:
             penalty = 12
         elif hit_rate < 0.4 and average_change_pct < 0:
             penalty = 6
+        horizon_penalty = 0
+        weak_15d = next((item for item in milestone_breakdown if item["key"] == "15d"), None)
+        if weak_15d and weak_15d["completed_count"] >= 2 and weak_15d["hit_rate"] < 0.25 and weak_15d["average_change_pct"] <= -0.05:
+            horizon_penalty = 4
+            penalty += horizon_penalty
         if penalty <= 0:
             continue
         actionable[ticker] = {
-            **stats,
+            "ticker": ticker,
+            "completed_count": completed,
+            "positive_count": stats["positive_count"],
+            "flat_count": stats["flat_count"],
+            "negative_count": stats["negative_count"],
+            "worst_change_pct": stats["worst_change_pct"],
+            "best_change_pct": stats["best_change_pct"],
             "hit_rate": round(hit_rate, 4),
             "average_change_pct": round(average_change_pct, 4),
             "penalty_points": penalty,
+            "base_penalty_points": penalty - horizon_penalty,
+            "horizon_penalty_points": horizon_penalty,
+            "weakest_milestone": weakest_milestone,
+            "milestone_breakdown": milestone_breakdown,
         }
     return actionable
 
@@ -598,6 +659,11 @@ def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict
     candidate.setdefault("risk_notes", []).append(
         f"최근 추천 추적 {completed}건 hit rate {hit_rate * 100:.1f}%, 평균 수익률 {average_change_pct * 100:.1f}%로 재추천 전 논거 재검증이 필요합니다."
     )
+    weakest = feedback.get("weakest_milestone") if isinstance(feedback.get("weakest_milestone"), dict) else None
+    if weakest:
+        candidate.setdefault("risk_notes", []).append(
+            f"취약 추적 구간: {weakest.get('label')} hit rate {float(weakest.get('hit_rate') or 0) * 100:.1f}%, 평균 {float(weakest.get('average_change_pct') or 0) * 100:.1f}%."
+        )
     candidate.setdefault("quality_flags", []).append("최근 추천 성과 피드백 감점")
     candidate.setdefault("evidence_sources", []).append(
         f"추적 성과 피드백: 완료 {completed}건 · hit rate {hit_rate * 100:.1f}% · 평균 {average_change_pct * 100:.1f}%"
