@@ -85,7 +85,8 @@ def main() -> int:
             "- source_payloads: "
             f"firecrawl_ir={counts.get('firecrawl_ir', 0)} "
             f"firecrawl_earnings={counts.get('firecrawl_earnings', 0)} "
-            f"earnings_transcript={counts.get('earnings_transcript', 0)}"
+            f"earnings_transcript={counts.get('earnings_transcript', 0)} "
+            f"deepseek_ir_analysis={counts.get('deepseek_ir_analysis', 0)}"
         )
         print(f"- scored_signals: {summary.get('signal_count')} / tickers={summary.get('ticker_count')}")
         print(f"- portfolio_score: {summary.get('portfolio_score')}")

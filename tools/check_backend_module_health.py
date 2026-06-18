@@ -18,6 +18,7 @@ EXPECTED_MODULES = {
     "data_provider_utils.py",
     "data_provider_core.py",
     "data_providers.py",
+    "deepseek_ir_analysis.py",
     "nps_data_provider.py",
     "opendart_data_provider.py",
     "export_routes.py",

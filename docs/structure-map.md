@@ -110,6 +110,7 @@
 | `backend\research_os\firecrawl_ir_collector.py` | Firecrawl IR 수집 결과를 Market Signal Graph `upsert_external_signal` payload로 정규화하고 Supabase RPC 적재 상태를 분리 | `FirecrawlIrCollectorTests`, `check_firecrawl_ir_collector.py` |
 | `backend\research_os\firecrawl_earnings_collector.py` | Firecrawl earnings release/event page를 Market Signal Graph `firecrawl_earnings` payload로 정규화 | `FirecrawlEarningsCollectorTests`, `check_firecrawl_earnings_collector.py` |
 | `backend\research_os\earnings_transcript_collector.py` | Earnings call transcript를 Market Signal Graph payload로 정규화하는 dry-run collector | `EarningsTranscriptCollectorTests`, `check_earnings_transcript_collector.py` |
+| `backend\research_os\deepseek_ir_analysis.py` | 수집 signal과 DeepSeek 분석 결과를 `signal_analyses` 저장 payload로 정규화 | `DeepSeekIrAnalysisTests`, `check_deepseek_ir_analysis.py` |
 | `backend\research_os\rag_memory.py` | RAG 문서 색인/검색/백필 | `smoke_research_console_clicks.py` |
 | `backend\research_os\rag_memory_utils.py` | RAG 문서 ID, JSON/safe 변환, manifest 본문 읽기, 문서 품질 판정 helper | `RagMemoryUtilsModuleTests` |
 | `backend\research_os\rag_search_results.py` | RAG 검색 결과 중복 보고서 compact와 match strength 표시 helper | `RagSearchResultsModuleTests` |

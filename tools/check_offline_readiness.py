@@ -64,6 +64,7 @@ CHECKS = [
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
     ("Firecrawl Earnings 수집 payload", ["tools/check_firecrawl_earnings_collector.py"]),
+    ("DeepSeek IR 분석 payload", ["tools/check_deepseek_ir_analysis.py"]),
     ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
     ("Telegram Portfolio Brief dry-run", ["tools/check_telegram_brief_sender.py"]),
     ("Earnings Transcript payload", ["tools/check_earnings_transcript_collector.py"]),

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from research_os.deepseek_ir_analysis import (
+    DESIGN_NAME as DEEPSEEK_IR_ANALYSIS_DESIGN,
+    build_deepseek_ir_analysis_batch_result,
+)
 from research_os.earnings_transcript_collector import (
     DESIGN_NAME as EARNINGS_TRANSCRIPT_DESIGN,
     build_earnings_transcript_batch_result,
@@ -146,6 +150,24 @@ def _signal_from_payload(
     }
 
 
+def _analysis_item_from_signal(signal_payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = signal_payload.get("metadata") if isinstance(signal_payload.get("metadata"), dict) else {}
+    ticker = metadata.get("ticker")
+    return {
+        "signal": signal_payload,
+        "analysis": {
+            "ticker": ticker,
+            "company": metadata.get("company"),
+            "stance": "positive",
+            "confidence": 0.78,
+            "score": 7.2,
+            "summary": f"DeepSeek dry-run analysis for {ticker or 'signal'} based on captured IR material.",
+            "key_points": ["source captured", "analysis payload shape verified"],
+            "risks": ["requires live LLM review before production use"],
+        },
+    }
+
+
 def _score_label_to_stance(label: Any) -> str:
     if label == "strengthened":
         return "positive"
@@ -236,6 +258,14 @@ def build_market_signal_graph_pipeline_contract(
         for item in earnings_batch.get("results", [])
         if isinstance(item, dict) and isinstance(item.get("payload"), dict)
     ]
+    deepseek_batch = build_deepseek_ir_analysis_batch_result([_analysis_item_from_signal(payload) for payload in ir_payloads])
+    if deepseek_batch.get("status") != "success":
+        errors.append("deepseek_ir_analysis: batch validation failed")
+    deepseek_payloads = [
+        item.get("payload")
+        for item in deepseek_batch.get("results", [])
+        if isinstance(item, dict) and isinstance(item.get("payload"), dict)
+    ]
 
     signal_inputs: list[dict[str, Any]] = []
     signal_inputs.extend(_signal_from_payload(payload, stance="positive", confidence=0.82, score=7.4) for payload in ir_payloads)
@@ -245,6 +275,7 @@ def build_market_signal_graph_pipeline_contract(
     signal_inputs.extend(
         _signal_from_payload(payload, stance="positive", confidence=0.72, score=7.1) for payload in earnings_payloads
     )
+    signal_inputs.extend(deepseek_payloads)
     signal_inputs.extend(sec_dart_signals if sec_dart_signals is not None else sample_sec_dart_signals())
 
     score_result = build_portfolio_signal_scores(signal_inputs)
@@ -267,6 +298,7 @@ def build_market_signal_graph_pipeline_contract(
             FIRECRAWL_IR_DESIGN,
             FIRECRAWL_EARNINGS_DESIGN,
             EARNINGS_TRANSCRIPT_DESIGN,
+            DEEPSEEK_IR_ANALYSIS_DESIGN,
             PORTFOLIO_SIGNAL_SCORE_DESIGN,
             PORTFOLIO_CHANGE_DESIGN,
             TELEGRAM_BRIEF_DESIGN,
@@ -276,7 +308,9 @@ def build_market_signal_graph_pipeline_contract(
             "firecrawl_ir": len(ir_payloads),
             "firecrawl_earnings": len(firecrawl_earnings_payloads),
             "earnings_transcript": len(earnings_payloads),
+            "deepseek_ir_analysis": len(deepseek_payloads),
         },
+        "deepseek_analysis": deepseek_batch,
         "score": score_result,
         "current_health_brief": current_health_brief,
         "change_detection": change_result,

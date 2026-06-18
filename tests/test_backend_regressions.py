@@ -1319,6 +1319,67 @@ class FirecrawlEarningsCollectorTests(unittest.TestCase):
         self.assertIn("public http/https URL", result["results"][1]["errors"][0])
 
 
+class DeepSeekIrAnalysisTests(unittest.TestCase):
+    def test_deepseek_ir_analysis_payload_matches_signal_analysis_contract(self):
+        from research_os.deepseek_ir_analysis import build_deepseek_ir_analysis_payload, sha256_hex
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
+
+        signal = build_firecrawl_ir_signal_payload(
+            {
+                "company": "Planet Labs",
+                "ticker": "PL",
+                "raw_url": "https://investors.planet.com/",
+                "page_title": "Planet Labs Investor Relations",
+                "markdown": "IR material",
+            }
+        )
+        payload = build_deepseek_ir_analysis_payload(
+            signal,
+            {
+                "stance": "positive",
+                "score": 7.4,
+                "confidence": 0.82,
+                "summary": "Constructive IR read-through.",
+                "key_points": ["IR captured"],
+                "risks": ["Execution risk"],
+                "catalysts": ["Earnings update"],
+            },
+        )
+
+        self.assertEqual(payload["source_platform"], "deepseek_ir_analysis")
+        self.assertEqual(payload["analysis_type"], "firecrawl_ir_signal_analysis_v2")
+        self.assertEqual(payload["source_signal_platform"], "firecrawl_ir")
+        self.assertEqual(payload["source_signal_external_id"], signal["external_id"])
+        self.assertEqual(payload["ticker"], "PL")
+        self.assertEqual(payload["stance"], "positive")
+        self.assertEqual(payload["score"], 7.4)
+        self.assertEqual(payload["confidence"], 0.82)
+        self.assertEqual(payload["metadata"]["collector_design"], "deepseek_ir_analysis_contract_v1")
+        self.assertEqual(
+            payload["analysis_id"],
+            sha256_hex(
+                "|".join(
+                    [
+                        "firecrawl_ir_signal_analysis_v2",
+                        "firecrawl_ir",
+                        signal["external_id"],
+                        "PL",
+                        "Planet Labs Investor Relations",
+                    ]
+                )
+            ),
+        )
+
+    def test_deepseek_ir_analysis_batch_requires_source_signal(self):
+        from research_os.deepseek_ir_analysis import build_deepseek_ir_analysis_batch_result
+
+        result = build_deepseek_ir_analysis_batch_result([{"analysis": {"summary": "missing signal"}}])
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["failed_count"], 1)
+        self.assertIn("requires signal", result["results"][0]["errors"][0])
+
+
 class PortfolioSignalScoreTests(unittest.TestCase):
     def test_portfolio_signal_score_integrates_ir_earnings_sec_and_dart(self):
         from research_os.portfolio_signal_score import build_portfolio_signal_scores
@@ -1376,13 +1437,15 @@ class MarketSignalGraphPipelineContractTests(unittest.TestCase):
         self.assertIn("firecrawl_ir_collector_v1", result["contracts"])
         self.assertIn("firecrawl_earnings_collector_v1", result["contracts"])
         self.assertIn("earnings_transcript_collector_v1", result["contracts"])
+        self.assertIn("deepseek_ir_analysis_contract_v1", result["contracts"])
         self.assertIn("portfolio_signal_score_v1", result["contracts"])
         self.assertIn("portfolio_change_detection_v1", result["contracts"])
         self.assertIn("telegram_brief_sender_v1", result["contracts"])
         self.assertEqual(result["source_payload_counts"]["firecrawl_ir"], 2)
         self.assertEqual(result["source_payload_counts"]["firecrawl_earnings"], 2)
         self.assertEqual(result["source_payload_counts"]["earnings_transcript"], 2)
-        self.assertGreaterEqual(result["summary"]["signal_count"], 8)
+        self.assertEqual(result["source_payload_counts"]["deepseek_ir_analysis"], 2)
+        self.assertGreaterEqual(result["summary"]["signal_count"], 10)
         self.assertGreaterEqual(result["summary"]["ticker_count"], 3)
         self.assertGreater(result["summary"]["portfolio_score"], 0)
         self.assertTrue(result["change_detection"]["top_movers"])
