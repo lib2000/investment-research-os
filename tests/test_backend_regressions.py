@@ -1132,6 +1132,73 @@ class PortfolioChangeDetectionTests(unittest.TestCase):
         self.assertEqual(result["items"]["VRT"]["confidence"], 0.81)
 
 
+class TelegramBriefSenderTests(unittest.TestCase):
+    def test_telegram_brief_sender_renders_portfolio_change_sections(self):
+        from research_os.portfolio_change_detection import detect_portfolio_changes
+        from research_os.telegram_brief_sender import build_telegram_brief_payload
+
+        change_result = detect_portfolio_changes(
+            {
+                "created_at": "2026-06-17T08:00:00+09:00",
+                "content": {
+                    "total_score": 6.4,
+                    "holdings": [
+                        {"ticker": "PL", "company": "Planet Labs", "stance": "neutral", "confidence": 0.54, "score": 6.0},
+                        {"ticker": "JOBY", "company": "Joby Aviation", "stance": "positive", "confidence": 0.72, "score": 7.2},
+                    ],
+                },
+            },
+            {
+                "created_at": "2026-06-18T08:00:00+09:00",
+                "content": {
+                    "health": {"total_score": 6.9},
+                    "holdings": [
+                        {"ticker": "PL", "company": "Planet Labs", "stance": "positive", "confidence": 0.78, "score": 7.1},
+                        {"ticker": "JOBY", "company": "Joby Aviation", "stance": "risk", "confidence": 0.58, "score": 6.4},
+                    ],
+                },
+            },
+        )
+
+        payload = build_telegram_brief_payload(change_result, chat_id="12345")
+
+        self.assertEqual(payload["design"], "telegram_brief_sender_v1")
+        self.assertTrue(payload["chat_id_configured"])
+        self.assertEqual(payload["message_count"], 1)
+        self.assertIn("Portfolio Health", payload["text"])
+        self.assertIn("Top Movers", payload["text"])
+        self.assertIn("Watch Items", payload["text"])
+        self.assertIn("PL Planet Labs", payload["text"])
+        self.assertIn("JOBY Joby Aviation", payload["text"])
+        self.assertEqual(payload["messages"][0]["chat_id"], "12345")
+        self.assertTrue(payload["messages"][0]["disable_web_page_preview"])
+
+    def test_telegram_brief_sender_chunks_long_messages(self):
+        from research_os.telegram_brief_sender import build_telegram_brief_payload
+
+        change_result = {
+            "current_as_of": "2026-06-18",
+            "health_score": {"previous": 6.1, "current": 6.7, "delta": 0.6, "direction": "up"},
+            "change_counts": {"changed_count": 30, "stance_changed_count": 30, "confidence_changed_count": 0, "watch_item_count": 0},
+            "top_movers": [
+                {
+                    "ticker": f"T{i:02d}",
+                    "company_name": "Very Long Company Name " + ("x" * 80),
+                    "previous_stance": "neutral",
+                    "current_stance": "positive",
+                    "event_types": ["stance_changed"],
+                }
+                for i in range(30)
+            ],
+            "watch_items": [],
+        }
+
+        payload = build_telegram_brief_payload(change_result, max_items=30, max_message_chars=500)
+
+        self.assertGreater(payload["message_count"], 1)
+        self.assertTrue(all(len(message["text"]) <= 500 for message in payload["messages"]))
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state

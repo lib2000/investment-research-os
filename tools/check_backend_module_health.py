@@ -32,6 +32,7 @@ EXPECTED_MODULES = {
     "naver_market_close_automation.py",
     "telegram_market_journal.py",
     "telegram_market_close_automation.py",
+    "telegram_brief_sender.py",
     "models.py",
     "portfolio_change_detection.py",
     "portfolio_analysis_coverage.py",
