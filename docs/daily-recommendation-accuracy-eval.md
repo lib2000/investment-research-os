@@ -249,3 +249,14 @@ Post-change failures:
 
 Remaining risk:
 - This is diagnostic-only. The next improvement should either improve future candidate policy further or wait for newer post-policy cohorts to mature.
+
+Iteration 21 - store check policy drift visibility:
+- Bottleneck: policy drift was visible in eval, API, and console, but the primary store CLI still printed only the latest saved recommendation rows without explaining that one of them now conflicts with current review-hold policy.
+- Change: `check_daily_recommendations_store.py` imports the same store alignment helper and prints `최신 추천 정책 이탈` when latest saved records include current review-hold tickers.
+- Result: store check still passes, and its output now shows `최신 추천 정책 이탈: OTLY` before the final success line.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This is visibility-only; the stale latest saved set remains unchanged until the next scheduled recommendation run.

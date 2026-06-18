@@ -356,6 +356,20 @@ def validate_score_evidence_alignment(record: dict[str, Any], errors: list[str])
         errors.append(f"{label} 최근 1주 자료 묶음 근거가 있으나 최근 자료 점수 구성 누락")
 
 
+def latest_policy_alignment(root: Path, records: list[dict[str, Any]], latest: list[dict[str, Any]]) -> dict[str, Any]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    try:
+        from research_os.daily_recommendation_store import latest_daily_recommendation_policy_alignment  # noqa: PLC0415
+    except Exception:
+        return {}
+    try:
+        return latest_daily_recommendation_policy_alignment(records, latest)
+    except Exception:
+        return {}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="매일 추천 저장 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="daily_recommendations.json 경로")
@@ -388,6 +402,7 @@ def main() -> int:
     latest_date = args.date or data.get("latest_recommendation_date") or max(record_date(r) for r in records)
     latest = [record for record in records if record_date(record) == latest_date]
     latest.sort(key=record_rank)
+    policy_alignment = latest_policy_alignment(root, records, latest)
     counts = Counter(record_date(record) for record in records)
 
     errors: list[str] = []
@@ -561,6 +576,10 @@ def main() -> int:
             f"{record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
             f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}{profile_text}"
         )
+    if policy_alignment.get("status") == "drift":
+        drift_rows = policy_alignment.get("review_hold_records") or []
+        drift_tickers = ", ".join(str(item.get("ticker") or "").strip() for item in drift_rows if item.get("ticker"))
+        print(f"최신 추천 정책 이탈: {drift_tickers or '확인 필요'} | {policy_alignment.get('message')}")
 
     if errors:
         for error in errors:
