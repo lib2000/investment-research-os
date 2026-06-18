@@ -240,6 +240,10 @@ def daily_recommendation_candidate_review_hold(candidate: dict) -> bool:
     return daily_recommendation_ranking.daily_recommendation_candidate_review_hold(candidate)
 
 
+def daily_recommendation_candidate_soft_tracking_hold(candidate: dict) -> bool:
+    return daily_recommendation_ranking.daily_recommendation_candidate_soft_tracking_hold(candidate)
+
+
 def finalize_daily_recommendation_ranking(
     candidates_by_ticker: dict[str, dict],
     *,

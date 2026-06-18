@@ -40,6 +40,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_state_path,
     daily_recommendation_consensus_label,
     daily_recommendation_target_label,
+    daily_recommendation_candidate_soft_tracking_hold,
     daily_recommendation_tracking_feedback,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
@@ -738,6 +739,35 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual([item["ticker"] for item in result["candidates"]], ["A", "B", "C"])
         self.assertIn("WEAK", result["warnings"][0])
         self.assertEqual(len(result["warnings"]), 10)
+
+    def test_finalize_daily_recommendation_ranking_soft_holds_weak_tracking_when_alternatives_exist(self):
+        soft_candidate = {
+            "ticker": "SOFT",
+            "company_name": "약세추적",
+            "score": 200,
+            "baseline_price": 10,
+            "tracking_feedback_profile": {
+                "completed_count": 8,
+                "hit_rate": 0.25,
+                "average_change_pct": -0.03,
+                "penalty_points": 6,
+                "review_hold": False,
+            },
+        }
+        result = finalize_daily_recommendation_ranking(
+            {
+                "SOFT": soft_candidate,
+                "A": {"ticker": "A", "company_name": "알파", "score": 130, "baseline_price": 10},
+                "B": {"ticker": "B", "company_name": "베타", "score": 120, "baseline_price": 10},
+                "C": {"ticker": "C", "company_name": "감마", "score": 110, "baseline_price": 10},
+            },
+            limit=3,
+            as_of="2026-06-18T08:00:00+09:00",
+        )
+
+        self.assertTrue(daily_recommendation_candidate_soft_tracking_hold(soft_candidate))
+        self.assertEqual([item["ticker"] for item in result["candidates"]], ["A", "B", "C"])
+        self.assertIn("추적 성과 약세 top3 대체: SOFT", result["warnings"])
 
     def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
         candidate = {"score": 10}

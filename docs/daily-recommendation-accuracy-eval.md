@@ -227,3 +227,14 @@ Post-change failures:
 
 Remaining risk:
 - After 08:00 KST, the same drift should become a hard failure again if the scheduled recommendation generation does not replace the stale top slot.
+
+Iteration 19 - soft hold for weak tracking candidates:
+- Bottleneck: current candidate dry-run no longer allowed severe review-hold tickers in top 3, but a weaker underperformer (`033500`, hit rate `26.7%`, average `-2.6%`, penalty `6`) still ranked 2nd despite enough clean alternatives.
+- Change: ranking now separates severe `review_hold` candidates from `soft_tracking_hold` candidates. Soft holds require at least 5 completed milestones, penalty at least 6, hit rate below 30%, and negative average return; when enough clean alternatives exist they are moved behind clean candidates and reported as `추적 성과 약세 top3 대체`.
+- Result: candidate dry-run top 3 changed from `ABSI, 033500, 105630` to `ABSI, 105630, PL`; warnings now report `033500, 003230` as soft replaced and `OTLY, 112610` as severe review-hold.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This improves future selection policy but cannot change historical tracked outcomes until new recommendations mature through 7-day and 15-day milestones.

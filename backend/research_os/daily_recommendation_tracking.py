@@ -20,6 +20,10 @@ REVIEW_HOLD_MAX_HIT_RATE = 0.15
 REVIEW_HOLD_MAX_AVERAGE_CHANGE_PCT = -0.05
 REVIEW_HOLD_MIN_COMPLETED = 3
 REVIEW_HOLD_MIN_PENALTY = 12
+SOFT_HOLD_MAX_HIT_RATE = 0.3
+SOFT_HOLD_MAX_AVERAGE_CHANGE_PCT = 0.0
+SOFT_HOLD_MIN_COMPLETED = 5
+SOFT_HOLD_MIN_PENALTY = 6
 
 
 def build_tracking_milestones(recommendation_date: date) -> list[dict]:
@@ -329,3 +333,19 @@ def daily_recommendation_candidate_review_hold(candidate: dict) -> bool:
     if not isinstance(profile, dict):
         return False
     return bool(profile.get("review_hold"))
+
+
+def daily_recommendation_candidate_soft_tracking_hold(candidate: dict) -> bool:
+    profile = candidate.get("tracking_feedback_profile")
+    if not isinstance(profile, dict) or profile.get("review_hold"):
+        return False
+    completed = int(profile.get("completed_count") or 0)
+    hit_rate = float(profile.get("hit_rate") or 0)
+    average_change_pct = float(profile.get("average_change_pct") or 0)
+    penalty = int(profile.get("penalty_points") or 0)
+    return (
+        completed >= SOFT_HOLD_MIN_COMPLETED
+        and penalty >= SOFT_HOLD_MIN_PENALTY
+        and hit_rate < SOFT_HOLD_MAX_HIT_RATE
+        and average_change_pct < SOFT_HOLD_MAX_AVERAGE_CHANGE_PCT
+    )

@@ -168,7 +168,7 @@ python tools\check_daily_recommendation_citations.py --strict
 python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker OTLY --expected-held-ticker 112610
 ```
 
-`check_daily_recommendation_candidate_policy.py`는 추천을 새로 저장하지 않고 현재 후보 생성 정책만 dry-run으로 평가합니다. 반복 부진 후보가 충분한 대체 후보가 있는데도 top 3에 다시 들어오면 실패합니다. top 3 후보에 추적 성과 피드백이 있으면 hit rate와 감점도 함께 출력해, 보류 전 단계의 약한 후보를 확인할 수 있습니다.
+`check_daily_recommendation_candidate_policy.py`는 추천을 새로 저장하지 않고 현재 후보 생성 정책만 dry-run으로 평가합니다. 반복 부진 후보가 충분한 대체 후보가 있는데도 top 3에 다시 들어오면 실패합니다. 보류 전 단계지만 추적 성과가 약한 후보는 `추적 성과 약세 top3 대체` 경고로 top 3 밖 대체 여부를 표시하며, top 후보에 추적 성과 피드백이 있으면 hit rate와 감점도 함께 출력합니다.
 
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.
 

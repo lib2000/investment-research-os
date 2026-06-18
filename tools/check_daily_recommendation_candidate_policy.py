@@ -25,6 +25,18 @@ def normalize_ticker(value: object) -> str:
     return str(value or "").strip().upper()
 
 
+def candidate_soft_tracking_hold(candidate: dict[str, Any]) -> bool:
+    profile = candidate.get("tracking_feedback_profile")
+    if not isinstance(profile, dict) or profile.get("review_hold"):
+        return False
+    return (
+        int(profile.get("completed_count") or 0) >= 5
+        and int(profile.get("penalty_points") or 0) >= 6
+        and float(profile.get("hit_rate") or 0) < 0.3
+        and float(profile.get("average_change_pct") or 0) < 0
+    )
+
+
 def validate_candidate_policy(
     payload: dict[str, Any],
     *,
@@ -67,6 +79,7 @@ def validate_candidate_policy(
                     isinstance(candidate.get("tracking_feedback_profile"), dict)
                     and candidate["tracking_feedback_profile"].get("review_hold")
                 ),
+                "soft_tracking_hold": candidate_soft_tracking_hold(candidate),
                 "tracking_hit_rate": (
                     candidate.get("tracking_feedback_profile", {}).get("hit_rate")
                     if isinstance(candidate.get("tracking_feedback_profile"), dict)
@@ -128,7 +141,7 @@ def main() -> int:
     else:
         print("추천 후보 정책 가드:", "실패" if failures else "정상")
         for candidate in details["top_candidates"]:
-            marker = " | 보류대상" if candidate["review_hold"] else ""
+            marker = " | 보류대상" if candidate["review_hold"] else " | 약세추적" if candidate["soft_tracking_hold"] else ""
             tracking_note = ""
             if candidate.get("tracking_penalty_points") is not None:
                 tracking_note = (
