@@ -143,6 +143,34 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["review_hold_tickers"][0]["ticker"], "AAA")
         self.assertEqual(details["penalized_tickers_without_hold"][0]["ticker"], "BBB")
 
+    def test_accuracy_eval_reports_latest_policy_drift(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        failures, details = accuracy_eval.latest_policy_alignment(
+            [
+                {"rank": 1, "ticker": "WEAK", "company_name": "Weak Co"},
+                {"rank": 2, "ticker": "OK", "company_name": "Okay Co"},
+            ],
+            {
+                "WEAK": {
+                    "hit_rate": 0.0,
+                    "average_change_pct": -0.08,
+                    "penalty_points": 16,
+                    "review_hold": True,
+                },
+                "OK": {
+                    "hit_rate": 0.5,
+                    "average_change_pct": 0.03,
+                    "penalty_points": 0,
+                    "review_hold": False,
+                },
+            },
+        )
+
+        self.assertEqual(failures, ["latest_policy_drift: 최신 추천에 반복 부진 보류 후보 포함: WEAK"])
+        self.assertEqual(details["latest_review_hold_records"][0]["ticker"], "WEAK")
+        self.assertEqual(details["latest_review_hold_records"][0]["penalty_points"], 16)
+
     def test_candidate_policy_eval_rejects_review_hold_in_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 

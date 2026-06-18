@@ -356,6 +356,35 @@ def score_tracked_outcomes(
     }
 
 
+def latest_policy_alignment(
+    latest: list[dict[str, Any]],
+    tracking_feedback_profiles: dict[str, dict[str, Any]],
+) -> tuple[list[str], dict[str, Any]]:
+    review_hold_records: list[dict[str, Any]] = []
+    for record in latest:
+        ticker = normalize_ticker(record.get("ticker"))
+        if not ticker:
+            continue
+        profile = tracking_feedback_profiles.get(ticker)
+        if not isinstance(profile, dict) or not profile.get("review_hold"):
+            continue
+        review_hold_records.append(
+            {
+                "rank": record.get("rank"),
+                "ticker": ticker,
+                "company_name": record.get("company_name") or ticker,
+                "hit_rate": round(float(profile.get("hit_rate") or 0), 4),
+                "average_change_pct": round(float(profile.get("average_change_pct") or 0), 4),
+                "penalty_points": int(profile.get("penalty_points") or 0),
+            }
+        )
+    failures: list[str] = []
+    if review_hold_records:
+        tickers = ", ".join(item["ticker"] for item in review_hold_records)
+        failures.append(f"latest_policy_drift: 최신 추천에 반복 부진 보류 후보 포함: {tickers}")
+    return failures, {"latest_review_hold_records": review_hold_records}
+
+
 def tracking_feedback_profiles(root: Path, records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     backend_dir = root / "backend"
     if str(backend_dir) not in sys.path:
@@ -383,9 +412,11 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
     records = [item for item in store.get("records", []) if isinstance(item, dict)]
     latest_date, latest = latest_records(records)
     latest_score, latest_failures, latest_details = score_latest_records(root, latest, expected_latest_count)
+    feedback_profiles = tracking_feedback_profiles(root, records)
+    policy_failures, policy_details = latest_policy_alignment(latest, feedback_profiles)
     outcome_score, outcome_failures, outcome_details = score_tracked_outcomes(
         records,
-        tracking_feedback_profiles=tracking_feedback_profiles(root, records),
+        tracking_feedback_profiles=feedback_profiles,
     )
     score = round(min(100.0, latest_score + outcome_score), 2)
     counts_by_date = Counter(str(record.get("recommendation_date") or "") for record in records)
@@ -407,9 +438,10 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
             "latest_quality": round(latest_score, 2),
             "tracked_outcomes": round(outcome_score, 2),
         },
-        "failures": latest_failures + outcome_failures,
+        "failures": latest_failures + policy_failures + outcome_failures,
         "details": {
             **latest_details,
+            "latest_policy": policy_details,
             "tracked_outcomes": outcome_details,
         },
     }
@@ -446,6 +478,18 @@ def main() -> int:
                 print(f"- {failure}")
         else:
             print("실패/병목: 없음")
+        latest_policy = result.get("details", {}).get("latest_policy", {})
+        latest_review_holds = latest_policy.get("latest_review_hold_records") or []
+        if latest_review_holds:
+            print("최신 추천 정책 이탈:")
+            for item in latest_review_holds[:5]:
+                print(
+                    "- "
+                    f"{item.get('rank')}위 {item['ticker']} {item['company_name']}: "
+                    f"hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"penalty {item['penalty_points']}"
+                )
         tracked = result.get("details", {}).get("tracked_outcomes", {})
         underperformers = tracked.get("underperforming_tickers") or []
         if underperformers:

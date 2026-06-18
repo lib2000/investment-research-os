@@ -180,3 +180,15 @@ Post-change failures:
 
 Remaining risk:
 - This prevents new empty syntheses from being saved, but it does not rewrite or delete existing vault entries.
+
+Iteration 15 - latest recommendation policy drift diagnostics:
+- Bottleneck: the eval showed current review-hold candidates, but it did not flag that the latest saved recommendation set could still contain a ticker that is now held by the improved candidate policy.
+- Change: `evaluate_daily_recommendation_accuracy.py` now compares latest saved recommendations against tracking feedback profiles and reports `latest_policy_drift` plus a `최신 추천 정책 이탈` section when a latest pick is now a review-hold candidate.
+- Result: score unchanged at `85.24/100`; the eval now flags `OTLY` in the 2026-06-18 saved top slot as current-policy drift with hit rate `0.10`, average change `-8.5%`, and penalty `16`.
+
+Post-change failures:
+- `latest_policy_drift: 최신 추천에 반복 부진 보류 후보 포함: OTLY`
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This is diagnostic-only; it does not rewrite the existing 2026-06-18 recommendation store. The next scheduled recommendation generation should produce a fresh set under the current hold policy.
