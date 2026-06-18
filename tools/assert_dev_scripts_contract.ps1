@@ -352,6 +352,7 @@ $contracts = @(
     Snippets = @(
       '--only-system-check',
       '--progress',
+      '--progress-heartbeat-seconds',
       '--list-stages',
       '--stop-after',
       '[smoke]',
@@ -360,6 +361,16 @@ $contracts = @(
       '네이버 리서치/시장일지 상태',
       'recentWeeklyEvidenceSynthesisButton',
       'recentWeeklyEvidenceButtonVisible'
+    )
+  },
+
+  @{
+    Path = "tools\verify_research_console.ps1"
+    Snippets = @(
+      'ClickSmokeProgressHeartbeatSeconds',
+      '--progress-heartbeat-seconds',
+      'ClickSmokeStopAfter',
+      'ClickSmokeProgress'
     )
   },
 
