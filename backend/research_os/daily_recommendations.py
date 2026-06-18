@@ -28,6 +28,7 @@ from research_os.daily_recommendation_store import (
     read_daily_recommendation_store,
     read_json_payload,
     should_run_daily_recommendations,
+    daily_recommendation_status_payload as store_daily_recommendation_status_payload,
     summarize_daily_recommendation_store as store_summarize_daily_recommendation_store,
     update_recommendation_tracking as store_update_recommendation_tracking,
     upsert_daily_recommendations as store_upsert_daily_recommendations,
@@ -230,6 +231,10 @@ def build_daily_recommendation_tracking_feedback(settings: Settings) -> dict[str
     store = read_daily_recommendation_store(settings)
     records = [item for item in store.get("records", []) if isinstance(item, dict)]
     return daily_recommendation_tracking_feedback(records)
+
+
+def daily_recommendation_status_payload(settings: Settings, *, today: str | None = None) -> dict[str, Any]:
+    return store_daily_recommendation_status_payload(settings, today=today)
 
 
 def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict | None) -> dict:

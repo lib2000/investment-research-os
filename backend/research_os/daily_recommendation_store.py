@@ -323,6 +323,26 @@ def latest_daily_recommendation_policy_alignment(records: list[dict], latest_rec
     }
 
 
+def daily_recommendation_status_payload(settings: Settings, *, today: str | None = None) -> dict[str, Any]:
+    payload = summarize_daily_recommendation_store(settings)
+    state = read_json_payload(daily_recommendation_state_path(settings), {})
+    today_key = today or current_recommendation_datetime().date().isoformat()
+    today_records = [
+        item
+        for item in (payload.get("records") or [])
+        if item.get("recommendation_date") == today_key
+    ]
+    payload["enabled"] = settings.daily_recommendations_enabled
+    payload["daily_time"] = settings.daily_recommendations_time
+    payload["tracking_enabled"] = settings.daily_recommendations_tracking_enabled
+    payload["due_now"] = should_run_daily_recommendations(settings)
+    payload["today_recommendation_date"] = today_key
+    payload["today_records"] = sorted(today_records, key=lambda item: int(item.get("rank") or 999))[:3]
+    payload["has_today_recommendations"] = bool(today_records)
+    payload["state"] = state
+    return payload
+
+
 def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30) -> dict[str, Any]:
     store = read_daily_recommendation_store(settings)
     records = [item for item in store.get("records", []) if isinstance(item, dict)]

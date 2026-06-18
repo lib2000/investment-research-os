@@ -86,6 +86,7 @@ from research_os.daily_recommendations import (
     finalize_daily_recommendation_ranking as _finalize_daily_recommendation_ranking,
     daily_recommendation_recent_weekly_index as _daily_recommendation_recent_weekly_index,
     daily_recommendation_state_path,
+    daily_recommendation_status_payload,
     daily_recommendation_target_key as _daily_recommendation_target_key,
     daily_recommendation_target_label as _daily_recommendation_target_label,
     saved_portfolio_price_lookup as _saved_portfolio_price_lookup,
@@ -14766,23 +14767,7 @@ def start_daily_recommendations_scheduler() -> None:
     dependencies=[Depends(verify_user_token)],
 )
 def get_daily_recommendations_status(settings: Settings = Depends(get_settings)) -> dict:
-    payload = summarize_daily_recommendation_store(settings)
-    state = read_json_store(daily_recommendation_state_path(settings), {})
-    today = current_storage_date().isoformat()
-    today_records = [
-        item
-        for item in (payload.get("records") or [])
-        if item.get("recommendation_date") == today
-    ]
-    payload["enabled"] = settings.daily_recommendations_enabled
-    payload["daily_time"] = settings.daily_recommendations_time
-    payload["tracking_enabled"] = settings.daily_recommendations_tracking_enabled
-    payload["due_now"] = should_run_daily_recommendations(settings)
-    payload["today_recommendation_date"] = today
-    payload["today_records"] = sorted(today_records, key=lambda item: int(item.get("rank") or 999))[:3]
-    payload["has_today_recommendations"] = bool(today_records)
-    payload["state"] = state
-    return payload
+    return daily_recommendation_status_payload(settings, today=current_storage_date().isoformat())
 
 
 @app.post(

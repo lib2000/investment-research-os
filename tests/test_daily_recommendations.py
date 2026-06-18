@@ -42,6 +42,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_target_label,
     daily_recommendation_candidate_soft_tracking_hold,
     daily_recommendation_tracking_feedback,
+    daily_recommendation_status_payload,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
     finalize_daily_recommendation_ranking,
@@ -884,19 +885,16 @@ class DailyRecommendationsTests(unittest.TestCase):
         with (
             patch.object(
                 main,
-                "summarize_daily_recommendation_store",
+                "daily_recommendation_status_payload",
                 return_value={
-                    "records": [
-                        {"recommendation_date": "2026-06-12", "rank": 1, "ticker": "OLD"},
-                        {"recommendation_date": "2026-06-13", "rank": 2, "ticker": "B"},
-                        {"recommendation_date": "2026-06-13", "rank": 1, "ticker": "A"},
-                    ],
+                    "today_records": [{"rank": 1, "ticker": "A"}, {"rank": 2, "ticker": "B"}],
                     "latest_recommendation_date": "2026-06-13",
+                    "daily_time": "08:00",
+                    "has_today_recommendations": True,
+                    "today_recommendation_date": "2026-06-13",
                 },
-            ),
+            ) as status_payload,
             patch.object(main, "current_storage_date", return_value=date(2026, 6, 13)),
-            patch.object(main, "read_json_store", return_value={"last_run_date": "2026-06-13"}),
-            patch.object(main, "should_run_daily_recommendations", return_value=False),
         ):
             payload = main.get_daily_recommendations_status(settings)
 
@@ -904,6 +902,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(payload["has_today_recommendations"])
         self.assertEqual([item["ticker"] for item in payload["today_records"]], ["A", "B"])
         self.assertEqual(payload["today_recommendation_date"], "2026-06-13")
+        status_payload.assert_called_once_with(settings, today="2026-06-13")
 
     def test_daily_recommendations_save_top_three_and_track_milestones(self):
         with TemporaryDirectory() as temp_dir:
@@ -998,6 +997,31 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(status["performance_summary"]["pending_count"], 12)
         self.assertEqual(status["performance_summary"]["price_unavailable_count"], 2)
         self.assertEqual(status["performance_summary"]["positive_count"], 1)
+
+    def test_daily_recommendation_status_payload_adds_schedule_fields(self):
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(
+                research_vault_dir=str(Path(temp_dir) / "research_vault"),
+                daily_recommendations_time="08:00",
+            )
+            upsert_daily_recommendations(
+                settings,
+                candidates=[{"ticker": "PL", "company_name": "Planet Labs", "score": 70}],
+                recommendation_date=date(2026, 6, 18),
+                generated_at="2026-06-18T08:00:00+09:00",
+            )
+            write_json_payload(
+                daily_recommendation_state_path(settings),
+                {"status": "success", "last_run_date": "2026-06-18", "selected_count": 1},
+            )
+            payload = daily_recommendation_status_payload(settings, today="2026-06-18")
+
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(payload["daily_time"], "08:00")
+        self.assertEqual(payload["today_recommendation_date"], "2026-06-18")
+        self.assertEqual(payload["today_records"][0]["ticker"], "PL")
+        self.assertTrue(payload["has_today_recommendations"])
+        self.assertEqual(payload["state"]["selected_count"], 1)
 
     def test_copyright_safe_url_only_is_not_body_missing_warning(self):
         main = import_research_os_main_or_skip()
