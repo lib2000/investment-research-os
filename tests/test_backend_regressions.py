@@ -636,6 +636,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         missing = tool._rpc_submit_readiness_errors(
             SimpleNamespace(
                 firecrawl_ir_enabled=False,
+                firecrawl_ir_dry_run=True,
                 market_signal_graph_enabled=False,
                 market_signal_graph_rpc_url="",
                 market_signal_graph_service_role_key="",
@@ -644,15 +645,17 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         ready = tool._rpc_submit_readiness_errors(
             SimpleNamespace(
                 firecrawl_ir_enabled=True,
+                firecrawl_ir_dry_run=False,
                 market_signal_graph_enabled=True,
                 market_signal_graph_rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
                 market_signal_graph_service_role_key="secret",
             )
         )
 
-        self.assertEqual(len(missing), 4)
+        self.assertEqual(len(missing), 5)
         self.assertEqual(ready, [])
         self.assertTrue(all("--submit" in error for error in missing))
+        self.assertTrue(any("FIRECRAWL_IR_DRY_RUN" in error for error in missing))
 
     def test_firecrawl_ir_check_tool_labels_rpc_preflight_errors(self):
         from types import SimpleNamespace
@@ -662,6 +665,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         missing = tool._rpc_submit_readiness_errors(
             SimpleNamespace(
                 firecrawl_ir_enabled=False,
+                firecrawl_ir_dry_run=True,
                 market_signal_graph_enabled=False,
                 market_signal_graph_rpc_url="",
                 market_signal_graph_service_role_key="",

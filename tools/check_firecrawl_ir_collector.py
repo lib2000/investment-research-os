@@ -107,6 +107,8 @@ def _rpc_submit_readiness_errors(settings, *, purpose: str = "--submit") -> list
     errors: list[str] = []
     if not getattr(settings, "firecrawl_ir_enabled", False):
         errors.append(f"FIRECRAWL_IR_ENABLED must be true for {purpose}")
+    if getattr(settings, "firecrawl_ir_dry_run", True):
+        errors.append(f"FIRECRAWL_IR_DRY_RUN must be false for {purpose}")
     if not getattr(settings, "market_signal_graph_enabled", False):
         errors.append(f"MARKET_SIGNAL_GRAPH_ENABLED must be true for {purpose}")
     if not getattr(settings, "market_signal_graph_rpc_url", ""):
@@ -154,6 +156,8 @@ def main() -> int:
         "input_source": input_source,
         "item_count": len(items),
         "rpc_enabled": rpc_enabled,
+        "firecrawl_ir_enabled": bool(settings.firecrawl_ir_enabled),
+        "firecrawl_ir_dry_run": bool(settings.firecrawl_ir_dry_run),
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
         "require_env_registry": args.require_env_registry,
@@ -193,6 +197,8 @@ def main() -> int:
             print(f"- source_platform: {payload['source_platform']}")
             print(f"- external_id: {payload['external_id']}")
             print(f"- canonical_hash: {payload['canonical_hash']}")
+        print(f"- firecrawl_ir_enabled: {bool(settings.firecrawl_ir_enabled)}")
+        print(f"- firecrawl_ir_dry_run: {bool(settings.firecrawl_ir_dry_run)}")
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
