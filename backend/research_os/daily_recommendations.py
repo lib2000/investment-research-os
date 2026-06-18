@@ -162,51 +162,11 @@ def apply_daily_recommendation_recent_weekly_evidence(
     recent_items: list[dict],
     weekly_groups: list[dict] | None = None,
 ) -> dict:
-    important_count = sum(1 for item in recent_items if item.get("category") == "filing")
-    report_count = sum(1 for item in recent_items if item.get("category") == "report")
-    public_ir_sec_items = [item for item in recent_items if item.get("category") == "public_ir_sec"]
-    public_ir_sec_count = len(public_ir_sec_items)
-    usable_public_ir_sec_count = sum(1 for item in public_ir_sec_items if item.get("usable_for_recommendation"))
-    blocked_public_ir_sec_count = public_ir_sec_count - usable_public_ir_sec_count
-
-    if important_count:
-        add_daily_recommendation_score(candidate, min(20, important_count * 5), "최근 중요 공시 반영")
-        candidate.setdefault("reasons", []).append(f"최근 1주 중요 공시 {important_count}건 확인")
-        candidate.setdefault("evidence_sources", []).append("최근 1주 공시 브리프 반영")
-    if report_count:
-        add_daily_recommendation_score(candidate, min(12, report_count * 3), "최근 핵심 리포트 반영")
-        candidate.setdefault("evidence_sources", []).append(f"최근 1주 핵심 리포트 {report_count}건")
-    if usable_public_ir_sec_count:
-        add_daily_recommendation_score(candidate, min(12, usable_public_ir_sec_count * 4), "최근 공개 IR/SEC 반영")
-        candidate.setdefault("evidence_sources", []).append(f"최근 1주 공개 IR/SEC 자료 {usable_public_ir_sec_count}건")
-        candidate.setdefault("reasons", []).append("본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨")
-    if blocked_public_ir_sec_count:
-        candidate.setdefault("risk_notes", []).append(f"공개 IR/SEC URL-only 자료 {blocked_public_ir_sec_count}건은 본문 보강 전 추천 점수 가산에서 제외")
-        candidate.setdefault("quality_flags", []).append("공개 IR/SEC 본문 보강 필요")
-
-    for recent_item in recent_items[:8]:
-        document = daily_recommendation_recent_item_evidence_document(recent_item)
-        if document:
-            candidate.setdefault("evidence_documents", []).append(document)
-
-    deduped_weekly_groups = []
-    seen_group_keys = set()
-    for group in weekly_groups or []:
-        group_key = str(group.get("key") or group.get("label") or "")
-        if group_key in seen_group_keys:
-            continue
-        seen_group_keys.add(group_key)
-        deduped_weekly_groups.append(group)
-    if deduped_weekly_groups:
-        candidate["weekly_evidence_groups"] = deduped_weekly_groups[:5]
-        weekly_group_text = ", ".join(
-            item
-            for item in (daily_recommendation_weekly_group_evidence_text(group) for group in deduped_weekly_groups[:4])
-            if item
-        )
-        if weekly_group_text:
-            candidate.setdefault("evidence_sources", []).append(f"최근 1주 자료 묶음: {weekly_group_text}")
-    return candidate
+    return daily_recommendation_recent.apply_daily_recommendation_recent_weekly_evidence(
+        candidate,
+        recent_items,
+        weekly_groups,
+    )
 
 
 def apply_daily_recommendation_evidence_documents(

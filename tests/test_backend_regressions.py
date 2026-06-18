@@ -4635,6 +4635,57 @@ class DailyRecommendationRecentModuleTests(unittest.TestCase):
         self.assertIn("공개 IR/SEC 3건", group_text)
         self.assertIn("추천 가능 2건", group_text)
 
+    def test_daily_recommendation_recent_module_applies_recent_weekly_evidence(self):
+        from research_os import daily_recommendation_recent
+
+        candidate = {
+            "score": 0,
+            "score_components": [],
+            "reasons": [],
+            "evidence_sources": [],
+            "risk_notes": [],
+            "quality_flags": [],
+            "evidence_documents": [],
+        }
+
+        updated = daily_recommendation_recent.apply_daily_recommendation_recent_weekly_evidence(
+            candidate,
+            [
+                {
+                    "category": "filing",
+                    "title": "삼양식품 공시",
+                    "relative_path": "research_vault/003230/filing.md",
+                    "recommendation_usage_summary": "공시 확인",
+                },
+                {
+                    "category": "report",
+                    "title": "삼양식품 리포트",
+                    "relative_path": "research_vault/003230/report.md",
+                },
+                {
+                    "category": "public_ir_sec",
+                    "usable_for_recommendation": True,
+                    "title": "IR 자료",
+                    "relative_path": "research_vault/003230/ir.md",
+                },
+                {"category": "public_ir_sec", "usable_for_recommendation": False},
+            ],
+            [
+                {"key": "filing", "label": "중요 공시", "count": 1, "visible_count": 1, "ticker_count": 1},
+                {"key": "filing", "label": "중요 공시 중복", "count": 1},
+            ],
+        )
+
+        labels = [component["label"] for component in candidate["score_components"]]
+        self.assertIs(updated, candidate)
+        self.assertIn("최근 중요 공시 반영", labels)
+        self.assertIn("최근 핵심 리포트 반영", labels)
+        self.assertIn("최근 공개 IR/SEC 반영", labels)
+        self.assertIn("공개 IR/SEC 본문 보강 필요", candidate["quality_flags"])
+        self.assertEqual(len(candidate["evidence_documents"]), 3)
+        self.assertEqual(len(candidate["weekly_evidence_groups"]), 1)
+        self.assertTrue(any(item.startswith("최근 1주 자료 묶음:") for item in candidate["evidence_sources"]))
+
 class DailyRecommendationTrackingModuleTests(unittest.TestCase):
     def test_daily_recommendation_tracking_builds_milestones_and_summary(self):
         from datetime import date
