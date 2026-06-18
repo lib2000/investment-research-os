@@ -149,6 +149,76 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertGreater(score, 20.0 * details["aggregate_hit_rate"])
         self.assertTrue(any("recent_hit_rate" in failure for failure in failures))
 
+    def test_accuracy_eval_scores_current_policy_eligible_recent_cohort(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        records = []
+        recent_dates = [f"2026-06-{day:02d}" for day in range(2, 10)]
+        for index in range(12):
+            records.append(
+                {
+                    "ticker": "KEEP",
+                    "recommendation_date": recent_dates[index % len(recent_dates)],
+                    "tracking_milestones": [
+                        {
+                            "key": "7d",
+                            "label": "추천 후 1주일",
+                            "status": "complete",
+                            "price_change_pct": 0.04 if index < 7 else 0.0,
+                        }
+                    ],
+                }
+            )
+        for index in range(8):
+            records.append(
+                {
+                    "ticker": "SOFT",
+                    "recommendation_date": recent_dates[index % len(recent_dates)],
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.04}
+                    ],
+                }
+            )
+        for index in range(4):
+            records.append(
+                {
+                    "ticker": "HOLD",
+                    "recommendation_date": recent_dates[index % len(recent_dates)],
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.08}
+                    ],
+                }
+            )
+
+        score, failures, details = accuracy_eval.score_tracked_outcomes(
+            records,
+            tracking_feedback_profiles={
+                "SOFT": {
+                    "completed_count": 8,
+                    "hit_rate": 0.25,
+                    "average_change_pct": -0.03,
+                    "penalty_points": 6,
+                    "review_hold": False,
+                    "soft_tracking_hold": True,
+                },
+                "HOLD": {
+                    "completed_count": 4,
+                    "hit_rate": 0.0,
+                    "average_change_pct": -0.08,
+                    "penalty_points": 16,
+                    "review_hold": True,
+                    "soft_tracking_hold": False,
+                },
+            },
+        )
+
+        self.assertEqual(details["score_basis"], "current_policy_eligible_recent_cohort")
+        self.assertEqual(details["current_policy_eligible_recent_cohort"]["completed_count"], 12)
+        self.assertEqual(details["current_policy_eligible_recent_cohort"]["excluded_count"], 12)
+        self.assertEqual(failures, [])
+        self.assertTrue(any("legacy_aggregate" in warning for warning in details["warnings"]))
+        self.assertGreaterEqual(score, 10.0)
+
     def test_accuracy_eval_reports_review_hold_feedback(self):
         from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
 

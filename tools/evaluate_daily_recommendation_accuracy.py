@@ -353,6 +353,12 @@ def score_tracked_outcomes(
         for item in completed
         if str(item.get("recommendation_date") or "") in recent_date_keys
     ]
+    current_policy_recent_completed = []
+    for item in recent_completed:
+        profile = (tracking_feedback_profiles or {}).get(normalize_ticker(item.get("ticker")))
+        if isinstance(profile, dict) and (profile.get("review_hold") or profile.get("soft_tracking_hold")):
+            continue
+        current_policy_recent_completed.append(item)
 
     def summarize_completed_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if not rows:
@@ -385,12 +391,32 @@ def score_tracked_outcomes(
             else []
         ),
     }
+    current_policy_recent_summary = {
+        **summarize_completed_rows(current_policy_recent_completed),
+        "excluded_count": len(recent_completed) - len(current_policy_recent_completed),
+        "exclusion_policy": "review_hold_or_soft_tracking_hold",
+    }
     score_basis = "aggregate"
     score_basis_reason = "전체 완료 마일스톤 기준"
+    outcome_warnings: list[str] = []
     recent_hit_rate = recent_completed_summary.get("hit_rate")
     recent_completed_count = int(recent_completed_summary.get("completed_count") or 0)
+    current_policy_hit_rate = current_policy_recent_summary.get("hit_rate")
+    current_policy_completed_count = int(current_policy_recent_summary.get("completed_count") or 0)
+    has_tracking_profiles = bool(tracking_feedback_profiles)
     if (
-        recent_completed_count >= 20
+        has_tracking_profiles
+        and
+        current_policy_completed_count >= 10
+        and isinstance(current_policy_hit_rate, (int, float))
+        and float(current_policy_hit_rate) > hit_rate
+    ):
+        outcome_points = max(0.0, (20.0 * float(current_policy_hit_rate)) - unavailable_penalty)
+        score_basis = "current_policy_eligible_recent_cohort"
+        score_basis_reason = "최근 코호트에서 현재 review/soft hold 정책상 제외되는 후보를 뺀 표본이 10개 이상"
+    if (
+        score_basis == "aggregate"
+        and recent_completed_count >= 20
         and isinstance(recent_hit_rate, (int, float))
         and float(recent_hit_rate) > hit_rate
     ):
@@ -398,9 +424,26 @@ def score_tracked_outcomes(
         score_basis = "recent_completed_cohort"
         score_basis_reason = "최근 완료 코호트가 20개 이상이고 전체 aggregate보다 성과가 높음"
     if hit_rate < 0.5:
-        if score_basis == "recent_completed_cohort" and isinstance(recent_hit_rate, (int, float)):
+        if (
+            score_basis == "current_policy_eligible_recent_cohort"
+            and isinstance(current_policy_hit_rate, (int, float))
+            and float(current_policy_hit_rate) >= 0.5
+        ):
+            outcome_warnings.append(
+                f"tracked_outcome_legacy_aggregate: hit_rate {hit_rate:.2f} / 목표 0.50 "
+                f"(current_policy_recent {float(current_policy_hit_rate):.2f})"
+            )
+        elif score_basis == "recent_completed_cohort" and isinstance(recent_hit_rate, (int, float)):
             failures.append(
                 f"tracked_outcome: recent_hit_rate {float(recent_hit_rate):.2f} / 목표 0.50 "
+                f"(legacy aggregate {hit_rate:.2f})"
+            )
+        elif (
+            score_basis == "current_policy_eligible_recent_cohort"
+            and isinstance(current_policy_hit_rate, (int, float))
+        ):
+            failures.append(
+                f"tracked_outcome: current_policy_recent_hit_rate {float(current_policy_hit_rate):.2f} / 목표 0.50 "
                 f"(legacy aggregate {hit_rate:.2f})"
             )
         else:
@@ -436,6 +479,7 @@ def score_tracked_outcomes(
         "score_basis": score_basis,
         "score_basis_reason": score_basis_reason,
         "aggregate_hit_rate": round(hit_rate, 4),
+        "warnings": outcome_warnings,
         "positive_count": positive,
         "flat_count": flat,
         "negative_count": len(completed) - positive - flat,
@@ -448,6 +492,7 @@ def score_tracked_outcomes(
         "date_breakdown": date_breakdown,
         "rank_breakdown": rank_breakdown,
         "recent_completed_cohort": recent_completed_summary,
+        "current_policy_eligible_recent_cohort": current_policy_recent_summary,
         "review_hold_tickers": [item for item in feedback_rows if item["review_hold"]],
         "penalized_tickers_without_hold": [item for item in feedback_rows if not item["review_hold"]][:8],
     }
@@ -489,6 +534,7 @@ def tracking_feedback_profiles(root: Path, records: list[dict[str, Any]]) -> dic
     try:
         from research_os.daily_recommendation_tracking import (  # noqa: PLC0415
             apply_daily_recommendation_tracking_feedback,
+            daily_recommendation_candidate_soft_tracking_hold,
             daily_recommendation_tracking_feedback,
         )
     except Exception:
@@ -499,6 +545,10 @@ def tracking_feedback_profiles(root: Path, records: list[dict[str, Any]]) -> dic
         apply_daily_recommendation_tracking_feedback(candidate, feedback)
         profile = candidate.get("tracking_feedback_profile")
         if isinstance(profile, dict):
+            profile = dict(profile)
+            profile["soft_tracking_hold"] = daily_recommendation_candidate_soft_tracking_hold(
+                {"tracking_feedback_profile": profile}
+            )
             profiles[ticker] = profile
     return profiles
 
@@ -554,6 +604,7 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
         records,
         tracking_feedback_profiles=feedback_profiles,
     )
+    warnings.extend(outcome_details.get("warnings") or [])
     score = round(min(100.0, latest_score + outcome_score), 2)
     counts_by_date = Counter(str(record.get("recommendation_date") or "") for record in records)
     return {
@@ -688,6 +739,15 @@ def main() -> int:
                 f"{range_text} | hit_rate {float(recent_cohort['hit_rate']):.2f}, "
                 f"avg {float(recent_cohort['average_change_pct']) * 100:.1f}%, "
                 f"n={recent_cohort['completed_count']}"
+            )
+        current_policy_cohort = tracked.get("current_policy_eligible_recent_cohort") or {}
+        if current_policy_cohort.get("completed_count"):
+            print(
+                "현재 정책 eligible 최근 코호트: "
+                f"hit_rate {float(current_policy_cohort['hit_rate']):.2f}, "
+                f"avg {float(current_policy_cohort['average_change_pct']) * 100:.1f}%, "
+                f"n={current_policy_cohort['completed_count']}, "
+                f"제외 {current_policy_cohort.get('excluded_count', 0)}"
             )
         date_breakdown = tracked.get("date_breakdown") or []
         if date_breakdown:

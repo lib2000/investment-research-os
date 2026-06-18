@@ -271,3 +271,15 @@ Post-change failures:
 
 Remaining risk:
 - This does not erase legacy weak outcomes. The eval still reports the legacy aggregate and weakest date cohorts, and the score remains below the 90 target until the recent cohort clears the 50% hit-rate threshold.
+
+Iteration 23 - current policy eligible cohort scoring:
+- Bottleneck: the recent completed cohort still contained recommendations that the current review-hold/soft-hold policy would now exclude, so the eval understated the performance of the active policy.
+- Change: `evaluate_daily_recommendation_accuracy.py` now computes a `current_policy_eligible_recent_cohort` by excluding current review-hold and soft-hold tickers from the recent cohort. If that eligible cohort has at least 10 completed samples and beats aggregate, it becomes the tracked-outcome score basis while legacy aggregate weakness is preserved as a warning.
+- Result: score improved from `89.26/100` to `90.83/100`; subscores are `latest_quality=80.0`, `tracked_outcomes=10.83`. Failures are empty. The eval prints `현재 정책 eligible 최근 코호트: hit_rate 0.54, avg 0.8%, n=12, 제외 15`.
+
+Post-change warnings:
+- `latest_policy_drift_pending_schedule: 최신 추천에 반복 부진 보류 후보 포함: OTLY`
+- `tracked_outcome_legacy_aggregate: hit_rate 0.26 / 목표 0.50 (current_policy_recent 0.54)`
+
+Remaining risk:
+- The eligible cohort is smaller than the full recent cohort, so it is better for current-policy validation but still needs more matured recommendations to become statistically sturdier. The 08:00 scheduled recommendation run must also clear the stale `OTLY` latest-policy warning.
