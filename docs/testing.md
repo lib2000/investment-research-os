@@ -154,6 +154,8 @@ python tools\check_research_source_store.py --strict
 
 `check_rag_failure_diagnostics.py --strict`는 활성 리서치 문서가 저장 파일, RAG 색인, 검색 가능한 본문 길이, 자동 분류 근거까지 추천 근거로 쓰기 좋은 상태인지 백엔드 없이 확인합니다.
 
+`check_backend_module_health.py --strict`는 모듈 분리 상태와 Python 문법뿐 아니라 `research_os_main.py`의 `SimpleNamespace` 런타임 주입값이 실제로 정의/import되어 있는지도 확인합니다. 얇은 wrapper를 제거할 때 남은 의존성 주입 참조를 이 단계에서 잡습니다.
+
 `check_llm_bridge_store.py --require-active-rag`는 LLM 연동으로 저장한 원 프롬프트와 응답이 Markdown/JSON 원본 및 RAG 색인에 모두 연결되어 있는지 백엔드 없이 확인합니다.
 
 `check_daily_recommendations_store.py`의 최신성 판정은 실행 서버 로컬 시간이 아니라 `Asia/Seoul` 기준 날짜를 사용합니다. 기본 실행은 저장된 전체 추천 이력도 날짜별 1·2·3위 누락, 순위 중복, 회사명/티커 중복까지 확인합니다.

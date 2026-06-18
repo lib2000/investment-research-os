@@ -1,5 +1,6 @@
 import sys
 import unittest
+import ast
 import base64
 import copy
 import json
@@ -1585,6 +1586,21 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(tool.fallback_flow_ids("docs/new-note.md"), {"backend_module_health"})
         self.assertEqual(tool.fallback_flow_ids("backend/main.py"), {"portfolio_realtime", "backend_module_health"})
         self.assertEqual(tool.fallback_flow_ids("backend/.env.example"), {"source_automation", "backend_module_health"})
+
+    def test_backend_module_health_flags_missing_simplenamespace_dependency(self):
+        from tools import check_backend_module_health
+
+        tree = ast.parse(
+            "from types import SimpleNamespace\n"
+            "known = object()\n"
+            "def runtime():\n"
+            "    return SimpleNamespace(ok=known, broken=missing_name)\n"
+        )
+
+        self.assertEqual(
+            check_backend_module_health.simple_namespace_missing_dependencies(tree),
+            [(4, "broken", "missing_name")],
+        )
 
     def test_code_knowledge_graph_check_uses_existing_graph_when_refresh_write_is_blocked(self):
         tool = load_code_knowledge_graph_check_tool()

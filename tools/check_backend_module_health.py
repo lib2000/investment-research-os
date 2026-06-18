@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import builtins
 from pathlib import Path
 
 EXPECTED_MODULES = {
@@ -159,6 +160,52 @@ def reachable_research_os_imports(entry_tree: ast.Module, module_dir: Path) -> s
     return reachable
 
 
+def assigned_names(target: ast.expr) -> set[str]:
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: set[str] = set()
+        for item in target.elts:
+            names.update(assigned_names(item))
+        return names
+    return set()
+
+
+def module_defined_names(tree: ast.Module) -> set[str]:
+    names = set(dir(builtins))
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                names.update(assigned_names(target))
+        elif isinstance(node, ast.AnnAssign):
+            names.update(assigned_names(node.target))
+    return names
+
+
+def simple_namespace_missing_dependencies(tree: ast.Module) -> list[tuple[int, str, str]]:
+    defined = module_defined_names(tree)
+    missing: list[tuple[int, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "SimpleNamespace":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg is None or not isinstance(keyword.value, ast.Name):
+                continue
+            if keyword.value.id not in defined:
+                missing.append((node.lineno, keyword.arg, keyword.value.id))
+    return missing
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="백엔드 모듈 분리/문법/금지 소스 잔존 여부를 점검합니다.")
     parser.add_argument("--strict", action="store_true")
@@ -198,6 +245,13 @@ def main() -> int:
     missing_imports = sorted(EXPECTED_MAIN_IMPORTS - reachable_imports)
     if missing_imports:
         errors.append("research_os_main.py 연결 모듈 import 누락: " + ", ".join(missing_imports))
+    missing_runtime_dependencies = simple_namespace_missing_dependencies(main_tree)
+    if missing_runtime_dependencies:
+        formatted = ", ".join(
+            f"{name}={value}@{lineno}"
+            for lineno, name, value in missing_runtime_dependencies[:10]
+        )
+        errors.append("research_os_main.py SimpleNamespace 주입 미정의 참조: " + formatted)
 
     main_lines = len(main_path.read_text(encoding="utf-8-sig").splitlines())
     if main_lines > args.main_max_lines:
