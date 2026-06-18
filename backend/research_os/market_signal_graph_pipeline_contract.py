@@ -154,6 +154,43 @@ def _signal_from_payload(
     }
 
 
+def _duplicate_source_payload_keys(payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen_external: dict[tuple[str, str], int] = {}
+    seen_hash: dict[tuple[str, str], int] = {}
+    duplicates: list[dict[str, Any]] = []
+    for index, payload in enumerate(payloads, start=1):
+        source_platform = str(payload.get("source_platform") or "").strip()
+        external_id = str(payload.get("external_id") or "").strip()
+        canonical_hash = str(payload.get("canonical_hash") or "").strip()
+        external_key = (source_platform, external_id)
+        hash_key = (source_platform, canonical_hash)
+        if source_platform and external_id and external_key in seen_external:
+            duplicates.append(
+                {
+                    "key_type": "source_platform_external_id",
+                    "source_platform": source_platform,
+                    "key": external_id,
+                    "first_index": seen_external[external_key],
+                    "duplicate_index": index,
+                }
+            )
+        else:
+            seen_external[external_key] = index
+        if source_platform and canonical_hash and hash_key in seen_hash:
+            duplicates.append(
+                {
+                    "key_type": "source_platform_canonical_hash",
+                    "source_platform": source_platform,
+                    "key": canonical_hash,
+                    "first_index": seen_hash[hash_key],
+                    "duplicate_index": index,
+                }
+            )
+        else:
+            seen_hash[hash_key] = index
+    return duplicates
+
+
 def _analysis_item_from_signal(signal_payload: dict[str, Any]) -> dict[str, Any]:
     metadata = signal_payload.get("metadata") if isinstance(signal_payload.get("metadata"), dict) else {}
     ticker = metadata.get("ticker")
@@ -262,6 +299,11 @@ def build_market_signal_graph_pipeline_contract(
         for item in earnings_batch.get("results", [])
         if isinstance(item, dict) and isinstance(item.get("payload"), dict)
     ]
+    source_payloads = [*ir_payloads, *firecrawl_earnings_payloads, *earnings_payloads]
+    duplicate_source_keys = _duplicate_source_payload_keys(source_payloads)
+    if duplicate_source_keys:
+        errors.append(f"source_payload_dedup: duplicate keys {len(duplicate_source_keys)}")
+
     deepseek_batch = build_deepseek_ir_analysis_batch_result([_analysis_item_from_signal(payload) for payload in ir_payloads])
     if deepseek_batch.get("status") != "success":
         errors.append("deepseek_ir_analysis: batch validation failed")
@@ -328,6 +370,7 @@ def build_market_signal_graph_pipeline_contract(
             "deepseek_ir_analysis": len(deepseek_payloads),
             "portfolio_briefs": len(brief_batch.get("briefs") or []),
         },
+        "duplicate_source_keys": duplicate_source_keys,
         "deepseek_analysis": deepseek_batch,
         "score": score_result,
         "briefs": brief_batch,

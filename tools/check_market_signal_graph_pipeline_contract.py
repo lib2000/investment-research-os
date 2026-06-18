@@ -93,6 +93,7 @@ def main() -> int:
         print(f"- portfolio_score: {summary.get('portfolio_score')}")
         print(f"- movers/watch: {summary.get('top_mover_count')} / {summary.get('watch_item_count')}")
         print(f"- telegram_messages: {summary.get('telegram_message_count')}")
+        print(f"- duplicate_source_keys: {len(result.get('duplicate_source_keys') or [])}")
         for error in result.get("errors") or []:
             print(f"- error: {error}")
     return 0 if result.get("status") == "success" else 1

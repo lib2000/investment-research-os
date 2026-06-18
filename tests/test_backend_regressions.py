@@ -1507,6 +1507,25 @@ class MarketSignalGraphPipelineContractTests(unittest.TestCase):
         self.assertIn("firecrawl_ir", result["errors"][0])
         self.assertTrue(any("earnings_transcript" in error for error in result["errors"]))
 
+    def test_pipeline_contract_reports_duplicate_source_payload_keys(self):
+        from research_os.market_signal_graph_pipeline_contract import build_market_signal_graph_pipeline_contract
+
+        duplicated = {
+            "company": "Planet Labs",
+            "ticker": "PL",
+            "raw_url": "https://investors.planet.com/",
+            "page_title": "Planet Labs Investor Relations",
+            "markdown": "IR material",
+        }
+        result = build_market_signal_graph_pipeline_contract(ir_inputs=[duplicated, duplicated])
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["duplicate_source_keys"])
+        key_types = {item["key_type"] for item in result["duplicate_source_keys"]}
+        self.assertIn("source_platform_external_id", key_types)
+        self.assertIn("source_platform_canonical_hash", key_types)
+        self.assertTrue(any("source_payload_dedup" in error for error in result["errors"]))
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
