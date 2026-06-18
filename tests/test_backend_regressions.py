@@ -4813,6 +4813,32 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
             {"ABSI": (6.4, "saved_portfolio:finnhub")},
         )
 
+    def test_daily_recommendation_tracking_module_builds_and_applies_feedback(self):
+        from research_os import daily_recommendation_tracking
+
+        feedback = daily_recommendation_tracking.daily_recommendation_tracking_feedback(
+            [
+                {
+                    "ticker": "OTLY",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.12},
+                        {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.10},
+                        {"key": "15d", "label": "추천 후 15일", "status": "complete", "price_change_pct": -0.08},
+                    ],
+                }
+            ]
+        )
+        candidate = {"score": 20, "score_penalties": [], "risk_notes": [], "quality_flags": [], "evidence_sources": []}
+
+        daily_recommendation_tracking.apply_daily_recommendation_tracking_feedback(candidate, feedback["OTLY"])
+
+        self.assertEqual(feedback["OTLY"]["penalty_points"], 16)
+        self.assertEqual(feedback["OTLY"]["horizon_penalty_points"], 4)
+        self.assertTrue(candidate["tracking_feedback_profile"]["review_hold"])
+        self.assertTrue(daily_recommendation_tracking.daily_recommendation_candidate_review_hold(candidate))
+        self.assertEqual(candidate["score"], 4)
+        self.assertIn("반복 부진 후보 top3 보류", candidate["quality_flags"])
+
     def test_daily_recommendation_price_lookup_falls_back_to_naver_domestic_basic(self):
         import research_os_main as main
         from research_os.settings import Settings
