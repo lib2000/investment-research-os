@@ -98,3 +98,15 @@ Post-change failures:
 
 Remaining risk:
 - `033500` remains in the top 3 with a weaker but non-zero hit rate; broader exclusion should wait for more replay evidence or a separate rule for horizon-only deterioration.
+
+Iteration 8 - generated-candidate policy eval guard:
+- Bottleneck: the main accuracy eval measures saved historical records, so it could not fail when future candidate generation regressed and re-admitted a severe repeat-underperformer into top 3.
+- Change: added `tools/check_daily_recommendation_candidate_policy.py`, a read-only dry-run guard that builds current candidates and fails if any `tracking_feedback_profile.review_hold` candidate appears in the top slots when enough alternatives exist.
+- Current guard result: `ABSI`, `033500`, `105630` are top 3, and the first warning is `반복 부진 top3 보류: OTLY, 112610`.
+- Result: historical eval score remains `84.74/100`; the improvement loop now has a direct regression check for the new candidate policy.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- The guard validates current generation behavior, not realized future returns; the next score move still depends on new saved recommendations and completed milestones.

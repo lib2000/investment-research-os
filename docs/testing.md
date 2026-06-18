@@ -154,7 +154,10 @@ python tools\check_research_source_store.py --strict
 ```powershell
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
+python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker OTLY --expected-held-ticker 112610
 ```
+
+`check_daily_recommendation_candidate_policy.py`는 추천을 새로 저장하지 않고 현재 후보 생성 정책만 dry-run으로 평가합니다. 반복 부진 후보가 충분한 대체 후보가 있는데도 top 3에 다시 들어오면 실패합니다.
 
 시스템 점검 완료 여부만 빠르게 확인하려면 아래 집중 스모크를 사용합니다.
 

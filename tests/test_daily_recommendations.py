@@ -102,6 +102,44 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["underperforming_tickers"][0]["completed_count"], 2)
         self.assertEqual(details["milestone_breakdown"][0]["key"], "15d")
 
+    def test_candidate_policy_eval_rejects_review_hold_in_top_slots(self):
+        from tools import check_daily_recommendation_candidate_policy as policy_check
+
+        failures, details = policy_check.validate_candidate_policy(
+            {
+                "candidates": [
+                    {
+                        "rank": 1,
+                        "ticker": "WEAK",
+                        "tracking_feedback_profile": {"review_hold": True},
+                    },
+                    {"rank": 2, "ticker": "OK"},
+                ],
+                "warnings": ["반복 부진 top3 보류: OTLY"],
+            },
+            top_limit=3,
+            expected_held_tickers=["OTLY"],
+            require_hold_warning=True,
+        )
+
+        self.assertIn("top3_review_hold: WEAK", failures)
+        self.assertEqual(details["top_candidates"][0]["ticker"], "WEAK")
+
+    def test_candidate_policy_eval_requires_expected_hold_warning(self):
+        from tools import check_daily_recommendation_candidate_policy as policy_check
+
+        failures, _details = policy_check.validate_candidate_policy(
+            {
+                "candidates": [{"rank": 1, "ticker": "OK"}],
+                "warnings": ["반복 부진 top3 보류: OTLY, 112610"],
+            },
+            top_limit=3,
+            expected_held_tickers=["OTLY", "112610"],
+            require_hold_warning=True,
+        )
+
+        self.assertEqual(failures, [])
+
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
             {
