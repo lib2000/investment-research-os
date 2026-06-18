@@ -876,6 +876,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                     "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
                     "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
                     "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
+                    "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS": "0.2",
                     "SUPABASE_URL": "",
                     "SUPABASE_SERVICE_ROLE_KEY": "",
                 }
@@ -924,6 +925,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                     "MARKET_SIGNAL_GRAPH_RPC_URL": "http://127.0.0.1:9/rest/v1/rpc/upsert_external_signal",
                     "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
                     "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "test-service-role-key",
+                    "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS": "0.2",
                     "SUPABASE_URL": "",
                     "SUPABASE_SERVICE_ROLE_KEY": "",
                 }
