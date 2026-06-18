@@ -98,7 +98,7 @@ from research_os.daily_recommendations import (
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
-from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, thesis_impact, thesis_signal_words
+from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -3444,26 +3444,11 @@ def read_naver_market_close_task_log(settings: Settings, limit: int = 20) -> dic
 
 
 def repair_mojibake_log_line(value: str) -> str:
-    text = str(value or "")
-    if not text or not any(marker in text for marker in ("Ã", "Â", "ì", "ê", "ë", "í", "\x80", "\x81")):
-        return text
-    try:
-        repaired = text.encode("latin-1").decode("utf-8")
-    except Exception:
-        return text
-    hangul_count = sum(1 for char in repaired if "\uac00" <= char <= "\ud7a3")
-    original_hangul_count = sum(1 for char in text if "\uac00" <= char <= "\ud7a3")
-    return repaired if hangul_count > original_hangul_count else text
+    return text_repair.repair_mojibake_log_line(value)
 
 
 def repair_mojibake_payload(value):
-    if isinstance(value, str):
-        return repair_mojibake_log_line(value)
-    if isinstance(value, list):
-        return [repair_mojibake_payload(item) for item in value]
-    if isinstance(value, dict):
-        return {key: repair_mojibake_payload(item) for key, item in value.items()}
-    return value
+    return text_repair.repair_mojibake_payload(value)
 
 
 def build_naver_market_close_task_status(settings: Settings, log_limit: int = 20) -> dict:

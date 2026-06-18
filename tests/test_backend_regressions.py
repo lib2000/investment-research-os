@@ -3780,11 +3780,13 @@ class NaverResearchIngestTests(unittest.TestCase):
 
     def test_market_close_task_log_repairs_mojibake(self):
         import research_os_main as main
+        from research_os import text_repair
 
         broken = "title=êµ­ë´ ì£¼ì ë§ê° ìí©"
         repaired = main.repair_mojibake_log_line(broken)
 
         self.assertIn("국내 주식 마감 시황", repaired)
+        self.assertEqual(text_repair.repair_mojibake_log_line(broken), repaired)
 
     def test_recent_weekly_payload_repairs_mojibake(self):
         import research_os_main as main
