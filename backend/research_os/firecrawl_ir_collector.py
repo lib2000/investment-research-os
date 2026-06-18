@@ -261,6 +261,18 @@ def collection_status_from_rpc_result(rpc_result: dict[str, Any] | None) -> str:
     return "skipped"
 
 
+def batch_status_from_counts(status_counts: dict[str, int]) -> str:
+    if status_counts.get("failed", 0):
+        return "failed"
+    if status_counts.get("success", 0):
+        return "success"
+    if status_counts.get("skipped", 0):
+        return "skipped"
+    if status_counts.get("dry_run", 0):
+        return "dry_run"
+    return "success"
+
+
 def build_firecrawl_ir_collection_result(
     item: FirecrawlIrInput | dict[str, Any],
     settings: Any,
@@ -317,13 +329,15 @@ def build_firecrawl_ir_batch_result(
         status_counts[status] = status_counts.get(status, 0) + 1
     failed_count = status_counts.get("failed", 0)
     success_count = status_counts.get("success", 0)
+    skipped_count = status_counts.get("skipped", 0)
     return {
-        "status": "failed" if failed_count else "success",
+        "status": batch_status_from_counts(status_counts),
         "design": DESIGN_NAME,
         "source_platform": SOURCE_PLATFORM,
         "item_count": len(items),
         "success_count": success_count,
         "failed_count": failed_count,
+        "skipped_count": skipped_count,
         "status_counts": status_counts,
         "results": results,
         "checked_at": _utc_now_iso(),

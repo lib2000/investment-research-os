@@ -534,11 +534,16 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["reason"], "supabase_project_paused")
 
     def test_firecrawl_ir_collection_propagates_rpc_failure(self):
-        from research_os.firecrawl_ir_collector import collection_status_from_rpc_result
+        from research_os.firecrawl_ir_collector import batch_status_from_counts, collection_status_from_rpc_result
 
         self.assertEqual(collection_status_from_rpc_result({"status": "success"}), "success")
         self.assertEqual(collection_status_from_rpc_result({"status": "skipped"}), "skipped")
         self.assertEqual(collection_status_from_rpc_result({"status": "failed"}), "failed")
+        self.assertEqual(batch_status_from_counts({"success": 2}), "success")
+        self.assertEqual(batch_status_from_counts({"success": 1, "skipped": 1}), "success")
+        self.assertEqual(batch_status_from_counts({"skipped": 2}), "skipped")
+        self.assertEqual(batch_status_from_counts({"dry_run": 2}), "dry_run")
+        self.assertEqual(batch_status_from_counts({"failed": 1, "success": 1}), "failed")
 
     def test_market_signal_graph_rpc_url_derives_from_supabase_url(self):
         from research_os.settings import _resolve_market_signal_graph_rpc_url
@@ -634,6 +639,33 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["status_counts"]["dry_run"], 1)
         self.assertEqual(result["status_counts"]["failed"], 1)
+
+    def test_firecrawl_ir_batch_result_reports_all_skipped_items(self):
+        from types import SimpleNamespace
+
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_batch_result
+
+        settings = SimpleNamespace(
+            firecrawl_ir_dry_run=False,
+            market_signal_graph_rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+            market_signal_graph_service_role_key="",
+            market_signal_graph_timeout_seconds=1,
+        )
+        result = build_firecrawl_ir_batch_result(
+            [
+                {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+                {"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"},
+            ],
+            settings,
+            dry_run=False,
+        )
+
+        self.assertEqual(result["item_count"], 2)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["success_count"], 0)
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["skipped_count"], 2)
+        self.assertEqual(result["status_counts"]["skipped"], 2)
 
     def test_firecrawl_ir_check_tool_loads_env_registry(self):
         from types import SimpleNamespace
