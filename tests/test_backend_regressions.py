@@ -626,6 +626,23 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         ]:
             self.assertIn(expected, operations_doc)
 
+    def test_operations_docs_describe_openclaw_market_signal_graph_contract(self):
+        operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
+
+        for expected in [
+            "/home/lib2000/market_signal_graph",
+            "run_portfolio_ir_pipeline.sh",
+            "portfolio-ir-pipeline.timer",
+            "source_platform=firecrawl_earnings",
+            "analysis_type=firecrawl_ir_signal_analysis_v2",
+            "source_platform=deepseek_ir_analysis",
+            "brief_type=portfolio_ir",
+            "brief_type=portfolio_health",
+            "portfolio_change_detection_v1",
+            "telegram_brief_sender_v1",
+        ]:
+            self.assertIn(expected, operations_doc)
+
     def test_firecrawl_ir_registry_inputs_support_items_wrappers(self):
         from research_os.firecrawl_ir_collector import normalize_firecrawl_ir_inputs
 
