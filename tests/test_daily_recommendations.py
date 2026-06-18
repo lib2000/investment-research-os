@@ -102,6 +102,47 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["underperforming_tickers"][0]["completed_count"], 2)
         self.assertEqual(details["milestone_breakdown"][0]["key"], "15d")
 
+    def test_accuracy_eval_reports_review_hold_feedback(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        _score, _failures, details = accuracy_eval.score_tracked_outcomes(
+            [
+                {
+                    "ticker": "AAA",
+                    "company_name": "Alpha",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.1},
+                    ],
+                },
+                {
+                    "ticker": "BBB",
+                    "company_name": "Beta",
+                    "tracking_milestones": [
+                        {"key": "7d", "label": "추천 후 1주일", "status": "complete", "price_change_pct": -0.03},
+                    ],
+                },
+            ],
+            tracking_feedback_profiles={
+                "AAA": {
+                    "completed_count": 4,
+                    "hit_rate": 0.0,
+                    "average_change_pct": -0.08,
+                    "penalty_points": 16,
+                    "review_hold": True,
+                },
+                "BBB": {
+                    "completed_count": 2,
+                    "hit_rate": 0.0,
+                    "average_change_pct": -0.03,
+                    "penalty_points": 6,
+                    "review_hold": False,
+                },
+            },
+        )
+
+        self.assertEqual(details["review_hold_tickers"][0]["ticker"], "AAA")
+        self.assertEqual(details["penalized_tickers_without_hold"][0]["ticker"], "BBB")
+
     def test_candidate_policy_eval_rejects_review_hold_in_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 

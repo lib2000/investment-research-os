@@ -157,3 +157,15 @@ Post-change failures:
 
 Remaining risk:
 - The guard remains a future-selection safeguard; realized historical hit rate still needs future recommendations and completed milestones to improve.
+
+Iteration 13 - review-hold coverage diagnostics:
+- Bottleneck: the eval showed low realized hit rate but did not say whether underperforming tickers were already blocked by the current candidate policy or only penalized.
+- Change: `evaluate_daily_recommendation_accuracy.py` now reports `반복 부진 보류 후보` and `감점만 적용 후보` using the same tracking feedback profile that candidate generation applies.
+- Result: score unchanged at `85.24/100`, subscores `latest_quality=80.0`, `tracked_outcomes=5.24`.
+- New diagnostic: held candidates are `112610`, `OTLY`; penalized-without-hold candidates are `003230`, `071050`, `253450`, `033500`.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This is diagnostic-only; policy thresholds should only tighten when the penalized-without-hold group re-enters top slots or has enough completed, severe underperformance evidence.

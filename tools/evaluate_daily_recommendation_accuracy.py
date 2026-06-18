@@ -205,7 +205,10 @@ def score_latest_records(root: Path, latest: list[dict[str, Any]], expected_coun
     return points / max_points * 80.0, failures, {"latest_records": record_summaries}
 
 
-def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[str], dict[str, Any]]:
+def score_tracked_outcomes(
+    records: list[dict[str, Any]],
+    tracking_feedback_profiles: dict[str, dict[str, Any]] | None = None,
+) -> tuple[float, list[str], dict[str, Any]]:
     completed: list[dict[str, Any]] = []
     unavailable = 0
     by_ticker: dict[str, dict[str, Any]] = {}
@@ -312,6 +315,31 @@ def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[s
 
     ticker_breakdown = summarize_bucket(by_ticker)
     milestone_breakdown = summarize_bucket(by_milestone)
+    feedback_rows: list[dict[str, Any]] = []
+    if tracking_feedback_profiles:
+        ticker_labels = {row["key"]: row["label"] for row in ticker_breakdown}
+        for ticker, profile in tracking_feedback_profiles.items():
+            if not isinstance(profile, dict):
+                continue
+            feedback_rows.append(
+                {
+                    "ticker": ticker,
+                    "label": ticker_labels.get(ticker, ticker),
+                    "completed_count": int(profile.get("completed_count") or 0),
+                    "hit_rate": round(float(profile.get("hit_rate") or 0), 4),
+                    "average_change_pct": round(float(profile.get("average_change_pct") or 0), 4),
+                    "penalty_points": int(profile.get("penalty_points") or 0),
+                    "review_hold": bool(profile.get("review_hold")),
+                }
+            )
+    feedback_rows.sort(
+        key=lambda item: (
+            not item["review_hold"],
+            -item["penalty_points"],
+            item["hit_rate"],
+            item["average_change_pct"],
+        )
+    )
     return max(0.0, outcome_points), failures, {
         "completed_count": len(completed),
         "positive_count": positive,
@@ -323,7 +351,30 @@ def score_tracked_outcomes(records: list[dict[str, Any]]) -> tuple[float, list[s
         "price_unavailable_count": unavailable,
         "underperforming_tickers": ticker_breakdown[:8],
         "milestone_breakdown": milestone_breakdown,
+        "review_hold_tickers": [item for item in feedback_rows if item["review_hold"]],
+        "penalized_tickers_without_hold": [item for item in feedback_rows if not item["review_hold"]][:8],
     }
+
+
+def tracking_feedback_profiles(root: Path, records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    try:
+        from research_os.daily_recommendation_tracking import (  # noqa: PLC0415
+            apply_daily_recommendation_tracking_feedback,
+            daily_recommendation_tracking_feedback,
+        )
+    except Exception:
+        return {}
+    profiles: dict[str, dict[str, Any]] = {}
+    for ticker, feedback in daily_recommendation_tracking_feedback(records).items():
+        candidate: dict[str, Any] = {}
+        apply_daily_recommendation_tracking_feedback(candidate, feedback)
+        profile = candidate.get("tracking_feedback_profile")
+        if isinstance(profile, dict):
+            profiles[ticker] = profile
+    return profiles
 
 
 def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_count: int) -> dict[str, Any]:
@@ -332,7 +383,10 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
     records = [item for item in store.get("records", []) if isinstance(item, dict)]
     latest_date, latest = latest_records(records)
     latest_score, latest_failures, latest_details = score_latest_records(root, latest, expected_latest_count)
-    outcome_score, outcome_failures, outcome_details = score_tracked_outcomes(records)
+    outcome_score, outcome_failures, outcome_details = score_tracked_outcomes(
+        records,
+        tracking_feedback_profiles=tracking_feedback_profiles(root, records),
+    )
     score = round(min(100.0, latest_score + outcome_score), 2)
     counts_by_date = Counter(str(record.get("recommendation_date") or "") for record in records)
     return {
@@ -402,6 +456,26 @@ def main() -> int:
                     f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
                     f"avg {item['average_change_pct'] * 100:.1f}%, "
                     f"n={item['completed_count']}"
+                )
+        review_holds = tracked.get("review_hold_tickers") or []
+        if review_holds:
+            print("반복 부진 보류 후보:")
+            for item in review_holds[:5]:
+                print(
+                    "- "
+                    f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"penalty {item['penalty_points']}"
+                )
+        penalized_without_hold = tracked.get("penalized_tickers_without_hold") or []
+        if penalized_without_hold:
+            print("감점만 적용 후보:")
+            for item in penalized_without_hold[:5]:
+                print(
+                    "- "
+                    f"{item['label']}: hit_rate {item['hit_rate']:.2f}, "
+                    f"avg {item['average_change_pct'] * 100:.1f}%, "
+                    f"penalty {item['penalty_points']}"
                 )
         milestones = tracked.get("milestone_breakdown") or []
         if milestones:
