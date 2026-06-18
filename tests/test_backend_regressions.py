@@ -3513,6 +3513,17 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(summary["sample_targets"], ["AAPL", "AI"])
         self.assertIn("매칭 3건", check_research_source_store.format_market_journal_impact(summary))
         self.assertIn("연결률 66.7%", check_research_source_store.format_market_journal_impact(summary))
+        self.assertIn(
+            "설명 같은 원본이라 중복 저장하지 않았습니다.",
+            check_research_source_store.format_market_journal_attempt(
+                {
+                    "status": "skipped_duplicate",
+                    "last_attempt_date": "2026-06-19",
+                    "last_attempt_at": "2026-06-19T08:30:01+09:00",
+                    "last_attempt_message": "같은 원본이라 중복 저장하지 않았습니다.",
+                }
+            ),
+        )
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main

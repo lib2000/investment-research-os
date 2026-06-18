@@ -231,6 +231,16 @@ def format_market_journal_impact(summary: dict[str, Any]) -> str:
     )
 
 
+def format_market_journal_attempt(state: dict[str, Any]) -> str:
+    message = str(state.get("last_attempt_message") or "").strip()
+    return (
+        f"상태 {state.get('status') or '미확인'} | "
+        f"시도일 {state.get('last_attempt_date') or '미확인'} | "
+        f"시각 {state.get('last_attempt_at') or '미확인'} | "
+        f"설명 {message or '없음'}"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -481,8 +491,8 @@ def main() -> int:
     naver_category_summary = ", ".join(f"{name}={count}" for name, count in naver_category_counts.most_common(4))
     print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
     print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 파일 누락 {len(shinhan_missing_files)}개 | 갱신 {shinhan.get('updated_at')}")
-    print(f"마감 시황 자동 시도: 상태 {market_close_status or '미확인'} | 시도일 {market_close_state.get('last_attempt_date') or '미확인'} | 시각 {market_close_state.get('last_attempt_at') or '미확인'}")
-    print(f"텔레그램 미국 시장일지 자동 시도: 상태 {telegram_market_close_status or '미확인'} | 시도일 {telegram_market_close_state.get('last_attempt_date') or '미확인'} | 시각 {telegram_market_close_state.get('last_attempt_at') or '미확인'}")
+    print(f"마감 시황 자동 시도: {format_market_journal_attempt(market_close_state)}")
+    print(f"텔레그램 미국 시장일지 자동 시도: {format_market_journal_attempt(telegram_market_close_state)}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
     market_summary = ", ".join(
         format_market_journal_summary(market, summary)
