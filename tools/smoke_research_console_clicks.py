@@ -1598,6 +1598,9 @@ def run_click_smoke(
                       recentWeeklyEvidenceText.includes("RAG 검색어"),
                     recentWeeklyShowsPublicIrQuality:
                       !recentWeeklyBriefText.includes("공개 IR/SEC") ||
+                      recentWeeklyBriefText.includes("공개 IR/SEC 0건") ||
+                      recentWeeklyBriefText.includes("공개 IR·SEC 0건") ||
+                      recentWeeklyBriefText.includes("연결된 공개 IR/SEC 자료가 없습니다") ||
                       (recentWeeklyBriefText.includes("공개 IR/SEC") &&
                         recentWeeklyBriefText.includes("품질") &&
                         recentWeeklyBriefText.includes("본문 보강")),
