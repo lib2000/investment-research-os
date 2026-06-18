@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -40,6 +42,7 @@ from research_os.daily_recommendations import (
     finalize_daily_recommendation_candidate,
     finalize_daily_recommendation_ranking,
     parse_daily_recommendations_time,
+    saved_portfolio_price_lookup,
     summarize_daily_recommendation_store,
     should_run_daily_recommendations,
     update_recommendation_tracking,
@@ -55,6 +58,51 @@ from research_os.storage_quality import storage_quality_entry_needs_body
 
 
 class DailyRecommendationsTests(unittest.TestCase):
+    def test_accuracy_eval_counts_string_penalties(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        positive, penalty = accuracy_eval.component_points(
+            {
+                "score_components": [{"points": 10}, {"score": 4}],
+                "score_penalties": ["최근 자료 신선도 보강 필요 (-2)", {"points": -3}],
+            }
+        )
+
+        self.assertEqual(positive, 14)
+        self.assertEqual(penalty, 5)
+
+    def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
+        lookup = saved_portfolio_price_lookup(
+            {
+                "portfolios": {
+                    "OLD": {
+                        "holdings": [
+                            {
+                                "ticker": "ABSI",
+                                "current_price": "6.10",
+                                "price_source": "old_provider",
+                                "price_checked_at": "2026-06-17T08:00:00+09:00",
+                            },
+                            {"ticker": "PL", "current_price": None},
+                        ]
+                    },
+                    "NEW": {
+                        "holdings": [
+                            {
+                                "ticker": "ABSI",
+                                "current_price": 6.4,
+                                "price_source": "finnhub",
+                                "price_checked_at": "2026-06-18T06:55:31+09:00",
+                            }
+                        ]
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(lookup["ABSI"], (6.4, "saved_portfolio:finnhub"))
+        self.assertNotIn("PL", lookup)
+
     def test_daily_recommendation_consensus_label_uses_company_or_ticker(self):
         self.assertEqual(
             daily_recommendation_consensus_label({"company_name": "삼양식품"}, "003230"),

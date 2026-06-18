@@ -86,6 +86,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_state_path,
     daily_recommendation_target_key as _daily_recommendation_target_key,
     daily_recommendation_target_label as _daily_recommendation_target_label,
+    saved_portfolio_price_lookup as _saved_portfolio_price_lookup,
     should_run_daily_recommendations,
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
@@ -14503,8 +14504,22 @@ def _daily_recommendation_priority_targets(settings: Settings) -> dict[str, dict
 
 
 def _daily_recommendation_price_lookup(settings: Settings):
+    saved_prices: dict[str, tuple[float, str]] | None = None
+
     def lookup(ticker: str) -> tuple[float | None, str | None]:
-        return latest_provider_price(ticker, settings, force_refresh=True)
+        nonlocal saved_prices
+        price, source = latest_provider_price(ticker, settings, force_refresh=True)
+        if price is not None:
+            return price, source
+        if saved_prices is None:
+            try:
+                saved_prices = _saved_portfolio_price_lookup(read_portfolio_store(settings))
+            except Exception:
+                saved_prices = {}
+        fallback = saved_prices.get(normalize_ticker(ticker))
+        if fallback:
+            return fallback
+        return None, source
 
     return lookup
 
