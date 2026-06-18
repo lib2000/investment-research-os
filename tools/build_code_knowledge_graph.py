@@ -98,6 +98,19 @@ FLOW_DEFINITIONS = {
         "keywords": ["check_backend_module_health", "research_os_main", "requirements", "fastapi", "start-research-backend", "백엔드 실행", "코드 지식 그래프", "구조 지도"],
         "expected_files": ["backend/research_os/code_knowledge.py", "backend/research_os/state_store.py", "backend/requirements.txt", "scripts/start-research-backend.ps1", "tools/check_backend_module_health.py", "tools/check_offline_readiness.py", "docs/structure-map.md"],
     },
+    "market_signal_graph_pipeline": {
+        "label": "Market Signal Graph 수집/분석 pipeline contract",
+        "keywords": ["market_signal_graph_pipeline_contract", "firecrawl_ir_collector_v1", "portfolio_signal_score_v1", "telegram_brief_sender_v1", "Market Signal Graph"],
+        "expected_files": [
+            "backend/research_os/market_signal_graph_pipeline_contract.py",
+            "tools/check_market_signal_graph_pipeline_contract.py",
+            "backend/research_os/firecrawl_ir_collector.py",
+            "backend/research_os/earnings_transcript_collector.py",
+            "backend/research_os/portfolio_signal_score.py",
+            "backend/research_os/portfolio_change_detection.py",
+            "backend/research_os/telegram_brief_sender.py",
+        ],
+    },
 }
 
 

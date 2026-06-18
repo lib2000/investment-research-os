@@ -38,6 +38,7 @@
 - OpenClaw Market Signal Graph 운영 라인: `/home/lib2000/market_signal_graph`의 `run_portfolio_ir_pipeline.sh`는 Firecrawl IR 수집, Firecrawl Earnings 수집, pending signal 조회, DeepSeek 분석, `signal_analyses` 저장, `portfolio_ir` brief, `portfolio_health` score brief까지 9단계로 실행된다. user systemd timer `portfolio-ir-pipeline.timer`는 매일 08:00 KST에 `run_portfolio_ir_pipeline_cron.sh`를 실행하며, secret은 `/home/lib2000/.openclaw/secrets/firecrawl.env`와 `/home/lib2000/.openclaw/secrets/deepseek.env`에서만 읽는다. Investment Research OS 쪽에서는 이 라인을 직접 복제하지 않고 `public.signals`, `public.signal_analyses`, `public.briefs`의 계약을 소비/검증 대상으로 본다.
 - OpenClaw 수집/분석 계약: IR 입력은 `source_platform=firecrawl_ir`, earnings 입력은 `source_platform=firecrawl_earnings`, DeepSeek 분석은 `analysis_type=firecrawl_ir_signal_analysis_v2` 및 `source_platform=deepseek_ir_analysis`로 구분한다. 포트폴리오 brief 저장은 `brief_type=portfolio_ir`, health score 저장은 `brief_type=portfolio_health`, `channel=portfolio`를 사용한다. 현재 운영 기준 health score는 약 6.7이고 강화 종목은 `PL`, `JOBY`, `VRT`, `CHPT`, `ABSI`, 중립 종목은 `OPEN`, `OPTT`, `ADTN`, `RXRX`, `INTC`로 기록되어 있다.
 - OpenClaw 다음 우선순위: `portfolio_change_detection_v1`은 전일 대비 stance/confidence/health score 변화를 추적하고, `telegram_brief_sender_v1`은 08:00 실행 후 Portfolio Health, Top Movers, Watch Items를 텔레그램으로 보낸다. 이후 `earnings_transcript_collector_v1`, SEC/DART 통합 점수화를 붙여 IR+Earnings+SEC+DART 통합 Portfolio Score로 확장한다.
+- Market Signal Graph pipeline contract: `market_signal_graph_pipeline_contract_v1`은 Firecrawl IR payload, earnings transcript payload, IR/Earnings/SEC/DART 통합 점수, portfolio health 변화 감지, Telegram brief dry-run을 하나의 offline contract로 묶는다. 외부 RPC, Firecrawl, DeepSeek, Telegram 전송은 호출하지 않고 shape/count/status drift만 검증한다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 네이버 리서치, 신한 리서치, 마감 시황 시장일지, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다. 이 점검은 마감 시황 자동 수집 시도 상태와 리서치 자동화 Dossier 갱신 상태도 함께 확인하며, 네이버 리서치 저장경로 누락은 기본 허용 0건으로 본다.
 - 네이버 리서치 캐시에 메타데이터와 PDF 링크는 있으나 저장경로만 비어 있으면 삭제하지 않고 `repair_naver_research_cache(..., save_result=True)` 경로로 Markdown/JSON 저장을 보강한다. 복구 후 `python tools\check_research_source_store.py --strict`에서 `저장경로 누락 0개`, `파일 누락 0개`가 나와야 한다.
 - 중복 Dossier 큐 갱신은 `dossier_refresh_queue_status.json`뿐 아니라 `research_automation_status.json`의 상위 `updated_at`과 `last_deduped_dossier_refresh.updated_at`도 함께 갱신해야 한다. 소스 자동화 점검은 저장 성공, 실패 0건, RAG 연결, 뉴스 미승격 0건까지 같이 확인한다.
@@ -77,6 +78,7 @@ python tools\check_portfolio_change_detection.py
 python tools\check_telegram_brief_sender.py
 python tools\check_earnings_transcript_collector.py
 python tools\check_portfolio_signal_score.py
+python tools\check_market_signal_graph_pipeline_contract.py
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary

@@ -1306,6 +1306,44 @@ class PortfolioSignalScoreTests(unittest.TestCase):
         self.assertGreater(normalized["signal_score"], 0)
 
 
+class MarketSignalGraphPipelineContractTests(unittest.TestCase):
+    def test_pipeline_contract_links_collect_score_change_and_telegram(self):
+        from research_os.market_signal_graph_pipeline_contract import build_market_signal_graph_pipeline_contract
+
+        result = build_market_signal_graph_pipeline_contract(telegram_chat_id="dry-run-chat")
+
+        self.assertEqual(result["design"], "market_signal_graph_pipeline_contract_v1")
+        self.assertEqual(result["status"], "success")
+        self.assertIn("firecrawl_ir_collector_v1", result["contracts"])
+        self.assertIn("earnings_transcript_collector_v1", result["contracts"])
+        self.assertIn("portfolio_signal_score_v1", result["contracts"])
+        self.assertIn("portfolio_change_detection_v1", result["contracts"])
+        self.assertIn("telegram_brief_sender_v1", result["contracts"])
+        self.assertEqual(result["source_payload_counts"]["firecrawl_ir"], 2)
+        self.assertEqual(result["source_payload_counts"]["earnings_transcript"], 2)
+        self.assertGreaterEqual(result["summary"]["signal_count"], 6)
+        self.assertGreaterEqual(result["summary"]["ticker_count"], 3)
+        self.assertGreater(result["summary"]["portfolio_score"], 0)
+        self.assertTrue(result["change_detection"]["top_movers"])
+        self.assertTrue(result["telegram"]["chat_id_configured"])
+        self.assertIn("Portfolio Health", result["telegram"]["text"])
+
+    def test_pipeline_contract_reports_payload_validation_errors(self):
+        from research_os.market_signal_graph_pipeline_contract import build_market_signal_graph_pipeline_contract
+
+        result = build_market_signal_graph_pipeline_contract(
+            ir_inputs=[{"company": "Broken", "ticker": "BAD", "raw_url": "not-a-url"}],
+            earnings_inputs=[{"company": "Broken", "ticker": "BAD", "raw_url": "not-a-url"}],
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["source_payload_counts"]["firecrawl_ir"], 0)
+        self.assertEqual(result["source_payload_counts"]["earnings_transcript"], 0)
+        self.assertTrue(result["errors"])
+        self.assertIn("firecrawl_ir", result["errors"][0])
+        self.assertTrue(any("earnings_transcript" in error for error in result["errors"]))
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state

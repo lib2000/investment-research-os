@@ -21,6 +21,7 @@ REQUIRED_FLOW_IDS = {
     "investment_calendar",
     "console_click_regression",
     "backend_module_health",
+    "market_signal_graph_pipeline",
 }
 REQUIRED_NODE_IDS = {
     "file:backend/research_os_main.py",

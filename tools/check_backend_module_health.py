@@ -30,6 +30,7 @@ EXPECTED_MODULES = {
     "investment_calendar.py",
     "llm_bridge_status.py",
     "market_journal.py",
+    "market_signal_graph_pipeline_contract.py",
     "naver_market_close_automation.py",
     "telegram_market_journal.py",
     "telegram_market_close_automation.py",
