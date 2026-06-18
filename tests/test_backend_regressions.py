@@ -4587,6 +4587,47 @@ class DailyRecommendationScoringModuleTests(unittest.TestCase):
         self.assertIn("기준 현재가 미확인", candidate["quality_flags"])
 
 
+class DailyRecommendationProfilesModuleTests(unittest.TestCase):
+    def test_daily_recommendation_profiles_apply_freshness_and_overseas_tracking(self):
+        from types import SimpleNamespace
+
+        from research_os import daily_recommendation_profiles
+
+        candidate = {
+            "ticker": "PL",
+            "company_name": "PL",
+            "currency": "USD",
+            "baseline_price": 5.7,
+            "baseline_price_source": "finnhub",
+            "baseline_price_checked_at": "2026-06-18T08:00:00+09:00",
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": [],
+            "reasons": [],
+        }
+
+        daily_recommendation_profiles.apply_daily_recommendation_freshness_profile(
+            candidate,
+            ticker="PL",
+            verification=SimpleNamespace(company_name="Planet Labs PBC"),
+            profile={"analysis_focus": "위성 데이터 성장성"},
+            freshness={"tone": "warning", "summary": "최근 자료 신선도 확인 필요"},
+        )
+        daily_recommendation_profiles.apply_daily_recommendation_overseas_tracking(candidate)
+        domestic = daily_recommendation_profiles.apply_daily_recommendation_overseas_tracking({"currency": "KRW"})
+
+        self.assertEqual(candidate["company_name"], "Planet Labs PBC")
+        self.assertEqual(candidate["score"], 3)
+        self.assertIn("저장자료 신선도 확인 필요", candidate["quality_flags"])
+        self.assertIn("최근 자료 신선도 보강 필요 (-2)", candidate["score_penalties"])
+        self.assertIn("분석 초점: 위성 데이터 성장성", candidate["reasons"])
+        self.assertTrue(candidate["overseas_tracking"]["needs_fx_conversion"])
+        self.assertEqual(candidate["overseas_tracking"]["price_source"], "finnhub")
+        self.assertFalse(domestic["overseas_tracking"]["needs_fx_conversion"])
+
+
 class DailyRecommendationRecentModuleTests(unittest.TestCase):
     def test_daily_recommendation_recent_module_indexes_and_renders_weekly_evidence(self):
         from research_os import daily_recommendation_recent
