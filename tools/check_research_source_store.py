@@ -117,6 +117,36 @@ def missing_storage_files(root: Path, rows: list[dict[str, Any]]) -> list[str]:
     return missing
 
 
+def normalize_market(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def market_journal_market_summaries(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    summaries: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        market = normalize_market(row.get("market"))
+        if not market:
+            continue
+        summary = summaries.setdefault(
+            market,
+            {
+                "entry_count": 0,
+                "auto_entry_count": 0,
+                "auto_complete_count": 0,
+                "latest_session_date": "",
+            },
+        )
+        summary["entry_count"] += 1
+        session_date = str(row.get("session_date") or "").strip()
+        if session_date > str(summary["latest_session_date"] or ""):
+            summary["latest_session_date"] = session_date
+        if str(row.get("source_origin") or "").strip().lower() != "manual":
+            summary["auto_entry_count"] += 1
+            if all(str(row.get(field) or "").strip() for field in ("source_provider", "source_title")):
+                summary["auto_complete_count"] += 1
+    return dict(sorted(summaries.items()))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -131,7 +161,18 @@ def main() -> int:
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
     parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
+    parser.add_argument(
+        "--required-market-journal-market",
+        action="append",
+        default=None,
+        help="시장일지에 반드시 있어야 하는 시장 코드. 기본값: KR, US",
+    )
     args = parser.parse_args()
+    required_market_journal_markets = [
+        normalize_market(value)
+        for value in (args.required_market_journal_market or ["KR", "US"])
+        if normalize_market(value)
+    ]
 
     root = project_root(Path.cwd())
     system_dir = root / SYSTEM_DIR
@@ -295,6 +336,19 @@ def main() -> int:
         market_journal_age is None or market_journal_age > args.max_market_journal_age_hours,
         "마감 시황 시장일지 최신성 확인 필요",
     )
+    market_journal_by_market = market_journal_market_summaries(market_journal_rows)
+    for market in required_market_journal_markets:
+        summary = market_journal_by_market.get(market, {})
+        add_issue(
+            issues,
+            int(summary.get("entry_count") or 0) < 1,
+            f"마감 시황 시장일지 {market} 저장 항목 누락",
+        )
+        add_issue(
+            issues,
+            int(summary.get("auto_entry_count") or 0) < 1,
+            f"마감 시황 시장일지 {market} 자동 출처 항목 누락",
+        )
 
     print(f"소스 상태 폴더: {system_dir}")
     print(f"KCIF 관련 보고서: {kcif_related}개 | 상태 {kcif.get('source_status')} | 갱신 {kcif.get('updated_at')}")
@@ -321,6 +375,11 @@ def main() -> int:
     print(f"마감 시황 자동 시도: 상태 {market_close_status or '미확인'} | 시도일 {market_close_state.get('last_attempt_date') or '미확인'} | 시각 {market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"텔레그램 미국 시장일지 자동 시도: 상태 {telegram_market_close_status or '미확인'} | 시도일 {telegram_market_close_state.get('last_attempt_date') or '미확인'} | 시각 {telegram_market_close_state.get('last_attempt_at') or '미확인'}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
+    market_summary = ", ".join(
+        f"{market}={summary['entry_count']}개(auto {summary['auto_entry_count']}개, latest {summary['latest_session_date'] or '미확인'})"
+        for market, summary in market_journal_by_market.items()
+    )
+    print(f"마감 시황 시장별 커버리지: {market_summary or '없음'}")
 
     if issues:
         for issue in issues:

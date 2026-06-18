@@ -144,7 +144,7 @@ Windows PATH에 `python`이 없으면 `tools\verify_research_console.ps1`가 프
 python tools\check_research_source_store.py --strict
 ```
 
-`check_research_source_store.py --strict`는 네이버/신한 리서치 캐시의 저장 경로뿐 아니라 실제 Markdown/JSON 파일 존재도 확인합니다.
+`check_research_source_store.py --strict`는 네이버/신한 리서치 캐시의 저장 경로뿐 아니라 실제 Markdown/JSON 파일 존재도 확인합니다. 시장일지는 기본으로 `KR`, `US` 각각의 저장 항목과 자동 출처 항목이 있는지도 확인하며, 출력에 시장별 건수/자동 건수/최신 세션일을 표시합니다.
 
 `check_rag_failure_diagnostics.py --strict`는 활성 리서치 문서가 저장 파일, RAG 색인, 검색 가능한 본문 길이, 자동 분류 근거까지 추천 근거로 쓰기 좋은 상태인지 백엔드 없이 확인합니다.
 

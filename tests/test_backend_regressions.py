@@ -3338,6 +3338,39 @@ class NaverResearchIngestTests(unittest.TestCase):
             )
         )
 
+    def test_research_source_store_summarizes_market_journal_markets(self):
+        from tools import check_research_source_store
+
+        summaries = check_research_source_store.market_journal_market_summaries(
+            [
+                {
+                    "market": "KR",
+                    "session_date": "2026-06-17",
+                    "source_origin": "naver_research_auto",
+                    "source_provider": "naver_finance_research",
+                    "source_title": "국내 주식 마감 시황",
+                },
+                {
+                    "market": "US",
+                    "session_date": "2026-06-16",
+                    "source_origin": "manual",
+                },
+                {
+                    "market": "US",
+                    "session_date": "2026-06-17",
+                    "source_origin": "telegram_auto",
+                    "source_provider": "telegram_ehdwl",
+                    "source_title": "Telegram @ehdwl: 06/17 미 증시",
+                },
+            ]
+        )
+
+        self.assertEqual(summaries["KR"]["entry_count"], 1)
+        self.assertEqual(summaries["KR"]["auto_complete_count"], 1)
+        self.assertEqual(summaries["US"]["entry_count"], 2)
+        self.assertEqual(summaries["US"]["auto_entry_count"], 1)
+        self.assertEqual(summaries["US"]["latest_session_date"], "2026-06-17")
+
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main
         from research_os.settings import Settings
