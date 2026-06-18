@@ -580,6 +580,18 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("MARKET_SIGNAL_GRAPH_ENABLED=false", env_example)
         self.assertIn("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY=", env_example)
 
+    def test_firecrawl_ir_operations_docs_describe_submit_status_contract(self):
+        operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
+
+        for expected in [
+            "--submit",
+            "exit 0",
+            "exit 1",
+            "`skipped`/`failed`",
+            "batch_counts: success=N failed=N skipped=N dry_run=N",
+        ]:
+            self.assertIn(expected, operations_doc)
+
     def test_firecrawl_ir_registry_inputs_support_items_wrappers(self):
         from research_os.firecrawl_ir_collector import normalize_firecrawl_ir_inputs
 
