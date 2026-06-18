@@ -725,6 +725,30 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(saved["status"], "success")
         self.assertEqual(saved["payload"]["ticker"], "AAPL")
 
+    def test_firecrawl_ir_check_tool_summarizes_batch_payloads(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        summary = tool._payload_summary(
+            {
+                "index": 2,
+                "payload": {
+                    "url": "https://investor.apple.com/",
+                    "external_id": "a" * 64,
+                    "metadata": {"ticker": "AAPL", "company": "Apple"},
+                },
+                "errors": [],
+            }
+        )
+        failed = tool._payload_summary({"index": 3, "payload": None, "errors": ["bad url"]})
+
+        self.assertEqual(summary["index"], 2)
+        self.assertEqual(summary["ticker"], "AAPL")
+        self.assertEqual(summary["company"], "Apple")
+        self.assertEqual(summary["external_id_prefix"], "a" * 12)
+        self.assertEqual(summary["status"], "valid")
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["errors"], ["bad url"])
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):

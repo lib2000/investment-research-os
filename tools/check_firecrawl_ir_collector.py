@@ -123,6 +123,21 @@ def _write_output_json(result: dict, output_path: Path) -> None:
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _payload_summary(payload_result: dict) -> dict:
+    payload = payload_result.get("payload") or {}
+    metadata = payload.get("metadata") or {}
+    errors = payload_result.get("errors") or []
+    return {
+        "index": payload_result.get("index"),
+        "ticker": metadata.get("ticker") or "",
+        "company": metadata.get("company") or "",
+        "url": payload.get("url") or "",
+        "external_id_prefix": str(payload.get("external_id") or "")[:12],
+        "status": "failed" if errors else "valid",
+        "errors": errors,
+    }
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -165,6 +180,7 @@ def main() -> int:
         "dry_run": not args.submit,
         "payload": payload_results[0]["payload"] if len(payload_results) == 1 else None,
         "payloads": payload_results,
+        "payload_summaries": [_payload_summary(payload_result) for payload_result in payload_results],
         "errors": errors,
     }
     if args.submit:
@@ -197,6 +213,14 @@ def main() -> int:
             print(f"- source_platform: {payload['source_platform']}")
             print(f"- external_id: {payload['external_id']}")
             print(f"- canonical_hash: {payload['canonical_hash']}")
+        if result["payload_summaries"]:
+            print("- payload_summaries:")
+            for summary in result["payload_summaries"]:
+                label = f"{summary['ticker']} {summary['company']}".strip()
+                print(
+                    f"  {summary['index']}. {summary['status']} | {label} | "
+                    f"{summary['url']} | external_id={summary['external_id_prefix']}"
+                )
         print(f"- firecrawl_ir_enabled: {bool(settings.firecrawl_ir_enabled)}")
         print(f"- firecrawl_ir_dry_run: {bool(settings.firecrawl_ir_dry_run)}")
         print(f"- rpc_enabled: {rpc_enabled}")
