@@ -169,3 +169,14 @@ Post-change failures:
 
 Remaining risk:
 - This is diagnostic-only; policy thresholds should only tighten when the penalized-without-hold group re-enters top slots or has enough completed, severe underperformance evidence.
+
+Iteration 14 - prevent new no-op RAG synthesis saves:
+- Bottleneck: no-op RAG synthesis entries with `source_count=0` and `candidate_count=0` were already skipped by readiness checks, but new empty searches could still create storage/RAG artifacts.
+- Change: `rag_query_synthesis_storage.save_rag_query_synthesis_result` now returns a skipped result with `skip_reason=no_candidate_documents` before writing markdown, RAG documents, or thesis snapshots when the synthesis has no sources and no candidates.
+- Result: focused storage tests pass, `check_rag_synthesis_store.py --require-latest-rag` remains normal while reporting 16 legacy no-op syntheses as source-count skipped, and the offline console verification bundle passes with 365 backend regression tests.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- This prevents new empty syntheses from being saved, but it does not rewrite or delete existing vault entries.

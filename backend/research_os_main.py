@@ -12275,6 +12275,8 @@ def synthesize_rag_memory_search_results(
     storage = None
     rag_document = None
     thesis_snapshot = None
+    storage_skipped = False
+    storage_skip_reason = ""
     if save_result:
         saved_result = rag_query_synthesis_storage.save_rag_query_synthesis_result(
             _rag_query_synthesis_storage_runtime(),
@@ -12285,12 +12287,16 @@ def synthesize_rag_memory_search_results(
         storage = saved_result["storage"]
         rag_document = saved_result["rag_document"]
         thesis_snapshot = saved_result["thesis_snapshot"]
+        storage_skipped = bool(saved_result.get("skipped"))
+        storage_skip_reason = str(saved_result.get("skip_reason") or "")
 
     return {
         "status": "success",
         "module": "rag_query_synthesis",
         "query": query,
         "payload": payload,
+        "storage_skipped": storage_skipped,
+        "storage_skip_reason": storage_skip_reason,
         "storage": storage.model_dump(mode="json") if storage else None,
         "rag_document": rag_document,
         "thesis_snapshot": thesis_snapshot,

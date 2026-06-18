@@ -33,8 +33,26 @@ def build_rag_query_synthesis_manifest_extra(*, query: str, payload: dict) -> di
     }
 
 
+def rag_query_synthesis_is_noop(payload: dict) -> bool:
+    try:
+        source_count = int(payload.get("source_count") or 0)
+        candidate_count = int(payload.get("candidate_count") or 0)
+    except (TypeError, ValueError):
+        return False
+    return source_count == 0 and candidate_count == 0
+
+
 def save_rag_query_synthesis_result(runtime, *, vault_dir, query: str, payload: dict) -> dict:
     storage_key = runtime.rag_synthesis_storage_key(payload["source_documents"])
+    if rag_query_synthesis_is_noop(payload):
+        return {
+            "storage_key": storage_key,
+            "storage": None,
+            "rag_document": None,
+            "thesis_snapshot": None,
+            "skipped": True,
+            "skip_reason": "no_candidate_documents",
+        }
     storage_date = runtime.current_storage_date()
     thesis = None
     watch_items = []

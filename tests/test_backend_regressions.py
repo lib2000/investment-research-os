@@ -8996,6 +8996,55 @@ class RagQuerySynthesisStorageTests(unittest.TestCase):
         self.assertEqual(thesis_calls[0]["source_entry"]["date"], "2026-06-13")
         self.assertEqual(thesis_calls[0]["confidence"], 0.86)
 
+    def test_rag_query_synthesis_storage_skips_noop_payload(self):
+        from research_os import rag_query_synthesis_storage
+
+        def fail_if_called(**kwargs):
+            raise AssertionError(f"no-op RAG synthesis should not save: {kwargs}")
+
+        runtime = SimpleNamespace(
+            build_rag_query_synthesis_thesis=fail_if_called,
+            current_storage_date=lambda: date(2026, 6, 13),
+            rag_synthesis_storage_key=lambda documents: "SEARCH",
+            read_manifest=fail_if_called,
+            render_rag_query_synthesis_markdown=fail_if_called,
+            save_research_markdown=fail_if_called,
+            ticker_company_name=lambda ticker: "검색",
+            ticker_watch_kpis=lambda ticker: [],
+            upsert_research_memory_document=fail_if_called,
+            upsert_ticker_thesis_snapshot=fail_if_called,
+        )
+        payload = {
+            "date": "2026-06-13",
+            "summary": "검색 후보가 없습니다.",
+            "source_documents": [],
+            "source_count": 0,
+            "candidate_count": 0,
+            "grouped_count": 0,
+            "confidence": 0.0,
+            "tags": [],
+            "tickers": [],
+            "consensus_facts": [],
+            "bull_thesis": [],
+            "bear_thesis": [],
+            "cruxes": [],
+            "observables": [],
+        }
+
+        result = rag_query_synthesis_storage.save_rag_query_synthesis_result(
+            runtime,
+            vault_dir=PROJECT_ROOT / ".test-tmp" / "rag_query_synthesis_storage_noop",
+            query="없는 검색어",
+            payload=payload,
+        )
+
+        self.assertEqual(result["storage_key"], "SEARCH")
+        self.assertIsNone(result["storage"])
+        self.assertIsNone(result["rag_document"])
+        self.assertIsNone(result["thesis_snapshot"])
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["skip_reason"], "no_candidate_documents")
+
 
 class DartFilingStorageTests(unittest.TestCase):
     def test_dart_filing_storage_persists_manifest_and_rag(self):
