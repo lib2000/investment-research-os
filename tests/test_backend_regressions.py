@@ -4499,6 +4499,30 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertTrue(daily_recommendation_candidates.daily_recommendation_candidate_is_valid("003230", "삼양식품"))
         self.assertFalse(daily_recommendation_candidates.daily_recommendation_candidate_is_valid("123", "삼양식품"))
 
+    def test_daily_recommendation_candidates_finalize_score_explanation(self):
+        from research_os import daily_recommendation_candidates
+
+        candidate = {
+            "score": 11,
+            "reasons": [" 이유 ", "이유", ""],
+            "evidence_sources": [" 근거 "],
+            "risk_notes": [" 리스크 "],
+            "score_penalties": ["현재가 미확인 (-2)", "현재가 미확인 (-2)"],
+            "quality_flags": [" 점검 "],
+            "score_components": [{"label": "리포트", "points": 8}, {"label": "현재가", "points": 5}, {"points": 99}],
+            "evidence_documents": [{"title": "문서", "source_relative_path": "research_vault/003230/doc.md"}],
+        }
+
+        finalized = daily_recommendation_candidates.finalize_daily_recommendation_candidate(candidate)
+
+        self.assertIs(finalized, candidate)
+        self.assertEqual(candidate["reasons"], ["이유"])
+        self.assertEqual(candidate["score_penalties"], ["현재가 미확인 (-2)"])
+        self.assertEqual(candidate["score_explanation"]["positive_points"], 13)
+        self.assertEqual(candidate["score_explanation"]["penalty_points"], 2)
+        self.assertEqual(candidate["score_explanation"]["top_component"]["label"], "리포트")
+        self.assertEqual(candidate["evidence_documents"][0]["citation_label"], "근거 문서")
+
 
 class DailyRecommendationQualityModuleTests(unittest.TestCase):
     def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):

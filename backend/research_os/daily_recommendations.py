@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from pathlib import Path
-from re import search
 from typing import Any, Callable
 
 from research_os import daily_recommendation_candidates
@@ -344,47 +343,7 @@ def unique_text_items(values: list | tuple | None, limit: int) -> list[str]:
 
 
 def finalize_daily_recommendation_candidate(candidate: dict) -> dict:
-    """Normalize recommendation reasons, evidence, risks, and score explanation."""
-    if not candidate.get("reasons"):
-        candidate.setdefault("reasons", []).append("보유/관심목록과 저장 리서치에 포함된 일일 점검 후보입니다.")
-    candidate["reasons"] = unique_text_items(candidate.get("reasons"), 6)
-    candidate["evidence_sources"] = unique_text_items(candidate.get("evidence_sources"), 8)
-    candidate["evidence_documents"] = normalize_evidence_documents(candidate.get("evidence_documents"))
-    candidate["risk_notes"] = unique_text_items(candidate.get("risk_notes"), 5)
-    candidate["score_penalties"] = unique_text_items(candidate.get("score_penalties"), 6)
-    candidate["quality_flags"] = unique_text_items(candidate.get("quality_flags"), 6)
-    score_components = [
-        component
-        for component in candidate.get("score_components", [])
-        if isinstance(component, dict) and str(component.get("label") or "").strip()
-    ]
-    candidate["score_components"] = score_components
-    positive_points = sum(int(component.get("points") or 0) for component in score_components)
-    penalty_points = sum(
-        int(match.group(1))
-        for item in candidate.get("score_penalties", [])
-        for match in [search(r"\(-(\d+)\)", str(item))]
-        if match
-    )
-    if positive_points:
-        candidate["score_explanation"] = {
-            "positive_points": positive_points,
-            "penalty_points": penalty_points,
-            "final_score": int(candidate.get("score") or 0),
-            "top_component": max(
-                score_components,
-                key=lambda component: int(component.get("points") or 0),
-            ),
-            "component_weights": [
-                {
-                    "label": component.get("label"),
-                    "points": int(component.get("points") or 0),
-                    "weight_pct": round(int(component.get("points") or 0) / positive_points * 100, 1),
-                }
-                for component in score_components[:8]
-            ],
-        }
-    return candidate
+    return daily_recommendation_candidates.finalize_daily_recommendation_candidate(candidate)
 
 
 def build_tracking_milestones(recommendation_date: date) -> list[dict]:
