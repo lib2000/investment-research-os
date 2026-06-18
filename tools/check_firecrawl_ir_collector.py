@@ -92,6 +92,19 @@ def _validate_payload(payload: dict) -> list[str]:
     return errors
 
 
+def _rpc_submit_readiness_errors(settings) -> list[str]:
+    errors: list[str] = []
+    if not getattr(settings, "firecrawl_ir_enabled", False):
+        errors.append("FIRECRAWL_IR_ENABLED must be true for --submit")
+    if not getattr(settings, "market_signal_graph_enabled", False):
+        errors.append("MARKET_SIGNAL_GRAPH_ENABLED must be true for --submit")
+    if not getattr(settings, "market_signal_graph_rpc_url", ""):
+        errors.append("MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL must be configured for --submit")
+    if not getattr(settings, "market_signal_graph_service_role_key", ""):
+        errors.append("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY must be configured for --submit")
+    return errors
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -109,6 +122,8 @@ def main() -> int:
             errors.append(f"item {index}: {exc}")
 
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
+    submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
+    errors.extend(submit_readiness_errors)
     result = {
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
@@ -123,11 +138,14 @@ def main() -> int:
         "errors": errors,
     }
     if args.submit:
-        if not rpc_enabled:
+        if submit_readiness_errors:
             result["rpc"] = {
                 "status": "skipped",
-                "reason": "FIRECRAWL_IR_ENABLED and MARKET_SIGNAL_GRAPH_ENABLED must both be true",
+                "reason": "rpc_not_ready",
+                "readiness_errors": submit_readiness_errors,
             }
+        elif errors:
+            result["rpc"] = {"status": "skipped", "reason": "payload_validation_failed"}
         else:
             if len(items) == 1:
                 result["rpc"] = build_firecrawl_ir_collection_result(items[0], settings, dry_run=False).get("rpc")

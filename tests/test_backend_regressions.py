@@ -560,6 +560,31 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["ticker"], "AAPL")
 
+    def test_firecrawl_ir_check_tool_requires_rpc_config_for_submit(self):
+        from types import SimpleNamespace
+
+        tool = load_firecrawl_ir_check_tool()
+
+        missing = tool._rpc_submit_readiness_errors(
+            SimpleNamespace(
+                firecrawl_ir_enabled=False,
+                market_signal_graph_enabled=False,
+                market_signal_graph_rpc_url="",
+                market_signal_graph_service_role_key="",
+            )
+        )
+        ready = tool._rpc_submit_readiness_errors(
+            SimpleNamespace(
+                firecrawl_ir_enabled=True,
+                market_signal_graph_enabled=True,
+                market_signal_graph_rpc_url="https://example.supabase.co/rest/v1/rpc/upsert_external_signal",
+                market_signal_graph_service_role_key="secret",
+            )
+        )
+
+        self.assertEqual(len(missing), 4)
+        self.assertEqual(ready, [])
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
