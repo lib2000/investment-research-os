@@ -41,6 +41,7 @@ EXPECTED_MODULES = {
     "portfolio_change_detection.py",
     "portfolio_signal_score.py",
     "portfolio_analysis_coverage.py",
+    "portfolio_brief_contract.py",
     "portfolio_import.py",
     "portfolio_performance.py",
     "portfolio_store.py",

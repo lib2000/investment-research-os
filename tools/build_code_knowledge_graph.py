@@ -100,7 +100,7 @@ FLOW_DEFINITIONS = {
     },
     "market_signal_graph_pipeline": {
         "label": "Market Signal Graph 수집/분석 pipeline contract",
-        "keywords": ["market_signal_graph_pipeline_contract", "firecrawl_ir_collector_v1", "firecrawl_earnings_collector_v1", "deepseek_ir_analysis_contract_v1", "portfolio_signal_score_v1", "telegram_brief_sender_v1", "Market Signal Graph"],
+        "keywords": ["market_signal_graph_pipeline_contract", "firecrawl_ir_collector_v1", "firecrawl_earnings_collector_v1", "deepseek_ir_analysis_contract_v1", "portfolio_brief_contract_v1", "portfolio_signal_score_v1", "telegram_brief_sender_v1", "Market Signal Graph"],
         "expected_files": [
             "backend/research_os/market_signal_graph_pipeline_contract.py",
             "tools/check_market_signal_graph_pipeline_contract.py",
@@ -109,6 +109,8 @@ FLOW_DEFINITIONS = {
             "backend/research_os/earnings_transcript_collector.py",
             "backend/research_os/deepseek_ir_analysis.py",
             "tools/check_deepseek_ir_analysis.py",
+            "backend/research_os/portfolio_brief_contract.py",
+            "tools/check_portfolio_brief_contract.py",
             "backend/research_os/portfolio_signal_score.py",
             "backend/research_os/portfolio_change_detection.py",
             "backend/research_os/telegram_brief_sender.py",

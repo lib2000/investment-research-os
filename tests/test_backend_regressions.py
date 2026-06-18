@@ -1380,6 +1380,44 @@ class DeepSeekIrAnalysisTests(unittest.TestCase):
         self.assertIn("requires signal", result["results"][0]["errors"][0])
 
 
+class PortfolioBriefContractTests(unittest.TestCase):
+    def test_portfolio_brief_contract_builds_ir_and_health_payloads(self):
+        from research_os.deepseek_ir_analysis import build_deepseek_ir_analysis_payload
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
+        from research_os.portfolio_brief_contract import build_portfolio_brief_batch_result
+        from research_os.portfolio_signal_score import build_portfolio_signal_scores
+
+        signal = build_firecrawl_ir_signal_payload(
+            {
+                "company": "Planet Labs",
+                "ticker": "PL",
+                "raw_url": "https://investors.planet.com/",
+                "page_title": "Planet Labs Investor Relations",
+                "markdown": "IR material",
+            }
+        )
+        analysis = build_deepseek_ir_analysis_payload(
+            signal,
+            {"stance": "positive", "score": 7.4, "confidence": 0.82, "summary": "Constructive IR read-through."},
+        )
+        score_result = build_portfolio_signal_scores([analysis])
+        result = build_portfolio_brief_batch_result(
+            analysis_payloads=[analysis],
+            score_result=score_result,
+            as_of="2026-06-19T08:00:00+09:00",
+        )
+
+        self.assertEqual(result["design"], "portfolio_brief_contract_v1")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["brief_types"], ["portfolio_ir", "portfolio_health"])
+        by_type = {brief["brief_type"]: brief for brief in result["briefs"]}
+        self.assertEqual(by_type["portfolio_ir"]["channel"], "portfolio")
+        self.assertEqual(by_type["portfolio_health"]["channel"], "portfolio")
+        self.assertEqual(by_type["portfolio_ir"]["content"]["items"][0]["ticker"], "PL")
+        self.assertEqual(by_type["portfolio_health"]["content"]["holdings"][0]["ticker"], "PL")
+        self.assertEqual(by_type["portfolio_ir"]["metadata"]["collector_design"], "portfolio_brief_contract_v1")
+
+
 class PortfolioSignalScoreTests(unittest.TestCase):
     def test_portfolio_signal_score_integrates_ir_earnings_sec_and_dart(self):
         from research_os.portfolio_signal_score import build_portfolio_signal_scores
@@ -1439,12 +1477,14 @@ class MarketSignalGraphPipelineContractTests(unittest.TestCase):
         self.assertIn("earnings_transcript_collector_v1", result["contracts"])
         self.assertIn("deepseek_ir_analysis_contract_v1", result["contracts"])
         self.assertIn("portfolio_signal_score_v1", result["contracts"])
+        self.assertIn("portfolio_brief_contract_v1", result["contracts"])
         self.assertIn("portfolio_change_detection_v1", result["contracts"])
         self.assertIn("telegram_brief_sender_v1", result["contracts"])
         self.assertEqual(result["source_payload_counts"]["firecrawl_ir"], 2)
         self.assertEqual(result["source_payload_counts"]["firecrawl_earnings"], 2)
         self.assertEqual(result["source_payload_counts"]["earnings_transcript"], 2)
         self.assertEqual(result["source_payload_counts"]["deepseek_ir_analysis"], 2)
+        self.assertEqual(result["source_payload_counts"]["portfolio_briefs"], 2)
         self.assertGreaterEqual(result["summary"]["signal_count"], 10)
         self.assertGreaterEqual(result["summary"]["ticker_count"], 3)
         self.assertGreater(result["summary"]["portfolio_score"], 0)

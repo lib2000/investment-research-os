@@ -24,6 +24,10 @@ from research_os.portfolio_change_detection import (
     DESIGN_NAME as PORTFOLIO_CHANGE_DESIGN,
     detect_portfolio_changes,
 )
+from research_os.portfolio_brief_contract import (
+    DESIGN_NAME as PORTFOLIO_BRIEF_DESIGN,
+    build_portfolio_brief_batch_result,
+)
 from research_os.portfolio_signal_score import (
     DESIGN_NAME as PORTFOLIO_SIGNAL_SCORE_DESIGN,
     build_portfolio_signal_scores,
@@ -282,7 +286,19 @@ def build_market_signal_graph_pipeline_contract(
     if score_result.get("status") != "success":
         errors.append("portfolio_signal_score: scoring failed")
 
-    current_health_brief = build_portfolio_health_brief_from_scores(score_result, as_of=current_as_of)
+    brief_batch = build_portfolio_brief_batch_result(
+        analysis_payloads=deepseek_payloads,
+        score_result=score_result,
+        as_of=current_as_of,
+    )
+    if brief_batch.get("status") != "success":
+        errors.append("portfolio_brief_contract: brief payload generation failed")
+    health_briefs = [
+        brief
+        for brief in brief_batch.get("briefs", [])
+        if isinstance(brief, dict) and brief.get("brief_type") == "portfolio_health"
+    ]
+    current_health_brief = health_briefs[0] if health_briefs else build_portfolio_health_brief_from_scores(score_result, as_of=current_as_of)
     change_result = detect_portfolio_changes(previous_health_brief or sample_previous_portfolio_health_brief(), current_health_brief)
     if change_result.get("status") != "success":
         errors.append("portfolio_change_detection: change detection failed")
@@ -300,6 +316,7 @@ def build_market_signal_graph_pipeline_contract(
             EARNINGS_TRANSCRIPT_DESIGN,
             DEEPSEEK_IR_ANALYSIS_DESIGN,
             PORTFOLIO_SIGNAL_SCORE_DESIGN,
+            PORTFOLIO_BRIEF_DESIGN,
             PORTFOLIO_CHANGE_DESIGN,
             TELEGRAM_BRIEF_DESIGN,
         ],
@@ -309,9 +326,11 @@ def build_market_signal_graph_pipeline_contract(
             "firecrawl_earnings": len(firecrawl_earnings_payloads),
             "earnings_transcript": len(earnings_payloads),
             "deepseek_ir_analysis": len(deepseek_payloads),
+            "portfolio_briefs": len(brief_batch.get("briefs") or []),
         },
         "deepseek_analysis": deepseek_batch,
         "score": score_result,
+        "briefs": brief_batch,
         "current_health_brief": current_health_brief,
         "change_detection": change_result,
         "telegram": telegram_payload,
