@@ -1066,6 +1066,72 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(payload_results[1]["errors"], errors)
 
 
+class PortfolioChangeDetectionTests(unittest.TestCase):
+    def test_portfolio_change_detection_tracks_health_stance_and_confidence_changes(self):
+        from research_os.portfolio_change_detection import detect_portfolio_changes
+
+        previous = {
+            "brief_type": "portfolio_health",
+            "channel": "portfolio",
+            "created_at": "2026-06-17T08:00:00+09:00",
+            "content": {
+                "total_score": 6.4,
+                "holdings": [
+                    {"ticker": "PL", "company": "Planet Labs", "stance": "neutral", "confidence": 0.54, "score": 6.0},
+                    {"ticker": "JOBY", "company": "Joby Aviation", "stance": "positive", "confidence": 0.72, "score": 7.2},
+                    {"ticker": "INTC", "company": "Intel", "stance": "neutral", "confidence": 0.44, "score": 5.7},
+                ],
+            },
+        }
+        current = {
+            "brief_type": "portfolio_health",
+            "channel": "portfolio",
+            "created_at": "2026-06-18T08:00:00+09:00",
+            "content": {
+                "health": {"total_score": 6.9},
+                "holdings": [
+                    {"ticker": "PL", "company": "Planet Labs", "stance": "positive", "confidence": 0.78, "score": 7.1},
+                    {"ticker": "JOBY", "company": "Joby Aviation", "stance": "risk", "confidence": 0.58, "score": 6.4},
+                    {"ticker": "ABSI", "company": "Absci", "stance": "positive", "confidence": 0.62, "score": 6.8},
+                ],
+            },
+        }
+
+        result = detect_portfolio_changes(previous, current)
+
+        self.assertEqual(result["design"], "portfolio_change_detection_v1")
+        self.assertEqual(result["health_score"]["delta"], 0.5)
+        self.assertEqual(result["health_score"]["direction"], "up")
+        self.assertEqual(result["change_counts"]["changed_count"], 4)
+        self.assertEqual(result["change_counts"]["stance_changed_count"], 2)
+        self.assertEqual(result["change_counts"]["watch_item_count"], 2)
+        by_ticker = {item["ticker"]: item for item in result["ticker_changes"]}
+        self.assertEqual(by_ticker["PL"]["stance_direction"], "improved")
+        self.assertIn("confidence_changed", by_ticker["PL"]["event_types"])
+        self.assertEqual(by_ticker["JOBY"]["stance_direction"], "weakened")
+        self.assertTrue(by_ticker["JOBY"]["watch_item"])
+        self.assertIn("added", by_ticker["ABSI"]["event_types"])
+        self.assertIn("removed", by_ticker["INTC"]["event_types"])
+
+    def test_portfolio_change_detection_accepts_payload_level_briefs(self):
+        from research_os.portfolio_change_detection import normalize_portfolio_health_brief
+
+        result = normalize_portfolio_health_brief(
+            {
+                "as_of": "2026-06-18",
+                "score": 6.7,
+                "items": [
+                    {"symbol": "VRT", "name": "Vertiv", "rating": "강화", "confidence_score": "0.81"},
+                ],
+            }
+        )
+
+        self.assertEqual(result["brief_type"], "portfolio_health")
+        self.assertEqual(result["total_score"], 6.7)
+        self.assertEqual(result["items"]["VRT"]["stance"], "강화")
+        self.assertEqual(result["items"]["VRT"]["confidence"], 0.81)
+
+
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
         from research_os.portfolio_analysis_coverage import portfolio_analysis_module_state

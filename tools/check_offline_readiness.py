@@ -63,6 +63,7 @@ CHECKS = [
     ("최근 1주 자료/추천 근거", ["tools/check_recent_weekly_brief.py", "--strict"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
+    ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
     ("자동 분류 태그/RAG 품질", ["tools/check_classification_quality.py", "--strict"]),
     ("저장/RAG 실패 진단", ["tools/check_rag_failure_diagnostics.py", "--strict"]),

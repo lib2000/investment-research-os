@@ -73,6 +73,7 @@ python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecraw
 python tools\check_firecrawl_ir_collector.py --input-json docs\examples\firecrawl_ir_registry.sample.json --output-json output\firecrawl-ir-payloads.json
 python tools\check_firecrawl_ir_collector.py --use-env-registry
 python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rpc-ready
+python tools\check_portfolio_change_detection.py
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\build_code_knowledge_graph.py --print-summary

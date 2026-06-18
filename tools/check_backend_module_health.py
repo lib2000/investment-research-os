@@ -33,6 +33,7 @@ EXPECTED_MODULES = {
     "telegram_market_journal.py",
     "telegram_market_close_automation.py",
     "models.py",
+    "portfolio_change_detection.py",
     "portfolio_analysis_coverage.py",
     "portfolio_import.py",
     "portfolio_performance.py",
