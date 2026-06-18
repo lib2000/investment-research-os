@@ -1,10 +1,8 @@
-import re
-
 import httpx
 
 from research_os import provider_usage
 from research_os import data_provider_status_messages
-from research_os.models import DataSourceType, InjectedDataPoint
+from research_os.models import InjectedDataPoint
 from research_os.settings import Settings
 from research_os.data_provider_core import (
     CompositeFinancialDataProvider,
@@ -30,11 +28,8 @@ from research_os.data_provider_status import (
 )
 from research_os.data_provider_utils import (
     _first_value,
-    _is_configured_secret,
-    _parse_float_value,
-    _provider_now,
-    _safe_provider_error,
 )
+from research_os.alpha_vantage_data_provider import AlphaVantageSupplementalDataProvider
 from research_os.finnhub_data_provider import (
     FinnhubClient,
     FinnhubMarketDataProvider,
@@ -68,12 +63,12 @@ from research_os.kis_data_provider import (
     KisClient,
     KisOverseasMarketDataProvider,
     _kis_candidate_exchange_codes,
-    _looks_like_korean_security_code,
 )
 from research_os.opendart_data_provider import (
     OpenDartClient,
     OpenDartFinancialDataProvider,
 )
+from research_os.tiingo_data_provider import TiingoMarketDataProvider
 from research_os.web_search_data_provider import (
     BraveSupplementalDataProvider,
     TavilySupplementalDataProvider,
@@ -101,102 +96,6 @@ def _consume_external_provider_quota(
         units=units,
         unit_label=unit_label,
     )
-
-
-class TiingoMarketDataProvider(MarketDataProvider):
-    def __init__(self, settings: Settings) -> None:
-        self.api_key = settings.tiingo_api_key.strip()
-        self.base_url = settings.tiingo_base_url.rstrip("/")
-        self.timeout_seconds = settings.tiingo_timeout_seconds
-
-    @property
-    def is_configured(self) -> bool:
-        return _is_configured_secret(self.api_key)
-
-    def fetch_market_snapshot(self, ticker: str) -> list[InjectedDataPoint]:
-        if _looks_like_korean_security_code(ticker) or not self.is_configured:
-            return []
-        try:
-            response = httpx.get(
-                f"{self.base_url}/tiingo/daily/{ticker.upper()}/prices",
-                params={"token": self.api_key},
-                timeout=self.timeout_seconds,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, list) or not payload:
-                return []
-            quote = payload[0]
-            return [
-                InjectedDataPoint(
-                    source_type=DataSourceType.MARKET_PRICE,
-                    label="tiingo_last_price",
-                    value=str(quote.get("close") or "n/a"),
-                    as_of=str(quote.get("date") or _provider_now()),
-                    source_url=f"{self.base_url}/tiingo/daily/{ticker.upper()}/prices",
-                    confidence=0.78,
-                )
-            ]
-        except Exception as exc:
-            return [
-                InjectedDataPoint(
-                    source_type=DataSourceType.OTHER,
-                    label="tiingo_market_provider_warning",
-                    value=f"Tiingo 가격 데이터 호출 실패: {_safe_provider_error(exc)}",
-                    as_of=_provider_now(),
-                    confidence=0.5,
-                )
-            ]
-
-
-class AlphaVantageSupplementalDataProvider(SupplementalDataProvider):
-    def __init__(self, settings: Settings) -> None:
-        self.api_key = settings.alpha_vantage_api_key.strip()
-        self.base_url = settings.alpha_vantage_base_url
-        self.timeout_seconds = settings.alpha_vantage_timeout_seconds
-
-    @property
-    def is_configured(self) -> bool:
-        return _is_configured_secret(self.api_key)
-
-    def fetch_supplemental_snapshot(self, ticker: str) -> list[InjectedDataPoint]:
-        if _looks_like_korean_security_code(ticker) or not self.is_configured:
-            return []
-        try:
-            response = httpx.get(
-                self.base_url,
-                params={"function": "OVERVIEW", "symbol": ticker.upper(), "apikey": self.api_key},
-                timeout=self.timeout_seconds,
-            )
-            response.raise_for_status()
-            overview = response.json()
-            if not isinstance(overview, dict) or not overview.get("Symbol"):
-                return []
-            as_of = _provider_now()
-            return [
-                InjectedDataPoint(
-                    source_type=DataSourceType.FINANCIAL_DATA,
-                    label="alpha_vantage_company_overview",
-                    value=(
-                        f"Sector={overview.get('Sector')}; Industry={overview.get('Industry')}; "
-                        f"MarketCap={overview.get('MarketCapitalization')}; PERatio={overview.get('PERatio')}; "
-                        f"ProfitMargin={overview.get('ProfitMargin')}"
-                    ),
-                    as_of=as_of,
-                    source_url=self.base_url,
-                    confidence=0.72,
-                )
-            ]
-        except Exception as exc:
-            return [
-                InjectedDataPoint(
-                    source_type=DataSourceType.OTHER,
-                    label="alpha_vantage_provider_warning",
-                    value=f"Alpha Vantage Overview 호출 실패: {_safe_provider_error(exc)}",
-                    as_of=_provider_now(),
-                    confidence=0.5,
-                )
-            ]
 
 
 class AnalysisDataProvider:
