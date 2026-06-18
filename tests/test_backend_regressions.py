@@ -50,6 +50,18 @@ def load_code_diff_impact_tool():
     return module
 
 
+def load_firecrawl_ir_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_firecrawl_ir_collector.py"
+    spec = spec_from_file_location("check_firecrawl_ir_collector", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_write_actions_smoke_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -448,6 +460,23 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["status_counts"]["dry_run"], 1)
         self.assertEqual(result["status_counts"]["failed"], 1)
+
+    def test_firecrawl_ir_check_tool_loads_env_registry(self):
+        from types import SimpleNamespace
+
+        tool = load_firecrawl_ir_check_tool()
+        args = SimpleNamespace(input_json=None, use_env_registry=True)
+        settings = SimpleNamespace(
+            firecrawl_ir_sources_json=json.dumps(
+                {"items": [{"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"}]}
+            )
+        )
+
+        items, source = tool._load_items(args, settings)
+
+        self.assertEqual(source, "env_registry")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["ticker"], "AAPL")
 
 
 class BackendModuleBoundaryTests(unittest.TestCase):

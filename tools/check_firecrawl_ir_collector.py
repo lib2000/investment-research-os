@@ -42,16 +42,24 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--title", default=APPLE_IR_SAMPLE["page_title"])
     parser.add_argument("--text", default=APPLE_IR_SAMPLE["markdown"])
     parser.add_argument("--input-json", type=Path, help="Optional Firecrawl IR item/list JSON file.")
+    parser.add_argument(
+        "--use-env-registry",
+        action="store_true",
+        help="Read FIRECRAWL_IR_SOURCES_JSON instead of the built-in Apple sample.",
+    )
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
     parser.add_argument("--json", action="store_true", help="Print full non-secret validation JSON.")
     return parser
 
 
-def _load_items(args: argparse.Namespace) -> list[dict]:
+def _load_items(args: argparse.Namespace, settings) -> tuple[list[dict], str]:
     if args.input_json:
         data = json.loads(args.input_json.read_text(encoding="utf-8"))
-        return normalize_firecrawl_ir_inputs(data)
-    return [{
+        return normalize_firecrawl_ir_inputs(data), "input_json"
+    if args.use_env_registry:
+        data = json.loads(settings.firecrawl_ir_sources_json or "[]")
+        return normalize_firecrawl_ir_inputs(data), "env_registry"
+    return ([{
         "company": args.company,
         "ticker": args.ticker,
         "raw_url": args.url,
@@ -59,7 +67,7 @@ def _load_items(args: argparse.Namespace) -> list[dict]:
         "page_title": args.title,
         "markdown": args.text,
         "language": "en",
-    }]
+    }], "sample")
 
 
 def _validate_payload(payload: dict) -> list[str]:
@@ -86,7 +94,8 @@ def _validate_payload(payload: dict) -> list[str]:
 
 def main() -> int:
     args = _build_parser().parse_args()
-    items = _load_items(args)
+    settings = get_settings()
+    items, input_source = _load_items(args, settings)
     payload_results: list[dict] = []
     errors: list[str] = [] if items else ["no firecrawl IR items found"]
     for index, item in enumerate(items, start=1):
@@ -99,11 +108,11 @@ def main() -> int:
             payload_results.append({"index": index, "payload": None, "errors": [str(exc)]})
             errors.append(f"item {index}: {exc}")
 
-    settings = get_settings()
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
     result = {
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
+        "input_source": input_source,
         "item_count": len(items),
         "rpc_enabled": rpc_enabled,
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
@@ -129,6 +138,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         print(f"[{result['status']}] {DESIGN_NAME}")
+        print(f"- input_source: {input_source}")
         print(f"- item_count: {len(items)}")
         if len(payload_results) == 1 and payload_results[0]["payload"]:
             payload = payload_results[0]["payload"]
