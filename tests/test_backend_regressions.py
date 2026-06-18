@@ -65,6 +65,18 @@ def load_firecrawl_ir_check_tool():
     return module
 
 
+def load_telegram_brief_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_brief_sender.py"
+    spec = spec_from_file_location("check_telegram_brief_sender", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_write_actions_smoke_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1201,6 +1213,21 @@ class PortfolioChangeDetectionTests(unittest.TestCase):
 
 
 class TelegramBriefSenderTests(unittest.TestCase):
+    def test_telegram_brief_check_tool_uses_env_chat_id(self):
+        tool = load_telegram_brief_check_tool()
+
+        with patch.dict(
+            os.environ,
+            {
+                "MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID": "",
+                "TELEGRAM_CHAT_ID": "12345",
+            },
+        ):
+            chat_id, source = tool.default_telegram_chat_id()
+
+        self.assertEqual(chat_id, "12345")
+        self.assertEqual(source, "TELEGRAM_CHAT_ID")
+
     def test_telegram_brief_sender_renders_portfolio_change_sections(self):
         from research_os.portfolio_change_detection import detect_portfolio_changes
         from research_os.telegram_brief_sender import build_telegram_brief_payload

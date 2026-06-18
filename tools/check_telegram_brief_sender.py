@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,14 @@ if str(BACKEND_DIR) not in sys.path:
 
 from research_os.portfolio_change_detection import detect_portfolio_changes  # noqa: E402
 from research_os.telegram_brief_sender import DESIGN_NAME, build_telegram_brief_payload  # noqa: E402
+
+
+def default_telegram_chat_id() -> tuple[str, str]:
+    for name in ("MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID"):
+        value = os.getenv(name, "").strip()
+        if value:
+            return value, name
+    return "", "none"
 
 
 def sample_previous() -> dict:
@@ -60,14 +69,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Telegram portfolio brief payload를 dry-run으로 점검합니다.")
     parser.add_argument("--change-json", type=Path, help="portfolio_change_detection_v1 결과 JSON")
     parser.add_argument("--output-json", type=Path, help="Telegram payload 결과 저장")
-    parser.add_argument("--chat-id", default="", help="실제 전송 없이 payload에 넣을 chat id")
+    parser.add_argument("--chat-id", default=None, help="실제 전송 없이 payload에 넣을 chat id")
     parser.add_argument("--max-message-chars", type=int, default=3600)
     args = parser.parse_args()
 
+    env_chat_id, env_chat_source = default_telegram_chat_id()
+    effective_chat_id = args.chat_id if args.chat_id is not None else env_chat_id
+    chat_id_source = "cli" if args.chat_id is not None and args.chat_id else env_chat_source
     change_result = read_json(args.change_json) if args.change_json else detect_portfolio_changes(sample_previous(), sample_current())
     payload = build_telegram_brief_payload(
         change_result,
-        chat_id=args.chat_id,
+        chat_id=effective_chat_id,
         max_message_chars=args.max_message_chars,
     )
     if args.output_json:
@@ -77,6 +89,7 @@ def main() -> int:
 
     print(f"[{payload.get('status')}] {DESIGN_NAME}")
     print(f"- chat_id_configured: {payload.get('chat_id_configured')}")
+    print(f"- chat_id_source: {chat_id_source}")
     print(f"- message_count: {payload.get('message_count')}")
     text = str(payload.get("text") or "")
     print(f"- text_chars: {len(text)}")
