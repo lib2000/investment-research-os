@@ -138,6 +138,36 @@ def _payload_summary(payload_result: dict) -> dict:
     }
 
 
+def _mark_duplicate_payload_errors(payload_results: list[dict]) -> list[str]:
+    errors: list[str] = []
+    seen_external_ids: dict[tuple[str, str], int] = {}
+    seen_canonical_hashes: dict[tuple[str, str], int] = {}
+    for result in payload_results:
+        payload = result.get("payload") or {}
+        item_errors = result.setdefault("errors", [])
+        index = int(result.get("index") or 0)
+        platform = str(payload.get("source_platform") or SOURCE_PLATFORM)
+        external_id = str(payload.get("external_id") or "")
+        canonical_hash = str(payload.get("canonical_hash") or "")
+        external_key = (platform, external_id)
+        canonical_key = (platform, canonical_hash)
+        if external_id and external_key in seen_external_ids:
+            message = f"item {index}: duplicate source_platform/external_id with item {seen_external_ids[external_key]}"
+            item_errors.append(message)
+            errors.append(message)
+            continue
+        if external_id:
+            seen_external_ids[external_key] = index
+        if canonical_hash and canonical_key in seen_canonical_hashes:
+            message = f"item {index}: duplicate source_platform/canonical_hash with item {seen_canonical_hashes[canonical_key]}"
+            item_errors.append(message)
+            errors.append(message)
+            continue
+        if canonical_hash:
+            seen_canonical_hashes[canonical_key] = index
+    return errors
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -155,6 +185,7 @@ def main() -> int:
         except Exception as exc:
             payload_results.append({"index": index, "payload": None, "errors": [str(exc)]})
             errors.append(f"item {index}: {exc}")
+    errors.extend(_mark_duplicate_payload_errors(payload_results))
 
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []

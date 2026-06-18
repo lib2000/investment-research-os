@@ -749,6 +749,26 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(failed["status"], "failed")
         self.assertEqual(failed["errors"], ["bad url"])
 
+    def test_firecrawl_ir_check_tool_marks_duplicate_payload_keys(self):
+        tool = load_firecrawl_ir_check_tool()
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
+
+        payload = build_firecrawl_ir_signal_payload(
+            {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"}
+        )
+        payload_results = [
+            {"index": 1, "payload": payload, "errors": []},
+            {"index": 2, "payload": dict(payload), "errors": []},
+        ]
+
+        errors = tool._mark_duplicate_payload_errors(payload_results)
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("duplicate source_platform/external_id with item 1", errors[0])
+        self.assertEqual(payload_results[0]["errors"], [])
+        self.assertEqual(payload_results[1]["errors"], errors)
+        self.assertEqual(tool._payload_summary(payload_results[1])["status"], "failed")
+
 
 class BackendModuleBoundaryTests(unittest.TestCase):
     def test_portfolio_analysis_coverage_uses_file_and_tag_markers(self):
