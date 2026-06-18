@@ -655,20 +655,40 @@ def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict
     hit_rate = float(feedback.get("hit_rate") or 0)
     average_change_pct = float(feedback.get("average_change_pct") or 0)
     penalty = int(feedback.get("penalty_points") or 0)
+    weakest = feedback.get("weakest_milestone") if isinstance(feedback.get("weakest_milestone"), dict) else None
+    review_hold = completed >= 3 and penalty >= 12 and hit_rate <= 0.05 and average_change_pct <= -0.05
+    candidate["tracking_feedback_profile"] = {
+        "completed_count": completed,
+        "hit_rate": round(hit_rate, 4),
+        "average_change_pct": round(average_change_pct, 4),
+        "penalty_points": penalty,
+        "horizon_penalty_points": int(feedback.get("horizon_penalty_points") or 0),
+        "weakest_milestone": weakest,
+        "review_hold": review_hold,
+    }
     add_daily_recommendation_penalty(candidate, "최근 추천 성과 부진 피드백", penalty)
     candidate.setdefault("risk_notes", []).append(
         f"최근 추천 추적 {completed}건 hit rate {hit_rate * 100:.1f}%, 평균 수익률 {average_change_pct * 100:.1f}%로 재추천 전 논거 재검증이 필요합니다."
     )
-    weakest = feedback.get("weakest_milestone") if isinstance(feedback.get("weakest_milestone"), dict) else None
     if weakest:
         candidate.setdefault("risk_notes", []).append(
             f"취약 추적 구간: {weakest.get('label')} hit rate {float(weakest.get('hit_rate') or 0) * 100:.1f}%, 평균 {float(weakest.get('average_change_pct') or 0) * 100:.1f}%."
         )
     candidate.setdefault("quality_flags", []).append("최근 추천 성과 피드백 감점")
+    if review_hold:
+        candidate.setdefault("quality_flags", []).append("반복 부진 후보 top3 보류")
+        candidate.setdefault("risk_notes", []).append("충분한 대체 후보가 있으면 반복 부진 해소 전 top3 추천에서 보류합니다.")
     candidate.setdefault("evidence_sources", []).append(
         f"추적 성과 피드백: 완료 {completed}건 · hit rate {hit_rate * 100:.1f}% · 평균 {average_change_pct * 100:.1f}%"
     )
     return candidate
+
+
+def daily_recommendation_candidate_review_hold(candidate: dict) -> bool:
+    profile = candidate.get("tracking_feedback_profile")
+    if not isinstance(profile, dict):
+        return False
+    return bool(profile.get("review_hold"))
 
 
 def finalize_daily_recommendation_ranking(
@@ -689,19 +709,43 @@ def finalize_daily_recommendation_ranking(
         reverse=True,
     )
     selected_limit = max(1, min(limit, 10))
+    non_hold_candidates = [
+        candidate
+        for candidate in candidates
+        if not daily_recommendation_candidate_review_hold(candidate)
+    ]
+    hold_candidates = [
+        candidate
+        for candidate in candidates
+        if daily_recommendation_candidate_review_hold(candidate)
+    ]
+    selected_candidates = (
+        non_hold_candidates[:selected_limit]
+        if len(non_hold_candidates) >= selected_limit
+        else (non_hold_candidates + hold_candidates)[:selected_limit]
+    )
+    omitted_hold_tickers = [
+        str(candidate.get("ticker") or "").strip()
+        for candidate in hold_candidates
+        if candidate not in selected_candidates and str(candidate.get("ticker") or "").strip()
+    ][:5]
+    result_warnings = []
+    if omitted_hold_tickers:
+        result_warnings.append(f"반복 부진 top3 보류: {', '.join(omitted_hold_tickers)}")
+    result_warnings.extend(list(warnings or []))
     ranked_candidates = [
         {**candidate, "rank": index}
-        for index, candidate in enumerate(candidates[:selected_limit], start=1)
+        for index, candidate in enumerate(selected_candidates, start=1)
     ]
     return {
         "status": "success",
         "module": "daily_recommendation_candidate_ranking",
         "as_of": as_of,
         "universe_count": len(candidates_by_ticker),
-        "selected_count": min(limit, len(candidates)),
+        "selected_count": len(ranked_candidates),
         "consensus_summary": consensus_summary,
         "candidates": ranked_candidates,
-        "warnings": list(warnings or [])[:10],
+        "warnings": result_warnings[:10],
     }
 
 

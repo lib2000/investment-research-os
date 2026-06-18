@@ -86,3 +86,15 @@ Post-change failures:
 
 Remaining risk:
 - The penalty is deliberately conservative; stronger exclusion rules should wait for replay/backtest evidence that they improve future hit rate without overfitting to a small sample.
+
+Iteration 7 - severe repeat-underperformer top3 hold:
+- Bottleneck: after the horizon-aware penalty, a high-scoring repeat underperformer could still remain in the generated top 3.
+- Change: candidates now keep a structured `tracking_feedback_profile`; when a candidate has at least 3 completed outcomes, hit rate at or below `5%`, average return at or below `-5.0%`, and feedback penalty at least `12`, ranking holds it out of top 3 if enough alternatives exist.
+- Dry-run candidate generation: top 3 changed from including `OTLY` to `ABSI`, `033500`, `105630`; warning now starts with `반복 부진 top3 보류: OTLY, 112610`.
+- Result: historical eval score remains `84.74/100` because saved outcomes are not rewritten; future generated recommendations now avoid the clearest repeat-underperformer exposure.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- `033500` remains in the top 3 with a weaker but non-zero hit rate; broader exclusion should wait for more replay evidence or a separate rule for horizon-only deterioration.

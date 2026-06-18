@@ -142,6 +142,7 @@ class DailyRecommendationsTests(unittest.TestCase):
                     "tracking_milestones": [
                         {"status": "complete", "price_change_pct": -0.18},
                         {"status": "complete", "price_change_pct": -0.08},
+                        {"status": "complete", "price_change_pct": -0.06},
                     ],
                 },
                 {
@@ -161,6 +162,7 @@ class DailyRecommendationsTests(unittest.TestCase):
         apply_daily_recommendation_tracking_feedback(candidate, feedback["OTLY"])
 
         self.assertEqual(candidate["score"], 28)
+        self.assertTrue(candidate["tracking_feedback_profile"]["review_hold"])
         self.assertIn("최근 추천 성과 부진 피드백 (-12)", candidate["score_penalties"])
         self.assertTrue(any("hit rate" in item for item in candidate["risk_notes"]))
         self.assertIn("최근 추천 성과 피드백 감점", candidate["quality_flags"])
@@ -544,6 +546,35 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(result["warnings"], ["w1", "w2"])
         self.assertEqual([item["ticker"] for item in result["candidates"]], ["B", "C"])
         self.assertEqual([item["rank"] for item in result["candidates"]], [1, 2])
+
+    def test_finalize_daily_recommendation_ranking_holds_severe_repeat_underperformers(self):
+        result = finalize_daily_recommendation_ranking(
+            {
+                "WEAK": {
+                    "ticker": "WEAK",
+                    "company_name": "약세",
+                    "score": 200,
+                    "baseline_price": 10,
+                    "tracking_feedback_profile": {
+                        "completed_count": 4,
+                        "hit_rate": 0.0,
+                        "average_change_pct": -0.12,
+                        "penalty_points": 12,
+                        "review_hold": True,
+                    },
+                },
+                "A": {"ticker": "A", "company_name": "알파", "score": 130, "baseline_price": 10},
+                "B": {"ticker": "B", "company_name": "베타", "score": 120, "baseline_price": 10},
+                "C": {"ticker": "C", "company_name": "감마", "score": 110, "baseline_price": 10},
+            },
+            limit=3,
+            as_of="2026-06-18T08:00:00+09:00",
+            warnings=[f"w{i}" for i in range(12)],
+        )
+
+        self.assertEqual([item["ticker"] for item in result["candidates"]], ["A", "B", "C"])
+        self.assertIn("WEAK", result["warnings"][0])
+        self.assertEqual(len(result["warnings"]), 10)
 
     def test_daily_recommendation_score_helpers_ignore_invalid_values(self):
         candidate = {"score": 10}
