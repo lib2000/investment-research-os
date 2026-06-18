@@ -12237,14 +12237,29 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
       ].join("\n"), { skipCompletion: true });
       return;
     }
+    const linkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_recommendation).length;
+    const latestLinkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_latest_recommendation).length;
+    if (latestLinkedCount <= 0) {
+      const historicalLinkedCount = Math.max(0, linkedCount - latestLinkedCount);
+      setOutput([
+        "### 추천 근거 요약",
+        "",
+        `- **대상:** 최근 1주 자료 중 추천 근거 연결 ${formatNumber(linkedCount)}건`,
+        `- **오늘 추천 직접 연결:** ${formatNumber(latestLinkedCount)}건`,
+        `- **추천 이력 연결:** ${formatNumber(historicalLinkedCount)}건`,
+        "- **추천 근거 RAG 합성:** 최신 추천 직접 연결 없음 · 저장/RAG 생략",
+        "- **저장된 합성 보고서:** 저장 생략 (latest_recommendation_link_missing)",
+        `- **RAG 검색어:** ${compactOutputText(query, 220)}`,
+        "- **다음 행동:** 오늘 추천 근거가 최근 1주 자료 안에 다시 들어오면 저장형 합성을 실행하세요. 현재 과거 추천 연결은 참고 정보로만 둡니다.",
+      ].join("\n"), { skipCompletion: true });
+      return;
+    }
     const result = await synthesizeRagSearchResults(token(), {
       query,
       limit: 10,
       includeLowQuality: false,
       saveResult: true,
     });
-    const linkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_recommendation).length;
-    const latestLinkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_latest_recommendation).length;
     const synthesisPayload = result?.payload || {};
     const synthesisSourceCount = Number(synthesisPayload.source_count || 0);
     const synthesisCandidateCount = Number(synthesisPayload.candidate_count || 0);

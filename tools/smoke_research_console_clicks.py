@@ -584,6 +584,18 @@ def run_click_smoke(
                       ...itemLines,
                       "투자 논거 강화/약화, 핵심 리스크, 다음 확인 액션 중심으로 요약",
                     ].join(" / ").slice(0, 700);
+                    const latestLinkedCount = linkedItems.filter((item) => item && item.used_in_latest_recommendation).length;
+                    if (latestLinkedCount <= 0) {{
+                      return [
+                        "추천 근거 요약",
+                        `오늘 추천 직접 연결 ${{latestLinkedCount}}건`,
+                        `추천 이력 연결 ${{Math.max(0, linkedItems.length - latestLinkedCount)}}건`,
+                        "추천 근거 RAG 합성 최신 추천 직접 연결 없음 · 저장/RAG 생략",
+                        "저장된 합성 보고서 저장 생략 (latest_recommendation_link_missing)",
+                        `RAG 검색어 ${{query}}`,
+                        "다음 행동 오늘 추천 근거가 최근 1주 자료 안에 다시 들어오면 저장형 합성을 실행",
+                      ].join("\\n");
+                    }}
                     const synthesisResponse = await fetch("/api/v1/rag/memory/synthesize", {{
                       method: "POST",
                       headers: {{
@@ -602,7 +614,6 @@ def run_click_smoke(
                     }}
                     const synthesis = await synthesisResponse.json();
                     const payload = synthesis.payload || {{}};
-                    const latestLinkedCount = linkedItems.filter((item) => item && item.used_in_latest_recommendation).length;
                     return [
                       "추천 근거 요약",
                       `오늘 추천 직접 연결 ${{latestLinkedCount}}건`,
