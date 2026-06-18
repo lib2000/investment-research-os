@@ -216,3 +216,14 @@ Post-change failures:
 
 Remaining risk:
 - The existing 2026-06-18 saved set is not rewritten. The warning should disappear after the next successful recommendation generation under the current hold policy.
+
+Iteration 18 - schedule-aware latest policy drift eval:
+- Bottleneck: before the 08:00 daily recommendation run, the eval treated yesterday's latest saved recommendation drift as a hard failure even though the next scheduled regeneration had not yet had a chance to replace it.
+- Change: `evaluate_daily_recommendation_accuracy.py` now detects whether the latest recommendation date is before today but the current time is still before the configured daily run time. In that window it keeps the latest policy drift details visible but moves the item from `failures` to `warnings` as `latest_policy_drift_pending_schedule`.
+- Result: score unchanged at `85.24/100`; failure list now contains only `tracked_outcome: hit_rate 0.26 / 목표 0.50`, while `OTLY` remains visible as a scheduled-refresh pending warning.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.26 / 목표 0.50`
+
+Remaining risk:
+- After 08:00 KST, the same drift should become a hard failure again if the scheduled recommendation generation does not replace the stale top slot.

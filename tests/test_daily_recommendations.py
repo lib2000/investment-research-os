@@ -172,6 +172,24 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(details["latest_review_hold_records"][0]["ticker"], "WEAK")
         self.assertEqual(details["latest_review_hold_records"][0]["penalty_points"], 16)
 
+    def test_accuracy_eval_defers_latest_policy_drift_before_schedule(self):
+        from tools import evaluate_daily_recommendation_accuracy as accuracy_eval
+
+        self.assertTrue(
+            accuracy_eval.latest_policy_drift_deferred_until_schedule(
+                "2026-06-18",
+                now=datetime(2026, 6, 19, 7, 30),
+                daily_time="08:00",
+            )
+        )
+        self.assertFalse(
+            accuracy_eval.latest_policy_drift_deferred_until_schedule(
+                "2026-06-18",
+                now=datetime(2026, 6, 19, 8, 1),
+                daily_time="08:00",
+            )
+        )
+
     def test_candidate_policy_eval_rejects_review_hold_in_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 

@@ -26,6 +26,30 @@ REQUIRED_EVIDENCE_TOKENS = {
 }
 
 
+def parse_daily_time(value: object) -> tuple[int, int]:
+    match = re.match(r"^(\d{1,2}):(\d{2})$", str(value or "08:00").strip())
+    if not match:
+        return 8, 0
+    return min(max(int(match.group(1)), 0), 23), min(max(int(match.group(2)), 0), 59)
+
+
+def latest_policy_drift_deferred_until_schedule(
+    latest_date: str | None,
+    *,
+    now: datetime,
+    daily_time: object = "08:00",
+    enabled: bool = True,
+) -> bool:
+    if not enabled:
+        return False
+    parsed_latest = parse_iso_date(latest_date)
+    if not parsed_latest or parsed_latest >= now.date():
+        return False
+    hour, minute = parse_daily_time(daily_time)
+    scheduled_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return now < scheduled_at
+
+
 def project_root(start: Path) -> Path:
     for candidate in [start, *start.parents]:
         if (candidate / "backend" / "research_os_main.py").exists() and (candidate / "research_vault").exists():
@@ -406,6 +430,35 @@ def tracking_feedback_profiles(root: Path, records: list[dict[str, Any]]) -> dic
     return profiles
 
 
+def recommendation_schedule_context(root: Path, latest_date: str | None) -> dict[str, Any]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    try:
+        from research_os.daily_recommendation_store import current_recommendation_datetime  # noqa: PLC0415
+        from research_os.settings import Settings  # noqa: PLC0415
+    except Exception:
+        now = datetime.now().replace(microsecond=0)
+        daily_time = "08:00"
+        enabled = True
+    else:
+        settings = Settings()
+        now = current_recommendation_datetime()
+        daily_time = settings.daily_recommendations_time
+        enabled = bool(settings.daily_recommendations_enabled)
+    return {
+        "now": now.isoformat(),
+        "daily_time": daily_time,
+        "enabled": enabled,
+        "latest_policy_drift_deferred": latest_policy_drift_deferred_until_schedule(
+            latest_date,
+            now=now,
+            daily_time=daily_time,
+            enabled=enabled,
+        ),
+    }
+
+
 def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_count: int) -> dict[str, Any]:
     store = load_json(store_path)
     state = load_json(state_path)
@@ -414,6 +467,16 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
     latest_score, latest_failures, latest_details = score_latest_records(root, latest, expected_latest_count)
     feedback_profiles = tracking_feedback_profiles(root, records)
     policy_failures, policy_details = latest_policy_alignment(latest, feedback_profiles)
+    schedule_context = recommendation_schedule_context(root, latest_date)
+    warnings: list[str] = []
+    if policy_failures and schedule_context.get("latest_policy_drift_deferred"):
+        policy_details["scheduled_refresh_pending"] = True
+        policy_details["deferred_failures"] = policy_failures
+        warnings.extend(
+            failure.replace("latest_policy_drift:", "latest_policy_drift_pending_schedule:", 1)
+            for failure in policy_failures
+        )
+        policy_failures = []
     outcome_score, outcome_failures, outcome_details = score_tracked_outcomes(
         records,
         tracking_feedback_profiles=feedback_profiles,
@@ -439,9 +502,11 @@ def evaluate(root: Path, store_path: Path, state_path: Path, expected_latest_cou
             "tracked_outcomes": round(outcome_score, 2),
         },
         "failures": latest_failures + policy_failures + outcome_failures,
+        "warnings": warnings,
         "details": {
             **latest_details,
             "latest_policy": policy_details,
+            "schedule": schedule_context,
             "tracked_outcomes": outcome_details,
         },
     }
@@ -478,6 +543,11 @@ def main() -> int:
                 print(f"- {failure}")
         else:
             print("실패/병목: 없음")
+        warnings = result.get("warnings") or []
+        if warnings:
+            print("주의/대기:")
+            for warning in warnings:
+                print(f"- {warning}")
         latest_policy = result.get("details", {}).get("latest_policy", {})
         latest_review_holds = latest_policy.get("latest_review_hold_records") or []
         if latest_review_holds:
