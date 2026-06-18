@@ -3846,6 +3846,41 @@ class DailyRecommendationTrackingModuleTests(unittest.TestCase):
         self.assertEqual(summary["worst"]["ticker"], "071050")
         self.assertIn("강한 상승", daily_recommendation_tracking.investment_situation(0.16))
 
+    def test_daily_recommendation_price_lookup_falls_back_to_naver_domestic_basic(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(naver_finance_enabled=True, naver_finance_timeout_seconds=6)
+
+        with (
+            patch.object(main, "latest_provider_price", return_value=(None, "provider-missing")),
+            patch.object(main, "read_portfolio_store", return_value={"portfolios": {}}),
+            patch.object(
+                main,
+                "fetch_naver_domestic_stock_basic",
+                return_value={"stockName": "한국금융지주", "closePrice": "249,500"},
+            ),
+        ):
+            price, source = main._daily_recommendation_price_lookup(settings)("071050")
+
+        self.assertEqual(price, 249500.0)
+        self.assertEqual(source, "https://m.stock.naver.com/api/stock/071050/basic")
+
+    def test_daily_recommendation_price_lookup_prefers_naver_over_ambiguous_domestic_provider(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(naver_finance_enabled=True, naver_finance_timeout_seconds=6)
+
+        with (
+            patch.object(main, "latest_provider_price", return_value=(367.0, "data_provider")),
+            patch.object(main, "fetch_naver_domestic_stock_basic", return_value={"stockName": "한국금융지주", "closePrice": "233,000"}),
+        ):
+            price, source = main._daily_recommendation_price_lookup(settings)("071050")
+
+        self.assertEqual(price, 233000.0)
+        self.assertEqual(source, "https://m.stock.naver.com/api/stock/071050/basic")
+
 
 class RecentActivityGroupsModuleTests(unittest.TestCase):
     def test_recent_activity_groups_build_quality_summary_and_digest(self):

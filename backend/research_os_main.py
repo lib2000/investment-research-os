@@ -14503,12 +14503,45 @@ def _daily_recommendation_priority_targets(settings: Settings) -> dict[str, dict
     return result
 
 
+def _daily_recommendation_naver_domestic_price(ticker: str, settings: Settings) -> tuple[float | None, str | None]:
+    if not settings.naver_finance_enabled:
+        return None, None
+    code = normalize_kr_stock_code(ticker)
+    if not is_naver_domestic_stock_code(code):
+        return None, None
+    try:
+        basic = fetch_naver_domestic_stock_basic(
+            code,
+            settings,
+            timeout_seconds=min(float(settings.naver_finance_timeout_seconds or 6), 4.0),
+        )
+    except Exception:
+        return None, None
+    price = parse_float_or_none(
+        basic.get("closePrice")
+        or basic.get("currentPrice")
+        or basic.get("lastPrice")
+        or basic.get("tradePrice")
+    )
+    if price is None or price <= 0:
+        return None, None
+    source_url = f"{settings.naver_finance_base_url.rstrip('/')}/api/stock/{code}/basic"
+    return price, source_url
+
+
 def _daily_recommendation_price_lookup(settings: Settings):
     saved_prices: dict[str, tuple[float, str]] | None = None
 
     def lookup(ticker: str) -> tuple[float | None, str | None]:
         nonlocal saved_prices
         price, source = latest_provider_price(ticker, settings, force_refresh=True)
+        naver_price: float | None = None
+        naver_source: str | None = None
+        use_naver_domestic = is_naver_domestic_stock_code(normalize_kr_stock_code(ticker))
+        if use_naver_domestic and (price is None or not source or source == "data_provider"):
+            naver_price, naver_source = _daily_recommendation_naver_domestic_price(ticker, settings)
+            if naver_price is not None:
+                return naver_price, naver_source
         if price is not None:
             return price, source
         if saved_prices is None:
@@ -14519,6 +14552,10 @@ def _daily_recommendation_price_lookup(settings: Settings):
         fallback = saved_prices.get(normalize_ticker(ticker))
         if fallback:
             return fallback
+        if use_naver_domestic and naver_price is None:
+            naver_price, naver_source = _daily_recommendation_naver_domestic_price(ticker, settings)
+        if naver_price is not None:
+            return naver_price, naver_source
         return None, source
 
     return lookup
