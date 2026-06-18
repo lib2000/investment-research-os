@@ -8,6 +8,10 @@ from research_os.earnings_transcript_collector import (
     DESIGN_NAME as EARNINGS_TRANSCRIPT_DESIGN,
     build_earnings_transcript_batch_result,
 )
+from research_os.firecrawl_earnings_collector import (
+    DESIGN_NAME as FIRECRAWL_EARNINGS_DESIGN,
+    build_firecrawl_earnings_batch_result,
+)
 from research_os.firecrawl_ir_collector import (
     DESIGN_NAME as FIRECRAWL_IR_DESIGN,
     build_firecrawl_ir_signal_payload,
@@ -69,6 +73,29 @@ def sample_earnings_transcript_inputs() -> list[dict[str, Any]]:
             "event_date": "2026-05-07",
             "transcript_text": "Certification progress and commercialization milestones were discussed alongside operating costs.",
             "speaker_count": 5,
+        },
+    ]
+
+
+def sample_firecrawl_earnings_inputs() -> list[dict[str, Any]]:
+    return [
+        {
+            "company": "Planet Labs",
+            "ticker": "PL",
+            "raw_url": "https://investors.planet.com/events-and-presentations/",
+            "title": "Planet Labs Q1 FY2027 earnings release",
+            "fiscal_period": "Q1 FY2027",
+            "event_date": "2026-06-04",
+            "markdown": "Revenue growth, customer retention, and margin discipline were reported.",
+        },
+        {
+            "company": "Joby Aviation",
+            "ticker": "JOBY",
+            "raw_url": "https://ir.jobyaviation.com/news-events/events-presentations/",
+            "title": "Joby Aviation Q1 2026 shareholder letter",
+            "fiscal_period": "Q1 2026",
+            "event_date": "2026-05-07",
+            "markdown": "Certification progress, manufacturing readiness, and operating runway were highlighted.",
         },
     ]
 
@@ -172,6 +199,7 @@ def sample_previous_portfolio_health_brief() -> dict[str, Any]:
 def build_market_signal_graph_pipeline_contract(
     *,
     ir_inputs: list[dict[str, Any]] | None = None,
+    firecrawl_earnings_inputs: list[dict[str, Any]] | None = None,
     earnings_inputs: list[dict[str, Any]] | None = None,
     sec_dart_signals: list[dict[str, Any]] | None = None,
     previous_health_brief: dict[str, Any] | None = None,
@@ -187,6 +215,17 @@ def build_market_signal_graph_pipeline_contract(
         except Exception as exc:
             errors.append(f"firecrawl_ir: {exc}")
 
+    firecrawl_earnings_batch = build_firecrawl_earnings_batch_result(
+        firecrawl_earnings_inputs if firecrawl_earnings_inputs is not None else sample_firecrawl_earnings_inputs()
+    )
+    if firecrawl_earnings_batch.get("status") != "success":
+        errors.append("firecrawl_earnings: batch validation failed")
+    firecrawl_earnings_payloads = [
+        item.get("payload")
+        for item in firecrawl_earnings_batch.get("results", [])
+        if isinstance(item, dict) and isinstance(item.get("payload"), dict)
+    ]
+
     earnings_batch = build_earnings_transcript_batch_result(
         earnings_inputs if earnings_inputs is not None else sample_earnings_transcript_inputs()
     )
@@ -200,6 +239,9 @@ def build_market_signal_graph_pipeline_contract(
 
     signal_inputs: list[dict[str, Any]] = []
     signal_inputs.extend(_signal_from_payload(payload, stance="positive", confidence=0.82, score=7.4) for payload in ir_payloads)
+    signal_inputs.extend(
+        _signal_from_payload(payload, stance="positive", confidence=0.76, score=7.0) for payload in firecrawl_earnings_payloads
+    )
     signal_inputs.extend(
         _signal_from_payload(payload, stance="positive", confidence=0.72, score=7.1) for payload in earnings_payloads
     )
@@ -223,6 +265,7 @@ def build_market_signal_graph_pipeline_contract(
         "status": "failed" if errors else "success",
         "contracts": [
             FIRECRAWL_IR_DESIGN,
+            FIRECRAWL_EARNINGS_DESIGN,
             EARNINGS_TRANSCRIPT_DESIGN,
             PORTFOLIO_SIGNAL_SCORE_DESIGN,
             PORTFOLIO_CHANGE_DESIGN,
@@ -231,6 +274,7 @@ def build_market_signal_graph_pipeline_contract(
         "errors": errors,
         "source_payload_counts": {
             "firecrawl_ir": len(ir_payloads),
+            "firecrawl_earnings": len(firecrawl_earnings_payloads),
             "earnings_transcript": len(earnings_payloads),
         },
         "score": score_result,

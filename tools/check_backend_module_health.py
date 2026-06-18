@@ -23,6 +23,7 @@ EXPECTED_MODULES = {
     "export_routes.py",
     "export_utils.py",
     "earnings_transcript_collector.py",
+    "firecrawl_earnings_collector.py",
     "file_extraction.py",
     "kcif_reports.py",
     "kiwoom_auth.py",

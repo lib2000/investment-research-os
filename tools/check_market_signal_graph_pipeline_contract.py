@@ -42,6 +42,7 @@ def _read_object(path: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Market Signal Graph 포트폴리오 파이프라인 offline contract를 점검합니다.")
     parser.add_argument("--ir-input-json", type=Path, help="Firecrawl IR source/scrape item JSON")
+    parser.add_argument("--firecrawl-earnings-input-json", type=Path, help="Firecrawl earnings item JSON")
     parser.add_argument("--earnings-input-json", type=Path, help="Earnings transcript item JSON")
     parser.add_argument("--sec-dart-signal-json", type=Path, help="SEC/DART 추가 signal item JSON")
     parser.add_argument("--previous-health-json", type=Path, help="이전 portfolio_health brief JSON")
@@ -53,6 +54,11 @@ def main() -> int:
 
     result = build_market_signal_graph_pipeline_contract(
         ir_inputs=_read_list(args.ir_input_json, keys=("items", "sources", "results", "payloads")) if args.ir_input_json else None,
+        firecrawl_earnings_inputs=(
+            _read_list(args.firecrawl_earnings_input_json, keys=("items", "sources", "results", "payloads", "earnings"))
+            if args.firecrawl_earnings_input_json
+            else None
+        ),
         earnings_inputs=(
             _read_list(args.earnings_input_json, keys=("items", "sources", "results", "payloads", "transcripts"))
             if args.earnings_input_json
@@ -75,7 +81,12 @@ def main() -> int:
         counts = result.get("source_payload_counts") if isinstance(result.get("source_payload_counts"), dict) else {}
         print(f"[{result.get('status')}] {DESIGN_NAME}")
         print(f"- contracts: {', '.join(result.get('contracts') or [])}")
-        print(f"- source_payloads: firecrawl_ir={counts.get('firecrawl_ir', 0)} earnings_transcript={counts.get('earnings_transcript', 0)}")
+        print(
+            "- source_payloads: "
+            f"firecrawl_ir={counts.get('firecrawl_ir', 0)} "
+            f"firecrawl_earnings={counts.get('firecrawl_earnings', 0)} "
+            f"earnings_transcript={counts.get('earnings_transcript', 0)}"
+        )
         print(f"- scored_signals: {summary.get('signal_count')} / tickers={summary.get('ticker_count')}")
         print(f"- portfolio_score: {summary.get('portfolio_score')}")
         print(f"- movers/watch: {summary.get('top_mover_count')} / {summary.get('watch_item_count')}")

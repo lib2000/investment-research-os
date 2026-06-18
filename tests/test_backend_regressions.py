@@ -1260,6 +1260,65 @@ class EarningsTranscriptCollectorTests(unittest.TestCase):
         self.assertIn("public http/https URL", result["results"][1]["errors"][0])
 
 
+class FirecrawlEarningsCollectorTests(unittest.TestCase):
+    def test_firecrawl_earnings_payload_matches_market_signal_contract(self):
+        from research_os.firecrawl_earnings_collector import build_firecrawl_earnings_signal_payload, sha256_hex
+
+        payload = build_firecrawl_earnings_signal_payload(
+            {
+                "company": "Planet Labs",
+                "ticker": "PL",
+                "raw_url": "https://investors.planet.com/events-and-presentations/",
+                "title": "Planet Labs Q1 FY2027 earnings release",
+                "fiscal_period": "Q1 FY2027",
+                "event_date": "2026-06-04",
+                "markdown": "Revenue growth and margin discipline were reported.",
+            }
+        )
+
+        self.assertEqual(payload["source_platform"], "firecrawl_earnings")
+        self.assertEqual(payload["source_kind"], "earnings")
+        self.assertEqual(payload["channel"], "web")
+        self.assertEqual(
+            payload["external_id"],
+            sha256_hex("https://investors.planet.com/events-and-presentations/|Q1 FY2027|2026-06-04"),
+        )
+        self.assertTrue(payload["needs_enrichment"])
+        self.assertEqual(payload["analysis_status"], "pending")
+        self.assertEqual(payload["metadata"]["collector_design"], "firecrawl_earnings_collector_v1")
+        self.assertEqual(payload["metadata"]["target_type"], "company_earnings")
+        self.assertEqual(payload["metadata"]["ticker"], "PL")
+
+    def test_firecrawl_earnings_batch_accepts_wrappers_and_reports_failures(self):
+        from research_os.firecrawl_earnings_collector import (
+            build_firecrawl_earnings_batch_result,
+            normalize_firecrawl_earnings_inputs,
+        )
+
+        items = normalize_firecrawl_earnings_inputs(
+            {
+                "earnings": [
+                    {
+                        "company": "Joby Aviation",
+                        "ticker": "JOBY",
+                        "raw_url": "https://ir.jobyaviation.com/news-events/events-presentations/",
+                        "quarter": "Q1 2026",
+                        "markdown": "Shareholder letter body",
+                    },
+                    {"company": "Broken", "ticker": "BAD", "raw_url": "not-a-url"},
+                ]
+            }
+        )
+        result = build_firecrawl_earnings_batch_result(items)
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["valid_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["results"][0]["payload"]["metadata"]["ticker"], "JOBY")
+        self.assertIn("public http/https URL", result["results"][1]["errors"][0])
+
+
 class PortfolioSignalScoreTests(unittest.TestCase):
     def test_portfolio_signal_score_integrates_ir_earnings_sec_and_dart(self):
         from research_os.portfolio_signal_score import build_portfolio_signal_scores
@@ -1315,13 +1374,15 @@ class MarketSignalGraphPipelineContractTests(unittest.TestCase):
         self.assertEqual(result["design"], "market_signal_graph_pipeline_contract_v1")
         self.assertEqual(result["status"], "success")
         self.assertIn("firecrawl_ir_collector_v1", result["contracts"])
+        self.assertIn("firecrawl_earnings_collector_v1", result["contracts"])
         self.assertIn("earnings_transcript_collector_v1", result["contracts"])
         self.assertIn("portfolio_signal_score_v1", result["contracts"])
         self.assertIn("portfolio_change_detection_v1", result["contracts"])
         self.assertIn("telegram_brief_sender_v1", result["contracts"])
         self.assertEqual(result["source_payload_counts"]["firecrawl_ir"], 2)
+        self.assertEqual(result["source_payload_counts"]["firecrawl_earnings"], 2)
         self.assertEqual(result["source_payload_counts"]["earnings_transcript"], 2)
-        self.assertGreaterEqual(result["summary"]["signal_count"], 6)
+        self.assertGreaterEqual(result["summary"]["signal_count"], 8)
         self.assertGreaterEqual(result["summary"]["ticker_count"], 3)
         self.assertGreater(result["summary"]["portfolio_score"], 0)
         self.assertTrue(result["change_detection"]["top_movers"])
