@@ -20,6 +20,7 @@ from research_os import daily_recommendation_scoring
 from research_os import daily_recommendation_tracking
 from research_os.settings import Settings
 from research_os.daily_recommendation_store import (
+    build_recommendation_record as store_build_recommendation_record,
     current_recommendation_datetime,
     daily_recommendation_state_path,
     daily_recommendation_store_path,
@@ -27,8 +28,8 @@ from research_os.daily_recommendation_store import (
     parse_date,
     read_daily_recommendation_store,
     read_json_payload,
-    recommendation_record_id,
     should_run_daily_recommendations,
+    upsert_daily_recommendations as store_upsert_daily_recommendations,
     write_daily_recommendation_store,
     write_json_payload,
 )
@@ -357,41 +358,12 @@ def build_recommendation_record(
     recommendation_date: date,
     generated_at: str,
 ) -> dict:
-    normalized = normalize_candidate(candidate)
-    baseline_price = normalized.get("baseline_price")
-    record = {
-        "record_id": recommendation_record_id(recommendation_date, rank, normalized["ticker"]),
-        "recommendation_date": recommendation_date.isoformat(),
-        "generated_at": generated_at,
-        "rank": rank,
-        "ticker": normalized["ticker"],
-        "company_name": normalized["company_name"],
-        "score": normalized["score"],
-        "score_components": normalized.get("score_components") or [],
-        "score_explanation": normalized.get("score_explanation") or {},
-        "score_penalties": normalized.get("score_penalties") or [],
-        "quality_flags": normalized.get("quality_flags") or [],
-        "recommendation_type": "daily_review_candidate",
-        "action_label": "오늘의 검토 후보",
-        "baseline_price": baseline_price,
-        "baseline_price_source": normalized.get("baseline_price_source"),
-        "baseline_price_checked_at": normalized.get("baseline_price_checked_at"),
-        "currency": normalized.get("currency") or "KRW",
-        "reasons": normalized["reasons"],
-        "evidence_sources": normalized["evidence_sources"],
-        "evidence_documents": normalized.get("evidence_documents") or [],
-        "risk_notes": [
-            str(item).strip()
-            for item in normalized.get("risk_notes", [])
-            if str(item or "").strip()
-        ][:5],
-        "portfolio_context": normalized.get("portfolio_context") or [],
-        "investment_direction_profile": normalized.get("investment_direction_profile") or {},
-        "portfolio_risk_connection": normalized.get("portfolio_risk_connection") or {},
-        "overseas_tracking": normalized.get("overseas_tracking") or {},
-        "tracking_milestones": build_tracking_milestones(recommendation_date),
-    }
-    return record
+    return store_build_recommendation_record(
+        candidate,
+        rank=rank,
+        recommendation_date=recommendation_date,
+        generated_at=generated_at,
+    )
 
 
 def summarize_tracking_performance(records: list[dict]) -> dict:
@@ -406,60 +378,13 @@ def upsert_daily_recommendations(
     generated_at: str,
     force: bool = False,
 ) -> dict:
-    store = read_daily_recommendation_store(settings)
-    records = [item for item in store.get("records", []) if isinstance(item, dict)]
-    existing_today = [
-        item
-        for item in records
-        if item.get("recommendation_date") == recommendation_date.isoformat()
-    ]
-    if existing_today and not force:
-        return {
-            "status": "skipped_existing",
-            "module": "daily_stock_recommendations",
-            "message": "오늘 추천 후보는 이미 저장되어 있어 중복 저장하지 않았습니다.",
-            "recommendation_date": recommendation_date.isoformat(),
-            "records": sorted(existing_today, key=lambda item: int(item.get("rank") or 999))[:3],
-            "storage_path": str(daily_recommendation_store_path(settings)),
-        }
-
-    if force and existing_today:
-        today_ids = {item.get("record_id") for item in existing_today}
-        records = [item for item in records if item.get("record_id") not in today_ids]
-
-    new_records = [
-        build_recommendation_record(
-            candidate,
-            rank=index + 1,
-            recommendation_date=recommendation_date,
-            generated_at=generated_at,
-        )
-        for index, candidate in enumerate(candidates[:3])
-    ]
-    records.extend(new_records)
-    records.sort(
-        key=lambda item: (
-            str(item.get("recommendation_date") or ""),
-            -int(item.get("rank") or 999),
-        ),
-        reverse=True,
+    return store_upsert_daily_recommendations(
+        settings,
+        candidates=candidates,
+        recommendation_date=recommendation_date,
+        generated_at=generated_at,
+        force=force,
     )
-    store.update(
-        {
-            "updated_at": generated_at,
-            "latest_recommendation_date": recommendation_date.isoformat(),
-            "records": records,
-        }
-    )
-    write_daily_recommendation_store(settings, store)
-    return {
-        "status": "success",
-        "module": "daily_stock_recommendations",
-        "recommendation_date": recommendation_date.isoformat(),
-        "saved_count": len(new_records),
-        "records": new_records,
-        "storage_path": str(daily_recommendation_store_path(settings)),
-    }
 
 
 def investment_situation(change_pct: float | None) -> str:

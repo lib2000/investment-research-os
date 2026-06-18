@@ -4524,6 +4524,45 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertEqual(candidate["evidence_documents"][0]["citation_label"], "근거 문서")
 
 
+class DailyRecommendationStoreModuleTests(unittest.TestCase):
+    def test_daily_recommendation_store_builds_records_and_skips_existing_date(self):
+        from datetime import date
+        from tempfile import TemporaryDirectory
+
+        from research_os import daily_recommendation_store
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))
+            first = daily_recommendation_store.upsert_daily_recommendations(
+                settings,
+                candidates=[
+                    {
+                        "ticker": "003230",
+                        "company_name": "삼양식품",
+                        "score": 88,
+                        "reasons": ["목표가 상승여력"],
+                        "evidence_sources": ["리포트 근거"],
+                        "score_components": [{"label": "목표가", "points": 35}],
+                    }
+                ],
+                recommendation_date=date(2026, 6, 18),
+                generated_at="2026-06-18T08:00:00+09:00",
+            )
+            second = daily_recommendation_store.upsert_daily_recommendations(
+                settings,
+                candidates=[{"ticker": "PL", "company_name": "Planet Labs", "score": 70}],
+                recommendation_date=date(2026, 6, 18),
+                generated_at="2026-06-18T09:00:00+09:00",
+            )
+
+        self.assertEqual(first["status"], "success")
+        self.assertEqual(first["records"][0]["record_id"], "2026-06-18-01-003230")
+        self.assertEqual(first["records"][0]["tracking_milestones"][0]["target_date"], "2026-06-25")
+        self.assertEqual(second["status"], "skipped_existing")
+        self.assertEqual(second["records"][0]["ticker"], "003230")
+
+
 class DailyRecommendationQualityModuleTests(unittest.TestCase):
     def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):
         from research_os import daily_recommendation_quality
