@@ -178,6 +178,16 @@ def _rpc_preflight_result(readiness_errors: list[str]) -> dict:
     return {"status": "ready"}
 
 
+def _batch_counts_summary(batch_result: dict) -> str:
+    status_counts = batch_result.get("status_counts") or {}
+    return (
+        f"success={int(batch_result.get('success_count') or status_counts.get('success') or 0)} "
+        f"failed={int(batch_result.get('failed_count') or status_counts.get('failed') or 0)} "
+        f"skipped={int(batch_result.get('skipped_count') or status_counts.get('skipped') or 0)} "
+        f"dry_run={int(status_counts.get('dry_run') or 0)}"
+    )
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -275,7 +285,7 @@ def main() -> int:
         print(f"- dry_run: {not args.submit}")
         if result.get("batch"):
             print(f"- batch_status: {result['batch'].get('status')}")
-            print(f"- batch_counts: {result['batch'].get('status_counts')}")
+            print(f"- batch_counts: {_batch_counts_summary(result['batch'])}")
         if result.get("rpc"):
             print(f"- rpc_status: {result['rpc'].get('status')}")
             if result["rpc"].get("reason"):
