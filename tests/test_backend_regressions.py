@@ -3,6 +3,8 @@ import unittest
 import base64
 import copy
 import json
+import os
+import subprocess
 from datetime import date
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -726,6 +728,47 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             ["FIRECRAWL_IR_DRY_RUN must be false for --require-rpc-ready"],
         )
         self.assertEqual(ready, {"status": "ready"})
+
+    def test_firecrawl_ir_check_tool_writes_rpc_preflight_status_to_output_json(self):
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "firecrawl-ir-preflight.json"
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FIRECRAWL_IR_ENABLED": "false",
+                    "FIRECRAWL_IR_DRY_RUN": "true",
+                    "MARKET_SIGNAL_GRAPH_ENABLED": "false",
+                    "MARKET_SIGNAL_GRAPH_RPC_URL": "",
+                    "MARKET_SIGNAL_GRAPH_SUPABASE_URL": "",
+                    "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY": "",
+                    "SUPABASE_URL": "",
+                    "SUPABASE_SERVICE_ROLE_KEY": "",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_ir_collector.py"),
+                    "--input-json",
+                    str(PROJECT_ROOT / "docs" / "examples" / "firecrawl_ir_registry.sample.json"),
+                    "--require-rpc-ready",
+                    "--output-json",
+                    str(output_path),
+                    "--json",
+                ],
+                cwd=PROJECT_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            saved = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(saved["rpc"]["status"], "skipped")
+        self.assertEqual(saved["rpc"]["reason"], "rpc_not_ready")
+        self.assertTrue(saved["rpc"]["readiness_errors"])
 
     def test_firecrawl_ir_check_tool_writes_output_json(self):
         tool = load_firecrawl_ir_check_tool()
