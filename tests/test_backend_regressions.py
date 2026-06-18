@@ -553,6 +553,26 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "https://custom.example/rest/v1/rpc/upsert_external_signal",
         )
 
+    def test_firecrawl_ir_env_example_documents_safe_defaults(self):
+        env_example = (PROJECT_ROOT / "backend" / ".env.example").read_text(encoding="utf-8")
+
+        for name in [
+            "FIRECRAWL_IR_ENABLED",
+            "FIRECRAWL_IR_DRY_RUN",
+            "FIRECRAWL_IR_MCP_VERSION",
+            "FIRECRAWL_IR_SOURCES_JSON",
+            "MARKET_SIGNAL_GRAPH_ENABLED",
+            "MARKET_SIGNAL_GRAPH_SUPABASE_URL",
+            "MARKET_SIGNAL_GRAPH_RPC_URL",
+            "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY",
+            "MARKET_SIGNAL_GRAPH_TIMEOUT_SECONDS",
+        ]:
+            self.assertIn(f"{name}=", env_example)
+        self.assertIn("FIRECRAWL_IR_ENABLED=false", env_example)
+        self.assertIn("FIRECRAWL_IR_DRY_RUN=true", env_example)
+        self.assertIn("MARKET_SIGNAL_GRAPH_ENABLED=false", env_example)
+        self.assertIn("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY=", env_example)
+
     def test_firecrawl_ir_registry_inputs_support_items_wrappers(self):
         from research_os.firecrawl_ir_collector import normalize_firecrawl_ir_inputs
 
@@ -710,6 +730,7 @@ class BackendModuleBoundaryTests(unittest.TestCase):
 
         self.assertEqual(tool.fallback_flow_ids("docs/new-note.md"), {"backend_module_health"})
         self.assertEqual(tool.fallback_flow_ids("backend/main.py"), {"portfolio_realtime", "backend_module_health"})
+        self.assertEqual(tool.fallback_flow_ids("backend/.env.example"), {"source_automation", "backend_module_health"})
 
     def test_code_knowledge_graph_check_uses_existing_graph_when_refresh_write_is_blocked(self):
         tool = load_code_knowledge_graph_check_tool()

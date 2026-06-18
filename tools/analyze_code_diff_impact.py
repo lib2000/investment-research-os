@@ -56,6 +56,8 @@ def fallback_flow_ids(path: str) -> set[str]:
         return {"daily_recommendations", "research_storage_rag", "portfolio_realtime", "source_automation", "classification_quality", "backend_module_health"}
     if path == "backend/main.py":
         return {"portfolio_realtime", "backend_module_health"}
+    if path == "backend/.env.example":
+        return {"source_automation", "backend_module_health"}
     if path.startswith("backend/research_os/"):
         lower = path.lower()
         ids: set[str] = {"backend_module_health"}
