@@ -377,6 +377,58 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(payload["metadata"]["target_type"], "company_ir")
         self.assertEqual(payload["metadata"]["ticker"], "AAPL")
 
+    def test_firecrawl_ir_payload_accepts_nested_firecrawl_scrape_result(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload, sha256_hex
+
+        payload = build_firecrawl_ir_signal_payload(
+            {
+                "company": "Apple",
+                "ticker": "AAPL",
+                "firecrawl": {
+                    "markdown": "# Apple Investor Relations\nQuarterly results and SEC filings.",
+                    "metadata": {
+                        "title": "Apple Investor Relations",
+                        "sourceURL": "https://investor.apple.com/",
+                        "language": "en",
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(payload["url"], "https://investor.apple.com/")
+        self.assertEqual(payload["title"], "Apple Investor Relations")
+        self.assertEqual(payload["external_id"], sha256_hex("https://investor.apple.com/"))
+        self.assertIn("Quarterly results", payload["text"])
+        self.assertEqual(payload["language"], "en")
+        self.assertEqual(payload["metadata"]["raw_url"], "https://investor.apple.com/")
+        self.assertEqual(payload["metadata"]["ticker"], "AAPL")
+
+    def test_firecrawl_ir_payload_prefers_explicit_registry_fields(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
+
+        payload = build_firecrawl_ir_signal_payload(
+            {
+                "company": "Apple",
+                "ticker": "AAPL",
+                "raw_url": "https://investor.apple.com/",
+                "resolved_url": "https://investor.apple.com/newsroom/",
+                "page_title": "Apple Investor Newsroom",
+                "markdown": "Explicit registry summary.",
+                "data": {
+                    "markdown": "Nested Firecrawl summary.",
+                    "metadata": {
+                        "title": "Nested Title",
+                        "sourceURL": "https://nested.example.com/",
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(payload["url"], "https://investor.apple.com/newsroom/")
+        self.assertEqual(payload["title"], "Apple Investor Newsroom")
+        self.assertEqual(payload["text"], "Explicit registry summary.")
+        self.assertEqual(payload["metadata"]["raw_url"], "https://investor.apple.com/")
+
     def test_firecrawl_ir_collection_skips_rpc_when_key_missing(self):
         from types import SimpleNamespace
 

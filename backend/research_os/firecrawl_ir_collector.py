@@ -70,20 +70,78 @@ def _safe_title(value: str | None, company: str) -> str:
     return title[:180] or f"{company} Investor Relations"
 
 
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _first_non_empty(*values: Any) -> Any:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return value
+    return None
+
+
+def _firecrawl_payload_containers(item: dict[str, Any]) -> list[dict[str, Any]]:
+    containers = [item]
+    for key in ["data", "scrape", "firecrawl", "result"]:
+        nested = _dict_value(item.get(key))
+        if nested:
+            containers.append(nested)
+    return containers
+
+
+def _firecrawl_metadata(containers: list[dict[str, Any]]) -> dict[str, Any]:
+    for container in containers:
+        metadata = _dict_value(container.get("metadata"))
+        if metadata:
+            return metadata
+    return {}
+
+
+def _coerce_firecrawl_ir_input(item: dict[str, Any]) -> FirecrawlIrInput:
+    containers = _firecrawl_payload_containers(item)
+    metadata = _firecrawl_metadata(containers)
+    markdown = _first_non_empty(*(container.get("markdown") for container in containers))
+    text = _first_non_empty(*(container.get("text") for container in containers))
+    raw_url = _first_non_empty(
+        item.get("raw_url"),
+        item.get("source_url"),
+        item.get("url"),
+        metadata.get("sourceURL"),
+        metadata.get("sourceUrl"),
+        metadata.get("url"),
+        metadata.get("ogUrl"),
+    )
+    resolved_url = _first_non_empty(
+        item.get("resolved_url"),
+        item.get("final_url"),
+        item.get("resolvedURL"),
+        item.get("finalUrl"),
+        metadata.get("sourceURL"),
+        metadata.get("sourceUrl"),
+        metadata.get("url"),
+        metadata.get("ogUrl"),
+    )
+    return FirecrawlIrInput(
+        company=str(_first_non_empty(item.get("company"), metadata.get("company")) or ""),
+        ticker=str(_first_non_empty(item.get("ticker"), metadata.get("ticker"), metadata.get("symbol")) or ""),
+        raw_url=str(raw_url or ""),
+        resolved_url=resolved_url,
+        page_title=_first_non_empty(item.get("page_title"), item.get("title"), metadata.get("title")),
+        markdown=markdown,
+        text=text,
+        author=_first_non_empty(item.get("author"), metadata.get("author")),
+        language=str(_first_non_empty(item.get("language"), metadata.get("language")) or "en"),
+        published_at=_first_non_empty(item.get("published_at"), metadata.get("publishedTime")),
+    )
+
+
 def build_firecrawl_ir_signal_payload(item: FirecrawlIrInput | dict[str, Any]) -> dict[str, Any]:
     if isinstance(item, dict):
-        item = FirecrawlIrInput(
-            company=str(item.get("company") or ""),
-            ticker=str(item.get("ticker") or ""),
-            raw_url=str(item.get("raw_url") or item.get("url") or ""),
-            resolved_url=item.get("resolved_url") or item.get("final_url"),
-            page_title=item.get("page_title") or item.get("title"),
-            markdown=item.get("markdown"),
-            text=item.get("text"),
-            author=item.get("author"),
-            language=str(item.get("language") or "en"),
-            published_at=item.get("published_at"),
-        )
+        item = _coerce_firecrawl_ir_input(item)
     ticker = _safe_ticker(item.ticker)
     company = _safe_company(item.company, ticker)
     raw_url = str(item.raw_url or "").strip()
