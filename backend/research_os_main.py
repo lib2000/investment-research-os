@@ -2167,7 +2167,7 @@ def infer_shinhan_storage_target(item: dict, settings: Settings) -> tuple[str, s
         candidate = us_match.group(1)
         try:
             verified = ensure_verified_ticker(candidate, settings)
-            return verified, "shinhan_us_symbol", enum_or_str_value(DataSourceType.ANALYST_REPORT)
+            return verified, "shinhan_us_symbol", analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT)
         except HTTPException:
             return "MARKET-GLOBAL", "shinhan_unverified_us_symbol", "market_research"
 
@@ -2176,7 +2176,7 @@ def infer_shinhan_storage_target(item: dict, settings: Settings) -> tuple[str, s
         code = kr_code_match.group(1)
         try:
             verified = ensure_verified_ticker(code, settings)
-            return verified, "shinhan_kr_symbol_code", enum_or_str_value(DataSourceType.ANALYST_REPORT)
+            return verified, "shinhan_kr_symbol_code", analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT)
         except HTTPException:
             return "SECTOR", "shinhan_unverified_kr_symbol", "sector_research"
 
@@ -2198,7 +2198,7 @@ def infer_shinhan_storage_target(item: dict, settings: Settings) -> tuple[str, s
     if category in {"ETF", "기업/산업분석"}:
         inferred_ticker, source = infer_capture_ticker(context, settings)
         if inferred_ticker not in {"INBOX", "MARKET", "MARKET-KR", "MARKET-US", "MARKET-GLOBAL", "MACRO", "POLICY", "RATES", "FLOWS", "CUSTOMS"}:
-            return inferred_ticker, source, enum_or_str_value(DataSourceType.ANALYST_REPORT)
+            return inferred_ticker, source, analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT)
         return "SECTOR", f"shinhan_{category}", "sector_research"
 
     return "MARKET-KR", "shinhan_research", "market_research"
@@ -2305,7 +2305,7 @@ def refresh_shinhan_research_cache(
                 **item,
                 "ingested_at": current_storage_timestamp(),
                 "ticker": response.captured_item.ticker,
-                "source_type": enum_or_str_value(response.captured_item.source_type),
+                "source_type": analysis_labels.enum_or_str_value(response.captured_item.source_type),
                 "summary": response.captured_item.summary,
                 "storage": response.storage.model_dump(mode="json") if response.storage else None,
             }
@@ -2845,7 +2845,7 @@ def infer_naver_storage_target(item: dict, settings: Settings) -> tuple[str, str
     )
     if ticker and search(r"^\d{6}$", ticker):
         register_naver_korean_ticker(ticker, company_name or title, settings)
-        return ticker, "naver_kr_symbol_code", enum_or_str_value(DataSourceType.ANALYST_REPORT)
+        return ticker, "naver_kr_symbol_code", analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT)
     if category == "산업분석":
         key, source_type = infer_non_ticker_research_key(context)
         if key == "INBOX":
@@ -3047,7 +3047,7 @@ def refresh_naver_research_cache(
                 **item,
                 "ingested_at": current_storage_timestamp(),
                 "ticker": response.captured_item.ticker,
-                "source_type": enum_or_str_value(response.captured_item.source_type),
+                "source_type": analysis_labels.enum_or_str_value(response.captured_item.source_type),
                 "summary": response.captured_item.summary,
                 "storage": response.storage.model_dump(mode="json") if response.storage else None,
                 "thesis_impact_requested": response.captured_item.ticker not in SPECIAL_RESEARCH_KEYS,
@@ -3185,7 +3185,7 @@ def compact_naver_linked_impact(response: ResearchCaptureResponse) -> dict | Non
     if not impact:
         return None
     return {
-        "overall_impact": enum_or_str_value(impact.overall_impact),
+        "overall_impact": analysis_labels.enum_or_str_value(impact.overall_impact),
         "summary": impact.summary,
         "source_count": impact.source_count,
         "next_actions": impact.next_actions[:5],
@@ -5981,38 +5981,6 @@ def _analysis_labels_runtime() -> SimpleNamespace:
     return SimpleNamespace(normalize_ticker=normalize_ticker)
 
 
-def source_type_value(item: InjectedDataPoint) -> str:
-    return analysis_labels.source_type_value(item)
-
-
-def enum_or_str_value(value: object) -> str:
-    return analysis_labels.enum_or_str_value(value)
-
-
-def translate_source_type_label(value: object) -> str:
-    return analysis_labels.translate_source_type_label(value)
-
-
-def translate_data_label(value: str) -> str:
-    return analysis_labels.translate_data_label(value)
-
-
-def translate_trade_style_label(value: str) -> str:
-    return analysis_labels.translate_trade_style_label(value)
-
-
-def sector_research_key(region: str, style: str) -> str:
-    return analysis_labels.sector_research_key(_analysis_labels_runtime(), region, style)
-
-
-def compounder_research_key(region: str, sector: str, style: str) -> str:
-    return analysis_labels.compounder_research_key(_analysis_labels_runtime(), region, sector, style)
-
-
-def build_checklist_statuses(checked_items: list[str]) -> list[ChecklistItemStatus]:
-    return analysis_labels.build_checklist_statuses(checked_items, RESEARCH_CHECKLIST_ITEMS)
-
-
 def _analysis_context_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         build_ticker_profile=build_ticker_profile,
@@ -7075,7 +7043,7 @@ def render_institutional_markdown(
     storage_date: date,
 ) -> str:
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in analysis.injected_data
     )
     risks = "\n".join(f"- {risk}" for risk in analysis.key_risks)
@@ -7141,10 +7109,10 @@ def render_smart_trade_markdown(
         return f"${value:,.2f}"
 
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in setup.injected_data
     )
-    style_label = translate_trade_style_label(setup.style)
+    style_label = analysis_labels.translate_trade_style_label(setup.style)
     entries = "\n".join(
         f"- {item.label}: {trade_price_text(item.price)} ({item.rationale})"
         for item in setup.entry_zone
@@ -7217,7 +7185,7 @@ def render_earnings_reaction_markdown(
     storage_date: date,
 ) -> str:
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in reaction.injected_data
     )
     metrics = "\n".join(
@@ -7345,7 +7313,7 @@ def render_sector_opportunity_markdown(
         return list(dict.fromkeys(name for name in names if name))
 
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in report.injected_data
     )
     sectors = "\n\n".join(
@@ -7513,7 +7481,7 @@ def render_long_term_compounder_markdown(
         return item.company_name or item.ticker
 
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in report.injected_data
     )
     candidates = "\n\n".join(
@@ -7601,7 +7569,7 @@ def render_checklist_markdown(
     )
     next_steps = "\n".join(f"- {step}" for step in assessment.next_steps)
     injected_data = "\n".join(
-        f"- {translate_source_type_label(item.source_type)} / {translate_data_label(item.label)}: {item.value}"
+        f"- {analysis_labels.translate_source_type_label(item.source_type)} / {analysis_labels.translate_data_label(item.label)}: {item.value}"
         for item in assessment.injected_data
     )
 
@@ -7751,7 +7719,7 @@ def nps_signal_decision_note(signal: dict | None, company_name: str | None = Non
 
 def estimate_data_quality(injected_data: list[InjectedDataPoint]) -> DataQualitySummary:
     user_supplied_data = [
-        item for item in injected_data if source_type_value(item) != "research_memory"
+        item for item in injected_data if analysis_labels.source_type_value(item) != "research_memory"
     ]
     has_mock_limitation = any(item.label == "data_provider_limitation" for item in user_supplied_data)
     has_provider_warning = any(str(item.label).endswith("_provider_warning") for item in user_supplied_data)
@@ -7768,12 +7736,12 @@ def estimate_data_quality(injected_data: list[InjectedDataPoint]) -> DataQuality
         2,
     )
     has_financial_context = any(
-        source_type_value(item)
+        analysis_labels.source_type_value(item)
         in {"financial_data", "earnings_release", "official_filing"}
         for item in user_supplied_data
     )
     has_market_context = any(
-        source_type_value(item) in {"market_price", "news", "analyst_report"}
+        analysis_labels.source_type_value(item) in {"market_price", "news", "analyst_report"}
         for item in user_supplied_data
     )
     missing_data = []
@@ -8624,7 +8592,7 @@ def build_sector_trend_analysis(
         if sector != "미분류":
             state = bucket_state(sector)
             state["macro_hits"] += 1
-            state["evidence"].append(f"주입 데이터: {translate_data_label(item.label)}")
+            state["evidence"].append(f"주입 데이터: {analysis_labels.translate_data_label(item.label)}")
 
     store = read_portfolio_store(settings)
     for payload in store.get("portfolios", {}).values():
@@ -8909,7 +8877,7 @@ def build_sector_opportunity_report(
     settings: Settings,
     vault_dir: Path,
 ) -> SectorOpportunityResponse:
-    research_key = sector_research_key(request.region, request.style)
+    research_key = analysis_labels.sector_research_key(_analysis_labels_runtime(), request.region, request.style)
     macro_text = " ".join(
         [
             request.macro_environment,
@@ -9220,7 +9188,7 @@ def build_long_term_compounder_report(
     request: LongTermCompounderRequest,
     injected_data: list[InjectedDataPoint],
 ) -> LongTermCompounderResponse:
-    research_key = compounder_research_key(request.region, request.sector, request.style)
+    research_key = analysis_labels.compounder_research_key(_analysis_labels_runtime(), request.region, request.sector, request.style)
     region_key = "KR" if request.region.upper().startswith(("KR", "KOREA", "한국")) else "US"
     sector_filter = request.sector.strip()
     candidates = []
@@ -15790,7 +15758,7 @@ def run_sector_opportunity_finder(
     금리, AI, 에너지 가격, 경기 국면 같은 매크로 입력을 바탕으로
     향후 기간 동안 상대적으로 유리한 섹터와 후보 기업을 제안합니다.
     """
-    research_key = sector_research_key(request.region, request.style)
+    research_key = analysis_labels.sector_research_key(_analysis_labels_runtime(), request.region, request.style)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     macro_input = InjectedDataPoint(
         source_type="user_memo",
@@ -15827,7 +15795,7 @@ def run_long_term_compounder_finder(
     매출 성장, 마진, 경쟁 우위, 확장성, 시가총액 조건을 기준으로
     장기 복리 성장주 후보를 선별합니다.
     """
-    research_key = compounder_research_key(request.region, request.sector, request.style)
+    research_key = analysis_labels.compounder_research_key(_analysis_labels_runtime(), request.region, request.sector, request.style)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     criteria_input = InjectedDataPoint(
         source_type="user_memo",
@@ -15991,7 +15959,7 @@ def assess_research_checklist(
     ticker = ensure_verified_ticker(request.ticker)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     injected_data = collect_workspace_context(ticker, vault_dir, request.realtime_data)
-    statuses = build_checklist_statuses(request.checked_items)
+    statuses = analysis_labels.build_checklist_statuses(request.checked_items, RESEARCH_CHECKLIST_ITEMS)
     completed_items = [item for item in statuses if item.completed]
     missing_items = [item for item in statuses if not item.completed]
     total_count = len(statuses)
