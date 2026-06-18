@@ -35,9 +35,11 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_price_check,
     apply_daily_recommendation_priority_target,
     apply_daily_recommendation_recent_weekly_evidence,
+    apply_daily_recommendation_tracking_feedback,
     daily_recommendation_state_path,
     daily_recommendation_consensus_label,
     daily_recommendation_target_label,
+    daily_recommendation_tracking_feedback,
     ensure_daily_recommendation_candidate,
     finalize_daily_recommendation_candidate,
     finalize_daily_recommendation_ranking,
@@ -102,6 +104,37 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertEqual(lookup["ABSI"], (6.4, "saved_portfolio:finnhub"))
         self.assertNotIn("PL", lookup)
+
+    def test_tracking_feedback_penalizes_recent_underperformers(self):
+        feedback = daily_recommendation_tracking_feedback(
+            [
+                {
+                    "ticker": "OTLY",
+                    "tracking_milestones": [
+                        {"status": "complete", "price_change_pct": -0.18},
+                        {"status": "complete", "price_change_pct": -0.08},
+                    ],
+                },
+                {
+                    "ticker": "ABSI",
+                    "tracking_milestones": [
+                        {"status": "complete", "price_change_pct": 0.12},
+                        {"status": "complete", "price_change_pct": -0.01},
+                    ],
+                },
+            ]
+        )
+
+        self.assertEqual(feedback["OTLY"]["penalty_points"], 12)
+        self.assertNotIn("ABSI", feedback)
+
+        candidate = {"score": 40, "score_penalties": [], "risk_notes": [], "quality_flags": [], "evidence_sources": []}
+        apply_daily_recommendation_tracking_feedback(candidate, feedback["OTLY"])
+
+        self.assertEqual(candidate["score"], 28)
+        self.assertIn("최근 추천 성과 부진 피드백 (-12)", candidate["score_penalties"])
+        self.assertTrue(any("hit rate" in item for item in candidate["risk_notes"]))
+        self.assertIn("최근 추천 성과 피드백 감점", candidate["quality_flags"])
 
     def test_daily_recommendation_consensus_label_uses_company_or_ticker(self):
         self.assertEqual(

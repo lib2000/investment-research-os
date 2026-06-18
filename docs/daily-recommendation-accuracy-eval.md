@@ -49,3 +49,15 @@ Post-change failures:
 
 Remaining risk:
 - Price coverage is now complete for due milestones, so the next bottleneck is the actual realized recommendation hit rate rather than missing data.
+
+Iteration 4 - underperformance feedback loop:
+- Bottleneck: score coverage was complete, but realized `tracked_outcome` hit rate stayed below target.
+- Change: daily recommendation candidate scoring now applies a performance feedback penalty when prior completed milestones show repeated underperformance for the same ticker.
+- Current feedback candidates from the store: `OTLY=-12`, `112610=-12`, `033500=-6`, `003230=-6`, `253450=-6`, `071050=-6`.
+- Result: historical eval score remains `84.74/100` because past outcomes are not rewritten.
+
+Post-change failures:
+- `tracked_outcome: hit_rate 0.24 / 목표 0.50`
+
+Remaining risk:
+- The next score move now depends on future recommendations avoiding repeat underperformers and subsequent milestones completing with stronger outcomes.

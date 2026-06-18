@@ -522,6 +522,89 @@ def apply_daily_recommendation_price_check(
     return candidate
 
 
+def daily_recommendation_tracking_feedback(records: list[dict]) -> dict[str, dict]:
+    feedback: dict[str, dict] = {}
+    for record in records:
+        ticker = normalize_recommendation_ticker(record.get("ticker"))
+        if not ticker:
+            continue
+        stats = feedback.setdefault(
+            ticker,
+            {
+                "ticker": ticker,
+                "completed_count": 0,
+                "positive_count": 0,
+                "flat_count": 0,
+                "negative_count": 0,
+                "change_sum": 0.0,
+                "worst_change_pct": None,
+            },
+        )
+        for milestone in record.get("tracking_milestones") or []:
+            if not isinstance(milestone, dict) or milestone.get("status") != "complete":
+                continue
+            try:
+                change_pct = float(milestone.get("price_change_pct"))
+            except (TypeError, ValueError):
+                continue
+            stats["completed_count"] += 1
+            stats["change_sum"] += change_pct
+            if change_pct > 0.02:
+                stats["positive_count"] += 1
+            elif -0.02 <= change_pct <= 0.02:
+                stats["flat_count"] += 1
+            else:
+                stats["negative_count"] += 1
+            if stats["worst_change_pct"] is None or change_pct < stats["worst_change_pct"]:
+                stats["worst_change_pct"] = change_pct
+
+    actionable: dict[str, dict] = {}
+    for ticker, stats in feedback.items():
+        completed = int(stats["completed_count"])
+        if completed < 2:
+            continue
+        hit_rate = (int(stats["positive_count"]) + 0.5 * int(stats["flat_count"])) / completed
+        average_change_pct = float(stats["change_sum"]) / completed
+        penalty = 0
+        if hit_rate < 0.25 and average_change_pct <= -0.05:
+            penalty = 12
+        elif hit_rate < 0.4 and average_change_pct < 0:
+            penalty = 6
+        if penalty <= 0:
+            continue
+        actionable[ticker] = {
+            **stats,
+            "hit_rate": round(hit_rate, 4),
+            "average_change_pct": round(average_change_pct, 4),
+            "penalty_points": penalty,
+        }
+    return actionable
+
+
+def build_daily_recommendation_tracking_feedback(settings: Settings) -> dict[str, dict]:
+    store = read_daily_recommendation_store(settings)
+    records = [item for item in store.get("records", []) if isinstance(item, dict)]
+    return daily_recommendation_tracking_feedback(records)
+
+
+def apply_daily_recommendation_tracking_feedback(candidate: dict, feedback: dict | None) -> dict:
+    if not feedback:
+        return candidate
+    completed = int(feedback.get("completed_count") or 0)
+    hit_rate = float(feedback.get("hit_rate") or 0)
+    average_change_pct = float(feedback.get("average_change_pct") or 0)
+    penalty = int(feedback.get("penalty_points") or 0)
+    add_daily_recommendation_penalty(candidate, "최근 추천 성과 부진 피드백", penalty)
+    candidate.setdefault("risk_notes", []).append(
+        f"최근 추천 추적 {completed}건 hit rate {hit_rate * 100:.1f}%, 평균 수익률 {average_change_pct * 100:.1f}%로 재추천 전 논거 재검증이 필요합니다."
+    )
+    candidate.setdefault("quality_flags", []).append("최근 추천 성과 피드백 감점")
+    candidate.setdefault("evidence_sources", []).append(
+        f"추적 성과 피드백: 완료 {completed}건 · hit rate {hit_rate * 100:.1f}% · 평균 {average_change_pct * 100:.1f}%"
+    )
+    return candidate
+
+
 def finalize_daily_recommendation_ranking(
     candidates_by_ticker: dict[str, dict],
     *,

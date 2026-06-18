@@ -74,7 +74,9 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
     apply_daily_recommendation_priority_target as _apply_daily_recommendation_priority_target,
     apply_daily_recommendation_recent_weekly_evidence as _apply_daily_recommendation_recent_weekly_evidence,
+    apply_daily_recommendation_tracking_feedback as _apply_daily_recommendation_tracking_feedback,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
+    build_daily_recommendation_tracking_feedback as _build_daily_recommendation_tracking_feedback,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_consensus_label as _daily_recommendation_consensus_label,
     daily_recommendation_evidence_link_index as _daily_recommendation_evidence_link_index,
@@ -14573,6 +14575,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         recent_weekly = build_recent_weekly_research_brief(settings, days=7, refresh_if_due=False)
     except Exception:
         recent_weekly = {}
+    try:
+        tracking_feedback = _build_daily_recommendation_tracking_feedback(settings)
+    except Exception:
+        tracking_feedback = {}
     consensus_scan = build_target_consensus_scan(
         settings,
         portfolio_name=None,
@@ -14652,6 +14658,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             )
 
         _apply_daily_recommendation_overseas_tracking(candidate)
+        _apply_daily_recommendation_tracking_feedback(candidate, tracking_feedback.get(ticker))
         _apply_investment_direction_profile(candidate)
 
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(
