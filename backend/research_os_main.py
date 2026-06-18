@@ -5833,48 +5833,6 @@ def _safe_display_error(error: Exception) -> str:
     return text or error.__class__.__name__
 
 
-def keyword_hits(text: str, keywords: list[str]) -> int:
-    return news_market_journal.keyword_hits(text, keywords)
-
-
-def clean_market_summary_text(raw_summary: str) -> str:
-    return news_market_journal.clean_market_summary_text(raw_summary)
-
-
-def infer_market_close_sentiment(raw_summary: str) -> tuple[str, str, str]:
-    return news_market_journal.infer_market_close_sentiment(raw_summary)
-
-
-def infer_market_tags(raw_summary: str) -> list[str]:
-    return news_market_journal.infer_market_tags(raw_summary)
-
-
-def summarize_market_lines(raw_summary: str, limit: int = 5) -> list[str]:
-    return news_market_journal.summarize_market_lines(raw_summary, limit=limit)
-
-
-def build_sector_implications(raw_summary: str, tags: list[str]) -> list[str]:
-    return news_market_journal.build_sector_implications(raw_summary, tags)
-
-
-def build_market_portfolio_actions(sentiment: str, risk_level: str, regime: str) -> list[str]:
-    return news_market_journal.build_market_portfolio_actions(sentiment, risk_level, regime)
-
-
-def build_market_next_watch(tags: list[str], market: str) -> list[str]:
-    return news_market_journal.build_market_next_watch(tags, market)
-
-def market_tag_aliases(tags: list[str]) -> list[str]:
-    return news_market_journal.market_tag_aliases(tags)
-
-
-def text_matches_market_tags(value: str, tag_terms: list[str]) -> bool:
-    return news_market_journal.text_matches_market_tags(value, tag_terms)
-
-
-def append_unique(items: list[str], value: str, limit: int = 8) -> None:
-    news_market_journal.append_unique(items, value, limit=limit)
-
 def build_auto_market_utilization_focus(
     *,
     market: str,
@@ -9955,19 +9913,19 @@ def _news_market_journal_runtime() -> SimpleNamespace:
         InterestSector=InterestSector,
         build_auto_market_utilization_focus=build_auto_market_utilization_focus,
         build_market_interest_implications=build_market_interest_implications,
-        build_market_next_watch=build_market_next_watch,
-        build_market_portfolio_actions=build_market_portfolio_actions,
-        build_sector_implications=build_sector_implications,
+        build_market_next_watch=news_market_journal.build_market_next_watch,
+        build_market_portfolio_actions=news_market_journal.build_market_portfolio_actions,
+        build_sector_implications=news_market_journal.build_sector_implications,
         capture_quality_status=capture_quality_status,
-        clean_market_summary_text=clean_market_summary_text,
+        clean_market_summary_text=news_market_journal.clean_market_summary_text,
         compact_interest_text=compact_interest_text,
         cumulative_market_patterns=cumulative_market_patterns,
         current_storage_date=current_storage_date,
         current_storage_timestamp=current_storage_timestamp,
         fetch_naver_korea_index_snapshot=fetch_naver_korea_index_snapshot,
-        infer_market_close_sentiment=infer_market_close_sentiment,
+        infer_market_close_sentiment=news_market_journal.infer_market_close_sentiment,
         infer_market_from_news_item=infer_market_from_news_item,
-        infer_market_tags=infer_market_tags,
+        infer_market_tags=news_market_journal.infer_market_tags,
         market_close_journal_path=market_close_journal_path,
         market_research_key=market_research_key,
         news_item_safe_view=news_item_safe_view,
@@ -9977,7 +9935,7 @@ def _news_market_journal_runtime() -> SimpleNamespace:
         render_market_close_markdown=render_market_close_markdown,
         resolve_vault_dir=resolve_vault_dir,
         save_research_markdown=save_research_markdown,
-        summarize_market_lines=summarize_market_lines,
+        summarize_market_lines=news_market_journal.summarize_market_lines,
         write_json_store=write_json_store,
     )
 
@@ -15248,7 +15206,7 @@ def save_market_close_review(
     combined_summary_for_check = "\n\n".join(
         value for value in [request.raw_summary, url_body] if str(value or "").strip()
     )
-    has_text = bool(clean_market_summary_text(combined_summary_for_check))
+    has_text = bool(news_market_journal.clean_market_summary_text(combined_summary_for_check))
     has_file = bool(request.file_content_base64)
     if not has_text and not has_file:
         raise HTTPException(
