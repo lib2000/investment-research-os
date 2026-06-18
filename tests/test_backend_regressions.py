@@ -713,6 +713,20 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         self.assertTrue(all("--require-rpc-ready" in error for error in missing))
 
+    def test_firecrawl_ir_check_tool_reports_rpc_preflight_status(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        not_ready = tool._rpc_preflight_result(["FIRECRAWL_IR_DRY_RUN must be false for --require-rpc-ready"])
+        ready = tool._rpc_preflight_result([])
+
+        self.assertEqual(not_ready["status"], "skipped")
+        self.assertEqual(not_ready["reason"], "rpc_not_ready")
+        self.assertEqual(
+            not_ready["readiness_errors"],
+            ["FIRECRAWL_IR_DRY_RUN must be false for --require-rpc-ready"],
+        )
+        self.assertEqual(ready, {"status": "ready"})
+
     def test_firecrawl_ir_check_tool_writes_output_json(self):
         tool = load_firecrawl_ir_check_tool()
 

@@ -168,6 +168,16 @@ def _mark_duplicate_payload_errors(payload_results: list[dict]) -> list[str]:
     return errors
 
 
+def _rpc_preflight_result(readiness_errors: list[str]) -> dict:
+    if readiness_errors:
+        return {
+            "status": "skipped",
+            "reason": "rpc_not_ready",
+            "readiness_errors": readiness_errors,
+        }
+    return {"status": "ready"}
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     settings = get_settings()
@@ -228,6 +238,9 @@ def main() -> int:
                 result["rpc"] = build_firecrawl_ir_collection_result(items[0], settings, dry_run=False).get("rpc")
             else:
                 result["batch"] = build_firecrawl_ir_batch_result(items, settings, dry_run=False)
+
+    if args.require_rpc_ready and not args.submit:
+        result["rpc"] = _rpc_preflight_result(rpc_ready_errors)
 
     if args.output_json:
         result["output_json"] = str(args.output_json)
