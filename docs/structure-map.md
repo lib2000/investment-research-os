@@ -74,7 +74,7 @@
 | `backend\research_os\nps_data_provider.py` | 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환 | `check_backend_runtime_env.py` |
 | `backend\research_os\opendart_data_provider.py` | OpenDART corp-code/공시/재무 API client와 한국 종목 재무 provider | `BackendModuleBoundaryTests` |
 | `backend\research_os\tiingo_data_provider.py` | Tiingo 해외 현재가 provider | `TiingoDataProviderModuleTests` |
-| `backend\research_os\data_providers.py` | 기존 import 호환용 provider re-export와 관세청/NPS helper 연결 | `check_backend_runtime_env.py` |
+| `backend\research_os\data_providers.py` | 레거시 import 호환 facade. 운영 코드는 provider 소유 모듈을 직접 import | `check_backend_module_health.py` |
 | `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
 | `backend\research_os\file_attachment_utils.py` | 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper | `FileAttachmentUtilsModuleTests` |
 | `backend\research_os\file_image_metadata.py` | PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper | `FileImageMetadataModuleTests` |

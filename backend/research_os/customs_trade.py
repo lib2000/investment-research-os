@@ -7,7 +7,7 @@ from re import sub
 
 from fastapi import HTTPException
 
-from research_os.data_providers import fetch_customs_total_trend_status, fetch_customs_trade_rows
+from research_os.customs_data_provider import fetch_customs_total_trend_status, fetch_customs_trade_rows
 from research_os.state_store import current_storage_date, current_storage_timestamp
 
 

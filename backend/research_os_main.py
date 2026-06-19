@@ -33,15 +33,17 @@ from research_os.customs_trade import (
     should_check_customs_trade_today as _should_check_customs_trade_today,
     yymm_add_months as _yymm_add_months,
 )
-from research_os.data_providers import (
-    FmpClient,
-    OpenDartClient,
+from research_os.analysis_data_provider import get_analysis_data_provider
+from research_os.customs_data_provider import (
     fetch_customs_total_trend_status,
     fetch_customs_trade_rows,
+)
+from research_os.fmp_data_provider import FmpClient
+from research_os.nps_data_provider import (
     fetch_nps_institutional_context,
     fetch_nps_institutional_signal,
-    get_analysis_data_provider,
 )
+from research_os.opendart_data_provider import OpenDartClient
 from research_os.dossier_text import (
     DOSSIER_ALLOWED_REPORT_TYPES,
     DOSSIER_EXCLUDED_REPORT_TYPES,

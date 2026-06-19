@@ -10297,7 +10297,7 @@ class DartFilingWatchTests(unittest.TestCase):
 
 class CustomsTradeDataQualityTests(unittest.TestCase):
     def test_service_status_only_customs_rows_are_not_counted_as_trade_data(self):
-        from research_os.data_providers import fetch_customs_trade_rows
+        from research_os.customs_data_provider import fetch_customs_trade_rows
         from research_os.settings import Settings
 
         settings = Settings(
@@ -10307,7 +10307,7 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
             customs_trade_max_rows=20,
         )
 
-        with patch("research_os.data_providers.KoreaCustomsTradeClient.fetch_item_trade_rows") as fetch_mock:
+        with patch("research_os.customs_data_provider.KoreaCustomsTradeClient.fetch_item_trade_rows") as fetch_mock:
             fetch_mock.return_value = ([{"resultCode": "00", "resultMsg": "정상서비스."}], [], "https://example.test/customs")
             result = fetch_customs_trade_rows(
                 settings,
@@ -10413,7 +10413,7 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
         self.assertEqual(rag_calls[0]["metadata"]["source_urls"], ["https://example.test/customs"])
 
     def test_customs_total_trend_provider_status_is_separated_from_item_trade_api(self):
-        from research_os.data_providers import get_analysis_data_provider
+        from research_os.analysis_data_provider import get_analysis_data_provider
         from research_os.settings import Settings
 
         settings = Settings(
@@ -10432,7 +10432,7 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
         self.assertIn("수출입총괄", statuses["korea_customs_trade_total_trend"]["message"])
 
     def test_customs_total_trend_403_returns_actionable_warning_without_secret(self):
-        from research_os.data_providers import fetch_customs_total_trend_status
+        from research_os.customs_data_provider import fetch_customs_total_trend_status
         from research_os.settings import Settings
 
         class FakeResponse:
@@ -10459,7 +10459,7 @@ class CustomsTradeDataQualityTests(unittest.TestCase):
             customs_trade_total_api_url="https://example.test/total-trend",
         )
 
-        with patch("research_os.data_providers.httpx.Client", new=FakeClient):
+        with patch("research_os.customs_data_provider.httpx.Client", new=FakeClient):
             status = fetch_customs_total_trend_status(
                 settings,
                 start_yymm="202605",

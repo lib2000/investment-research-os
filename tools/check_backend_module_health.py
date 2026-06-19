@@ -89,7 +89,6 @@ EXPECTED_MAIN_IMPORTS = {
     "research_os.data_provider_core",
     "research_os.data_provider_status",
     "research_os.data_provider_status_messages",
-    "research_os.data_providers",
     "research_os.alpha_vantage_data_provider",
     "research_os.financial_datasets_data_provider",
     "research_os.finnhub_data_provider",

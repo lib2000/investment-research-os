@@ -1,5 +1,3 @@
-import httpx
-
 import research_os.provider_usage as provider_usage
 from research_os.analysis_data_provider import (
     AnalysisDataProvider,
@@ -26,8 +24,6 @@ from research_os.kis_data_provider import (
     KIS_US_EXCHANGE_BY_TICKER,
     _kis_candidate_exchange_codes,
 )
-from research_os.fmp_data_provider import FmpClient
-from research_os.opendart_data_provider import OpenDartClient
 
 
 def _resolve_backend_relative_path(path_value: str):

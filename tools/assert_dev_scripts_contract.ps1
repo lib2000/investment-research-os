@@ -714,7 +714,6 @@ $contracts = @(
       'research_os.analysis_data_provider',
       'analysis_data_provider.py',
       'research_os.brokerage',
-      'research_os.data_providers',
       'research_os.kis_data_provider',
       'kis_data_provider.py',
       'research_os.data_provider_core',
