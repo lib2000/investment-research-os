@@ -2156,8 +2156,11 @@ class DataProviderStatusModuleTests(unittest.TestCase):
         from types import SimpleNamespace
 
         from research_os.data_provider_status import (
+            build_financial_datasets_status,
+            build_finnhub_market_status,
             build_kis_market_status,
             build_supplemental_provider_statuses,
+            build_tiingo_market_status,
         )
         from research_os.settings import Settings
 
@@ -2203,6 +2206,16 @@ class DataProviderStatusModuleTests(unittest.TestCase):
         ).to_dict()
         self.assertEqual(kis_status["name"], "kis_overseas_market_data")
         self.assertIn("자동매매 보호", kis_status["message"])
+
+        financial_status = build_financial_datasets_status(SimpleNamespace(is_configured=True)).to_dict()
+        finnhub_market_status = build_finnhub_market_status(SimpleNamespace(is_configured=False)).to_dict()
+        tiingo_status = build_tiingo_market_status(SimpleNamespace(is_configured=True)).to_dict()
+        self.assertEqual(financial_status["name"], "financial_datasets_financials")
+        self.assertIn("Financial Datasets", financial_status["message"])
+        self.assertEqual(finnhub_market_status["name"], "finnhub_market_data")
+        self.assertIn("API 키가 없어", finnhub_market_status["message"])
+        self.assertEqual(tiingo_status["name"], "tiingo_market_data")
+        self.assertIn("Tiingo", tiingo_status["message"])
 
 
 class RagSearchResultsModuleTests(unittest.TestCase):
@@ -2361,6 +2374,70 @@ class FinnhubDataProviderModuleTests(unittest.TestCase):
         self.assertIn("finnhub_next_earnings_event", [point.label for point in supplemental_points])
         self.assertIn("finnhub_recent_news", [point.label for point in supplemental_points])
         self.assertEqual(FinnhubMarketDataProvider(FakeClient()).fetch_market_snapshot("005930"), [])
+
+
+class AlphaVantageDataProviderModuleTests(unittest.TestCase):
+    def test_alpha_vantage_provider_maps_company_overview_without_network(self):
+        from research_os.alpha_vantage_data_provider import AlphaVantageSupplementalDataProvider
+        from research_os.settings import Settings
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "Symbol": "PL",
+                    "Sector": "Industrials",
+                    "Industry": "Aerospace",
+                    "MarketCapitalization": "1200000000",
+                    "PERatio": "15.2",
+                    "ProfitMargin": "0.12",
+                }
+
+        settings = Settings(
+            alpha_vantage_api_key="test-alpha-key",
+            alpha_vantage_base_url="https://alpha.test/query",
+        )
+
+        with patch("research_os.alpha_vantage_data_provider.httpx.get", return_value=FakeResponse()) as get_mock:
+            points = AlphaVantageSupplementalDataProvider(settings).fetch_supplemental_snapshot("PL")
+
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0].label, "alpha_vantage_company_overview")
+        self.assertIn("Sector=Industrials", points[0].value)
+        self.assertEqual(points[0].source_url, "https://alpha.test/query")
+        self.assertEqual(get_mock.call_args.kwargs["params"]["symbol"], "PL")
+        self.assertEqual(AlphaVantageSupplementalDataProvider(settings).fetch_supplemental_snapshot("005930"), [])
+
+
+class TiingoDataProviderModuleTests(unittest.TestCase):
+    def test_tiingo_provider_maps_price_payload_without_network(self):
+        from research_os.settings import Settings
+        from research_os.tiingo_data_provider import TiingoMarketDataProvider
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return [{"close": 10.75, "date": "2026-06-18T00:00:00Z"}]
+
+        settings = Settings(
+            tiingo_api_key="test-tiingo-key",
+            tiingo_base_url="https://tiingo.test",
+        )
+
+        with patch("research_os.tiingo_data_provider.httpx.get", return_value=FakeResponse()) as get_mock:
+            points = TiingoMarketDataProvider(settings).fetch_market_snapshot("PL")
+
+        self.assertEqual(len(points), 1)
+        self.assertEqual(points[0].label, "tiingo_last_price")
+        self.assertEqual(points[0].value, "10.75")
+        self.assertEqual(points[0].source_url, "https://tiingo.test/tiingo/daily/PL/prices")
+        self.assertEqual(get_mock.call_args.args[0], "https://tiingo.test/tiingo/daily/PL/prices")
+        self.assertEqual(TiingoMarketDataProvider(settings).fetch_market_snapshot("005930"), [])
+
 
 class WebSearchDataProviderModuleTests(unittest.TestCase):
     def test_web_search_data_providers_return_quota_guard_without_network(self):

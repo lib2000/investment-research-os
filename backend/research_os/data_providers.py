@@ -1,7 +1,7 @@
 import httpx
 
-from research_os import provider_usage
-from research_os import data_provider_status_messages
+import research_os.data_provider_status_messages as data_provider_status_messages
+import research_os.provider_usage as provider_usage
 from research_os.models import InjectedDataPoint
 from research_os.settings import Settings
 from research_os.data_provider_core import (
