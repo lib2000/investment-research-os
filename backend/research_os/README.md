@@ -37,6 +37,7 @@
 - `dashboard_helpers.py`: 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper
 - `automation_digest_helpers.py`: 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper
 - `automation_schedule_status.py`: 리서치 외부 소스 자동화 스케줄 상태 row 조립 helper
+- `analysis_data_provider.py`: 분석 입력용 market/financial/supplemental provider composition과 상태 payload 조립
 - `data_provider_utils.py`: 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸
 - `data_provider_status_messages.py`: KIS/FMP/외부 보강 provider 상태 표시 문구 helper
 - `data_provider_status.py`: KIS/OpenDART/검색/관세청 등 data provider 상태 row 조립 helper
@@ -49,7 +50,7 @@
 - `nps_data_provider.py`: 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환
 - `opendart_data_provider.py`: OpenDART corp-code/공시/재무 API client와 한국 종목 재무 provider
 - `tiingo_data_provider.py`: Tiingo 해외 현재가 provider
-- `data_providers.py`: KIS, OpenDART, 가격, NPS와 검색/보강 데이터 프로바이더 호출
+- `data_providers.py`: 기존 import 호환용 provider re-export와 관세청/NPS helper 연결
 - `export_utils.py`: 화면 결과 엑셀 다운로드용 순수 XLSX 생성 유틸
 - `file_attachment_utils.py`: 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper
 - `file_image_metadata.py`: PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper

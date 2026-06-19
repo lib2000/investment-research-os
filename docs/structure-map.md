@@ -61,6 +61,7 @@
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
 | `backend\research_os\automation_digest_helpers.py` | 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper | `AutomationStatusModuleTests` |
 | `backend\research_os\automation_schedule_status.py` | 리서치 외부 소스 자동화 스케줄 상태 row 조립 helper | `AutomationStatusModuleTests` |
+| `backend\research_os\analysis_data_provider.py` | 분석 입력용 market/financial/supplemental provider composition과 상태 payload 조립 | `DataProviderStatusModuleTests` |
 | `backend\research_os\data_provider_utils.py` | 외부 데이터 프로바이더 공통 값 파싱, 비밀값 구성 판정, 오류 메시지 마스킹 유틸 | `check_backend_module_health.py` |
 | `backend\research_os\data_provider_status_messages.py` | KIS/FMP/외부 보강 provider 상태 표시 문구 helper | `DataProviderStatusMessagesModuleTests` |
 | `backend\research_os\data_provider_status.py` | KIS/OpenDART/검색/관세청 등 data provider 상태 row 조립 helper | `DataProviderStatusModuleTests` |
@@ -73,7 +74,7 @@
 | `backend\research_os\nps_data_provider.py` | 국민연금 ODCLOUD 보유/대량보유 API client, 캐시, 기관 수급 신호 변환 | `check_backend_runtime_env.py` |
 | `backend\research_os\opendart_data_provider.py` | OpenDART corp-code/공시/재무 API client와 한국 종목 재무 provider | `BackendModuleBoundaryTests` |
 | `backend\research_os\tiingo_data_provider.py` | Tiingo 해외 현재가 provider | `TiingoDataProviderModuleTests` |
-| `backend\research_os\data_providers.py` | KIS/OpenDART/가격/NPS와 검색·보강 데이터 프로바이더 호출 | `check_backend_runtime_env.py` |
+| `backend\research_os\data_providers.py` | 기존 import 호환용 provider re-export와 관세청/NPS helper 연결 | `check_backend_runtime_env.py` |
 | `backend\research_os\export_utils.py` | 결과 엑셀 다운로드용 시트/워크북 생성 | `BackendModuleBoundaryTests` |
 | `backend\research_os\file_attachment_utils.py` | 첨부 파일명 정리, base64 디코딩, PDF/이미지 MIME 판정 helper | `FileAttachmentUtilsModuleTests` |
 | `backend\research_os\file_image_metadata.py` | PNG/JPEG/WEBP 첨부 이미지 크기 감지 helper | `FileImageMetadataModuleTests` |
