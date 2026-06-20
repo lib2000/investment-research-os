@@ -3743,6 +3743,42 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("특징 종목", candidate.raw_summary)
         self.assertIn("06/16 미 증시", candidate.source_title)
 
+    def test_telegram_market_journal_includes_sections_after_anchor(self):
+        from research_os.telegram_market_journal import (
+            latest_telegram_us_market_close_candidate,
+            parse_telegram_public_channel_html,
+        )
+
+        html = """
+        <div class="tgme_widget_message" data-post="ehdwl/10827">
+          <div class="tgme_widget_message_text">06/18 미 증시, 옵션 만기일 영향과 반도체에 집중된 수급 영향에 상승<br/>다우 +0.14%, 나스닥 +1.91%, S&amp;P500 +1.09%</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/10827"><time datetime="2026-06-18T20:32:08+00:00"></time></a>
+        </div>
+        <div class="tgme_widget_message" data-post="ehdwl/10828">
+          <div class="tgme_widget_message_text">특징 종목: 마이크론, 엔비디아 상승 Vs. 스페이스X 하락 지속<br/>필라델피아 반도체 지수는 상승</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/10828"><time datetime="2026-06-18T20:32:30+00:00"></time></a>
+        </div>
+        <div class="tgme_widget_message" data-post="ehdwl/10829">
+          <div class="tgme_widget_message_text">원자력, 우라늄: 뉴스케일 파워, 계약 소식에 급등<br/>에너지 테마 강세</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/10829"><time datetime="2026-06-18T20:32:30+00:00"></time></a>
+        </div>
+        <div class="tgme_widget_message" data-post="ehdwl/10830">
+          <div class="tgme_widget_message_text">한국 증시 관련 수치: 야간선물 급등, FOMO<br/>나스닥과 반도체 수급 영향</div>
+          <a class="tgme_widget_message_date" href="https://t.me/ehdwl/10830"><time datetime="2026-06-18T20:32:47+00:00"></time></a>
+        </div>
+        """
+
+        posts = parse_telegram_public_channel_html(html, channel_username="ehdwl", base_url="https://t.me/s/ehdwl")
+        candidate = latest_telegram_us_market_close_candidate(posts, today=date(2026, 6, 19))
+
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.source_item_id, "ehdwl/10827")
+        self.assertEqual(candidate.session_date, "2026-06-18")
+        self.assertEqual(candidate.included_post_count, 4)
+        self.assertIn("특징 종목", candidate.raw_summary)
+        self.assertIn("원자력, 우라늄", candidate.raw_summary)
+        self.assertIn("한국 증시 관련 수치", candidate.raw_summary)
+
     def test_telegram_market_close_refresh_marks_auto_source(self):
         import research_os_main as main
         from research_os.models import MarketCloseEntry, MarketCloseReviewResponse

@@ -260,6 +260,9 @@ def is_related_us_market_section(post: TelegramMarketPost) -> bool:
         "한국 증시 관련 수치",
         "필라델피아 반도체",
         "국제유가",
+        "에너지",
+        "원자력",
+        "우라늄",
         "달러화",
         "국채 금리",
         "시간 외",
@@ -272,8 +275,16 @@ def is_related_us_market_section(post: TelegramMarketPost) -> bool:
 
 def _candidate_posts_for_anchor(posts: list[TelegramMarketPost], anchor_index: int, max_related_posts: int) -> list[TelegramMarketPost]:
     selected = [posts[anchor_index]]
+    limit = max(max_related_posts, 1)
+    for following in posts[anchor_index + 1 :]:
+        if len(selected) >= limit:
+            break
+        if is_us_market_close_anchor(following):
+            break
+        if is_related_us_market_section(following):
+            selected.append(following)
     for prior in reversed(posts[:anchor_index]):
-        if len(selected) >= max_related_posts:
+        if len(selected) >= limit:
             break
         if is_us_market_close_anchor(prior):
             break
