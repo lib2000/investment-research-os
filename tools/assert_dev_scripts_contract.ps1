@@ -60,6 +60,9 @@ $contracts = @(
       '$StopExistingPortProcess',
       '$ForceExistingPortProcess',
       '$env:EXPO_PUBLIC_API_BASE_URL',
+      '$expoHostName',
+      'Expo web supports --host values lan, tunnel, or localhost',
+      'Unsupported Expo host',
       'show_dev_server_ports.ps1',
       '강제 taskkill은 실행하지 않았습니다',
       'npx @expoArgs'

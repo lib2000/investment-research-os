@@ -12,6 +12,16 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 
+$expoHostName = $HostName
+if ($HostName -eq "127.0.0.1" -or $HostName -eq "::1") {
+  Write-Warning "Expo web supports --host values lan, tunnel, or localhost. Using localhost instead of $HostName."
+  $expoHostName = "localhost"
+}
+
+if ($expoHostName -notin @("localhost", "lan", "tunnel")) {
+  throw "Unsupported Expo host '$HostName'. Use localhost, lan, or tunnel."
+}
+
 function Get-PortOwningProcessIds {
   param([int]$LocalPort)
 
@@ -121,13 +131,13 @@ $env:EXPO_PUBLIC_API_BASE_URL = $ApiBaseUrl
 
 Set-Location -LiteralPath $mobilePath
 Write-Host "Expo 모바일 웹 미리보기를 시작합니다."
-Write-Host "URL: http://$HostName`:$Port"
+Write-Host "URL: http://$expoHostName`:$Port"
 Write-Host "API: $ApiBaseUrl"
 if ($ClearCache) {
   Write-Host "Metro 캐시를 비우고 시작합니다."
 }
 
-$expoArgs = @("expo", "start", "--web", "--host", $HostName, "--port", "$Port")
+$expoArgs = @("expo", "start", "--web", "--host", $expoHostName, "--port", "$Port")
 if ($ClearCache) {
   $expoArgs += "--clear"
 }
