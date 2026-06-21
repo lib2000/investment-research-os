@@ -188,6 +188,10 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_evidence_synthesis_title": "추천 근거 요약",
     "recent_weekly_evidence_synthesis_rag_status": "추천 근거 RAG 합성",
     "recent_weekly_evidence_synthesis_storage": "저장된 합성 보고서",
+    "telegram_market_close_task_status_api": "fetchTelegramMarketCloseTaskStatus",
+    "telegram_market_close_system_check": "텔레그램 미국 시장일지 자동 반영",
+    "telegram_market_close_storage_line": "미국 시장일지 저장",
+    "telegram_market_close_section_count": "포함 섹션",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {

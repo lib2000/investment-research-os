@@ -1981,6 +1981,16 @@ export async function fetchNaverMarketCloseTaskStatus(accessToken, logLimit = 20
   );
 }
 
+export async function fetchTelegramMarketCloseTaskStatus(accessToken, logLimit = 20) {
+  return request(
+    `/api/v1/telegram-market-close-journal/task-status?log_limit=${encodeURIComponent(logLimit)}`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
 export async function fetchCustomsTradeSnapshot(
   accessToken,
   {
