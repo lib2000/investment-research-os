@@ -3628,6 +3628,20 @@ class NaverResearchIngestTests(unittest.TestCase):
                 }
             ),
         )
+        telegram_attempt = check_research_source_store.format_telegram_market_journal_attempt(
+            {
+                "status": "skipped_duplicate",
+                "last_attempt_date": "2026-06-21",
+                "last_attempt_at": "2026-06-21T11:05:29+09:00",
+                "last_attempt_message": "같은 텔레그램 미국 시장일지 원본이라 중복 저장하지 않았습니다.",
+                "included_post_count": 4,
+                "storage": {
+                    "relative_path": "research_vault/MARKET-US/MARKET-US-market-close-review-2026-06-18-003.md"
+                },
+            }
+        )
+        self.assertIn("포함 섹션 4개", telegram_attempt)
+        self.assertIn("MARKET-US-market-close-review-2026-06-18-003.md", telegram_attempt)
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main

@@ -241,6 +241,18 @@ def format_market_journal_attempt(state: dict[str, Any]) -> str:
     )
 
 
+def format_telegram_market_journal_attempt(state: dict[str, Any]) -> str:
+    base = format_market_journal_attempt(state)
+    included_post_count = state.get("included_post_count")
+    storage = state.get("storage") if isinstance(state.get("storage"), dict) else {}
+    storage_path = str(storage.get("relative_path") or "").strip()
+    return (
+        f"{base} | "
+        f"포함 섹션 {included_post_count if included_post_count is not None else '미확인'}개 | "
+        f"저장 {storage_path or '미확인'}"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -255,6 +267,7 @@ def main() -> int:
     parser.add_argument("--max-market-journal-age-hours", type=float, default=72.0, help="시장일지 최신성 기준")
     parser.add_argument("--max-market-journal-session-age-days", type=int, default=7, help="시장별 최신 세션일 허용 경과일")
     parser.add_argument("--max-market-journal-attempt-age-hours", type=float, default=72.0, help="마감 시황 자동 수집 시도 최신성 기준")
+    parser.add_argument("--min-telegram-market-journal-included-posts", type=int, default=2, help="텔레그램 미국 시장일지 후보에 포함돼야 하는 최소 섹션 수")
     parser.add_argument("--min-market-journal-impact-links", type=int, default=1, help="관심/보유 자동화 보드에 필요한 시장일지 연결 최소 건수")
     parser.add_argument("--min-market-journal-linked-targets", type=int, default=1, help="시장일지가 연결되어야 하는 관심/보유 자동화 대상 최소 수")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
@@ -411,6 +424,18 @@ def main() -> int:
         if telegram_market_close_status in {"success", "skipped_duplicate"}:
             add_issue(issues, not str(telegram_market_close_state.get("source_item_id") or "").strip(), "텔레그램 미국 시장일지 source_item_id 누락")
             add_issue(issues, not str(telegram_market_close_state.get("source_provider") or "").strip(), "텔레그램 미국 시장일지 출처 제공자 누락")
+            included_post_count = int(telegram_market_close_state.get("included_post_count") or 0)
+            add_issue(
+                issues,
+                included_post_count < max(1, int(args.min_telegram_market_journal_included_posts)),
+                f"텔레그램 미국 시장일지 포함 섹션 부족: {included_post_count}개",
+            )
+            storage = telegram_market_close_state.get("storage")
+            add_issue(
+                issues,
+                not isinstance(storage, dict) or not str(storage.get("relative_path") or "").strip(),
+                "텔레그램 미국 시장일지 저장 경로 누락",
+            )
 
     market_journal = load_json(system_dir, "market_close_journal.json")
     market_journal_rows = rows_from_mapping_or_list(market_journal.get("entries"))
@@ -492,7 +517,7 @@ def main() -> int:
     print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
     print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 파일 누락 {len(shinhan_missing_files)}개 | 갱신 {shinhan.get('updated_at')}")
     print(f"마감 시황 자동 시도: {format_market_journal_attempt(market_close_state)}")
-    print(f"텔레그램 미국 시장일지 자동 시도: {format_market_journal_attempt(telegram_market_close_state)}")
+    print(f"텔레그램 미국 시장일지 자동 시도: {format_telegram_market_journal_attempt(telegram_market_close_state)}")
     print(f"마감 시황 시장일지: {len(market_journal_rows)}개 | 자동 출처 {len(market_journal_auto_complete_rows)}/{len(market_journal_auto_rows)}개 | 갱신 {market_journal.get('updated_at')}")
     market_summary = ", ".join(
         format_market_journal_summary(market, summary)
