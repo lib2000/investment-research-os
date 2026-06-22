@@ -347,6 +347,9 @@ def assert_partial_click_smoke(result: dict) -> None:
         checks = [
             ("systemCheckCompleted", "시스템 점검이 완료 상태까지 도달하지 못했습니다."),
             ("systemCheckShowsDartReliability", "시스템 점검 화면에 자동화 신뢰도/네이버 리서치 상태가 표시되지 않았습니다."),
+            ("telegramMarketJournalVisible", "시스템 점검 화면에 텔레그램 미국 시장일지 상태가 표시되지 않았습니다."),
+            ("telegramMarketJournalShowsSectionCount", "시스템 점검 화면에 텔레그램 미국 시장일지 포함 섹션 수가 표시되지 않았습니다."),
+            ("telegramMarketJournalShowsStoragePath", "시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다."),
             ("researchAutomationShowsSourceQuality", "리서치 자동화 상태 화면에 수집 품질 대시보드가 표시되지 않았습니다."),
         ]
     elif stage == "memory-sources":
@@ -459,7 +462,10 @@ def run_click_smoke(
                           const output = document.querySelector("#output")?.innerText || "";
                           return output.includes("전체 시스템 점검 완료") &&
                             output.includes("DART 공시 감시 상태") &&
-                            output.includes("네이버 리서치/시장일지 상태")
+                            output.includes("네이버 리서치/시장일지 상태") &&
+                            output.includes("텔레그램 미국 시장일지") &&
+                            output.includes("포함 섹션") &&
+                            output.includes("research_vault/MARKET-US/")
                             ? output
                             : "";
                         },
@@ -469,8 +475,11 @@ def run_click_smoke(
                       return {
                         backendStatus: document.querySelector("#backendStatus")?.textContent || "",
                         systemCheckCompleted: true,
+                        telegramMarketJournalVisible: text.includes("텔레그램 미국 시장일지"),
+                        telegramMarketJournalShowsSectionCount: text.includes("포함 섹션"),
+                        telegramMarketJournalShowsStoragePath: text.includes("research_vault/MARKET-US/"),
                         elapsedMs: Date.now() - started,
-                        preview: text.split("\\n").slice(0, 18).join("\\n"),
+                        preview: text.split("\\n").slice(0, 28).join("\\n"),
                       };
                     })()
                     """,
@@ -483,6 +492,12 @@ def run_click_smoke(
                 progress_step("system-check smoke completed")
                 if not result["systemCheckCompleted"]:
                     raise AssertionError("시스템 점검이 완료 상태까지 도달하지 못했습니다.")
+                if not result.get("telegramMarketJournalVisible"):
+                    raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 상태가 표시되지 않았습니다.")
+                if not result.get("telegramMarketJournalShowsSectionCount"):
+                    raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 포함 섹션 수가 표시되지 않았습니다.")
+                if not result.get("telegramMarketJournalShowsStoragePath"):
+                    raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다.")
                 return result
             progress_step(f"full click smoke started{f' (stop after {stop_after})' if stop_after else ''}")
             stop_after_json = json.dumps(stop_after or "")
@@ -1159,6 +1174,9 @@ def run_click_smoke(
                       systemCheckShowsDartReliability: systemCheckCompleted
                         ? (systemCheckText.includes("DART 공시 감시 상태") || systemCheckText.includes("네이버 리서치/시장일지 자동 반영"))
                         : /시스템 점검|진행 중|백엔드|저장/.test(systemCheckText),
+                      telegramMarketJournalVisible: systemCheckText.includes("텔레그램 미국 시장일지"),
+                      telegramMarketJournalShowsSectionCount: systemCheckText.includes("포함 섹션"),
+                      telegramMarketJournalShowsStoragePath: systemCheckText.includes("research_vault/MARKET-US/"),
                       researchAutomationShowsSourceQuality:
                         researchAutomationStatusText.includes("수집 품질 대시보드") &&
                         researchAutomationStatusText.includes("저작권:") &&
@@ -1686,6 +1704,9 @@ def run_click_smoke(
                     systemCheckShowsDartReliability: systemCheckCompleted
                       ? (systemCheckText.includes("DART 공시 감시 상태") || systemCheckText.includes("네이버 리서치/시장일지 자동 반영"))
                       : /시스템 점검|진행 중|백엔드|저장/.test(systemCheckText),
+                    telegramMarketJournalVisible: systemCheckText.includes("텔레그램 미국 시장일지"),
+                    telegramMarketJournalShowsSectionCount: systemCheckText.includes("포함 섹션"),
+                    telegramMarketJournalShowsStoragePath: systemCheckText.includes("research_vault/MARKET-US/"),
                     naverStatusShowsDuplicateGuard: naverStatusText.includes("중복 시장일지 후보"),
                     naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                     naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
