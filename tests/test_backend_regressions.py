@@ -522,6 +522,66 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(payload["text"], "Explicit registry summary.")
         self.assertEqual(payload["metadata"]["raw_url"], "https://investor.apple.com/")
 
+    def test_firecrawl_ir_readiness_reports_safe_disabled_defaults(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_readiness_status
+
+        settings = SimpleNamespace(
+            firecrawl_ir_enabled=False,
+            firecrawl_ir_dry_run=True,
+            firecrawl_api_key="",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_ir_mcp_version="3.17.0",
+            firecrawl_ir_sources_json="",
+            market_signal_graph_enabled=False,
+            market_signal_graph_rpc_url="",
+            market_signal_graph_service_role_key="",
+        )
+
+        status = build_firecrawl_ir_readiness_status(settings)
+
+        self.assertEqual(status["status"], "disabled")
+        self.assertFalse(status["hosted_api"]["api_key_configured"])
+        self.assertEqual(status["source_registry"]["input_source"], "sample")
+        self.assertEqual(status["dry_run_sample"]["source_platform"], "firecrawl_ir")
+        self.assertEqual(status["dry_run_sample"]["ticker"], "AAPL")
+        self.assertNotIn("firecrawl_api_key", json.dumps(status).lower())
+
+    def test_firecrawl_ir_readiness_uses_env_registry_without_exposing_key(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_readiness_status
+
+        settings = SimpleNamespace(
+            firecrawl_ir_enabled=True,
+            firecrawl_ir_dry_run=True,
+            firecrawl_api_key="fc-secret-value",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=15,
+            firecrawl_ir_mcp_version="3.17.0",
+            firecrawl_ir_sources_json=json.dumps(
+                [
+                    {
+                        "company": "Planet Labs",
+                        "ticker": "PL",
+                        "raw_url": "https://investors.planet.com/",
+                        "page_title": "Planet Labs Investor Relations",
+                        "markdown": "Planet Labs IR page.",
+                    }
+                ]
+            ),
+            market_signal_graph_enabled=False,
+            market_signal_graph_rpc_url="",
+            market_signal_graph_service_role_key="",
+        )
+
+        status = build_firecrawl_ir_readiness_status(settings)
+
+        self.assertEqual(status["status"], "ready")
+        self.assertTrue(status["hosted_api"]["api_key_configured"])
+        self.assertEqual(status["source_registry"]["item_count"], 1)
+        self.assertEqual(status["source_registry"]["input_source"], "env_registry")
+        self.assertEqual(status["dry_run_sample"]["ticker"], "PL")
+        self.assertNotIn("fc-secret-value", json.dumps(status))
+
     def test_firecrawl_ir_collection_skips_rpc_when_key_missing(self):
         from types import SimpleNamespace
 
@@ -2891,6 +2951,45 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(result["filing_group"], "financial_release")
         self.assertIn("financial_release", result["tags"])
         self.assertIn("8-K", result["tags"])
+
+    def test_public_ir_sec_status_includes_firecrawl_readiness(self):
+        from research_os.public_ir_sec import public_ir_sec_status_payload
+
+        settings = SimpleNamespace(
+            research_vault_dir="unused",
+            firecrawl_ir_enabled=True,
+            firecrawl_ir_dry_run=True,
+            firecrawl_api_key="fc-secret-value",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_ir_mcp_version="3.17.0",
+            firecrawl_ir_sources_json=json.dumps(
+                [
+                    {
+                        "company": "Joby Aviation",
+                        "ticker": "JOBY",
+                        "raw_url": "https://ir.jobyaviation.com/",
+                        "page_title": "Joby Aviation Investor Relations",
+                        "markdown": "Joby investor relations.",
+                    }
+                ]
+            ),
+            market_signal_graph_enabled=False,
+            market_signal_graph_rpc_url="",
+            market_signal_graph_service_role_key="",
+        )
+
+        with (
+            patch("research_os.public_ir_sec.resolve_vault_dir", return_value=PROJECT_ROOT / "research_vault"),
+            patch("research_os.public_ir_sec.read_manifest", return_value=[]),
+        ):
+            status = public_ir_sec_status_payload(settings)
+
+        self.assertEqual(status["module"], "public_ir_sec_status")
+        self.assertEqual(status["firecrawl_ir"]["status"], "ready")
+        self.assertTrue(status["firecrawl_ir"]["hosted_api"]["api_key_configured"])
+        self.assertEqual(status["firecrawl_ir"]["dry_run_sample"]["ticker"], "JOBY")
+        self.assertNotIn("fc-secret-value", json.dumps(status))
 
     def test_company_ir_parser_extracts_joby_press_release_links(self):
         from research_os.company_ir_sources import COMPANY_IR_SOURCES, parse_company_ir_press_releases

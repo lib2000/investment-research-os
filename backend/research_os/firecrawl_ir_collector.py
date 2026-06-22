@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
+import json
 from typing import Any
 from urllib.parse import urlparse
 
@@ -17,6 +18,16 @@ SOURCE_KIND = "ir"
 CHANNEL = "web"
 COLLECTOR = "firecrawl"
 TARGET_TYPE = "company_ir"
+EXPECTED_FIRECRAWL_MCP_VERSION = "3.17.0"
+DEFAULT_READINESS_SAMPLE = {
+    "company": "Apple",
+    "ticker": "AAPL",
+    "raw_url": "https://investor.apple.com/",
+    "resolved_url": "https://investor.apple.com/",
+    "page_title": "Apple Investor Relations",
+    "markdown": "Apple Investor Relations provides earnings releases, SEC filings, governance materials, and shareholder information.",
+    "language": "en",
+}
 
 
 @dataclass(frozen=True)
@@ -341,4 +352,122 @@ def build_firecrawl_ir_batch_result(
         "status_counts": status_counts,
         "results": results,
         "checked_at": _utc_now_iso(),
+    }
+
+
+def _settings_bool(settings: Any, name: str, default: bool = False) -> bool:
+    return bool(getattr(settings, name, default))
+
+
+def _settings_str(settings: Any, name: str, default: str = "") -> str:
+    return str(getattr(settings, name, default) or "").strip()
+
+
+def _settings_float(settings: Any, name: str, default: float) -> float:
+    try:
+        return float(getattr(settings, name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _firecrawl_registry_items(settings: Any) -> tuple[list[dict[str, Any]], str | None]:
+    raw = _settings_str(settings, "firecrawl_ir_sources_json")
+    if not raw:
+        return [], None
+    try:
+        return normalize_firecrawl_ir_inputs(json.loads(raw)), None
+    except json.JSONDecodeError as exc:
+        return [], f"FIRECRAWL_IR_SOURCES_JSON parse failed: {exc}"
+
+
+def _rpc_readiness_errors(settings: Any) -> list[str]:
+    errors: list[str] = []
+    if not _settings_bool(settings, "firecrawl_ir_enabled"):
+        errors.append("FIRECRAWL_IR_ENABLED must be true for RPC submit")
+    if _settings_bool(settings, "firecrawl_ir_dry_run", True):
+        errors.append("FIRECRAWL_IR_DRY_RUN must be false for RPC submit")
+    if not _settings_bool(settings, "market_signal_graph_enabled"):
+        errors.append("MARKET_SIGNAL_GRAPH_ENABLED must be true for RPC submit")
+    if not _settings_str(settings, "market_signal_graph_rpc_url"):
+        errors.append("MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL must be configured for RPC submit")
+    if not _settings_str(settings, "market_signal_graph_service_role_key"):
+        errors.append("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY must be configured for RPC submit")
+    return errors
+
+
+def build_firecrawl_ir_readiness_status(settings: Any) -> dict[str, Any]:
+    """Return non-secret Firecrawl readiness and a one-item dry-run payload check."""
+
+    enabled = _settings_bool(settings, "firecrawl_ir_enabled")
+    dry_run = _settings_bool(settings, "firecrawl_ir_dry_run", True)
+    api_key_configured = bool(_settings_str(settings, "firecrawl_api_key"))
+    base_url = _settings_str(settings, "firecrawl_base_url", "https://api.firecrawl.dev/v2").rstrip("/")
+    timeout_seconds = _settings_float(settings, "firecrawl_timeout_seconds", 30.0)
+    configured_mcp_version = _settings_str(settings, "firecrawl_ir_mcp_version", EXPECTED_FIRECRAWL_MCP_VERSION)
+    registry_items, registry_error = _firecrawl_registry_items(settings)
+    sample_item = registry_items[0] if registry_items else DEFAULT_READINESS_SAMPLE
+    dry_run_result = build_firecrawl_ir_collection_result(sample_item, settings, dry_run=True)
+    payload = dry_run_result.get("payload") or {}
+    payload_metadata = payload.get("metadata") or {}
+    rpc_errors = _rpc_readiness_errors(settings)
+    warnings: list[str] = []
+    if registry_error:
+        warnings.append(registry_error)
+    if configured_mcp_version != EXPECTED_FIRECRAWL_MCP_VERSION:
+        warnings.append(
+            f"FIRECRAWL_IR_MCP_VERSION should be {EXPECTED_FIRECRAWL_MCP_VERSION} "
+            f"(configured: {configured_mcp_version or 'missing'})"
+        )
+    if enabled and not api_key_configured:
+        warnings.append("FIRECRAWL_API_KEY is not configured, so hosted API scrape calls cannot run.")
+    if not enabled:
+        status = "disabled"
+        next_action = "FIRECRAWL_IR_ENABLED=false 상태입니다. 파일럿 수집 전 API 키와 소스 레지스트리를 먼저 설정하세요."
+    elif not api_key_configured:
+        status = "needs_api_key"
+        next_action = "FIRECRAWL_API_KEY를 설정한 뒤 공개 IR/SEC URL 1건으로 hosted scrape dry-run을 확인하세요."
+    elif warnings:
+        status = "needs_attention"
+        next_action = "Firecrawl 설정 경고를 해소한 뒤 공개 IR/SEC 보조 수집 provider로 연결하세요."
+    else:
+        status = "ready"
+        next_action = "공개 IR/SEC 수집에서 Firecrawl hosted scrape를 선택 provider로 붙일 수 있습니다."
+    return {
+        "status": status,
+        "module": "firecrawl_ir_readiness",
+        "design": DESIGN_NAME,
+        "enabled": enabled,
+        "dry_run": dry_run,
+        "hosted_api": {
+            "api_key_configured": api_key_configured,
+            "base_url": base_url,
+            "timeout_seconds": timeout_seconds,
+        },
+        "mcp": {
+            "configured_version": configured_mcp_version,
+            "expected_version": EXPECTED_FIRECRAWL_MCP_VERSION,
+            "version_ok": configured_mcp_version == EXPECTED_FIRECRAWL_MCP_VERSION,
+        },
+        "source_registry": {
+            "item_count": len(registry_items),
+            "input_source": "env_registry" if registry_items else "sample",
+            "parse_error": registry_error,
+        },
+        "dry_run_sample": {
+            "status": dry_run_result.get("status"),
+            "source_platform": payload.get("source_platform"),
+            "external_id_prefix": str(payload.get("external_id") or "")[:12],
+            "url": payload.get("url"),
+            "title": payload.get("title"),
+            "ticker": payload_metadata.get("ticker"),
+            "company": payload_metadata.get("company"),
+            "content_chars": payload_metadata.get("content_chars"),
+        },
+        "rpc": {
+            "enabled": bool(_settings_bool(settings, "market_signal_graph_enabled") and enabled),
+            "submit_ready": not rpc_errors,
+            "readiness_errors": rpc_errors,
+        },
+        "warnings": warnings,
+        "next_action": next_action,
     }
