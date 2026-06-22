@@ -158,6 +158,9 @@ class Settings(BaseModel):
     company_ir_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     firecrawl_ir_enabled: bool = False
     firecrawl_ir_dry_run: bool = True
+    firecrawl_api_key: str = Field(default="")
+    firecrawl_base_url: str = "https://api.firecrawl.dev/v2"
+    firecrawl_timeout_seconds: float = 30.0
     firecrawl_ir_mcp_version: str = "3.17.0"
     firecrawl_ir_sources_json: str = ""
     market_signal_graph_enabled: bool = False
@@ -441,6 +444,9 @@ class Settings(BaseModel):
             ),
             firecrawl_ir_enabled=_read_bool("FIRECRAWL_IR_ENABLED", False),
             firecrawl_ir_dry_run=_read_bool("FIRECRAWL_IR_DRY_RUN", True),
+            firecrawl_api_key=os.getenv("FIRECRAWL_API_KEY", ""),
+            firecrawl_base_url=os.getenv("FIRECRAWL_BASE_URL", "https://api.firecrawl.dev/v2"),
+            firecrawl_timeout_seconds=float(os.getenv("FIRECRAWL_TIMEOUT_SECONDS", "30")),
             firecrawl_ir_mcp_version=os.getenv("FIRECRAWL_IR_MCP_VERSION", "3.17.0"),
             firecrawl_ir_sources_json=os.getenv("FIRECRAWL_IR_SOURCES_JSON", ""),
             market_signal_graph_enabled=_read_bool("MARKET_SIGNAL_GRAPH_ENABLED", False),

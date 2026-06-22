@@ -90,7 +90,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=b16281b2f9b7";
+} from "./api.js?v=195001bdb151";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -15338,6 +15338,9 @@ function formatKoreanResult(value) {
 
   if (value.module === "public_ir_sec_status") {
     const entries = Array.isArray(value.recent_entries) ? value.recent_entries : [];
+    const firecrawl = value.firecrawl_ir || {};
+    const firecrawlHosted = firecrawl.hosted_api || {};
+    const firecrawlSample = firecrawl.dry_run_sample || {};
     const entryLines = entries.length
       ? entries.slice(0, 12).map((item, index) => `${index + 1}. ${item.title || item.file_name || "제목 없음"} · ${item.date || "날짜 없음"} · ${item.source_provider || "출처 미확인"} · ${item.capture_quality_status || item.capture_quality?.status || "품질 미확인"}`)
       : [value.empty_state?.title || "아직 수집된 공개 IR/SEC 자료가 없습니다."];
@@ -15347,6 +15350,12 @@ function formatKoreanResult(value) {
       `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
       `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,
       `정책: ${value.policy || "공개 자료만 수집합니다."}`,
+      ``,
+      `Firecrawl IR 보조 수집`,
+      `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,
+      `Hosted API: ${firecrawlHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${firecrawlHosted.base_url || "https://api.firecrawl.dev/v2"}`,
+      `Dry-run 샘플: ${firecrawlSample.ticker || "AAPL"} ${firecrawlSample.company || "Apple"} · ${firecrawlSample.status || "미확인"} · ${firecrawlSample.external_id_prefix || "id 미확인"}`,
+      firecrawl.next_action ? `Firecrawl 다음 조치: ${firecrawl.next_action}` : "",
       value.empty_state?.message ? `상태: ${value.empty_state.message}` : "",
       ``,
       `최근 자료`,

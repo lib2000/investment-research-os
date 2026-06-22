@@ -192,6 +192,9 @@ REQUIRED_JS_SNIPPETS = {
     "telegram_market_close_system_check": "텔레그램 미국 시장일지 자동 반영",
     "telegram_market_close_storage_line": "미국 시장일지 저장",
     "telegram_market_close_section_count": "포함 섹션",
+    "public_ir_sec_firecrawl_readiness": "Firecrawl IR 보조 수집",
+    "public_ir_sec_firecrawl_hosted_api": "Hosted API:",
+    "public_ir_sec_firecrawl_dry_run_sample": "Dry-run 샘플:",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {
