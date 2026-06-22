@@ -565,3 +565,62 @@ def build_firecrawl_ir_readiness_status(settings: Any) -> dict[str, Any]:
         "warnings": warnings,
         "next_action": next_action,
     }
+
+
+def build_firecrawl_ir_hosted_dry_run_result(settings: Any) -> dict[str, Any]:
+    registry_items, registry_error = _firecrawl_registry_items(settings)
+    if registry_error:
+        return {
+            "status": "failed",
+            "module": "firecrawl_ir_hosted_dry_run",
+            "design": DESIGN_NAME,
+            "reason": "firecrawl_ir_sources_json_parse_error",
+            "message": registry_error,
+            "source_registry": {
+                "item_count": 0,
+                "input_source": "env_registry",
+                "parse_error": registry_error,
+            },
+        }
+    sample_item = registry_items[0] if registry_items else DEFAULT_READINESS_SAMPLE
+    result = scrape_firecrawl_ir_item(sample_item, settings)
+    status = str(result.get("status") or "unknown")
+    next_action = ""
+    if status == "success":
+        next_action = "Firecrawl hosted scrape dry-run이 성공했습니다. 같은 registry로 RPC 저장 전환 전 payload를 검토하세요."
+    elif result.get("reason") == "firecrawl_api_key_missing":
+        next_action = "FIRECRAWL_API_KEY를 backend secret env에 설정한 뒤 다시 실행하세요."
+    else:
+        next_action = "Firecrawl hosted scrape 응답과 URL 접근 가능 여부를 확인하세요."
+    return {
+        "status": status,
+        "module": "firecrawl_ir_hosted_dry_run",
+        "design": DESIGN_NAME,
+        "source_registry": {
+            "item_count": len(registry_items),
+            "input_source": "env_registry" if registry_items else "sample",
+            "parse_error": None,
+        },
+        "hosted_scrape": {
+            key: value
+            for key, value in result.items()
+            if key
+            in {
+                "status",
+                "reason",
+                "design",
+                "source_platform",
+                "http_status",
+                "url",
+                "title",
+                "ticker",
+                "company",
+                "content_chars",
+                "external_id_prefix",
+                "scraped_at",
+                "message",
+            }
+        },
+        "payload": result.get("payload") if status == "success" else None,
+        "next_action": next_action,
+    }

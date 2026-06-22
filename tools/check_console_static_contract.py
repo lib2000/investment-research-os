@@ -91,6 +91,7 @@ REQUIRED_FEEDBACK_BUTTON_IDS = {
     "dedupedDossierRefreshButton",
     "manifestButton",
     "tickerCacheButton",
+    "publicIrSecFirecrawlDryRunButton",
     "investmentCalendarRefreshButton",
 }
 
@@ -195,6 +196,8 @@ REQUIRED_JS_SNIPPETS = {
     "public_ir_sec_firecrawl_readiness": "Firecrawl IR 보조 수집",
     "public_ir_sec_firecrawl_hosted_api": "Hosted API:",
     "public_ir_sec_firecrawl_dry_run_sample": "Dry-run 샘플:",
+    "public_ir_sec_firecrawl_dry_run_button": "Firecrawl IR hosted dry-run",
+    "public_ir_sec_firecrawl_dry_run_api": "runPublicIrSecFirecrawlDryRun",
 }
 
 REQUIRED_WORKFLOW_ACTIONS = {

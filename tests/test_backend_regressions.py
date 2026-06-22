@@ -651,6 +651,50 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "firecrawl_api_key_missing")
 
+    def test_firecrawl_ir_hosted_dry_run_result_reports_next_action_without_key(self):
+        from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
+
+        result = build_firecrawl_ir_hosted_dry_run_result(
+            SimpleNamespace(
+                firecrawl_api_key="",
+                firecrawl_base_url="https://api.firecrawl.dev/v2",
+                firecrawl_timeout_seconds=30,
+                firecrawl_ir_sources_json=json.dumps(
+                    {"items": [{"company": "Joby Aviation", "ticker": "JOBY", "raw_url": "https://ir.jobyaviation.com/"}]}
+                ),
+            )
+        )
+
+        self.assertEqual(result["module"], "firecrawl_ir_hosted_dry_run")
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["hosted_scrape"]["reason"], "firecrawl_api_key_missing")
+        self.assertEqual(result["source_registry"]["input_source"], "env_registry")
+        self.assertIn("FIRECRAWL_API_KEY", result["next_action"])
+        self.assertNotIn("fc-secret", json.dumps(result))
+
+    def test_public_ir_sec_firecrawl_dry_run_route_returns_safe_result(self):
+        import research_os_main as main
+        from fastapi.testclient import TestClient
+
+        fake_result = {
+            "status": "skipped",
+            "module": "firecrawl_ir_hosted_dry_run",
+            "design": "firecrawl_ir_collector_v1",
+            "hosted_scrape": {"status": "skipped", "reason": "firecrawl_api_key_missing"},
+            "next_action": "FIRECRAWL_API_KEY를 backend secret env에 설정한 뒤 다시 실행하세요.",
+        }
+
+        with patch.object(main, "build_firecrawl_ir_hosted_dry_run_result", return_value=fake_result):
+            response = TestClient(main.app).post(
+                "/api/v1/public-ir-sec/firecrawl/dry-run",
+                headers={"Authorization": "Bearer dev-local-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["module"], "firecrawl_ir_hosted_dry_run")
+        self.assertEqual(payload["hosted_scrape"]["reason"], "firecrawl_api_key_missing")
+
     def test_firecrawl_ir_collection_skips_rpc_when_key_missing(self):
         from types import SimpleNamespace
 
