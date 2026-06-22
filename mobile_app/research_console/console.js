@@ -85,11 +85,12 @@
   repairNaverResearchCache,
   refreshNaverMarketCloseJournal,
   fetchNaverMarketCloseTaskStatus,
+  fetchTelegramMarketCloseTaskStatus,
   fetchCustomsTradeSnapshot,
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=cdb888f10fb1";
+} from "./api.js?v=b16281b2f9b7";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -5199,6 +5200,14 @@ function summarizeSystemCheckValue(label, value) {
     const sourceLabel = marketJournal.source_origin === "naver_research_auto" ? "자동 반영" : "수동/기타";
     return `캐시 ${value.entry_count || 0}건 · RAG ${value.active_rag_count || 0}건 · 저장 누락 ${value.missing_storage_count || 0}건 · PDF 성공 ${pdfCounts.success || 0}건/미분석 ${pdfCounts.unknown || 0}건 · 시장일지 ${marketJournal.last_run_date || "미실행"} · ${sourceLabel} ${marketJournal.daily_time || "08:30"}`;
   }
+  if (label.includes("텔레그램 미국 시장일지")) {
+    const state = value.state || {};
+    const storage = state.storage || {};
+    const sectionCount = Number(state.included_post_count || 0);
+    const storagePath = storage.relative_path || storage.file_name || "저장 경로 미확인";
+    const sessionDate = state.session_date || state.last_run_date || "미확인";
+    return `상태 ${value.status || state.status || "미확인"} · 세션 ${sessionDate} · 포함 섹션 ${sectionCount}개 · 저장 ${storagePath} · ${value.daily_time || "07:20"}`;
+  }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
     return `Pulls 대상 ${digest.target_count || 0}개 · RAG ${digest.rag_document_count || 0}개 · Dossier ${digest.dossier_count || 0}개`;
@@ -5229,10 +5238,13 @@ function formatConsoleSystemCheckResult(payload) {
   const ocrCheck = checks.find((item) => item.label.includes("OCR"));
   const dartCheck = checks.find((item) => item.label.includes("DART"));
   const naverCheck = checks.find((item) => item.label.includes("네이버 리서치"));
+  const telegramMarketCheck = checks.find((item) => item.label.includes("텔레그램 미국 시장일지"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
   const dartFailures = dartValue.last_failures || [];
+  const telegramMarketState = telegramMarketCheck?.value?.state || {};
+  const telegramMarketStorage = telegramMarketState.storage || {};
   const okCount = checks.length - failed.length;
   const ocrLimits = ocrCheck?.value?.limits || {};
   return [
@@ -5278,6 +5290,15 @@ function formatConsoleSystemCheckResult(payload) {
     naverCheck?.value?.market_close_journal
       ? `- **마지막 국내 마감 시황:** ${naverCheck.value.market_close_journal.source_title || "미확인"} · ${naverCheck.value.market_close_journal.last_run_at ? formatDateTime(naverCheck.value.market_close_journal.last_run_at) : "미실행"}`
       : `- **마지막 국내 마감 시황:** 미확인`,
+    telegramMarketCheck
+      ? `- **텔레그램 미국 시장일지:** ${telegramMarketCheck.status} · ${telegramMarketCheck.summary}`
+      : `- **텔레그램 미국 시장일지:** 점검 결과를 불러오지 못했습니다.`,
+    telegramMarketCheck
+      ? `- **미국 시장일지 저장:** 세션 ${telegramMarketState.session_date || "미확인"} · 포함 섹션 ${formatNumber(telegramMarketState.included_post_count || 0)}개 · ${telegramMarketStorage.relative_path || telegramMarketStorage.file_name || "저장 경로 미확인"}`
+      : "",
+    telegramMarketCheck?.value?.next_action
+      ? `- **미국 시장일지 다음 조치:** ${telegramMarketCheck.value.next_action}`
+      : "",
     `- **실패 상세:** ${
       dartFailures.length
         ? dartFailures
@@ -5325,6 +5346,9 @@ async function runConsoleSystemCheck() {
         value?.ready === false ||
         value?.ok === false ||
         value?.status === "warning" ||
+        value?.status === "error" ||
+        value?.status === "needs_attention" ||
+        value?.status === "due" ||
         value?.daily_check?.due ||
         value?.daily_check?.status === "partial_success"
           ? "확인 필요"
@@ -5377,6 +5401,7 @@ async function runConsoleSystemCheck() {
     }),
     runCheck("DART 신규 공시 감시", () => fetchDartFilingWatchStatus(token())),
     runCheck("네이버 리서치/시장일지 자동 반영", () => fetchNaverResearchStatus(token())),
+    runCheck("텔레그램 미국 시장일지 자동 반영", () => fetchTelegramMarketCloseTaskStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
     runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false)),
   ]);
