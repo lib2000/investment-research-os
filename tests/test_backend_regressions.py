@@ -871,6 +871,26 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertTrue(all(payload["analysis_status"] == "pending" for payload in payloads))
         self.assertTrue(all(len(payload["external_id"]) == 64 for payload in payloads))
 
+    def test_firecrawl_ir_pilot_env_example_loads_registry_without_secret(self):
+        tool = load_firecrawl_ir_check_tool()
+        env_path = PROJECT_ROOT / "docs" / "examples" / "firecrawl_ir_pilot.env.example"
+        env_text = env_path.read_text(encoding="utf-8")
+
+        self.assertIn("FIRECRAWL_API_KEY=", env_text)
+        self.assertNotIn("fc-", env_text)
+
+        with patch.dict(os.environ, {}, clear=True):
+            loaded = tool._load_env_file(env_path)
+            settings = SimpleNamespace(firecrawl_ir_sources_json=os.environ.get("FIRECRAWL_IR_SOURCES_JSON", ""))
+            items, source = tool._load_items(
+                SimpleNamespace(input_json=None, use_env_registry=True, require_env_registry=False),
+                settings,
+            )
+
+        self.assertGreaterEqual(loaded["loaded_count"], 7)
+        self.assertEqual(source, "env_registry")
+        self.assertEqual([item["ticker"] for item in items], ["AAPL", "JOBY"])
+
     def test_firecrawl_ir_batch_result_summarizes_dry_run_items(self):
         from types import SimpleNamespace
 
