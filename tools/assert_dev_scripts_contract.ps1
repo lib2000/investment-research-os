@@ -347,6 +347,8 @@ $contracts = @(
       'assert_project_root.ps1',
       'Resolve-WindowsPython',
       'Start-Process',
+      'PYTHONIOENCODING',
+      'PYTHONUTF8',
       'smoke_research_console_menus.py',
       'smoke_research_console_clicks.py',
       '--only-system-check',
