@@ -169,6 +169,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn('PYTHONIOENCODING = "utf-8"', smoke_source)
         self.assertIn('PYTHONUTF8 = "1"', smoke_source)
 
+    def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
+        verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[switch]$ClickSmokeOnlyPublicIrSec", verify_source)
+        self.assertIn("if (-not $ClickSmokeOnlyPublicIrSec)", verify_source)
+        self.assertIn("$clickSmokeArgs += \"--only-public-ir-sec\"", verify_source)
+        self.assertIn("$clickSmokeArgs += @(\"--progress-heartbeat-seconds\", \"$ClickSmokeProgressHeartbeatSeconds\")", verify_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
