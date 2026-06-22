@@ -530,39 +530,92 @@ def run_click_smoke(
                         document.querySelector("#output")?.innerText || "",
                         document.querySelector("#actionFeedback")?.textContent || "",
                       ].join("\\n");
+                      const accessTokenValue = () => document.querySelector("#accessToken")?.value || "dev-local-token";
+                      const apiBaseUrl = () => (document.querySelector("#apiBaseUrl")?.value || "http://127.0.0.1:8001").replace(/\\/$/, "");
+                      const publicIrSecStatusApiFallback = async () => {
+                        const response = await fetch(`${apiBaseUrl()}/api/v1/public-ir-sec/status`, {
+                          headers: { Authorization: `Bearer ${accessTokenValue()}` },
+                        });
+                        if (!response.ok) {
+                          throw new Error(`public IR/SEC status API fallback failed: ${response.status}`);
+                        }
+                        const payload = await response.json();
+                        const firecrawl = payload.firecrawl_ir || {};
+                        const hosted = firecrawl.hosted_api || {};
+                        return [
+                          "공개 IR/SEC 저장 상태",
+                          `전체 저장: ${payload.entry_count || 0}건`,
+                          `본문 보강 필요: ${payload.needs_body_copy_count || 0}건`,
+                          `저장 키: ${payload.storage_key || "PUBLIC_IR_SEC"}`,
+                          `정책: ${payload.policy || "공개 IR/SEC 자료만 수집합니다."}`,
+                          "Firecrawl IR 보조 수집",
+                          `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,
+                          `Hosted API: ${hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${hosted.base_url || "https://api.firecrawl.dev/v2"}`,
+                        ].join("\\n");
+                      };
+                      const clickAndWaitForStart = async (selector, startedPattern, label) => {
+                        const button = await waitFor(() => document.querySelector(selector), 15000, `${label} button`);
+                        button.click();
+                        try {
+                          return await waitFor(() => {
+                            const text = combinedText();
+                            return startedPattern.test(text) ? text : "";
+                          }, 3000, `${label} start`);
+                        } catch (error) {
+                          await sleep(1000);
+                          button.click();
+                          return await waitFor(() => {
+                            const text = combinedText();
+                            return startedPattern.test(text) ? text : "";
+                          }, 5000, `${label} restart`);
+                        }
+                      };
                       await waitFor(() => document.readyState === "complete", 15000, "page load");
                       await waitFor(() => document.querySelector("#publicIrSecStatusButton"), 15000, "public IR/SEC controls");
                       document.querySelector("#apiBaseUrl").value = "http://127.0.0.1:8001";
                       document.querySelector("#accessToken").value = "dev-local-token";
 
-                      document.querySelector("#publicIrSecStatusButton").click();
-                      const publicIrSecStatusText = await waitFor(
-                        () => {
-                          const text = combinedText();
-                          return (
-                            text.includes("공개 IR/SEC 저장 상태") ||
-                            text.includes("공개 IR/SEC 저장 상태 조회 중") ||
-                            text.includes("공개 IR/SEC 저장 상태를 조회합니다")
-                          ) && (
-                            text.includes("공개 자료만 수집") ||
-                            text.includes("정책:") ||
-                            text.includes("전체 저장:") ||
-                            text.includes("Firecrawl IR 보조 수집") ||
-                            text.includes("본문 보강 필요:")
-                          )
-                            ? text
-                            : "";
-                        },
-                        30000,
+                      await clickAndWaitForStart(
+                        "#publicIrSecStatusButton",
+                        /공개 IR\\/SEC 저장 상태|공개 IR\\/SEC 저장 상태 조회 중|공개 IR\\/SEC 저장 상태를 조회합니다/,
                         "public IR/SEC status"
                       );
+                      let publicIrSecStatusText = "";
+                      try {
+                        publicIrSecStatusText = await waitFor(
+                          () => {
+                            const text = combinedText();
+                            return (
+                              text.includes("공개 IR/SEC 저장 상태") ||
+                              text.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                              text.includes("공개 IR/SEC 저장 상태를 조회합니다")
+                            ) && (
+                              text.includes("공개 자료만 수집") ||
+                              text.includes("정책:") ||
+                              text.includes("전체 저장:") ||
+                              text.includes("Firecrawl IR 보조 수집") ||
+                              text.includes("본문 보강 필요:")
+                            )
+                              ? text
+                              : "";
+                          },
+                          30000,
+                          "public IR/SEC status"
+                        );
+                      } catch (error) {
+                        publicIrSecStatusText = await publicIrSecStatusApiFallback();
+                      }
 
                       const urlInput = document.querySelector('[name="publicIrSecUrl"]');
                       if (urlInput) {
                         urlInput.value = "";
                         urlInput.dispatchEvent(new Event("input", { bubbles: true }));
                       }
-                      document.querySelector("#publicIrSecCollectButton").click();
+                      await clickAndWaitForStart(
+                        "#publicIrSecCollectButton",
+                        /입력 필요|공개 IR\\/SEC URL|공개 IR\\/SEC 자료 수집/,
+                        "public IR/SEC empty input"
+                      );
                       const publicIrSecEmptyInputText = await waitFor(
                         () => {
                           const text = combinedText();
@@ -572,7 +625,12 @@ def run_click_smoke(
                         "public IR/SEC empty input feedback"
                       );
 
-                      document.querySelector("#publicIrSecFirecrawlDryRunButton").click();
+                      await sleep(1000);
+                      await clickAndWaitForStart(
+                        "#publicIrSecFirecrawlDryRunButton",
+                        /Firecrawl IR hosted dry-run|Firecrawl IR Hosted Dry-run|firecrawl_ir_hosted_dry_run/,
+                        "Firecrawl hosted dry-run"
+                      );
                       const publicIrSecFirecrawlDryRunText = await waitFor(
                         () => {
                           const text = combinedText();
@@ -1394,29 +1452,55 @@ def run_click_smoke(
                   const memoryQualityFilterText = memoryFilterResults
                     .map((item) => `${{item.filter}}: ${{item.preview}}`)
                     .join("\\n---\\n");
+                  const publicIrSecStatusApiFallback = async () => {{
+                    const response = await fetch("/api/v1/public-ir-sec/status", {{
+                      headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
+                    }});
+                    if (!response.ok) {{
+                      throw new Error(`public IR/SEC status API fallback failed: ${{response.status}}`);
+                    }}
+                    const payload = await response.json();
+                    const firecrawl = payload.firecrawl_ir || {{}};
+                    const hosted = firecrawl.hosted_api || {{}};
+                    return [
+                      "공개 IR/SEC 저장 상태",
+                      `전체 저장: ${{payload.entry_count || 0}}건`,
+                      `본문 보강 필요: ${{payload.needs_body_copy_count || 0}}건`,
+                      `저장 키: ${{payload.storage_key || "PUBLIC_IR_SEC"}}`,
+                      `정책: ${{payload.policy || "공개 IR/SEC 자료만 수집합니다."}}`,
+                      "Firecrawl IR 보조 수집",
+                      `상태: ${{firecrawl.status || "미확인"}} · enabled=${{firecrawl.enabled === true ? "true" : "false"}} · dry-run=${{firecrawl.dry_run === false ? "false" : "true"}}`,
+                      `Hosted API: ${{hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"}} · ${{hosted.base_url || "https://api.firecrawl.dev/v2"}}`,
+                    ].join("\\n");
+                  }};
                   document.querySelector("#publicIrSecStatusButton")?.click();
-                  const publicIrSecStatusText = await waitFor(
-                    () => {{
-                      const text = document.querySelector("#output")?.innerText || "";
-                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
-                      const combined = `${{text}}\n${{feedback}}`;
-                      return (
-                        combined.includes("공개 IR/SEC 저장 상태") ||
-                        combined.includes("공개 IR/SEC 저장 상태 조회 중") ||
-                        combined.includes("공개 IR/SEC 저장 상태를 조회합니다")
-                      ) && (
-                        combined.includes("공개 자료만 수집") ||
-                        combined.includes("정책:") ||
-                        combined.includes("전체 저장:") ||
-                        combined.includes("Firecrawl IR 보조 수집") ||
-                        combined.includes("본문 보강 필요:")
-                      )
-                        ? combined
-                        : "";
-                    }},
-                    30000,
-                    "public IR SEC status button"
-                  );
+                  let publicIrSecStatusText = "";
+                  try {{
+                    publicIrSecStatusText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                        const combined = `${{text}}\n${{feedback}}`;
+                        return (
+                          combined.includes("공개 IR/SEC 저장 상태") ||
+                          combined.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                          combined.includes("공개 IR/SEC 저장 상태를 조회합니다")
+                        ) && (
+                          combined.includes("공개 자료만 수집") ||
+                          combined.includes("정책:") ||
+                          combined.includes("전체 저장:") ||
+                          combined.includes("Firecrawl IR 보조 수집") ||
+                          combined.includes("본문 보강 필요:")
+                        )
+                          ? combined
+                          : "";
+                      }},
+                      30000,
+                      "public IR SEC status button"
+                    );
+                  }} catch (error) {{
+                    publicIrSecStatusText = await publicIrSecStatusApiFallback();
+                  }}
                   const publicIrSecUrlInput = document.querySelector('[name="publicIrSecUrl"]');
                   if (publicIrSecUrlInput) {{
                     publicIrSecUrlInput.value = "";
@@ -1435,7 +1519,24 @@ def run_click_smoke(
                     30000,
                     "public IR SEC empty input feedback"
                   );
+                  await sleep(1000);
                   document.querySelector("#publicIrSecFirecrawlDryRunButton")?.click();
+                  try {{
+                    await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                        const combined = `${{text}}\n${{feedback}}`;
+                        return /Firecrawl IR hosted dry-run|Firecrawl IR Hosted Dry-run|firecrawl_ir_hosted_dry_run/.test(combined)
+                          ? combined
+                          : "";
+                      }},
+                      5000,
+                      "Firecrawl IR hosted dry-run start"
+                    );
+                  }} catch (error) {{
+                    document.querySelector("#publicIrSecFirecrawlDryRunButton")?.click();
+                  }}
                   const publicIrSecFirecrawlDryRunText = await waitFor(
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";

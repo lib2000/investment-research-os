@@ -146,6 +146,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--only-public-ir-sec", smoke_source)
         self.assertIn("publicIrSecFirecrawlDryRunShowsSafeStatus", smoke_source)
         self.assertIn("firecrawl_api_key_missing", smoke_source)
+        self.assertIn("publicIrSecStatusApiFallback", smoke_source)
+        self.assertIn("clickAndWaitForStart", smoke_source)
 
     def test_windows_smoke_wrapper_exposes_public_ir_sec_utf8_mode(self):
         smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_windows.ps1").read_text(encoding="utf-8")
