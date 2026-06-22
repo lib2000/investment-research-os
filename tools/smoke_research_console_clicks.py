@@ -358,6 +358,7 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("memoryQualityFilterFeedbackWorks", "저장 데이터 품질 필터 변경 시 사용자 피드백이 표시되지 않았습니다."),
             ("publicIrSecStatusShowsPolicy", "공개 IR/SEC 상태 버튼에 저장 정책과 상태가 표시되지 않았습니다."),
             ("publicIrSecEmptyInputShowsFeedback", "공개 IR/SEC 수집 버튼의 빈 URL 피드백이 표시되지 않았습니다."),
+            ("publicIrSecFirecrawlDryRunShowsSafeStatus", "Firecrawl IR Dry-run 버튼에 키 없음/안전 상태 안내가 표시되지 않았습니다."),
             ("codeKnowledgeGraphShowsFlows", "시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다."),
             ("naverStatusShowsDuplicateGuard", "네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다."),
             ("naverStatusShowsTaskLog", "네이버 리서치 상태 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
@@ -1300,6 +1301,24 @@ def run_click_smoke(
                     30000,
                     "public IR SEC empty input feedback"
                   );
+                  document.querySelector("#publicIrSecFirecrawlDryRunButton")?.click();
+                  const publicIrSecFirecrawlDryRunText = await waitFor(
+                    () => {{
+                      const text = document.querySelector("#output")?.innerText || "";
+                      const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                      const combined = `${{text}}\n${{feedback}}`;
+                      return combined.includes("Firecrawl IR Hosted Dry-run") &&
+                        (
+                          combined.includes("firecrawl_api_key_missing") ||
+                          combined.includes("FIRECRAWL_API_KEY") ||
+                          combined.includes("Firecrawl hosted scrape dry-run이 성공")
+                        )
+                        ? combined
+                        : "";
+                    }},
+                    30000,
+                    "Firecrawl IR hosted dry-run button"
+                  );
                   document.querySelector("#codeKnowledgeGraphButton")?.click();
                   let codeKnowledgeGraphText = "";
                   try {{
@@ -1400,6 +1419,13 @@ def run_click_smoke(
                       publicIrSecEmptyInputShowsFeedback:
                         publicIrSecEmptyInputText.includes("입력 필요") &&
                         publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
+                      publicIrSecFirecrawlDryRunShowsSafeStatus:
+                        publicIrSecFirecrawlDryRunText.includes("Firecrawl IR Hosted Dry-run") &&
+                        (
+                          publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
+                          publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                          publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
+                        ),
                       codeKnowledgeGraphShowsFlows:
                         codeKnowledgeGraphText.includes("시스템 구조 맵") &&
                         codeKnowledgeGraphText.includes("운영 흐름") &&
@@ -1430,6 +1456,7 @@ def run_click_smoke(
                       memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
                       publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
                       publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
+                      publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                       codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
                       naverStatusPreview: naverStatusText.split("\\n").slice(0, 12).join("\\n"),
                       naverRepairPreview: naverRepairText.split("\\n").slice(0, 12).join("\\n"),
@@ -1728,6 +1755,13 @@ def run_click_smoke(
                     publicIrSecEmptyInputShowsFeedback:
                       publicIrSecEmptyInputText.includes("입력 필요") &&
                       publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
+                    publicIrSecFirecrawlDryRunShowsSafeStatus:
+                      publicIrSecFirecrawlDryRunText.includes("Firecrawl IR Hosted Dry-run") &&
+                      (
+                        publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
+                        publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                        publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
+                      ),
                     codeKnowledgeGraphShowsFlows:
                       codeKnowledgeGraphText.includes("시스템 구조 맵") &&
                       codeKnowledgeGraphText.includes("운영 흐름") &&
@@ -1805,6 +1839,7 @@ def run_click_smoke(
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
                     publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
                     publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
+                    publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                     codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
                     llmCopyFeedbackPreview: llmCopyFeedbackText.split("\\n").slice(0, 8).join("\\n"),
                     llmStorageStatusPreview: llmStorageStatusText.split("\\n").slice(0, 12).join("\\n"),
@@ -1916,6 +1951,8 @@ def run_click_smoke(
                 raise AssertionError("공개 IR/SEC 상태 버튼에 저장 정책과 상태가 표시되지 않았습니다.")
             if not result["publicIrSecEmptyInputShowsFeedback"]:
                 raise AssertionError("공개 IR/SEC 수집 버튼의 빈 URL 피드백이 표시되지 않았습니다.")
+            if not result["publicIrSecFirecrawlDryRunShowsSafeStatus"]:
+                raise AssertionError("Firecrawl IR Dry-run 버튼에 키 없음/안전 상태 안내가 표시되지 않았습니다.")
             if not result["codeKnowledgeGraphShowsFlows"]:
                 raise AssertionError("시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다.")
             if not (result["naverRepairShowsSoftArchive"] or result["naverRepairShowsProgress"]):
