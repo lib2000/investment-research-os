@@ -137,6 +137,13 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertEqual(tool.normalize_progress_heartbeat_seconds("2.5"), 2.5)
         self.assertEqual(tool.normalize_progress_heartbeat_seconds("bad"), 30.0)
 
+    def test_click_smoke_covers_firecrawl_ir_dry_run_button(self):
+        smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_clicks.py").read_text(encoding="utf-8")
+
+        self.assertIn("#publicIrSecFirecrawlDryRunButton", smoke_source)
+        self.assertIn("publicIrSecFirecrawlDryRunShowsSafeStatus", smoke_source)
+        self.assertIn("firecrawl_api_key_missing", smoke_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
