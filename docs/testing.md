@@ -178,7 +178,11 @@ python tools\check_daily_recommendation_candidate_policy.py --require-hold-warni
 python tools\smoke_research_console_clicks.py --only-system-check --progress --progress-heartbeat-seconds 30
 ```
 
-브라우저 스모크도 WSL/Codex 격리 환경에서는 Chrome DevTools 포트 접근이 차단될 수 있으므로, 실제 화면 검증은 Windows PowerShell에서 실행합니다.
+브라우저 스모크도 WSL/Codex 격리 환경에서는 Chrome DevTools 포트 접근이 차단될 수 있으므로, 실제 화면 검증은 Windows PowerShell에서 실행합니다. Firecrawl IR Hosted Dry-run과 공개 IR/SEC 입력 피드백만 확인할 때는 Windows 래퍼에서도 클릭 스모크를 좁혀 실행할 수 있습니다.
+
+```powershell
+.\tools\smoke_research_console_windows.ps1 -Mode Clicks -PublicIrSecClicks
+```
 
 ## React 콘솔 검증
 
