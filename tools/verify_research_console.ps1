@@ -15,6 +15,7 @@
   [switch]$CheckPortfolioStore,
   [switch]$CheckStorageQualitySafeguards,
   [string]$ClickSmokeStopAfter = "",
+  [switch]$ClickSmokeOnlyPublicIrSec,
   [switch]$ClickSmokeProgress,
   [double]$ClickSmokeProgressHeartbeatSeconds = 30,
   [string]$CustomsBaseUrl = "http://127.0.0.1:8001",
@@ -90,6 +91,24 @@ function python {
     & $script:PythonRuntime.Command --cd $script:PythonRuntime.Cwd $script:PythonRuntime.Runtime @pythonArgs
   } else {
     & $script:PythonRuntime.Command @args
+  }
+}
+
+function Resolve-LiveSmokePython {
+  $pythonCommand = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -ne $pythonCommand) {
+    return @{ Mode = "native"; Command = $pythonCommand.Source }
+  }
+  return $script:PythonRuntime
+}
+
+$script:LiveSmokePythonRuntime = Resolve-LiveSmokePython
+function pythonLiveSmoke {
+  $pythonArgs = Convert-ToolArgsForWsl -Values $args
+  if ($script:LiveSmokePythonRuntime.Mode -eq "wsl") {
+    & $script:LiveSmokePythonRuntime.Command --cd $script:LiveSmokePythonRuntime.Cwd $script:LiveSmokePythonRuntime.Runtime @pythonArgs
+  } else {
+    & $script:LiveSmokePythonRuntime.Command @args
   }
 }
 
@@ -357,13 +376,15 @@ if ($CheckDailyRecommendationStore) {
 
 if ($CheckFeedbackSmoke) {
   Invoke-VerifyStep "클래식 콘솔 피드백 스모크" {
-    python tools\smoke_research_console_menus.py --url $ConsoleUrl
+    pythonLiveSmoke tools\smoke_research_console_menus.py --url $ConsoleUrl
   }
 }
 
 if (-not $SkipLiveSmoke) {
-  Invoke-VerifyStep "클래식 콘솔 메뉴 스모크" {
-    python tools\smoke_research_console_menus.py --url $ConsoleUrl
+  if (-not $ClickSmokeOnlyPublicIrSec) {
+    Invoke-VerifyStep "클래식 콘솔 메뉴 스모크" {
+      pythonLiveSmoke tools\smoke_research_console_menus.py --url $ConsoleUrl
+    }
   }
 
   Invoke-VerifyStep "클래식 콘솔 클릭 회귀 스모크" {
@@ -375,17 +396,20 @@ if (-not $SkipLiveSmoke) {
     if (-not [string]::IsNullOrWhiteSpace($ClickSmokeStopAfter)) {
       $clickSmokeArgs += @("--stop-after", $ClickSmokeStopAfter)
     }
-    python @clickSmokeArgs
+    if ($ClickSmokeOnlyPublicIrSec) {
+      $clickSmokeArgs += "--only-public-ir-sec"
+    }
+    pythonLiveSmoke @clickSmokeArgs
   }
 
   if (-not $SkipWriteSmoke) {
     Invoke-VerifyStep "클래식 콘솔 쓰기 액션 스모크" {
-      python tools\smoke_research_console_write_actions.py --url $ConsoleUrl
+      pythonLiveSmoke tools\smoke_research_console_write_actions.py --url $ConsoleUrl
     }
   }
 
   Invoke-VerifyStep "라이브 스모크 후 QA 쓰기 액션 정리" {
-    python tools\smoke_research_console_write_actions.py --cleanup-only
+    pythonLiveSmoke tools\smoke_research_console_write_actions.py --cleanup-only
   }
 }
 

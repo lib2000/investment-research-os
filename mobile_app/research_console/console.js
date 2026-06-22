@@ -91,7 +91,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=ff25ff8440d5";
+} from "./api.js?v=9a179c3aef07";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
