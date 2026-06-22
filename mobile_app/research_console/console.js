@@ -52,6 +52,7 @@
   fetchRecentWeeklyResearchBrief,
   fetchPublicIrSecStatus,
   collectPublicIrSec,
+  runPublicIrSecFirecrawlDryRun,
   fetchInvestmentCalendar,
   runDailyRecommendations,
   trackDailyRecommendations,
@@ -90,7 +91,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=195001bdb151";
+} from "./api.js?v=ff25ff8440d5";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -241,6 +242,7 @@ const elements = {
   publicIrSecUrl: document.querySelector('[name="publicIrSecUrl"]'),
   publicIrSecCollectButton: document.querySelector("#publicIrSecCollectButton"),
   publicIrSecStatusButton: document.querySelector("#publicIrSecStatusButton"),
+  publicIrSecFirecrawlDryRunButton: document.querySelector("#publicIrSecFirecrawlDryRunButton"),
   tickerCacheList: document.querySelector("#tickerCacheList"),
   dashboardTickerSelect: document.querySelector("#dashboardTickerSelect"),
   dashboardTickerOptions: document.querySelector("#dashboardTickerOptions"),
@@ -11880,6 +11882,7 @@ const MEMORY_ACTION_MESSAGES = {
   tickerCacheButton: "티커 캐시 조회를 시작했습니다.",
   publicIrSecCollectButton: "공개 IR/SEC 자료 수집을 시작했습니다.",
   publicIrSecStatusButton: "공개 IR/SEC 저장 상태를 조회합니다.",
+  publicIrSecFirecrawlDryRunButton: "Firecrawl IR hosted dry-run을 실행합니다.",
   investmentCalendarRefreshButton: "투자 캘린더를 새로고침합니다.",
 };
 
@@ -12365,6 +12368,21 @@ elements.publicIrSecStatusButton?.addEventListener("click", async () => {
   try {
     const result = await fetchPublicIrSecStatus(token(), 12);
     setOutput(result || "공개 IR/SEC 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.publicIrSecFirecrawlDryRunButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("Firecrawl IR hosted dry-run 실행 중", [
+    "Firecrawl API 키 설정 확인",
+    "첫 번째 IR registry URL 선택",
+    "RPC 저장 없이 payload 정규화 검증",
+  ]);
+  try {
+    const result = await runPublicIrSecFirecrawlDryRun(token());
+    setOutput(result || "Firecrawl IR dry-run 결과를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -15363,6 +15381,25 @@ function formatKoreanResult(value) {
       ``,
       `다음 액션`,
       ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 160), "공개 IR/SEC 수집 URL을 입력하세요."),
+    ].filter(Boolean).join("\n");
+  }
+
+  if (value.module === "firecrawl_ir_hosted_dry_run") {
+    const hosted = value.hosted_scrape || {};
+    const registry = value.source_registry || {};
+    const payload = value.payload || {};
+    const metadata = payload.metadata || {};
+    return [
+      `### Firecrawl IR Hosted Dry-run`,
+      `상태: ${value.status || hosted.status || "미확인"}`,
+      hosted.reason ? `사유: ${hosted.reason}` : "",
+      `Registry: ${registry.input_source || "sample"} · ${formatNumber(registry.item_count || 0)}건`,
+      `대상: ${hosted.ticker || metadata.ticker || "AAPL"} ${hosted.company || metadata.company || "Apple"}`,
+      `URL: ${hosted.url || payload.url || "미확인"}`,
+      `제목: ${hosted.title || payload.title || "미확인"}`,
+      `본문 길이: ${formatNumber(hosted.content_chars || metadata.content_chars || 0)}자`,
+      `external_id: ${hosted.external_id_prefix || String(payload.external_id || "").slice(0, 12) || "미확인"}`,
+      value.next_action ? `다음 조치: ${value.next_action}` : "",
     ].filter(Boolean).join("\n");
   }
 

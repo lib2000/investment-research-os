@@ -156,6 +156,7 @@ from research_os.public_ir_sec import (
     collect_public_ir_sec_url,
     public_ir_sec_status_payload,
 )
+from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
 from research_os.recent_activity import (
     build_recent_weekly_research_brief as _build_recent_weekly_research_brief,
     recent_activity_target_terms as _recent_activity_target_terms,
@@ -12092,6 +12093,16 @@ def collect_public_ir_sec(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/public-ir-sec/firecrawl/dry-run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_public_ir_sec_firecrawl_dry_run(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_firecrawl_ir_hosted_dry_run_result(settings)
 
 
 @app.get(

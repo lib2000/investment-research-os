@@ -290,6 +290,19 @@ export async function collectPublicIrSec(
   }
 }
 
+export async function runPublicIrSecFirecrawlDryRun(accessToken) {
+  try {
+    return request("/api/v1/public-ir-sec/firecrawl/dry-run", {
+      method: "POST",
+      accessToken,
+      timeoutMs: 90000,
+    });
+  } catch (error) {
+    console.error("Firecrawl IR hosted dry-run 실행 중 오류 발생:", error);
+    return null;
+  }
+}
+
 
 export async function fetchRecentWeeklyResearchBrief(accessToken, options = {}) {
   const params = new URLSearchParams();
