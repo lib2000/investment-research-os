@@ -147,6 +147,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("publicIrSecFirecrawlDryRunShowsSafeStatus", smoke_source)
         self.assertIn("firecrawl_api_key_missing", smoke_source)
 
+    def test_windows_smoke_wrapper_exposes_public_ir_sec_utf8_mode(self):
+        smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[switch]$PublicIrSecClicks", smoke_source)
+        self.assertIn("--only-public-ir-sec", smoke_source)
+        self.assertIn('PYTHONIOENCODING = "utf-8"', smoke_source)
+        self.assertIn('PYTHONUTF8 = "1"', smoke_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
