@@ -582,6 +582,75 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["dry_run_sample"]["ticker"], "PL")
         self.assertNotIn("fc-secret-value", json.dumps(status))
 
+    def test_firecrawl_ir_hosted_scrape_dry_run_normalizes_response_without_exposing_key(self):
+        from research_os import firecrawl_ir_collector
+
+        class FakeResponse:
+            status_code = 200
+            text = '{"success":true}'
+
+            def json(self):
+                return {
+                    "success": True,
+                    "data": {
+                        "markdown": "Planet Labs investor relations page with filings and shareholder materials.",
+                        "metadata": {
+                            "title": "Planet Labs Investor Relations",
+                            "sourceURL": "https://investors.planet.com/",
+                            "language": "en",
+                        },
+                    },
+                }
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def post(self, url, headers, json):
+                self.post_url = url
+                self.headers = headers
+                self.request_json = json
+                return FakeResponse()
+
+        settings = SimpleNamespace(
+            firecrawl_api_key="fc-secret-value",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=12,
+        )
+
+        with patch.object(firecrawl_ir_collector.httpx, "Client", FakeClient):
+            result = firecrawl_ir_collector.scrape_firecrawl_ir_item(
+                {"company": "Planet Labs", "ticker": "PL", "raw_url": "https://investors.planet.com/"},
+                settings,
+            )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["http_status"], 200)
+        self.assertEqual(result["ticker"], "PL")
+        self.assertEqual(result["company"], "Planet Labs")
+        self.assertEqual(result["payload"]["source_platform"], "firecrawl_ir")
+        self.assertEqual(result["payload"]["title"], "Planet Labs Investor Relations")
+        self.assertGreater(result["content_chars"], 20)
+        self.assertNotIn("fc-secret-value", json.dumps(result))
+
+    def test_firecrawl_ir_hosted_scrape_dry_run_skips_without_key(self):
+        from research_os.firecrawl_ir_collector import scrape_firecrawl_ir_item
+
+        result = scrape_firecrawl_ir_item(
+            {"company": "Apple", "ticker": "AAPL", "raw_url": "https://investor.apple.com/"},
+            SimpleNamespace(firecrawl_api_key="", firecrawl_base_url="https://api.firecrawl.dev/v2"),
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "firecrawl_api_key_missing")
+
     def test_firecrawl_ir_collection_skips_rpc_when_key_missing(self):
         from types import SimpleNamespace
 
@@ -717,6 +786,9 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         for name in [
             "FIRECRAWL_IR_ENABLED",
             "FIRECRAWL_IR_DRY_RUN",
+            "FIRECRAWL_API_KEY",
+            "FIRECRAWL_BASE_URL",
+            "FIRECRAWL_TIMEOUT_SECONDS",
             "FIRECRAWL_IR_MCP_VERSION",
             "FIRECRAWL_IR_SOURCES_JSON",
             "MARKET_SIGNAL_GRAPH_ENABLED",
@@ -739,6 +811,9 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "exit 0",
             "exit 1",
             "`skipped`/`failed`",
+            "--hosted-scrape-dry-run",
+            "FIRECRAWL_API_KEY",
+            "POST https://api.firecrawl.dev/v2/scrape",
             "FIRECRAWL_IR_MCP_VERSION=3.17.0",
             "batch_counts: success=N failed=N skipped=N dry_run=N",
         ]:
@@ -1118,6 +1193,34 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("- rpc_submit_ready: False", completed.stdout)
         self.assertIn("- rpc_readiness_errors: 5", completed.stdout)
         self.assertIn("FIRECRAWL_IR_DRY_RUN must be false for RPC readiness", completed.stdout)
+
+    def test_firecrawl_ir_check_tool_hosted_scrape_requires_api_key_without_printing_secret(self):
+        env = os.environ.copy()
+        env.update(
+            {
+                "FIRECRAWL_API_KEY": "",
+                "FIRECRAWL_BASE_URL": "https://api.firecrawl.dev/v2",
+                "FIRECRAWL_IR_MCP_VERSION": "3.17.0",
+            }
+        )
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "tools" / "check_firecrawl_ir_collector.py"),
+                "--hosted-scrape-dry-run",
+                "--json",
+            ],
+            cwd=PROJECT_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("FIRECRAWL_API_KEY must be configured", completed.stdout)
+        self.assertIn('"firecrawl_api_key_configured": false', completed.stdout)
+        self.assertNotIn("fc-", completed.stdout)
 
     def test_firecrawl_ir_check_tool_writes_submit_batch_status_to_output_json(self):
         with TemporaryDirectory() as tmpdir:

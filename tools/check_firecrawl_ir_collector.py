@@ -19,6 +19,7 @@ from research_os.firecrawl_ir_collector import (  # noqa: E402
     build_firecrawl_ir_collection_result,
     build_firecrawl_ir_signal_payload,
     normalize_firecrawl_ir_inputs,
+    scrape_firecrawl_ir_item,
 )
 from research_os.settings import get_settings  # noqa: E402
 
@@ -61,6 +62,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-json", type=Path, help="Write the non-secret validation result JSON to this path.")
     parser.add_argument("--submit", action="store_true", help="Call MARKET_SIGNAL_GRAPH_RPC_URL when enabled.")
+    parser.add_argument(
+        "--hosted-scrape-dry-run",
+        action="store_true",
+        help="Call Firecrawl hosted POST /v2/scrape for the first IR URL and validate the normalized payload without RPC submit.",
+    )
     parser.add_argument(
         "--env-file",
         type=Path,
@@ -285,6 +291,9 @@ def main() -> int:
     rpc_enabled = bool(settings.market_signal_graph_enabled and settings.firecrawl_ir_enabled)
     mcp_version_errors = _mcp_version_errors(settings)
     rpc_readiness_errors = _rpc_submit_readiness_errors(settings, purpose="RPC readiness")
+    hosted_scrape_errors: list[str] = []
+    if args.hosted_scrape_dry_run and not getattr(settings, "firecrawl_api_key", ""):
+        hosted_scrape_errors.append("FIRECRAWL_API_KEY must be configured for --hosted-scrape-dry-run")
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
     rpc_ready_errors = (
         _rpc_submit_readiness_errors(settings, purpose="--require-rpc-ready")
@@ -292,6 +301,7 @@ def main() -> int:
         else []
     )
     errors.extend(mcp_version_errors)
+    errors.extend(hosted_scrape_errors)
     errors.extend(submit_readiness_errors)
     errors.extend(rpc_ready_errors)
     result = {
@@ -306,6 +316,8 @@ def main() -> int:
         "expected_firecrawl_ir_mcp_version": EXPECTED_FIRECRAWL_MCP_VERSION,
         "rpc_url_configured": bool(settings.market_signal_graph_rpc_url),
         "service_role_key_configured": bool(settings.market_signal_graph_service_role_key),
+        "firecrawl_api_key_configured": bool(getattr(settings, "firecrawl_api_key", "")),
+        "firecrawl_base_url": str(getattr(settings, "firecrawl_base_url", "") or ""),
         "rpc_submit_ready": not (mcp_version_errors or rpc_readiness_errors),
         "rpc_readiness_errors": rpc_readiness_errors,
         "require_env_registry": args.require_env_registry,
@@ -333,6 +345,15 @@ def main() -> int:
                 result["rpc"] = build_firecrawl_ir_collection_result(items[0], settings, dry_run=False).get("rpc")
             else:
                 result["batch"] = build_firecrawl_ir_batch_result(items, settings, dry_run=False)
+
+    if args.hosted_scrape_dry_run and not hosted_scrape_errors and not errors:
+        result["hosted_scrape"] = scrape_firecrawl_ir_item(items[0], settings)
+        if result["hosted_scrape"].get("status") != "success":
+            errors.append(
+                "hosted Firecrawl scrape failed: "
+                f"{result['hosted_scrape'].get('reason') or result['hosted_scrape'].get('status')}"
+            )
+            result["errors"] = errors
 
     if args.require_rpc_ready and not args.submit:
         result["rpc"] = _rpc_preflight_result(rpc_ready_errors)
@@ -366,6 +387,8 @@ def main() -> int:
         print(f"- firecrawl_ir_dry_run: {bool(settings.firecrawl_ir_dry_run)}")
         print(f"- firecrawl_ir_mcp_version: {settings.firecrawl_ir_mcp_version}")
         print(f"- expected_firecrawl_ir_mcp_version: {EXPECTED_FIRECRAWL_MCP_VERSION}")
+        print(f"- firecrawl_api_key_configured: {result['firecrawl_api_key_configured']}")
+        print(f"- firecrawl_base_url: {result['firecrawl_base_url']}")
         print(f"- rpc_enabled: {rpc_enabled}")
         print(f"- rpc_url_configured: {bool(settings.market_signal_graph_rpc_url)}")
         print(f"- service_role_key_configured: {bool(settings.market_signal_graph_service_role_key)}")
@@ -388,6 +411,18 @@ def main() -> int:
             print(f"- rpc_status: {result['rpc'].get('status')}")
             if result["rpc"].get("reason"):
                 print(f"- rpc_reason: {result['rpc'].get('reason')}")
+        if result.get("hosted_scrape"):
+            print(f"- hosted_scrape_status: {result['hosted_scrape'].get('status')}")
+            if result["hosted_scrape"].get("reason"):
+                print(f"- hosted_scrape_reason: {result['hosted_scrape'].get('reason')}")
+            if result["hosted_scrape"].get("status") == "success":
+                print(
+                    "- hosted_scrape_payload: "
+                    f"{result['hosted_scrape'].get('ticker')} "
+                    f"{result['hosted_scrape'].get('company')} | "
+                    f"{result['hosted_scrape'].get('url')} | "
+                    f"external_id={result['hosted_scrape'].get('external_id_prefix')}"
+                )
         for error in errors:
             print(f"ERROR: {error}")
     return 0 if result["status"] == "success" else 1

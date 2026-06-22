@@ -263,6 +263,100 @@ def upsert_external_signal_payload(
         }
 
 
+def firecrawl_scrape_endpoint(base_url: str | None) -> str:
+    effective_base_url = str(base_url or "https://api.firecrawl.dev/v2").strip().rstrip("/")
+    return f"{effective_base_url}/scrape"
+
+
+def scrape_firecrawl_ir_item(
+    item: FirecrawlIrInput | dict[str, Any],
+    settings: Any,
+) -> dict[str, Any]:
+    """Call Firecrawl hosted scrape for one public IR URL and return a non-secret dry-run payload."""
+
+    api_key = _settings_str(settings, "firecrawl_api_key")
+    if not api_key:
+        return {
+            "status": "skipped",
+            "reason": "firecrawl_api_key_missing",
+            "design": DESIGN_NAME,
+        }
+    input_item = item if isinstance(item, FirecrawlIrInput) else _coerce_firecrawl_ir_input(item)
+    url = _safe_url(input_item.raw_url, input_item.resolved_url)
+    timeout_seconds = _settings_float(settings, "firecrawl_timeout_seconds", 30.0)
+    endpoint = firecrawl_scrape_endpoint(_settings_str(settings, "firecrawl_base_url", "https://api.firecrawl.dev/v2"))
+    request_payload = {
+        "url": url,
+        "formats": ["markdown"],
+        "onlyMainContent": True,
+        "removeBase64Images": True,
+        "blockAds": True,
+        "timeout": int(timeout_seconds * 1000),
+    }
+    headers = {
+        "authorization": f"Bearer {api_key}",
+        "content-type": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=timeout_seconds, trust_env=False) as client:
+            response = client.post(endpoint, headers=headers, json=request_payload)
+        response_text = response.text[:500]
+        if response.status_code not in {200, 201}:
+            return {
+                "status": "failed",
+                "reason": "firecrawl_scrape_error",
+                "design": DESIGN_NAME,
+                "http_status": response.status_code,
+                "message": response_text,
+            }
+        try:
+            body = response.json()
+        except ValueError:
+            return {
+                "status": "failed",
+                "reason": "firecrawl_response_not_json",
+                "design": DESIGN_NAME,
+                "http_status": response.status_code,
+                "message": response_text,
+            }
+        data = body.get("data") if isinstance(body, dict) else {}
+        if not isinstance(data, dict):
+            data = {}
+        merged_item: dict[str, Any] = {
+            "company": input_item.company,
+            "ticker": input_item.ticker,
+            "raw_url": input_item.raw_url,
+            "resolved_url": input_item.resolved_url or input_item.raw_url,
+            "page_title": input_item.page_title,
+            "language": input_item.language,
+            "published_at": input_item.published_at,
+            "firecrawl": data,
+        }
+        payload = build_firecrawl_ir_signal_payload(merged_item)
+        metadata = payload.get("metadata") or {}
+        return {
+            "status": "success",
+            "design": DESIGN_NAME,
+            "source_platform": SOURCE_PLATFORM,
+            "http_status": response.status_code,
+            "url": payload.get("url"),
+            "title": payload.get("title"),
+            "ticker": metadata.get("ticker"),
+            "company": metadata.get("company"),
+            "content_chars": metadata.get("content_chars"),
+            "external_id_prefix": str(payload.get("external_id") or "")[:12],
+            "payload": payload,
+            "scraped_at": _utc_now_iso(),
+        }
+    except httpx.RequestError as exc:
+        return {
+            "status": "skipped",
+            "reason": "firecrawl_unreachable",
+            "design": DESIGN_NAME,
+            "message": str(exc)[:500],
+        }
+
+
 def collection_status_from_rpc_result(rpc_result: dict[str, Any] | None) -> str:
     rpc_status = str((rpc_result or {}).get("status") or "")
     if rpc_status == "success":
