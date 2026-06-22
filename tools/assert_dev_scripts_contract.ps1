@@ -350,6 +350,8 @@ $contracts = @(
       'smoke_research_console_menus.py',
       'smoke_research_console_clicks.py',
       '--only-system-check',
+      '[switch]$PublicIrSecClicks',
+      '--only-public-ir-sec',
       '실제 브라우저 스모크 검증 완료'
     )
   },

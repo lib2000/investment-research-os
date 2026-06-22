@@ -3,6 +3,7 @@ param(
   [string]$Mode = "Both",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [switch]$FullClicks,
+  [switch]$PublicIrSecClicks,
   [switch]$IncludeWriteActions
 )
 
@@ -96,7 +97,9 @@ if ($Mode -in @("Both", "Menus")) {
 
 if ($Mode -in @("Both", "Clicks")) {
   $clickArgs = @("--url", "$BaseUrl/console/index.html?smoke=clicks-windows")
-  if (-not $FullClicks) {
+  if ($PublicIrSecClicks) {
+    $clickArgs += "--only-public-ir-sec"
+  } elseif (-not $FullClicks) {
     $clickArgs += "--only-system-check"
   }
   $results.Clicks = Invoke-SmokeScript `
