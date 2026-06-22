@@ -424,6 +424,8 @@ $contracts = @(
       'check_research_source_store.py',
       'check_public_ir_sec_store.py',
       '공개 IR/SEC 저장 품질',
+      'Firecrawl IR registry 샘플 payload',
+      'docs/examples/firecrawl_ir_registry.sample.json',
       'check_backend_module_health.py',
       'check_operational_readiness_score.py',
       '운영 완성도 95%',

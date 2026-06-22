@@ -63,6 +63,14 @@ CHECKS = [
     ("최근 1주 자료/추천 근거", ["tools/check_recent_weekly_brief.py", "--strict"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
+    (
+        "Firecrawl IR registry 샘플 payload",
+        [
+            "tools/check_firecrawl_ir_collector.py",
+            "--input-json",
+            "docs/examples/firecrawl_ir_registry.sample.json",
+        ],
+    ),
     ("Firecrawl Earnings 수집 payload", ["tools/check_firecrawl_earnings_collector.py"]),
     ("DeepSeek IR 분석 payload", ["tools/check_deepseek_ir_analysis.py"]),
     ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
