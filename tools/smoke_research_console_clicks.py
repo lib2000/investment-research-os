@@ -545,10 +545,10 @@ def run_click_smoke(
                             text.includes("공개 IR/SEC 저장 상태를 조회합니다")
                           ) && (
                             text.includes("공개 자료만 수집") ||
-                            text.includes("저장 manifest 확인") ||
-                            text.includes("본문 보강 필요 자료 집계") ||
-                            text.includes("조회 중") ||
-                            text.includes("조회합니다")
+                            text.includes("정책:") ||
+                            text.includes("전체 저장:") ||
+                            text.includes("Firecrawl IR 보조 수집") ||
+                            text.includes("본문 보강 필요:")
                           )
                             ? text
                             : "";
@@ -600,10 +600,10 @@ def run_click_smoke(
                             publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
                             publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
                           (publicIrSecStatusText.includes("공개 자료만 수집") ||
-                            publicIrSecStatusText.includes("저장 manifest 확인") ||
-                            publicIrSecStatusText.includes("본문 보강 필요 자료 집계") ||
-                            publicIrSecStatusText.includes("조회 중") ||
-                            publicIrSecStatusText.includes("조회합니다")),
+                            publicIrSecStatusText.includes("정책:") ||
+                            publicIrSecStatusText.includes("전체 저장:") ||
+                            publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
+                            publicIrSecStatusText.includes("본문 보강 필요:")),
                         publicIrSecEmptyInputShowsFeedback:
                           publicIrSecEmptyInputText.includes("입력 필요") &&
                           publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -1406,8 +1406,10 @@ def run_click_smoke(
                         combined.includes("공개 IR/SEC 저장 상태를 조회합니다")
                       ) && (
                         combined.includes("공개 자료만 수집") ||
-                        combined.includes("저장 manifest 확인") ||
-                        combined.includes("본문 보강 필요 자료 집계")
+                        combined.includes("정책:") ||
+                        combined.includes("전체 저장:") ||
+                        combined.includes("Firecrawl IR 보조 수집") ||
+                        combined.includes("본문 보강 필요:")
                       )
                         ? combined
                         : "";
@@ -1458,8 +1460,10 @@ def run_click_smoke(
                           publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
                           publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
                         (publicIrSecStatusText.includes("공개 자료만 수집") ||
-                          publicIrSecStatusText.includes("저장 manifest 확인") ||
-                          publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                          publicIrSecStatusText.includes("정책:") ||
+                          publicIrSecStatusText.includes("전체 저장:") ||
+                          publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
+                          publicIrSecStatusText.includes("본문 보강 필요:")),
                       publicIrSecEmptyInputShowsFeedback:
                         publicIrSecEmptyInputText.includes("입력 필요") &&
                         publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -1570,8 +1574,10 @@ def run_click_smoke(
                           publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
                           publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
                         (publicIrSecStatusText.includes("공개 자료만 수집") ||
-                          publicIrSecStatusText.includes("저장 manifest 확인") ||
-                          publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                          publicIrSecStatusText.includes("정책:") ||
+                          publicIrSecStatusText.includes("전체 저장:") ||
+                          publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
+                          publicIrSecStatusText.includes("본문 보강 필요:")),
                       publicIrSecEmptyInputShowsFeedback:
                         publicIrSecEmptyInputText.includes("입력 필요") &&
                         publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -1906,8 +1912,10 @@ def run_click_smoke(
                         publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
                         publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
                       (publicIrSecStatusText.includes("공개 자료만 수집") ||
-                        publicIrSecStatusText.includes("저장 manifest 확인") ||
-                        publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                        publicIrSecStatusText.includes("정책:") ||
+                        publicIrSecStatusText.includes("전체 저장:") ||
+                        publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
+                        publicIrSecStatusText.includes("본문 보강 필요:")),
                     publicIrSecEmptyInputShowsFeedback:
                       publicIrSecEmptyInputText.includes("입력 필요") &&
                       publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),

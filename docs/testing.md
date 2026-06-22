@@ -94,14 +94,16 @@ node --check mobile_app\research_console\console.js
 ```powershell
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks --progress --progress-heartbeat-seconds 30
 python tools\smoke_research_console_clicks.py --list-stages
+python tools\smoke_research_console_clicks.py --only-public-ir-sec --progress --progress-heartbeat-seconds 20
 ```
 
-부분 실행은 `--list-stages`로 가능한 체크포인트를 확인한 뒤 `--stop-after <stage>`를 붙여 사용합니다. 장시간 full smoke는 `--progress-heartbeat-seconds`로 브라우저 응답 대기 heartbeat 간격을 조절할 수 있습니다.
+부분 실행은 `--list-stages`로 가능한 체크포인트를 확인한 뒤 `--stop-after <stage>`를 붙여 사용합니다. Firecrawl IR Hosted Dry-run 버튼과 공개 IR/SEC 입력 피드백만 빠르게 확인할 때는 `--only-public-ir-sec`를 사용합니다. 장시간 full smoke는 `--progress-heartbeat-seconds`로 브라우저 응답 대기 heartbeat 간격을 조절할 수 있습니다.
 
 `verify_research_console.ps1`에서 라이브 클릭 스모크를 같이 돌릴 때도 같은 부분 실행 옵션을 전달할 수 있습니다.
 
 ```powershell
 .\tools\verify_research_console.ps1 -ClickSmokeProgress -ClickSmokeStopAfter portfolio
+.\tools\verify_research_console.ps1 -SkipWriteSmoke -ClickSmokeOnlyPublicIrSec -ClickSmokeProgress -ClickSmokeProgressHeartbeatSeconds 20
 ```
 
 
