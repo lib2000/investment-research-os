@@ -10,6 +10,8 @@ param(
 $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot (Resolve-Path (Join-Path $PSScriptRoot "..")) -PassThru
 $LogDir = Join-Path $ProjectRootPath "tmp"
