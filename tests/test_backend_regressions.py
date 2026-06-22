@@ -65,6 +65,18 @@ def load_firecrawl_ir_check_tool():
     return module
 
 
+def load_offline_readiness_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_offline_readiness.py"
+    spec = spec_from_file_location("check_offline_readiness", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_brief_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -173,6 +185,23 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertNotIn("interestCleanupError", result)
         self.assertNotIn("newsCleanupError", result)
         self.assertNotIn("researchArchiveError", result)
+
+
+class OfflineReadinessToolTests(unittest.TestCase):
+    def test_offline_readiness_checks_firecrawl_registry_sample(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("Firecrawl IR registry 샘플 payload", checks)
+        self.assertEqual(
+            checks["Firecrawl IR registry 샘플 payload"],
+            [
+                "tools/check_firecrawl_ir_collector.py",
+                "--input-json",
+                "docs/examples/firecrawl_ir_registry.sample.json",
+            ],
+        )
 
 
 class WebCaptureRenderingTests(unittest.TestCase):
