@@ -32,6 +32,7 @@ STOP_AFTER_STAGE_ORDER = (
     "analysis-forms",
     "portfolio",
     "system-automation",
+    "public-ir-sec",
     "memory-sources",
     "recommendations-calendar",
 )
@@ -352,6 +353,12 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("telegramMarketJournalShowsStoragePath", "시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다."),
             ("researchAutomationShowsSourceQuality", "리서치 자동화 상태 화면에 수집 품질 대시보드가 표시되지 않았습니다."),
         ]
+    elif stage == "public-ir-sec":
+        checks = [
+            ("publicIrSecStatusShowsPolicy", "공개 IR/SEC 상태 버튼에 저장 정책과 상태가 표시되지 않았습니다."),
+            ("publicIrSecEmptyInputShowsFeedback", "공개 IR/SEC 수집 버튼의 빈 URL 피드백이 표시되지 않았습니다."),
+            ("publicIrSecFirecrawlDryRunShowsSafeStatus", "Firecrawl IR Dry-run 버튼에 키 없음/안전 상태 안내가 표시되지 않았습니다."),
+        ]
     elif stage == "memory-sources":
         checks = [
             ("memoryQualityFilterWorks", "저장 데이터 품질 필터가 화면에서 적용되지 않았습니다."),
@@ -388,6 +395,7 @@ def run_click_smoke(
     url: str,
     include_llm_save: bool = False,
     only_system_check: bool = False,
+    only_public_ir_sec: bool = False,
     progress: bool = False,
     progress_heartbeat_seconds: float = 30.0,
     stop_after: str | None = None,
@@ -499,6 +507,130 @@ def run_click_smoke(
                     raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 포함 섹션 수가 표시되지 않았습니다.")
                 if not result.get("telegramMarketJournalShowsStoragePath"):
                     raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다.")
+                return result
+            if only_public_ir_sec:
+                progress_step("public IR/SEC smoke started")
+                result = client.evaluate(
+                    """
+                    (async () => {
+                      const runtimeErrors = [];
+                      window.addEventListener("error", (event) => runtimeErrors.push(event.message || String(event.error || "runtime error")));
+                      window.addEventListener("unhandledrejection", (event) => runtimeErrors.push(event.reason?.message || String(event.reason || "unhandled rejection")));
+                      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+                      const waitFor = async (predicate, timeout = 30000, label = "condition") => {
+                        const started = Date.now();
+                        while (Date.now() - started < timeout) {
+                          const value = predicate();
+                          if (value) return value;
+                          await sleep(250);
+                        }
+                        throw new Error(`Timed out waiting for ${label}`);
+                      };
+                      const combinedText = () => [
+                        document.querySelector("#output")?.innerText || "",
+                        document.querySelector("#actionFeedback")?.textContent || "",
+                      ].join("\\n");
+                      await waitFor(() => document.readyState === "complete", 15000, "page load");
+                      await waitFor(() => document.querySelector("#publicIrSecStatusButton"), 15000, "public IR/SEC controls");
+                      document.querySelector("#apiBaseUrl").value = "http://127.0.0.1:8001";
+                      document.querySelector("#accessToken").value = "dev-local-token";
+
+                      document.querySelector("#publicIrSecStatusButton").click();
+                      const publicIrSecStatusText = await waitFor(
+                        () => {
+                          const text = combinedText();
+                          return (
+                            text.includes("공개 IR/SEC 저장 상태") ||
+                            text.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                            text.includes("공개 IR/SEC 저장 상태를 조회합니다")
+                          ) && (
+                            text.includes("공개 자료만 수집") ||
+                            text.includes("저장 manifest 확인") ||
+                            text.includes("본문 보강 필요 자료 집계") ||
+                            text.includes("조회 중") ||
+                            text.includes("조회합니다")
+                          )
+                            ? text
+                            : "";
+                        },
+                        30000,
+                        "public IR/SEC status"
+                      );
+
+                      const urlInput = document.querySelector('[name="publicIrSecUrl"]');
+                      if (urlInput) {
+                        urlInput.value = "";
+                        urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+                      }
+                      document.querySelector("#publicIrSecCollectButton").click();
+                      const publicIrSecEmptyInputText = await waitFor(
+                        () => {
+                          const text = combinedText();
+                          return text.includes("입력 필요") && text.includes("공개 IR/SEC URL") ? text : "";
+                        },
+                        15000,
+                        "public IR/SEC empty input feedback"
+                      );
+
+                      document.querySelector("#publicIrSecFirecrawlDryRunButton").click();
+                      const publicIrSecFirecrawlDryRunText = await waitFor(
+                        () => {
+                          const text = combinedText();
+                          return (
+                            text.includes("Firecrawl IR Hosted Dry-run") ||
+                            text.includes("firecrawl_ir_hosted_dry_run")
+                          ) &&
+                            (
+                              text.includes("firecrawl_api_key_missing") ||
+                              text.includes("FIRECRAWL_API_KEY") ||
+                              text.includes("hosted_scrape") ||
+                              text.includes("success")
+                            )
+                            ? text
+                            : "";
+                        },
+                        45000,
+                        "Firecrawl hosted dry-run"
+                      );
+
+                      return {
+                        smokeStage: "public-ir-sec",
+                        publicIrSecStatusShowsPolicy:
+                          (publicIrSecStatusText.includes("공개 IR/SEC 저장 상태") ||
+                            publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                            publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
+                          (publicIrSecStatusText.includes("공개 자료만 수집") ||
+                            publicIrSecStatusText.includes("저장 manifest 확인") ||
+                            publicIrSecStatusText.includes("본문 보강 필요 자료 집계") ||
+                            publicIrSecStatusText.includes("조회 중") ||
+                            publicIrSecStatusText.includes("조회합니다")),
+                        publicIrSecEmptyInputShowsFeedback:
+                          publicIrSecEmptyInputText.includes("입력 필요") &&
+                          publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
+                        publicIrSecFirecrawlDryRunShowsSafeStatus:
+                          (publicIrSecFirecrawlDryRunText.includes("Firecrawl IR Hosted Dry-run") ||
+                            publicIrSecFirecrawlDryRunText.includes("firecrawl_ir_hosted_dry_run")) &&
+                          (
+                            publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
+                            publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                            publicIrSecFirecrawlDryRunText.includes("hosted_scrape") ||
+                            publicIrSecFirecrawlDryRunText.includes("success")
+                          ),
+                        publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 12).join("\\n"),
+                        publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
+                        publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 18).join("\\n"),
+                        runtimeErrors,
+                      };
+                    })()
+                    """,
+                    timeout=75,
+                    heartbeat=progress_step if progress else None,
+                    heartbeat_interval=progress_heartbeat_seconds,
+                    heartbeat_label="public IR/SEC browser flow still running",
+                )
+                result["elapsedSeconds"] = round(time.monotonic() - started_at, 2)
+                assert_partial_click_smoke(result)
+                progress_step("public IR/SEC smoke completed")
                 return result
             progress_step(f"full click smoke started{f' (stop after {stop_after})' if stop_after else ''}")
             stop_after_json = json.dumps(stop_after or "")
@@ -1319,6 +1451,30 @@ def run_click_smoke(
                     30000,
                     "Firecrawl IR hosted dry-run button"
                   );
+                  if (stopAfter === "public-ir-sec") {{
+                    return partialResult("public-ir-sec", {{
+                      publicIrSecStatusShowsPolicy:
+                        (publicIrSecStatusText.includes("공개 IR/SEC 저장 상태") ||
+                          publicIrSecStatusText.includes("공개 IR/SEC 저장 상태 조회 중") ||
+                          publicIrSecStatusText.includes("공개 IR/SEC 저장 상태를 조회합니다")) &&
+                        (publicIrSecStatusText.includes("공개 자료만 수집") ||
+                          publicIrSecStatusText.includes("저장 manifest 확인") ||
+                          publicIrSecStatusText.includes("본문 보강 필요 자료 집계")),
+                      publicIrSecEmptyInputShowsFeedback:
+                        publicIrSecEmptyInputText.includes("입력 필요") &&
+                        publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
+                      publicIrSecFirecrawlDryRunShowsSafeStatus:
+                        publicIrSecFirecrawlDryRunText.includes("Firecrawl IR Hosted Dry-run") &&
+                        (
+                          publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
+                          publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                          publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
+                        ),
+                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                      publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
+                      publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
+                    }});
+                  }}
                   document.querySelector("#codeKnowledgeGraphButton")?.click();
                   let codeKnowledgeGraphText = "";
                   try {{
@@ -1999,6 +2155,7 @@ def main() -> int:
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
     parser.add_argument("--only-system-check", action="store_true", help="전체 클릭 회귀 대신 시스템 점검 완료 여부만 확인합니다.")
+    parser.add_argument("--only-public-ir-sec", action="store_true", help="공개 IR/SEC 상태/입력 피드백/Firecrawl dry-run 버튼만 빠르게 확인합니다.")
     parser.add_argument("--progress", action="store_true", help="긴 click smoke의 주요 진행 구간을 표준 출력에 표시합니다.")
     parser.add_argument(
         "--progress-heartbeat-seconds",
@@ -2021,6 +2178,7 @@ def main() -> int:
             args.url,
             include_llm_save=args.include_llm_save,
             only_system_check=args.only_system_check,
+            only_public_ir_sec=args.only_public_ir_sec,
             progress=args.progress,
             progress_heartbeat_seconds=args.progress_heartbeat_seconds,
             stop_after=args.stop_after,

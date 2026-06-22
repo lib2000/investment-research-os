@@ -112,6 +112,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
                 "analysis-forms",
                 "portfolio",
                 "system-automation",
+                "public-ir-sec",
                 "memory-sources",
                 "recommendations-calendar",
             ),
@@ -141,6 +142,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_clicks.py").read_text(encoding="utf-8")
 
         self.assertIn("#publicIrSecFirecrawlDryRunButton", smoke_source)
+        self.assertIn('"public-ir-sec"', smoke_source)
+        self.assertIn("--only-public-ir-sec", smoke_source)
         self.assertIn("publicIrSecFirecrawlDryRunShowsSafeStatus", smoke_source)
         self.assertIn("firecrawl_api_key_missing", smoke_source)
 
