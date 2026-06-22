@@ -908,6 +908,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "FIRECRAWL_API_KEY",
             "POST https://api.firecrawl.dev/v2/scrape",
             "FIRECRAWL_IR_MCP_VERSION=3.17.0",
+            "docs\\examples\\firecrawl_ir_registry.sample.json",
+            "full offline readiness",
             "batch_counts: success=N failed=N skipped=N dry_run=N",
         ]:
             self.assertIn(expected, operations_doc)

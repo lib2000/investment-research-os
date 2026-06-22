@@ -133,6 +133,8 @@ python tools\check_console_static_contract.py --strict
 python tools\check_console_asset_and_js.py
 ```
 
+이 묶음 점검에는 `docs\examples\firecrawl_ir_registry.sample.json` 기반 Firecrawl IR registry 샘플 payload 검증도 포함되어, AAPL/JOBY 같은 공개 IR URL 샘플이 Market Signal Graph 입력 payload로 계속 정규화되는지 백엔드 없이 확인합니다.
+
 개별 점검은 아래 명령을 사용합니다.
 
 ```powershell
