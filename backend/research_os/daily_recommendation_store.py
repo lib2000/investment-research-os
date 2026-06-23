@@ -15,6 +15,9 @@ from research_os import daily_recommendation_tracking
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
 
+MARKET_ORDER = {"KR": 0, "US": 1}
+MARKET_LABELS = {"KR": "한국", "US": "미국"}
+
 
 def daily_recommendation_store_path(settings: Settings) -> Path:
     return resolve_vault_dir(settings.research_vault_dir) / "_system" / "daily_recommendations.json"
@@ -94,8 +97,50 @@ def parse_date(value: object) -> date | None:
         return None
 
 
-def recommendation_record_id(recommendation_date: date, rank: int, ticker: str) -> str:
-    return f"{recommendation_date.isoformat()}-{rank:02d}-{str(ticker or '').upper()}"
+def recommendation_market(candidate: dict[str, Any]) -> str:
+    market = str(candidate.get("market") or "").strip().upper()
+    if market in MARKET_ORDER:
+        return market
+    currency = str(candidate.get("currency") or "").strip().upper()
+    ticker = str(candidate.get("ticker") or "").strip()
+    if currency == "KRW" or (ticker.isdigit() and len(ticker) == 6):
+        return "KR"
+    return "US"
+
+
+def recommendation_market_label(market: str) -> str:
+    return MARKET_LABELS.get(str(market or "").upper(), str(market or "").upper() or "시장")
+
+
+def recommendation_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+    market = recommendation_market(item)
+    return (
+        MARKET_ORDER.get(market, 99),
+        int(item.get("rank") or 999),
+        str(item.get("ticker") or ""),
+    )
+
+
+def recommendation_record_id(recommendation_date: date, market: str, rank: int, ticker: str) -> str:
+    return f"{recommendation_date.isoformat()}-{market}-{rank:02d}-{str(ticker or '').upper()}"
+
+
+def daily_recommendation_market_groups(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for market in sorted({recommendation_market(record) for record in records}, key=lambda value: MARKET_ORDER.get(value, 99)):
+        market_records = sorted(
+            [record for record in records if recommendation_market(record) == market],
+            key=recommendation_sort_key,
+        )
+        groups.append(
+            {
+                "market": market,
+                "label": recommendation_market_label(market),
+                "count": len(market_records),
+                "records": market_records,
+            }
+        )
+    return groups
 
 
 def build_recommendation_record(
@@ -107,10 +152,13 @@ def build_recommendation_record(
 ) -> dict:
     normalized = daily_recommendation_candidates.normalize_candidate(candidate)
     baseline_price = normalized.get("baseline_price")
+    market = recommendation_market(normalized)
     return {
-        "record_id": recommendation_record_id(recommendation_date, rank, normalized["ticker"]),
+        "record_id": recommendation_record_id(recommendation_date, market, rank, normalized["ticker"]),
         "recommendation_date": recommendation_date.isoformat(),
         "generated_at": generated_at,
+        "market": market,
+        "market_label": recommendation_market_label(market),
         "rank": rank,
         "ticker": normalized["ticker"],
         "company_name": normalized["company_name"],
@@ -162,7 +210,8 @@ def upsert_daily_recommendations(
             "module": "daily_stock_recommendations",
             "message": "오늘 추천 후보는 이미 저장되어 있어 중복 저장하지 않았습니다.",
             "recommendation_date": recommendation_date.isoformat(),
-            "records": sorted(existing_today, key=lambda item: int(item.get("rank") or 999))[:3],
+            "records": sorted(existing_today, key=recommendation_sort_key),
+            "market_groups": daily_recommendation_market_groups(existing_today),
             "storage_path": str(daily_recommendation_store_path(settings)),
         }
 
@@ -170,19 +219,27 @@ def upsert_daily_recommendations(
         today_ids = {item.get("record_id") for item in existing_today}
         records = [item for item in records if item.get("record_id") not in today_ids]
 
+    market_rank_counts: dict[str, int] = {}
+    ranked_candidates: list[tuple[dict, int]] = []
+    for index, candidate in enumerate(candidates):
+        market = recommendation_market(candidate)
+        market_rank_counts[market] = market_rank_counts.get(market, 0) + 1
+        rank = int(candidate.get("rank") or market_rank_counts[market] or index + 1)
+        ranked_candidates.append((candidate, rank))
     new_records = [
         build_recommendation_record(
             candidate,
-            rank=index + 1,
+            rank=rank,
             recommendation_date=recommendation_date,
             generated_at=generated_at,
         )
-        for index, candidate in enumerate(candidates[:3])
+        for candidate, rank in ranked_candidates
     ]
     records.extend(new_records)
     records.sort(
         key=lambda item: (
             str(item.get("recommendation_date") or ""),
+            -MARKET_ORDER.get(recommendation_market(item), 99),
             -int(item.get("rank") or 999),
         ),
         reverse=True,
@@ -201,6 +258,7 @@ def upsert_daily_recommendations(
         "recommendation_date": recommendation_date.isoformat(),
         "saved_count": len(new_records),
         "records": new_records,
+        "market_groups": daily_recommendation_market_groups(new_records),
         "storage_path": str(daily_recommendation_store_path(settings)),
     }
 
@@ -337,7 +395,8 @@ def daily_recommendation_status_payload(settings: Settings, *, today: str | None
     payload["tracking_enabled"] = settings.daily_recommendations_tracking_enabled
     payload["due_now"] = should_run_daily_recommendations(settings)
     payload["today_recommendation_date"] = today_key
-    payload["today_records"] = sorted(today_records, key=lambda item: int(item.get("rank") or 999))[:3]
+    payload["today_records"] = sorted(today_records, key=recommendation_sort_key)
+    payload["today_market_groups"] = daily_recommendation_market_groups(today_records)
     payload["has_today_recommendations"] = bool(today_records)
     payload["state"] = state
     return payload
@@ -385,7 +444,8 @@ def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30)
         "latest_recommendation_date": latest_date,
         "record_count": len(records),
         "recommendation_dates": recommendation_dates[:30],
-        "latest_records": sorted(latest_records, key=lambda item: int(item.get("rank") or 999))[:3],
+        "latest_records": sorted(latest_records, key=recommendation_sort_key),
+        "latest_market_groups": daily_recommendation_market_groups(latest_records),
         "records": records[: max(1, min(limit, 200))],
         "due_or_pending_milestones": due_milestones[:30],
         "performance_summary": daily_recommendation_tracking.summarize_tracking_performance(records),

@@ -25,6 +25,8 @@ REQUIRED_EVIDENCE_CATEGORIES = {
     "최근 저장/RAG": ("최근 근거 파일", "최근 저장 자료", "RAG 연결"),
     "보유/관심 범위": ("대상 범위", "보유:", "관심:"),
 }
+MARKET_ORDER = {"KR": 0, "US": 1}
+EXPECTED_MARKET_RANKS = {1, 2, 3}
 
 
 def project_root(start: Path) -> Path:
@@ -71,6 +73,21 @@ def record_date(record: dict[str, Any]) -> str:
 def record_rank(record: dict[str, Any]) -> int:
     value = record.get("rank")
     return value if isinstance(value, int) else 999
+
+
+def record_market(record: dict[str, Any]) -> str:
+    market = str(record.get("market") or "").strip().upper()
+    if market in MARKET_ORDER:
+        return market
+    currency = str(record.get("currency") or "").strip().upper()
+    ticker = str(record.get("ticker") or "").strip()
+    if currency == "KRW" or (ticker.isdigit() and len(ticker) == 6):
+        return "KR"
+    return "US"
+
+
+def record_sort_key(record: dict[str, Any]) -> tuple[int, int, str]:
+    return (MARKET_ORDER.get(record_market(record), 99), record_rank(record), str(record.get("ticker") or ""))
 
 
 def milestone_keys(record: dict[str, Any]) -> set[str]:
@@ -173,16 +190,32 @@ def validate_all_date_rank_integrity(
         by_date.setdefault(date_key, []).append(record)
 
     for date_key, group in sorted(by_date.items()):
-        if expected_count > 0 and len(group) != expected_count:
-            errors.append(f"{date_key} 일자별 추천 수 불일치: {len(group)}개 / 기대 {expected_count}개")
-        ranks = [record_rank(record) for record in group]
-        expected_ranks = set(range(1, (expected_count or len(group)) + 1))
-        actual_ranks = set(ranks)
-        if actual_ranks != expected_ranks:
-            errors.append(f"{date_key} 일자별 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}")
-        duplicate_ranks = duplicate_values([str(rank) for rank in ranks if rank != 999])
-        if duplicate_ranks:
-            errors.append(f"{date_key} 일자별 추천 순위 중복: {', '.join(sorted(duplicate_ranks))}")
+        if any("market" in record for record in group):
+            by_market: dict[str, list[dict[str, Any]]] = {}
+            for record in group:
+                by_market.setdefault(record_market(record), []).append(record)
+            if expected_count > 0 and len(group) not in {3, expected_count}:
+                errors.append(f"{date_key} 일자별 추천 수 불일치: {len(group)}개 / 기대 레거시 3개 또는 현행 {expected_count}개")
+            for market, market_group in sorted(by_market.items()):
+                ranks = [record_rank(record) for record in market_group]
+                actual_ranks = set(ranks)
+                expected_ranks = set(range(1, len(market_group) + 1))
+                if actual_ranks != expected_ranks or not actual_ranks <= EXPECTED_MARKET_RANKS:
+                    errors.append(
+                        f"{date_key} {market} 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}"
+                    )
+                duplicate_ranks = duplicate_values([str(rank) for rank in ranks if rank != 999])
+                if duplicate_ranks:
+                    errors.append(f"{date_key} {market} 추천 순위 중복: {', '.join(sorted(duplicate_ranks))}")
+        else:
+            ranks = [record_rank(record) for record in group]
+            expected_ranks = set(range(1, len(group) + 1))
+            actual_ranks = set(ranks)
+            if actual_ranks != expected_ranks:
+                errors.append(f"{date_key} 레거시 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}")
+            duplicate_ranks = duplicate_values([str(rank) for rank in ranks if rank != 999])
+            if duplicate_ranks:
+                errors.append(f"{date_key} 레거시 추천 순위 중복: {', '.join(sorted(duplicate_ranks))}")
 
         tickers = [str(record.get("ticker") or "").strip().upper() for record in group]
         companies = [str(record.get("company_name") or "").strip() for record in group]
@@ -375,8 +408,8 @@ def main() -> int:
     parser.add_argument("--store", type=Path, default=None, help="daily_recommendations.json 경로")
     parser.add_argument("--state", type=Path, default=None, help="daily_recommendations_state.json 경로")
     parser.add_argument("--date", default=None, help="확인할 추천일. 생략하면 latest_recommendation_date 사용")
-    parser.add_argument("--min-latest", type=int, default=3, help="해당 일자에 필요한 최소 추천 수")
-    parser.add_argument("--expected-latest-count", type=int, default=3, help="해당 일자에 기대하는 정확한 추천 수. 0이면 비활성화")
+    parser.add_argument("--min-latest", type=int, default=6, help="해당 일자에 필요한 최소 추천 수")
+    parser.add_argument("--expected-latest-count", type=int, default=6, help="해당 일자에 기대하는 정확한 추천 수. 0이면 비활성화")
     parser.add_argument("--max-latest-age-days", type=int, default=1, help="최신 추천일이 오늘 기준 며칠 전까지 허용되는지")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
@@ -401,7 +434,7 @@ def main() -> int:
 
     latest_date = args.date or data.get("latest_recommendation_date") or max(record_date(r) for r in records)
     latest = [record for record in records if record_date(record) == latest_date]
-    latest.sort(key=record_rank)
+    latest.sort(key=record_sort_key)
     policy_alignment = latest_policy_alignment(root, records, latest)
     counts = Counter(record_date(record) for record in records)
 
@@ -421,6 +454,10 @@ def main() -> int:
         errors.append(f"{latest_date} 추천 수 부족: {len(latest)}개 / 필요 {args.min_latest}개")
     if args.expected_latest_count > 0 and len(latest) != args.expected_latest_count:
         errors.append(f"{latest_date} 추천 수 불일치: {len(latest)}개 / 기대 {args.expected_latest_count}개")
+    latest_by_market = Counter(record_market(record) for record in latest)
+    for market in ("KR", "US"):
+        if latest_by_market.get(market, 0) != 3:
+            errors.append(f"{latest_date} {market} 추천 수 불일치: {latest_by_market.get(market, 0)}개 / 기대 3개")
     expected_date_count = args.expected_latest_count if args.expected_latest_count > 0 else args.min_latest
     if not args.skip_all_date_integrity:
         validate_all_date_rank_integrity(records, expected_date_count, errors)
@@ -452,10 +489,10 @@ def main() -> int:
     baseline_limit_hours = baseline_age_limit_hours(args, latest_age_days)
 
     if args.require_quality:
-        expected_ranks = set(range(1, args.min_latest + 1))
-        actual_ranks = {record_rank(record) for record in latest[: args.min_latest]}
-        if actual_ranks != expected_ranks:
-            errors.append(f"최신 추천 순위 불일치: {sorted(actual_ranks)} / 기대 {sorted(expected_ranks)}")
+        for market in ("KR", "US"):
+            market_ranks = {record_rank(record) for record in latest if record_market(record) == market}
+            if market_ranks != EXPECTED_MARKET_RANKS:
+                errors.append(f"최신 {market} 추천 순위 불일치: {sorted(market_ranks)} / 기대 {[1, 2, 3]}")
         quality_fields = (
             ("score_components", list),
             ("reasons", list),
@@ -573,7 +610,7 @@ def main() -> int:
         ]
         profile_text = f" | 투자방향 {', '.join(profile_labels[:2])}" if profile_labels else ""
         print(
-            f"{record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
+            f"{record_market(record)} {record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
             f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}{profile_text}"
         )
     if policy_alignment.get("status") == "drift":

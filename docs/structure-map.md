@@ -56,7 +56,7 @@
 | `backend\research_os\daily_recommendation_recent.py` | 매일 추천 최근 1주 자료 인덱스, evidence document 변환, 묶음 표시 helper | `DailyRecommendationRecentModuleTests` |
 | `backend\research_os\daily_recommendation_ranking.py` | 매일 추천 후보 정렬, 반복 부진 후보 보류, rank/warning payload helper | `DailyRecommendationsTests` |
 | `backend\research_os\daily_recommendation_tracking.py` | 매일 추천 사후 추적 milestone, 성과 요약, 투자 상황 문구 helper | `DailyRecommendationTrackingModuleTests` |
-| `backend\research_os\daily_recommendations.py` | 매일 추천 1~3위 저장, 스케줄 상태, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
+| `backend\research_os\daily_recommendations.py` | 매일 한국/미국 추천 1~3위 저장, 스케줄 상태, 추천 후보 저장 품질 점수 보정 | `check_daily_recommendations_store.py` |
 | `backend\research_os\dashboard_helpers.py` | 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper | `DashboardHelpersModuleTests` |
 | `backend\research_os\investment_direction_profile.py` | 사용자 첨부 투자 방향 테마를 오늘 추천 후보 점수/리스크/모니터링 트리거에 반영 | `DailyRecommendationsTests` |
 | `backend\research_os\automation_digest_helpers.py` | 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper | `AutomationStatusModuleTests` |
@@ -160,7 +160,7 @@ python tools\analyze_code_diff_impact.py --refresh --strict
 
 | 흐름 | 확인 목적 |
 |---|---|
-| 매일 추천 1~3위 | 추천 생성, 저장, 추적표 회귀 범위 확인 |
+| 매일 한국/미국 추천 1~3위 | 추천 생성, 저장, 추적표 회귀 범위 확인 |
 | 저장 데이터/RAG | LLM 저장, RAG 색인, 저장/RAG 상태 연결 확인 |
 | 포트폴리오 실시간/수량 보호 | 수량 덮어쓰기, 가격 갱신, 수익률 계산 영향 확인 |
 | 외부 리포트/소스 자동화 | KCIF/KIEP/네이버/신한/지역 소스 수집 영향 확인 |

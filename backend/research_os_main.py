@@ -14632,7 +14632,8 @@ def run_daily_stock_recommendations(
                 "module": "daily_stock_recommendations",
                 "message": "오늘 추천 후보는 이미 저장되어 있어 중복 저장하지 않고 추적 상태만 갱신했습니다.",
                 "recommendation_date": recommendation_date.isoformat(),
-                "records": updated_status.get("latest_records") or existing_today[:3],
+                "records": updated_status.get("latest_records") or existing_today,
+                "market_groups": updated_status.get("latest_market_groups"),
                 "record_count": updated_status.get("record_count"),
                 "recommendation_dates": updated_status.get("recommendation_dates"),
                 "performance_summary": updated_status.get("performance_summary"),
@@ -14649,7 +14650,7 @@ def run_daily_stock_recommendations(
                     "last_run_date": recommendation_date.isoformat(),
                     "last_tracking_at": checked_at,
                     "last_tracking_date": recommendation_date.isoformat(),
-                    "selected_count": len(existing_today[:3]),
+                    "selected_count": len(existing_today),
                     "message": result["message"],
                 },
             )

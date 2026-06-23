@@ -1188,7 +1188,7 @@ export async function fetchDailyBriefing(accessToken, saveResult = false) {
 }
 
 /**
- * 매일 추천 후보 1~3위와 사후 추적 상태를 조회합니다.
+ * 매일 한국/미국 추천 후보 1~3위와 사후 추적 상태를 조회합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
  * @returns {Promise<Object|null>} 일일 추천/추적 상태
@@ -1206,7 +1206,7 @@ export async function fetchDailyRecommendationsStatus(accessToken) {
 }
 
 /**
- * 오늘의 추천 후보 1~3위를 생성하고 별도 항목으로 저장합니다.
+ * 오늘의 한국/미국 추천 후보 1~3위를 생성하고 별도 항목으로 저장합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
  * @param {Object} options 실행 옵션

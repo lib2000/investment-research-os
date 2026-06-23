@@ -91,7 +91,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=9a179c3aef07";
+} from "./api.js?v=1b0f427e2e08";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -8178,8 +8178,7 @@ function dailyRecommendationTopRecords(payload = {}) {
   if (today.length) {
     return today
       .slice()
-      .sort((left, right) => Number(left.rank || 99) - Number(right.rank || 99))
-      .slice(0, 3);
+      .sort(dailyRecommendationRecordSort);
   }
   if (payload.has_today_recommendations === false) {
     return [];
@@ -8188,8 +8187,48 @@ function dailyRecommendationTopRecords(payload = {}) {
   const records = latest.length ? latest : Array.isArray(payload.records) ? payload.records : [];
   return records
     .slice()
-    .sort((left, right) => Number(left.rank || 99) - Number(right.rank || 99))
-    .slice(0, 3);
+    .sort(dailyRecommendationRecordSort);
+}
+
+function dailyRecommendationRecordMarket(record = {}) {
+  const market = String(record.market || "").trim().toUpperCase();
+  if (market === "KR" || market === "US") {
+    return market;
+  }
+  const currency = String(record.currency || "").trim().toUpperCase();
+  const ticker = String(record.ticker || "").trim();
+  return currency === "KRW" || /^\d{6}$/.test(ticker) ? "KR" : "US";
+}
+
+function dailyRecommendationMarketLabel(market) {
+  return market === "KR" ? "한국" : market === "US" ? "미국" : market || "시장";
+}
+
+function dailyRecommendationRecordSort(left = {}, right = {}) {
+  const marketOrder = { KR: 0, US: 1 };
+  const leftMarket = dailyRecommendationRecordMarket(left);
+  const rightMarket = dailyRecommendationRecordMarket(right);
+  return (
+    (marketOrder[leftMarket] ?? 99) - (marketOrder[rightMarket] ?? 99) ||
+    Number(left.rank || 99) - Number(right.rank || 99) ||
+    String(left.ticker || "").localeCompare(String(right.ticker || ""))
+  );
+}
+
+function dailyRecommendationMarketGroups(records = []) {
+  const groups = new Map();
+  records.slice().sort(dailyRecommendationRecordSort).forEach((record) => {
+    const market = dailyRecommendationRecordMarket(record);
+    if (!groups.has(market)) {
+      groups.set(market, []);
+    }
+    groups.get(market).push(record);
+  });
+  return Array.from(groups.entries()).map(([market, rows]) => ({
+    market,
+    label: dailyRecommendationMarketLabel(market),
+    records: rows,
+  }));
 }
 
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
@@ -8215,9 +8254,15 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
     ? ` · 정책 이탈 ${policyDriftTickers.join(", ")} 재정렬 필요`
     : "";
   const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length ? "warning" : "ok";
+  const marketGroups = dailyRecommendationMarketGroups(records);
   const rows = records.length
-    ? records
-        .map((record, index) => {
+    ? marketGroups
+        .map((group) => `
+          <li class="daily-recommendation-market-group market-${escapeHtml(group.market.toLowerCase())}">
+            <header>${escapeHtml(group.label)} 추천 1~3위</header>
+            <ol>
+              ${group.records
+                .map((record, index) => {
           const rank = Number(record.rank || index + 1);
           const exposure = dailyRecommendationExposureSummary(record);
           const reasonItems = Array.isArray(record.reasons) && record.reasons.length
@@ -8243,21 +8288,25 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
               </div>
             </li>
           `;
-        })
+                })
+                .join("")}
+            </ol>
+          </li>
+        `)
         .join("")
     : `
       <li class="is-empty">
         <b>대기</b>
-        <strong>오늘 추천 1~3위 준비 중</strong>
+        <strong>한국/미국 추천 1~3위 준비 중</strong>
         <span>${escapeHtml(dueText)}</span>
         <small>서버가 ${escapeHtml(schedule)} 이후 자동 실행하면 이 영역에 바로 표시됩니다.</small>
       </li>
     `;
   return `
-    <section class="daily-recommendation-top-panel ${escapeHtml(tone)}" aria-label="오늘 추천 1~3위">
+    <section class="daily-recommendation-top-panel ${escapeHtml(tone)}" aria-label="오늘 한국/미국 추천 1~3위">
       <div class="daily-recommendation-top-head">
         <div>
-          <span>오늘 추천 1~3위</span>
+          <span>오늘 한국/미국 추천 1~3위</span>
           <h2>${escapeHtml(records.length ? todayDate : "매일 08:00 자동 실행")}</h2>
         </div>
         <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
@@ -8421,14 +8470,14 @@ function renderDailyRecommendationCards(payload) {
   if (!elements.dailyRecommendationCards || !payload || typeof payload !== "object") {
     return;
   }
-  const records = (payload.latest_records || payload.records || []).slice(0, 3);
+  const records = (payload.latest_records || payload.records || []).slice().sort(dailyRecommendationRecordSort);
   const allRecords = Array.isArray(payload.records) ? payload.records : records;
   if (!records.length) {
     elements.dailyRecommendationCards.innerHTML = `
       <article class="daily-recommendation-card daily-recommendation-summary warning">
         <span>매일 추천 후보</span>
         <strong>저장된 후보 없음</strong>
-        <p>${escapeHtml(payload.message || "오늘 추천 후보 1~3위를 생성하면 이 영역에 저장 이력과 추적 일정이 표시됩니다.")}</p>
+        <p>${escapeHtml(payload.message || "한국/미국 추천 후보 1~3위를 생성하면 이 영역에 저장 이력과 추적 일정이 표시됩니다.")}</p>
       </article>
     `;
     return;
@@ -8590,7 +8639,7 @@ function renderDailyRecommendationCards(payload) {
     <article class="daily-recommendation-card daily-recommendation-summary ok daily-recommendation-board-summary">
       <span>오늘의 추천 결과</span>
       <strong>${escapeHtml(payload.latest_recommendation_date || payload.recommendation_date || "추천일 미확인")}</strong>
-      <p>1~3위 추천 후보를 한 줄 카드로 정렬했습니다 · 저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
+      <p>한국/미국 1~3위 추천 후보를 카드로 정렬했습니다 · 저장 ${escapeHtml(formatNumber(payload.record_count || records.length))}개 · 최근일 대기 ${escapeHtml(formatNumber(milestoneCounts.pending || 0))}개 · 누적 완료 ${escapeHtml(formatNumber(performance.complete_count || 0))}개 · 가격 미확인 ${escapeHtml(formatNumber(performance.price_unavailable_count || 0))}개</p>
       ${policyDriftRecords.length ? `<p class="daily-recommendation-warning">최신 추천 정책 이탈: ${escapeHtml(policyDriftText)} · 다음 자동 추천에서 재정렬 필요</p>` : ""}
       <small>${escapeHtml(
         `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
@@ -8600,7 +8649,7 @@ function renderDailyRecommendationCards(payload) {
     ${cards}
     <article class="daily-recommendation-card daily-recommendation-daily-list">
       <span>일자별 추천 목록</span>
-      <strong>매일 1위부터 3위</strong>
+      <strong>매일 한국/미국 1위부터 3위</strong>
       <div class="daily-recommendation-date-groups">
         ${dailyGroups
           .map(
@@ -11869,7 +11918,7 @@ const MEMORY_ACTION_MESSAGES = {
   naverResearchRepairButton: "네이버 리서치 캐시 정리와 PDF 신호 백필을 시작했습니다.",
   naverMarketJournalButton: "네이버 국내 마감 시황을 시장일지에 반영합니다.",
   dailyBriefButton: "일일 브리핑 생성을 시작했습니다.",
-  dailyRecommendationsButton: "오늘 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
+  dailyRecommendationsButton: "오늘 한국/미국 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
@@ -12164,7 +12213,7 @@ async function runDailyRecommendationsFlow() {
   startOutputLoading("오늘 추천 후보 생성 중", [
     "보유/관심 종목과 저장 리포트 확인",
     "목표가·공시·RAG 근거 점수화",
-    "추천 후보 1~3위 저장",
+    "한국/미국 추천 후보 1~3위 저장",
     "1주/15일/1달/3달/6달 추적표 갱신",
   ]);
   try {
@@ -13727,7 +13776,7 @@ function formatKoreanResult(value) {
     const actionForItem = (item) => {
       const status = usageStatusForItem(item);
       if (status === "오늘 추천 근거") {
-        return "오늘 추천 1~3위 논거에서 핵심 변화 여부 확인";
+        return "오늘 한국/미국 추천 1~3위 논거에서 핵심 변화 여부 확인";
       }
       if (status === "추천 이력 근거") {
         return "기존 추천 논거가 유지되는지 재검토";
@@ -13936,7 +13985,7 @@ function formatKoreanResult(value) {
       `- **핵심 리포트:** ${formatNumber(counts.display_reports || 0)}건 · 보유/관심 종목 연결 자료만 우선 표시`,
       `- **공개 IR/SEC:** ${formatNumber(counts.public_ir_sec || 0)}건 · 추천 가산 가능 ${formatNumber(counts.public_ir_sec_usable || 0)}건 · 본문 보강 ${formatNumber(counts.public_ir_sec_needs_body || counts.public_ir_sec_blocked || 0)}건`,
       `- **자동화 상태:** 점검 필요 ${formatNumber(watch.due_source_count || 0)}개 · 실패 ${formatNumber(watch.failed_source_count || 0)}개 · 최근 신호 ${formatNumber(watch.recent_signal_count || counts.total || 0)}건`,
-      `- **상태 기준:** 오늘 추천 근거 = 최신 추천 1~3위의 RAG 근거 문서와 직접 연결, 추천 이력 근거 = 과거 추천 근거 문서와 연결, 추천 반영 = 오늘 추천 가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
+      `- **상태 기준:** 오늘 추천 근거 = 최신 한국/미국 추천 1~3위의 RAG 근거 문서와 직접 연결, 추천 이력 근거 = 과거 추천 근거 문서와 연결, 추천 반영 = 오늘 추천 가산 가능, 참고만 = 시장 배경 또는 보조 자료, 본문 보강 필요 = 원문 확인 전 추천 점수 제외`,
       ``,
       `### 추천 근거 연결 자료`,
       `- **오늘 추천 직접 연결:** ${formatNumber(latestRecommendationLinkedLines.length)}건`,
@@ -13950,7 +13999,7 @@ function formatKoreanResult(value) {
       ...formatBulletList(impactByTargetLines, (item) => item, "최근 1주 자료와 추천 종목을 연결한 종목별 영향 요약이 없습니다."),
       ``,
       `#### 오늘 추천 근거 연결 자료`,
-      ...formatBulletList(latestRecommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘 추천 1~3위 근거 문서와 직접 연결된 항목이 없습니다."),
+      ...formatBulletList(latestRecommendationLinkedLines, (item) => item, "최근 1주 자료 중 오늘 한국/미국 추천 1~3위 근거 문서와 직접 연결된 항목이 없습니다."),
       ``,
       `#### 추천 이력 근거 연결 자료`,
       ...formatBulletList(historicalRecommendationLinkedLines, (item) => item, "오늘 추천 외 과거 추천 근거로만 연결된 항목은 없습니다."),
@@ -14105,7 +14154,7 @@ function formatKoreanResult(value) {
     });
     const performance = value.performance_summary || {};
     return [
-      `### 매일 추천 후보 1~3위`,
+      `### 매일 한국/미국 추천 후보 1~3위`,
       ``,
       `- **상태:** ${value.status || "미확인"}`,
       `- **추천일:** ${value.recommendation_date || value.latest_recommendation_date || state.last_run_date || "미확인"}`,

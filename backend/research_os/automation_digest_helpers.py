@@ -153,10 +153,10 @@ def build_dashboard_next_actions(
     elif dart_daily.get("failure_count"):
         next_actions.append(f"DART 공시 점검 실패 {dart_daily.get('failure_count')}개 종목을 확인하세요.")
     if daily_recommendations_due:
-        next_actions.append("오늘의 추천 후보 1~3위 생성과 사후 추적 저장이 필요합니다.")
+        next_actions.append("오늘의 한국/미국 추천 후보 1~3위 생성과 사후 추적 저장이 필요합니다.")
     elif daily_recommendations.get("latest_recommendation_date"):
         next_actions.append(
-            f"{daily_recommendations.get('latest_recommendation_date')} 추천 후보 1~3위가 별도 항목에 저장되어 있습니다."
+            f"{daily_recommendations.get('latest_recommendation_date')} 한국/미국 추천 후보 1~3위가 별도 항목에 저장되어 있습니다."
         )
     if not next_actions:
         next_actions.append("보유·관심 대상의 새 자료를 수집하고 Dossier/일일 브리핑에 반영할 준비가 되어 있습니다.")

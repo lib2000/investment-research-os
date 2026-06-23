@@ -22,5 +22,5 @@
 - 저장 키: `PUBLIC_IR_SEC`
 - 저장 범위: `research_vault/PUBLIC_IR_SEC`와 manifest/RAG 색인
 - 최근 1주 자료: 보유/관심 회사명, 티커, 섹터와 매칭되는 공개 IR/SEC만 표시
-- 오늘 추천 1~3위: 최근 1주 공개 IR/SEC가 종목과 직접 연결될 때만 근거 점수와 evidence source에 반영
+- 오늘 한국/미국 추천 1~3위: 최근 1주 공개 IR/SEC가 종목과 직접 연결될 때만 근거 점수와 evidence source에 반영
 - 품질 대시보드: 공개 IR/SEC 활성 수, 보관 수, URL-only/본문 보강 필요 수를 별도 집계

@@ -33,7 +33,7 @@
 - `daily_recommendation_recent.py`: 매일 추천 최근 1주 자료 인덱스, evidence document 변환, 묶음 표시 helper
 - `daily_recommendation_ranking.py`: 매일 추천 후보 정렬, 반복 부진 후보 보류, rank/warning payload helper
 - `daily_recommendation_tracking.py`: 매일 추천 사후 추적 milestone, 성과 요약, 투자 상황 문구 helper
-- `daily_recommendations.py`: 매일 추천 1~3위 저장/중복 방지, 추천 후보 저장 품질 점수 보정 유틸
+- `daily_recommendations.py`: 매일 한국/미국 추천 1~3위 저장/중복 방지, 추천 후보 저장 품질 점수 보정 유틸
 - `dashboard_helpers.py`: 종목 대시보드 리포트 요약, tooltip compact, watch item 표시 helper
 - `automation_digest_helpers.py`: 리서치 자동화 대시보드 digest 표시 카드, 다음 액션, 우선순위 helper
 - `automation_schedule_status.py`: 리서치 외부 소스 자동화 스케줄 상태 row 조립 helper

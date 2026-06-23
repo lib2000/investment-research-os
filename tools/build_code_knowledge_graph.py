@@ -49,7 +49,7 @@ ATTR_RE = re.compile(r"([A-Za-z_:][-A-Za-z0-9_:.]*)=[\"']([^\"']*)[\"']")
 
 FLOW_DEFINITIONS = {
     "daily_recommendations": {
-        "label": "매일 추천 1~3위",
+        "label": "매일 한국/미국 추천 1~3위",
         "keywords": ["daily_recommendations", "dailyRecommendations", "daily-recommendations", "오늘 추천", "투자 방향"],
         "expected_files": [
             "backend/research_os/daily_recommendations.py",
