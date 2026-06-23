@@ -43,6 +43,10 @@ def apply_daily_recommendation_consensus_row(
         candidate.setdefault("evidence_sources", []).append(
             f"목표가/리포트 근거 {item.get('source_count')}건"
         )
+    else:
+        candidate.setdefault("evidence_sources", []).append("목표가/리포트 확인 필요: 저장 데이터에서 증권사 목표주가를 찾지 못했습니다.")
+        candidate.setdefault("quality_flags", []).append("목표가/리포트 확인 필요")
+        candidate.setdefault("risk_notes", []).append("증권사 목표가나 리포트 근거가 부족해 가격 조건은 별도 확인이 필요합니다.")
     if item.get("market_value"):
         market_value = float(item.get("market_value") or 0)
         daily_recommendation_candidates.add_daily_recommendation_score(candidate, 20, "실제 보유 포트폴리오 비중")

@@ -79,13 +79,14 @@ def recommendation_signal(system_dir: Path, daily_time: str) -> dict[str, Any]:
         expected.add((now.date() - timedelta(days=1)).isoformat())
     last_run = str(state.get("last_run_date") or state.get("last_run_at") or "")
     date_ok = last_run[:10] in expected
-    score = (50.0 if date_ok else 0.0) + min(selected_count, 3) / 3 * 50.0
+    expected_count = 6
+    score = (50.0 if date_ok else 0.0) + min(selected_count, expected_count) / expected_count * 50.0
     return signal(
         "daily_recommendations_latest",
-        "오늘 추천 1~3위",
+        "오늘 한국/미국 추천 1~3위",
         score,
         f"선택 {selected_count}개, 마지막 실행 {last_run or '미확인'}",
-        "python tools\\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1",
+        "python tools\\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1",
     )
 
 

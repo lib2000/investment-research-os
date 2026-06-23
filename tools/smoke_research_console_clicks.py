@@ -378,9 +378,9 @@ def assert_partial_click_smoke(result: dict) -> None:
             raise AssertionError("네이버 리서치 정리 화면에 소프트 보관 정책 또는 처리 진행 피드백이 표시되지 않았습니다.")
     elif stage == "recommendations-calendar":
         checks = [
-            ("dailyRecommendationsShowsTopThree", "오늘 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다."),
-            ("dailyRecommendationsShowsExposure", "오늘 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."),
-            ("dailyRecommendationsShowsInvestmentProfile", "오늘 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다."),
+            ("dailyRecommendationsShowsTopThree", "오늘 한국/미국 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다."),
+            ("dailyRecommendationsShowsExposure", "오늘 한국/미국 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."),
+            ("dailyRecommendationsShowsInvestmentProfile", "오늘 한국/미국 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다."),
             ("dailyRecommendationsShowsTracking", "추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다."),
             ("investmentCalendarShowsMarkets", "투자 캘린더 화면에 한국/미국 시장 구분이 표시되지 않았습니다."),
             ("investmentCalendarShowsEarningsTitle", "투자 캘린더 화면에 실적발표 제목/일정이 표시되지 않았습니다."),
@@ -1742,7 +1742,7 @@ def run_click_smoke(
                         const hasDailyRecommendationOutput = output.includes("daily_recommendations.json") &&
                           /2026-[0-9]{2}-[0-9]{2}/.test(output);
                         return (
-                          ((combined.includes("오늘의 추천 결과") || combined.includes("매일 추천 후보 1~3위")) &&
+                          ((combined.includes("오늘의 추천 결과") || combined.includes("매일 한국/미국 추천 후보 1~3위")) &&
                             combined.includes("추천 후보") &&
                             (combined.includes("사후 추적") || cards.includes("경과 그래프"))) ||
                           hasDailyRecommendationCards ||
@@ -1773,7 +1773,7 @@ def run_click_smoke(
                         const hasDailyRecommendationStatusOutput = output.includes("daily_recommendations.json") &&
                           /2026-[0-9]{2}-[0-9]{2}/.test(output);
                         return (
-                          ((combined.includes("오늘의 추천 결과") || combined.includes("매일 추천 후보 1~3위")) &&
+                          ((combined.includes("오늘의 추천 결과") || combined.includes("매일 한국/미국 추천 후보 1~3위")) &&
                             combined.includes("추천일") &&
                             combined.includes("추천 후 1주일") &&
                             cards.includes("경과 그래프")) ||
@@ -1815,7 +1815,7 @@ def run_click_smoke(
                     return partialResult("recommendations-calendar", {{
                       dailyRecommendationsShowsTopThree:
                         ((dailyRecommendationsText.includes("오늘의 추천 결과") ||
-                          dailyRecommendationsText.includes("매일 추천 후보 1~3위")) &&
+                          dailyRecommendationsText.includes("매일 한국/미국 추천 후보 1~3위")) &&
                           dailyRecommendationsText.includes("추천 후보")) ||
                         (dailyRecommendationsText.length > 500 &&
                           /2026-[0-9]{{2}}-[0-9]{{2}}/.test(dailyRecommendationsText) &&
@@ -2052,7 +2052,7 @@ def run_click_smoke(
                     naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
                     dailyRecommendationsShowsTopThree:
                       ((dailyRecommendationsText.includes("오늘의 추천 결과") ||
-                        dailyRecommendationsText.includes("매일 추천 후보 1~3위")) &&
+                        dailyRecommendationsText.includes("매일 한국/미국 추천 후보 1~3위")) &&
                         dailyRecommendationsText.includes("추천 후보")) ||
                       (dailyRecommendationsText.length > 500 &&
                         /2026-[0-9]{2}-[0-9]{2}/.test(dailyRecommendationsText) &&
@@ -2128,7 +2128,7 @@ def run_click_smoke(
             if not result["dashboardShowsDartCoverage"]:
                 raise AssertionError("대시보드 DART 스트립에 대상/확인 커버리지 정보가 표시되지 않았습니다.")
             if not result["dashboardShowsDailyRecommendationShortcuts"]:
-                raise AssertionError("대시보드에 오늘 추천 1~3위와 추천 추적 바로가기 버튼이 표시되지 않았습니다.")
+                raise AssertionError("대시보드에 오늘 한국/미국 추천 1~3위와 추천 추적 바로가기 버튼이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsTimestamps"]:
                 raise AssertionError("최근 1주 자료 화면에 기준 시각/DART 점검 시각이 표시되지 않았습니다.")
             if not result["recentWeeklyShowsSourceGroups"]:
@@ -2227,13 +2227,13 @@ def run_click_smoke(
             if not result["naverMarketJournalShowsTaskLog"]:
                 raise AssertionError("시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsTopThree"]:
-                raise AssertionError("오늘 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
+                raise AssertionError("오늘 한국/미국 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsExposure"]:
                 raise AssertionError(
-                    "오늘 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."
+                    "오늘 한국/미국 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."
                 )
             if not result["dailyRecommendationsShowsInvestmentProfile"]:
-                raise AssertionError("오늘 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다.")
+                raise AssertionError("오늘 한국/미국 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다.")
             if not result["dailyRecommendationsShowsTracking"]:
                 raise AssertionError("추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:

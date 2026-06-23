@@ -863,6 +863,36 @@ class DailyRecommendationsTests(unittest.TestCase):
         )
         self.assertEqual(direct_result, result)
 
+    def test_finalize_daily_recommendation_ranking_selects_top_three_per_market(self):
+        result = finalize_daily_recommendation_ranking(
+            {
+                "003230": {"ticker": "003230", "company_name": "삼양식품", "score": 90, "currency": "KRW"},
+                "033500": {"ticker": "033500", "company_name": "동성화인텍", "score": 80, "currency": "KRW"},
+                "105630": {"ticker": "105630", "company_name": "한세실업", "score": 70, "currency": "KRW"},
+                "000660": {"ticker": "000660", "company_name": "SK하이닉스", "score": 60, "currency": "KRW"},
+                "PL": {"ticker": "PL", "company_name": "Planet Labs", "score": 95, "currency": "USD"},
+                "JOBY": {"ticker": "JOBY", "company_name": "Joby Aviation", "score": 85, "currency": "USD"},
+                "ABSI": {"ticker": "ABSI", "company_name": "Absci", "score": 75, "currency": "USD"},
+                "OTLY": {"ticker": "OTLY", "company_name": "Oatly", "score": 65, "currency": "USD"},
+            },
+            limit=3,
+            as_of="2026-06-23T08:00:00+09:00",
+        )
+
+        self.assertEqual(result["selected_count"], 6)
+        self.assertEqual(result["market_counts"], {"KR": 3, "US": 3})
+        self.assertEqual(
+            [(item["market"], item["rank"], item["ticker"]) for item in result["candidates"]],
+            [
+                ("KR", 1, "003230"),
+                ("KR", 2, "033500"),
+                ("KR", 3, "105630"),
+                ("US", 1, "PL"),
+                ("US", 2, "JOBY"),
+                ("US", 3, "ABSI"),
+            ],
+        )
+
     def test_finalize_daily_recommendation_ranking_holds_severe_repeat_underperformers(self):
         result = finalize_daily_recommendation_ranking(
             {
@@ -1098,22 +1128,26 @@ class DailyRecommendationsTests(unittest.TestCase):
             )
             status = summarize_daily_recommendation_store(settings)
 
-        self.assertEqual(saved["saved_count"], 3)
-        self.assertEqual(tracking["due_count"], 3)
-        self.assertEqual(status["record_count"], 3)
+        self.assertEqual(saved["saved_count"], 4)
+        self.assertEqual([group["market"] for group in saved["market_groups"]], ["KR", "US"])
+        self.assertEqual(tracking["due_count"], 4)
+        self.assertEqual(status["record_count"], 4)
         first = status["latest_records"][0]
         self.assertEqual(first["company_name"], "삼양식품")
+        self.assertEqual(first["market"], "KR")
         self.assertEqual(first["score_components"][0]["label"], "목표가")
         self.assertEqual(first["score_explanation"]["component_weights"][0]["weight_pct"], 100.0)
         self.assertTrue(first["portfolio_risk_connection"]["linked"])
         overseas = [item for item in status["latest_records"] if item["ticker"] == "PL"][0]
+        self.assertEqual(overseas["market"], "US")
+        self.assertEqual(overseas["rank"], 1)
         self.assertTrue(overseas["overseas_tracking"]["needs_fx_conversion"])
         week = first["tracking_milestones"][0]
         self.assertEqual(week["status"], "complete")
         self.assertEqual(week["price_change_pct"], 0.1)
         self.assertEqual(status["performance_summary"]["complete_count"], 1)
-        self.assertEqual(status["performance_summary"]["pending_count"], 12)
-        self.assertEqual(status["performance_summary"]["price_unavailable_count"], 2)
+        self.assertEqual(status["performance_summary"]["pending_count"], 16)
+        self.assertEqual(status["performance_summary"]["price_unavailable_count"], 3)
         self.assertEqual(status["performance_summary"]["positive_count"], 1)
 
     def test_daily_recommendation_status_payload_adds_schedule_fields(self):

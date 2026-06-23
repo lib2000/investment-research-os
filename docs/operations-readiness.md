@@ -2,16 +2,16 @@
 
 최종 갱신: 2026-06-18
 
-## 매일 추천 1~3위
+## 매일 한국/미국 추천 1~3위
 
-- 확인 위치: 콘솔 대시보드의 `오늘 추천 1~3위`, 또는 저장 데이터 탭의 `오늘 추천 1~3위` / `추천 추적 상태`
+- 확인 위치: 콘솔 대시보드의 `오늘 한국/미국 추천 1~3위`, 또는 저장 데이터 탭의 `오늘 한국/미국 추천 1~3위` / `추천 추적 상태`
 - API 확인: `GET /api/v1/daily-recommendations/status`
 - 실행 시각: `DAILY_RECOMMENDATIONS_TIME` 기본값 `08:00`
 - 저장 위치: `research_vault/_system/daily_recommendations.json`
 - 스케줄 상태 위치: `research_vault/_system/daily_recommendations_state.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표
 - 투자 방향 프로필: 사용자 첨부 투자 방향 테마는 오늘 추천 후보 점수, 리스크 메모, 모니터링 트리거에 반영되며 `투자 방향:` / `투자 방향 반영:` 라벨로 화면과 텍스트 출력에 표시된다.
-- 화면 표시: 콘솔은 `오늘의 추천 결과`를 제목으로 보여주고, 추천 기록은 일자별 1~3위 목록으로 묶는다. 1주/15일/1달/3달/6달 경과는 요약 막대 그래프와 종목별 타임라인으로 같이 표시한다.
+- 화면 표시: 콘솔은 `오늘의 추천 결과`를 제목으로 보여주고, 추천 기록은 한국 1~3위와 미국 1~3위 시장별 목록으로 묶는다. 1주/15일/1달/3달/6달 경과는 요약 막대 그래프와 종목별 타임라인으로 같이 표시한다.
 - 품질 가드: 활성 저장자료 중 중복 의심, 본문 보강 필요, OCR 필요, URL-only 정책 자료는 추천 근거에서 감점/확인 플래그로 분리하고, 검증된 저장자료가 충분한 후보만 품질 점수를 받는다.
 - 최신성/이력 가드: 추천 저장 점검은 `Asia/Seoul` 날짜 기준으로 최신 추천일이 허용 범위 안에 있고, 해당 일자 추천이 정확히 3개인지 확인한다. 또한 저장된 전체 추천 이력도 날짜별 1·2·3위가 빠짐없이 있고 같은 날짜 안에 회사명/티커/순위가 중복되지 않는지 확인한다. 각 후보의 기준가 조회 시각이 24시간을 넘으면 추천 품질 점검에서 실패한다.
 - 근거 분산 가드: 추천 후보별 근거가 `저장 품질`, `목표가/리포트`, `최근 저장/RAG`, `보유/관심 범위` 범주를 모두 포함하는지 오프라인 점검에서 확인한다. 저장 품질 대시보드 연결이 없는 후보도 `저장 품질:` 근거와 확인 플래그를 남겨 품질 공백을 숨기지 않는다. 한 범주에만 기대는 추천은 실패로 처리한다.
@@ -111,7 +111,7 @@ python tools\smoke_research_console_clicks.py --list-stages
 python tools\smoke_research_console_clicks.py --only-public-ir-sec --progress --progress-heartbeat-seconds 20
 python tools\smoke_research_console_menus.py
 python tools\smoke_research_console_external_sources.py
-python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
+python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
 ```
 
@@ -134,7 +134,7 @@ Firecrawl IR RPC 실전 전환은 `docs\examples\firecrawl_ir_rpc.env.example`�
 
 - `현재 작업 디렉토리가 없습니다` 또는 OneDrive 경로가 보이면 PowerShell에서 `. C:\Users\lib20\InvestmentJournalApp\scripts\enter-investment-research-os.ps1`를 실행해 현재 창의 작업 루트를 바로잡는다.
 - 콘솔 주소는 `http://127.0.0.1:8001/console/index.html`이고, 백엔드는 `C:\Users\lib20\InvestmentJournalApp`에서 `.\scripts\start-research-backend.ps1 -Port 8001`로 실행한다.
-- 매일 추천은 첫 화면의 `오늘 추천 1~3위`, 저장 데이터 탭의 `오늘 추천 1~3위`, `추천 추적 상태`에서 본다. 백엔드가 꺼져 있으면 `python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1`로 저장 원본을 확인한다.
+- 매일 추천은 첫 화면의 `오늘 한국/미국 추천 1~3위`, 저장 데이터 탭의 `오늘 한국/미국 추천 1~3위`, `추천 추적 상태`에서 본다. 백엔드가 꺼져 있으면 `python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1`로 저장 원본을 확인한다.
 - 푸시 대기 커밋이 있으면 Windows Git 인증이 가능한 터미널에서 `git push origin main`을 실행한다. OneDrive 경로에서는 푸시 전 검증이나 서버 실행을 하지 않는다.
 
 ## 운영 주의

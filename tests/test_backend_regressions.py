@@ -5830,7 +5830,8 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
             )
 
         self.assertEqual(first["status"], "success")
-        self.assertEqual(first["records"][0]["record_id"], "2026-06-18-01-003230")
+        self.assertEqual(first["records"][0]["record_id"], "2026-06-18-KR-01-003230")
+        self.assertEqual(first["records"][0]["market"], "KR")
         self.assertEqual(first["records"][0]["tracking_milestones"][0]["target_date"], "2026-06-25")
         self.assertEqual(second["status"], "skipped_existing")
         self.assertEqual(second["records"][0]["ticker"], "003230")
@@ -8724,7 +8725,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertEqual(ranked[0]["ticker"], "HIGH")
         self.assertIn("중복 의심 자료 2개", actions[0])
         self.assertTrue(any("KCIF 관련 매크로 보고서 3개" in item for item in actions))
-        self.assertTrue(any("2026-06-18 추천 후보" in item for item in actions))
+        self.assertTrue(any("2026-06-18 한국/미국 추천 후보" in item for item in actions))
 
     def test_automation_schedule_status_builds_source_rows(self):
         from research_os import automation_schedule_status

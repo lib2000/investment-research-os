@@ -120,19 +120,20 @@ def _recommendation_signal(settings: Settings) -> dict[str, Any]:
     last_run_date = str(state.get("last_run_date") or state.get("last_run_at") or "")
     expected_dates = _recommendation_expected_dates(settings)
     date_ok = last_run_date[:10] in expected_dates
-    ok = selected_count == 3 and date_ok
-    score = (50.0 if date_ok else 0.0) + min(selected_count, 3) / 3 * 50.0
+    expected_count = 6
+    ok = selected_count == expected_count and date_ok
+    score = (50.0 if date_ok else 0.0) + min(selected_count, expected_count) / expected_count * 50.0
     return _signal(
         signal_id="daily_recommendations_latest",
         label="오늘 추천 최신성",
         status="ok" if ok else "warning",
         message=(
-            f"추천 3개가 준비되어 있습니다. 마지막 실행: {last_run_date or '확인 안 됨'}"
+            f"한국/미국 추천 6개가 준비되어 있습니다. 마지막 실행: {last_run_date or '확인 안 됨'}"
             if ok
             else f"추천 최신성 확인 필요: 선택 {selected_count}개, 마지막 실행 {last_run_date or '확인 안 됨'}"
         ),
         flow_id="daily_recommendations",
-        next_action="python tools\\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1",
+        next_action="python tools\\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1",
         detail={"selected_count": selected_count, "last_run_date": last_run_date, "expected_dates": sorted(expected_dates)},
         score=score,
     )

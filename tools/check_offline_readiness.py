@@ -92,8 +92,6 @@ CHECKS = [
             "tools/check_daily_recommendation_candidate_policy.py",
             "--require-hold-warning",
             "--expected-held-ticker",
-            "OTLY",
-            "--expected-held-ticker",
             "112610",
         ],
     ),

@@ -25,6 +25,17 @@ def normalize_ticker(value: object) -> str:
     return str(value or "").strip().upper()
 
 
+def candidate_market(candidate: dict[str, Any]) -> str:
+    market = str(candidate.get("market") or "").strip().upper()
+    if market in {"KR", "US"}:
+        return market
+    currency = str(candidate.get("currency") or "").strip().upper()
+    ticker = normalize_ticker(candidate.get("ticker"))
+    if currency == "KRW" or (ticker.isdigit() and len(ticker) == 6):
+        return "KR"
+    return "US"
+
+
 def candidate_soft_tracking_hold(candidate: dict[str, Any]) -> bool:
     try:
         from research_os.daily_recommendation_tracking import daily_recommendation_candidate_soft_tracking_hold  # noqa: PLC0415
@@ -52,7 +63,10 @@ def validate_candidate_policy(
 ) -> tuple[list[str], dict[str, Any]]:
     candidates = [item for item in payload.get("candidates", []) if isinstance(item, dict)]
     warnings = [str(item).strip() for item in payload.get("warnings", []) if str(item or "").strip()]
-    top_candidates = candidates[: max(1, top_limit)]
+    top_candidates: list[dict[str, Any]] = []
+    for market in ("KR", "US"):
+        market_candidates = [candidate for candidate in candidates if candidate_market(candidate) == market]
+        top_candidates.extend(market_candidates[: max(1, top_limit)])
     top_hold_tickers = [
         normalize_ticker(candidate.get("ticker"))
         for candidate in top_candidates
@@ -78,6 +92,7 @@ def validate_candidate_policy(
         "top_candidates": [
             {
                 "rank": candidate.get("rank"),
+                "market": candidate_market(candidate),
                 "ticker": candidate.get("ticker"),
                 "company_name": candidate.get("company_name"),
                 "score": candidate.get("score"),
@@ -155,7 +170,7 @@ def main() -> int:
                     f" / 감점 {candidate.get('tracking_penalty_points')}"
                 )
             print(
-                f"{candidate.get('rank')}위 {candidate.get('ticker')} {candidate.get('company_name')} "
+                f"{candidate.get('market')} {candidate.get('rank')}위 {candidate.get('ticker')} {candidate.get('company_name')} "
                 f"| 점수 {candidate.get('score')}{tracking_note}{marker}"
             )
         for warning in details["warnings"][:3]:

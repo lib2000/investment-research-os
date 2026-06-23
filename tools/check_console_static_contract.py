@@ -132,7 +132,8 @@ REQUIRED_CSS_SNIPPETS = {
 
 REQUIRED_JS_SNIPPETS = {
     "daily_recommendation_result_title": "오늘의 추천 결과",
-    "daily_recommendation_rank_layout_text": "1~3위 추천 후보를 한 줄 카드로 정렬했습니다",
+    "daily_recommendation_rank_layout_text": "한국/미국 1~3위 추천 후보를 카드로 정렬했습니다",
+    "daily_recommendation_market_group_helper": "dailyRecommendationMarketGroups",
     "daily_recommendation_dashboard_top": "${renderDailyRecommendationHomeTopPanel()}\n      <section class=\"dashboard-clean-hero",
     "daily_recommendation_top_panel_class": "daily-recommendation-top-panel",
     "daily_recommendation_top_panel_schedule": "매일 08:00 자동 실행",
