@@ -91,7 +91,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1b0f427e2e08";
+} from "./api.js?v=5b81943dd905";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -8255,15 +8255,46 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
     : "";
   const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length ? "warning" : "ok";
   const marketGroups = dailyRecommendationMarketGroups(records);
+  const marketRecordsByRank = new Map();
+  marketGroups.forEach((group) => {
+    group.records.forEach((record, index) => {
+      const rank = Number(record.rank || index + 1);
+      if (!marketRecordsByRank.has(rank)) {
+        marketRecordsByRank.set(rank, {});
+      }
+      marketRecordsByRank.get(rank)[group.market] = record;
+    });
+  });
+  const marketLabels = new Map(marketGroups.map((group) => [group.market, group.label]));
+  const marketOrder = ["KR", "US"].filter((market) => marketRecordsByRank.size && marketLabels.has(market));
+  const rankRows = Array.from(marketRecordsByRank.keys())
+    .sort((left, right) => left - right)
+    .slice(0, 3);
   const rows = records.length
-    ? marketGroups
-        .map((group) => `
-          <li class="daily-recommendation-market-group market-${escapeHtml(group.market.toLowerCase())}">
-            <header>${escapeHtml(group.label)} 추천 1~3위</header>
-            <ol>
-              ${group.records
-                .map((record, index) => {
-          const rank = Number(record.rank || index + 1);
+    ? `
+      <div class="daily-recommendation-rank-board" role="table" aria-label="한국과 미국 추천 순위 비교">
+        <div class="daily-recommendation-rank-board-head" role="row">
+          <span role="columnheader">순위</span>
+          ${marketOrder.map((market) => `<span role="columnheader">${escapeHtml(marketLabels.get(market))}</span>`).join("")}
+        </div>
+        ${rankRows
+          .map((rank) => `
+            <div class="daily-recommendation-rank-board-row rank-${escapeHtml(rank)}" role="row">
+              <b class="daily-recommendation-rank-label" role="rowheader">${escapeHtml(rank)}위</b>
+              ${marketOrder
+                .map((market) => {
+          const record = marketRecordsByRank.get(rank)?.[market];
+          if (!record) {
+            return `
+              <article class="daily-recommendation-top-rank is-empty" role="cell">
+                <div class="daily-recommendation-top-body">
+                  <strong>추천 대기</strong>
+                  <span>${escapeHtml(marketLabels.get(market))} ${escapeHtml(rank)}위</span>
+                  <p>추천 후보가 아직 저장되지 않았습니다.</p>
+                </div>
+              </article>
+            `;
+          }
           const exposure = dailyRecommendationExposureSummary(record);
           const reasonItems = Array.isArray(record.reasons) && record.reasons.length
             ? record.reasons
@@ -8278,29 +8309,31 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
             : scoreComponents[0]?.label || exposure || "추천 근거 확인";
           const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
-            <li class="daily-recommendation-top-rank rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}">
+            <article class="daily-recommendation-top-rank rank-${escapeHtml(rank)} market-${escapeHtml(market.toLowerCase())}${rank === 1 ? " is-leader" : ""}" role="cell">
               <div class="daily-recommendation-rank-badge">${escapeHtml(rank)}위</div>
               <div class="daily-recommendation-top-body">
-                <strong>${escapeHtml(displayCompanyName(record))}</strong>
+                <strong title="${escapeHtml(record.ticker || "")}">${escapeHtml(displayCompanyName(record))}</strong>
                 <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(price)}</span>
                 <small>${escapeHtml(keyDriver)}</small>
                 <p>${escapeHtml(exposure || topReason)}</p>
               </div>
-            </li>
+            </article>
           `;
                 })
                 .join("")}
-            </ol>
-          </li>
-        `)
+            </div>
+          `)
         .join("")
+        }
+      </div>
+    `
     : `
-      <li class="is-empty">
+      <div class="daily-recommendation-top-empty">
         <b>대기</b>
         <strong>한국/미국 추천 1~3위 준비 중</strong>
         <span>${escapeHtml(dueText)}</span>
         <small>서버가 ${escapeHtml(schedule)} 이후 자동 실행하면 이 영역에 바로 표시됩니다.</small>
-      </li>
+      </div>
     `;
   return `
     <section class="daily-recommendation-top-panel ${escapeHtml(tone)}" aria-label="오늘 한국/미국 추천 1~3위">
@@ -8311,7 +8344,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
         </div>
         <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
       </div>
-      <ul>${rows}</ul>
+      ${rows}
       <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}${escapeHtml(driftText)}</p>
     </section>
   `;

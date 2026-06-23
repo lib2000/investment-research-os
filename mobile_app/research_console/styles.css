@@ -508,6 +508,7 @@ label {
 }
 
 .daily-recommendation-top-panel {
+  grid-column: 1 / -1;
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -552,20 +553,59 @@ label {
   min-height: 36px;
 }
 
-.daily-recommendation-top-panel ul {
+.daily-recommendation-rank-board {
   display: grid;
-  grid-template-columns: minmax(260px, 1.35fr) repeat(2, minmax(180px, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 8px;
+  min-width: 0;
 }
 
-.daily-recommendation-top-panel li {
+.daily-recommendation-rank-board-head,
+.daily-recommendation-rank-board-row {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 58px repeat(2, minmax(210px, 1fr));
+  gap: 8px;
+  align-items: stretch;
   min-width: 0;
-  min-height: 104px;
+}
+
+.daily-recommendation-rank-board-head {
+  align-items: center;
+}
+
+.daily-recommendation-rank-board-head span,
+.daily-recommendation-rank-label {
+  display: grid;
+  place-items: center;
+  min-height: 28px;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.daily-recommendation-rank-label {
+  min-height: 100%;
+  color: #ffffff;
+  background: #0f766e;
+  border-color: rgba(15, 118, 110, 0.32);
+}
+
+.daily-recommendation-rank-board-row.rank-2 .daily-recommendation-rank-label {
+  background: #2563eb;
+}
+
+.daily-recommendation-rank-board-row.rank-3 .daily-recommendation-rank-label {
+  background: #7c3aed;
+}
+
+.daily-recommendation-top-rank,
+.daily-recommendation-top-empty {
+  display: grid;
+  min-width: 0;
   padding: 12px;
   border: 1px solid rgba(41, 84, 89, 0.16);
   border-radius: 8px;
@@ -574,7 +614,9 @@ label {
 
 .daily-recommendation-top-rank {
   grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
+  min-height: 118px;
 }
 
 .daily-recommendation-top-rank.is-leader {
@@ -606,8 +648,15 @@ label {
 
 .daily-recommendation-top-body {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+}
+
+.daily-recommendation-top-body strong,
+.daily-recommendation-top-body span,
+.daily-recommendation-top-body small {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .daily-recommendation-top-body p {
@@ -619,13 +668,15 @@ label {
   overflow-wrap: anywhere;
 }
 
-.daily-recommendation-top-panel li.is-empty {
-  grid-column: 1 / -1;
+.daily-recommendation-top-empty {
+  gap: 5px;
 }
 
-.daily-recommendation-top-panel li b,
-.daily-recommendation-top-panel li span,
-.daily-recommendation-top-panel li small,
+.daily-recommendation-top-empty b,
+.daily-recommendation-top-empty span,
+.daily-recommendation-top-empty small,
+.daily-recommendation-top-rank span,
+.daily-recommendation-top-rank small,
 .daily-recommendation-top-panel > p {
   color: var(--muted);
   font-size: 12px;
@@ -633,7 +684,8 @@ label {
   line-height: 1.35;
 }
 
-.daily-recommendation-top-panel li strong {
+.daily-recommendation-top-empty strong,
+.daily-recommendation-top-rank strong {
   color: var(--text);
   font-size: 17px;
   line-height: 1.2;
@@ -4445,7 +4497,8 @@ pre {
   .dashboard-link-list,
   .ticker-cache-list,
   .daily-recommendation-cards,
-  .daily-recommendation-top-panel ul,
+  .daily-recommendation-rank-board-head,
+  .daily-recommendation-rank-board-row,
   .daily-recommendation-date-groups,
   .daily-recommendation-progress-grid,
   .daily-recommendation-timeline-steps,
@@ -4490,6 +4543,10 @@ pre {
 
   .daily-recommendation-top-rank {
     grid-template-columns: 1fr;
+  }
+
+  .daily-recommendation-rank-label {
+    min-height: 32px;
   }
 
   .daily-recommendation-rank-badge {
