@@ -904,6 +904,40 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("MARKET_SIGNAL_GRAPH_ENABLED=false", env_example)
         self.assertIn("MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY=", env_example)
 
+    def test_firecrawl_ir_rpc_env_example_documents_submit_preflight(self):
+        env_example = (PROJECT_ROOT / "docs" / "examples" / "firecrawl_ir_rpc.env.example").read_text(encoding="utf-8")
+
+        for expected in [
+            "FIRECRAWL_IR_ENABLED=true",
+            "FIRECRAWL_IR_DRY_RUN=false",
+            "FIRECRAWL_IR_MCP_VERSION=3.17.0",
+            "FIRECRAWL_IR_SOURCES_JSON=",
+            "MARKET_SIGNAL_GRAPH_ENABLED=true",
+            "MARKET_SIGNAL_GRAPH_RPC_URL=",
+            "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY=",
+        ]:
+            self.assertIn(expected, env_example)
+        self.assertNotIn("test-secret", env_example)
+
+    def test_firecrawl_ir_rpc_preflight_wrapper_uses_secret_env_without_printing_values(self):
+        wrapper = (PROJECT_ROOT / "tools" / "run_firecrawl_ir_rpc_preflight.ps1").read_text(encoding="utf-8")
+
+        for expected in [
+            "[Parameter(Mandatory = $true)]",
+            "[ValidateSet(\"Preflight\", \"Submit\")]",
+            "[System.IO.Path]::IsPathRooted($EnvFile)",
+            "Join-Path $ProjectRootPath $EnvFile",
+            "--env-file",
+            "--require-env-registry",
+            "--require-rpc-ready",
+            "--submit",
+            "firecrawl-ir-rpc-preflight.json",
+            "firecrawl-ir-rpc-submit.json",
+        ]:
+            self.assertIn(expected, wrapper)
+        self.assertNotIn("FIRECRAWL_API_KEY=", wrapper)
+        self.assertNotIn("SERVICE_ROLE_KEY=", wrapper)
+
     def test_firecrawl_ir_operations_docs_describe_submit_status_contract(self):
         operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
 
@@ -917,6 +951,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "POST https://api.firecrawl.dev/v2/scrape",
             "FIRECRAWL_IR_MCP_VERSION=3.17.0",
             "docs\\examples\\firecrawl_ir_registry.sample.json",
+            "run_firecrawl_ir_rpc_preflight.ps1",
+            "docs\\examples\\firecrawl_ir_rpc.env.example",
             "full offline readiness",
             "batch_counts: success=N failed=N skipped=N dry_run=N",
         ]:

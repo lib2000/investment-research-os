@@ -80,6 +80,8 @@ python tools\check_firecrawl_ir_collector.py --env-file docs\examples\firecrawl_
 python tools\check_firecrawl_ir_collector.py --env-file path\to\firecrawl.env --use-env-registry --hosted-scrape-dry-run --output-json output\firecrawl-ir-hosted-dry-run.json
 python tools\check_firecrawl_ir_collector.py --require-env-registry --require-rpc-ready
 python tools\check_firecrawl_ir_collector.py --env-file path\to\firecrawl.env --require-env-registry --require-rpc-ready
+.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env
+.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env -Mode Submit
 python tools\check_firecrawl_earnings_collector.py
 python tools\check_deepseek_ir_analysis.py
 python tools\check_portfolio_change_detection.py
@@ -112,6 +114,8 @@ python tools\smoke_research_console_external_sources.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 3 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
 ```
+
+Firecrawl IR RPC 실전 전환은 `docs\examples\firecrawl_ir_rpc.env.example`을 ignored secret env 파일로 복사해 값을 채운 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 먼저 `--require-env-registry --require-rpc-ready`를 통과해야 한다. 이 단계는 secret 원문을 출력하지 않고 output JSON에는 configured 여부와 readiness error만 남긴다. 실제 적재는 같은 파일로 `-Mode Submit`을 붙였을 때만 실행하며, 전부 `skipped`/`failed`인 batch는 성공으로 보지 않는다.
 
 전체 클릭 스모크는 실제 메뉴/버튼/포트폴리오/LLM/RAG/추천 추적까지 확인하므로 수 분이 걸릴 수 있다. 자동화나 터미널 래퍼에서 실행할 때는 외부 명령 제한 시간을 최소 600초 이상으로 두고, `--progress --progress-heartbeat-seconds 30`으로 주요 진행 구간과 장시간 브라우저 대기 heartbeat를 출력한다. 부분 확인은 `--list-stages`로 가능한 체크포인트를 본 뒤 `--stop-after <stage>`를 붙여 실행한다. Firecrawl IR Hosted Dry-run 버튼과 공개 IR/SEC 입력 피드백만 확인할 때는 `--only-public-ir-sec`를 사용한다. 묶음 검증 래퍼에서는 `.\tools\verify_research_console.ps1 -ClickSmokeProgress -ClickSmokeProgressHeartbeatSeconds 30 -ClickSmokeStopAfter portfolio` 또는 `.\tools\verify_research_console.ps1 -SkipWriteSmoke -ClickSmokeOnlyPublicIrSec -ClickSmokeProgress -ClickSmokeProgressHeartbeatSeconds 20`처럼 같은 옵션을 전달한다. 실제 Windows 브라우저 래퍼에서는 `.\tools\smoke_research_console_windows.ps1 -Mode Clicks -PublicIrSecClicks`로 같은 범위만 실행한다.
 정적 콘솔 계약은 상단 액션 피드백과 추천 카드의 `aria-live` 영역도 확인해, 버튼 클릭 후 메시지가 보이지 않는 회귀를 백엔드 없이 잡는다.
