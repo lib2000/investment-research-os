@@ -43,6 +43,11 @@ from research_os.nps_data_provider import (
     fetch_nps_institutional_context,
     fetch_nps_institutional_signal,
 )
+from research_os.nps_allocation_monitor import (
+    DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
+    DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
+    build_nps_domestic_equity_allocation_monitor,
+)
 from research_os.opendart_data_provider import OpenDartClient
 from research_os.dossier_text import (
     DOSSIER_ALLOWED_REPORT_TYPES,
@@ -11438,12 +11443,86 @@ def read_nps_institutional_flow(
     }
 
 
+def _load_saved_portfolios_for_nps_allocation(
+    portfolio_name: str,
+    settings: Settings,
+) -> tuple[str, list[PortfolioHolding], float | None]:
+    store = read_portfolio_store(settings)
+    portfolios = store.get("portfolios", {}) if isinstance(store, dict) else {}
+    if portfolio_name in {"__all__", "all", "전체"}:
+        aggregate_candidates: list[SavedPortfolio] = []
+        for key, payload in portfolios.items():
+            if not isinstance(payload, dict):
+                continue
+            saved = SavedPortfolio.model_validate(payload)
+            label = f"{key} {saved.portfolio_name}".lower()
+            if "합산" in label or "aggregate" in label or "consolidated" in label:
+                aggregate_candidates.append(saved)
+        if aggregate_candidates:
+            selected = sorted(
+                aggregate_candidates,
+                key=lambda item: float(item.portfolio_value or 0),
+                reverse=True,
+            )[0]
+            return selected.portfolio_name, selected.holdings, selected.portfolio_value
+
+        holdings: list[PortfolioHolding] = []
+        total_value = 0.0
+        loaded_names: list[str] = []
+        for payload in portfolios.values():
+            if not isinstance(payload, dict):
+                continue
+            saved = SavedPortfolio.model_validate(payload)
+            holdings.extend(saved.holdings)
+            if saved.portfolio_value is not None:
+                total_value += float(saved.portfolio_value or 0)
+            else:
+                total_value += sum(float(item.market_value or 0) for item in saved.holdings)
+            loaded_names.append(saved.portfolio_name)
+        if not loaded_names:
+            raise HTTPException(status_code=404, detail="저장된 포트폴리오가 없습니다.")
+        return "__all__", holdings, total_value
+
+    portfolio_payload = portfolios.get(portfolio_store_key(portfolio_name))
+    if not portfolio_payload:
+        raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
+    portfolio = SavedPortfolio.model_validate(portfolio_payload)
+    return portfolio.portfolio_name, portfolio.holdings, portfolio.portfolio_value
+
+
+@app.get(
+    "/api/v1/portfolios/{portfolio_name}/nps-domestic-equity-allocation",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_nps_domestic_equity_allocation(
+    portfolio_name: str,
+    target_weight: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TARGET, ge=0, le=1),
+    warn_tolerance: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE, ge=0, le=1),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    국민연금 공시 포트폴리오의 국내주식 14% 기준에 맞춰 저장 보유 현황을 자동 점검합니다.
+    __all__ 포트폴리오 이름은 합산 포트폴리오가 있으면 우선 사용하고, 없으면 저장 포트폴리오를 합산합니다.
+    """
+    resolved_name, holdings, portfolio_value = _load_saved_portfolios_for_nps_allocation(portfolio_name, settings)
+    return build_nps_domestic_equity_allocation_monitor(
+        portfolio_name=resolved_name,
+        holdings=holdings,
+        portfolio_value=portfolio_value,
+        target_weight=target_weight,
+        warn_tolerance=warn_tolerance,
+        checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+    )
+
+
 @app.get(
     "/api/v1/portfolios/{portfolio_name}/institutional-flow/nps",
     dependencies=[Depends(verify_user_token)],
 )
 def read_portfolio_nps_institutional_flow(
     portfolio_name: str,
+    target_weight: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TARGET, ge=0, le=1),
+    warn_tolerance: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE, ge=0, le=1),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
@@ -11455,6 +11534,14 @@ def read_portfolio_nps_institutional_flow(
     if not portfolio_payload:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
     portfolio = SavedPortfolio.model_validate(portfolio_payload)
+    allocation_monitor = build_nps_domestic_equity_allocation_monitor(
+        portfolio_name=portfolio.portfolio_name,
+        holdings=portfolio.holdings,
+        portfolio_value=portfolio.portfolio_value,
+        target_weight=target_weight,
+        warn_tolerance=warn_tolerance,
+        checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+    )
     signals: list[dict] = []
     matched_count = 0
     warning_count = 0
@@ -11588,9 +11675,11 @@ def read_portfolio_nps_institutional_flow(
             "ratio_chart": ratio_chart[:12],
             "portfolio_exposure_chart": exposure_chart[:12],
         },
+        "nps_domestic_equity_allocation": allocation_monitor,
         "institutional_flow_alerts": institutional_flow_alerts[:12],
         "research_assist_notes": research_assist_notes,
         "next_actions": [
+            allocation_monitor.get("recommended_action") or "국내주식 14% 정책 비중을 다시 확인하세요.",
             "국민연금 지분율이 높은 종목은 팀 리포트의 기관 수급 근거에 반영하세요.",
             "대량보유 보고 이벤트가 반복되거나 감소성 문구가 있는 종목은 리스크 스캔에서 수급 이탈 후보로 추적하세요.",
             "ETF와 해외주식은 공공데이터포털 국민연금 개별 국내주식 자료와 직접 매칭되지 않을 수 있습니다.",

@@ -56,6 +56,7 @@ REQUIRED_FEEDBACK_BUTTON_IDS = {
     "portfolioSyncHistoryButton",
     "portfolioConnectivityButton",
     "portfolioNpsFlowButton",
+    "portfolioNpsAllocationButton",
     "portfolioAnalysisStatusButton",
     "portfolioTeamQueueButton",
     "portfolioRunTopTeamButton",

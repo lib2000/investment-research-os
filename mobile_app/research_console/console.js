@@ -66,6 +66,7 @@
   fetchPortfolioPerformance,
   fetchTargetConsensusScan,
   fetchPortfolioNpsFlow,
+  fetchNpsDomesticEquityAllocation,
   fetchTickerNpsFlow,
   fetchPortfolioConnectivity,
   fetchPortfolioAnalysisStatus,
@@ -91,7 +92,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=5b81943dd905";
+} from "./api.js?v=64c2b7f7f2c8";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -150,6 +151,7 @@ const elements = {
   portfolioSyncHistoryButton: document.querySelector("#portfolioSyncHistoryButton"),
   portfolioConnectivityButton: document.querySelector("#portfolioConnectivityButton"),
   portfolioNpsFlowButton: document.querySelector("#portfolioNpsFlowButton"),
+  portfolioNpsAllocationButton: document.querySelector("#portfolioNpsAllocationButton"),
   portfolioAnalysisStatusButton: document.querySelector("#portfolioAnalysisStatusButton"),
   portfolioTeamQueueButton: document.querySelector("#portfolioTeamQueueButton"),
   portfolioRunTopTeamButton: document.querySelector("#portfolioRunTopTeamButton"),
@@ -9420,6 +9422,7 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioQuickRiskButton: "선택 리스크 스캔을 시작했습니다.",
   portfolioConnectivityButton: "전체 연결 점검을 시작했습니다.",
   portfolioNpsFlowButton: "국민연금 수급 확인을 시작했습니다.",
+  portfolioNpsAllocationButton: "국내주식 14% 비중 점검을 시작했습니다.",
   portfolioAnalysisStatusButton: "전체 분석 현황 점검을 시작했습니다.",
   portfolioTeamQueueButton: "기준 리포트 큐 정리를 시작했습니다.",
   portfolioRunTopTeamButton: "상위 1개 리포트 실행을 시작했습니다.",
@@ -10803,6 +10806,23 @@ elements.portfolioNpsFlowButton?.addEventListener("click", async () => {
   ]);
   try {
     const result = await fetchPortfolioNpsFlow(token(), portfolioName);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.portfolioNpsAllocationButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  const portfolioName = elements.portfolioSelect.value || "__all__";
+  startOutputLoading("국민연금 국내주식 14% 비중 점검 중", [
+    "저장 포트폴리오 보유 현황 불러오기",
+    "한국 개별주와 국내주식형 ETF 선별",
+    "한국 상장 해외 ETF, 인프라, 현금성 항목 제외",
+    "목표 14% 대비 현재 비중과 조정 금액 계산",
+  ]);
+  try {
+    const result = await fetchNpsDomesticEquityAllocation(token(), portfolioName);
     setOutput(result);
   } catch (error) {
     setError(error);
@@ -13459,6 +13479,57 @@ function renderStorageQualitySignalCard(dashboard) {
   `;
 }
 
+function formatNpsDomesticEquityAllocation(value) {
+  const domesticRows = value.top_domestic_equity_holdings || [];
+  const excludedRows = value.top_excluded_holdings || [];
+  const currentWeight = value.current_domestic_equity_weight === undefined || value.current_domestic_equity_weight === null
+    ? "미확인"
+    : toPercent(value.current_domestic_equity_weight);
+  const targetWeight = value.target_domestic_equity_weight === undefined || value.target_domestic_equity_weight === null
+    ? "14.0%"
+    : toPercent(value.target_domestic_equity_weight);
+  const gapText = value.gap_pct_points === undefined || value.gap_pct_points === null
+    ? "미확인"
+    : `${Number(value.gap_pct_points).toFixed(2)}%p`;
+  const statusLabel = {
+    within_band: "목표 범위",
+    below_target: "목표 미달",
+    above_target: "목표 초과",
+    needs_data: "데이터 필요",
+  }[value.status] || value.status || "미확인";
+  const domesticLines = domesticRows.slice(0, 8).map((item, index) =>
+    `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, item.currency || "KRW", "n/a")} · ${item.reason || item.bucket || "국내주식"}`
+  );
+  const excludedLines = excludedRows.slice(0, 8).map((item, index) =>
+    `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, item.currency || "KRW", "n/a")} · ${item.reason || item.bucket || "제외"}`
+  );
+  return [
+    `국민연금 국내주식 14% 비중 감시`,
+    ``,
+    value.summary || `국민연금 공시 포트폴리오 국내주식 14% 기준으로 보유 현황을 점검했습니다.`,
+    `포트폴리오: ${value.portfolio_name || "__all__"}`,
+    `상태: ${statusLabel} · 심각도 ${translateSeverity(value.severity)}`,
+    `현재 국내주식 비중: ${currentWeight}`,
+    `목표 비중: ${targetWeight}`,
+    `차이: ${gapText} · 조정 금액 ${formatMoney(value.gap_value, "KRW", "n/a")}`,
+    `국내주식 평가금액: ${formatMoney(value.domestic_equity_value, "KRW", "n/a")}`,
+    `전체 평가금액: ${formatMoney(value.total_portfolio_value, "KRW", "n/a")}`,
+    `점검 시각: ${value.checked_at || "미확인"}`,
+    ``,
+    `판정`,
+    `- ${value.recommended_action || "국내주식 14% 정책 비중을 다시 확인하세요."}`,
+    ``,
+    `국내주식 포함 상위`,
+    ...(domesticLines.length ? domesticLines : ["- 포함된 국내주식 항목이 없습니다."]),
+    ``,
+    `제외 상위`,
+    ...(excludedLines.length ? excludedLines : ["- 제외 항목이 없습니다."]),
+    ``,
+    `다음 액션`,
+    ...((value.next_actions || []).length ? value.next_actions.map((item) => `- ${item}`) : ["- 없음"]),
+  ].join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -15793,6 +15864,10 @@ function formatKoreanResult(value) {
     ].join("\n");
   }
 
+  if (value.module === "nps_domestic_equity_allocation_monitor") {
+    return formatNpsDomesticEquityAllocation(value);
+  }
+
   if (value.module === "portfolio_nps_institutional_flow") {
     const signals = value.signals || [];
     const matched = signals.filter((item) => item.matched);
@@ -15801,6 +15876,7 @@ function formatKoreanResult(value) {
     const exposureChart = chart.portfolio_exposure_chart || [];
     const alerts = value.institutional_flow_alerts || [];
     const researchNotes = value.research_assist_notes || [];
+    const allocation = value.nps_domestic_equity_allocation;
     const barLine = (label, rawValue, maxValue, suffix = "%") => {
       const valueNumber = Number(rawValue || 0);
       const maxNumber = Math.max(Number(maxValue || 0), 0.0001);
@@ -15848,6 +15924,14 @@ function formatKoreanResult(value) {
       `점검 종목: ${value.checked_count || signals.length}개`,
       `매칭 종목: ${value.matched_count || matched.length}개`,
       `경고: ${value.warning_count || 0}개`,
+      ``,
+      ...(allocation
+        ? [
+            `국내주식 14% 정책 비중`,
+            `- 현재 ${toPercent(allocation.current_domestic_equity_weight)} / 목표 ${toPercent(allocation.target_domestic_equity_weight)} / 차이 ${Number(allocation.gap_pct_points || 0).toFixed(2)}%p`,
+            `- ${allocation.recommended_action || "국내주식 14% 정책 비중을 다시 확인하세요."}`,
+          ]
+        : []),
       ``,
       `매칭된 종목`,
       ...(matchedLines.length ? matchedLines : ["- 현재 국민연금 보유/대량보유 신호가 매칭된 종목이 없습니다."]),

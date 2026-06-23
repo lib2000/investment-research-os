@@ -12487,5 +12487,55 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
 
 
 
+class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
+    def test_classifies_domestic_equity_and_excludes_overseas_exposure(self):
+        from research_os.models import PortfolioHolding
+        from research_os.nps_allocation_monitor import classify_domestic_equity_holding
+
+        samsung = PortfolioHolding(ticker="005930", name="삼성전자", market_value=140, currency="KRW")
+        korea_etf = PortfolioHolding(ticker="0117V0", name="TIGER 코리아AI전력기기TOP3플러스 ETF", market_value=50, currency="KRW")
+        us_etf = PortfolioHolding(ticker="360750", name="TIGER 미국S&P500", market_value=200, currency="KRW")
+        us_stock = PortfolioHolding(ticker="PL", name="Planet Labs PBC", market_value=300, currency="USD")
+        industrial_stock = PortfolioHolding(
+            ticker="033500",
+            name="동성화인텍",
+            market_value=100,
+            currency="KRW",
+            sector="Industrials",
+        )
+
+        self.assertTrue(classify_domestic_equity_holding(samsung).is_domestic_equity)
+        self.assertTrue(classify_domestic_equity_holding(korea_etf).is_domestic_equity)
+        self.assertTrue(classify_domestic_equity_holding(industrial_stock).is_domestic_equity)
+        self.assertFalse(classify_domestic_equity_holding(us_etf).is_domestic_equity)
+        self.assertEqual(classify_domestic_equity_holding(us_etf).bucket, "domestic_listed_overseas_exposure")
+        self.assertFalse(classify_domestic_equity_holding(us_stock).is_domestic_equity)
+
+    def test_build_monitor_calculates_nps_14_percent_gap(self):
+        from research_os.models import PortfolioHolding
+        from research_os.nps_allocation_monitor import build_nps_domestic_equity_allocation_monitor
+
+        monitor = build_nps_domestic_equity_allocation_monitor(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(ticker="005930", name="삼성전자", market_value=120, currency="KRW"),
+                PortfolioHolding(ticker="360750", name="TIGER 미국S&P500", market_value=280, currency="KRW"),
+                PortfolioHolding(ticker="PL", name="Planet Labs PBC", market_value=600, currency="USD"),
+            ],
+            portfolio_value=1000,
+            target_weight=0.14,
+            warn_tolerance=0.01,
+            checked_at="2026-06-23T12:00:00+09:00",
+        )
+
+        self.assertEqual(monitor["status"], "below_target")
+        self.assertEqual(monitor["current_domestic_equity_weight"], 0.12)
+        self.assertEqual(monitor["gap_pct_points"], 2.0)
+        self.assertEqual(monitor["gap_value"], 20.0)
+        self.assertEqual(monitor["included_domestic_equity_count"], 1)
+        self.assertEqual(monitor["excluded_count"], 2)
+        self.assertEqual(monitor["top_excluded_holdings"][0]["ticker"], "PL")
+
+
 if __name__ == "__main__":
     unittest.main()
