@@ -447,6 +447,19 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\run_firecrawl_ir_rpc_preflight.ps1"
+    Snippets = @(
+      '[Parameter(Mandatory = $true)]',
+      '[ValidateSet("Preflight", "Submit")]',
+      '--env-file',
+      '--require-env-registry',
+      '--require-rpc-ready',
+      '--submit',
+      'firecrawl-ir-rpc-preflight.json',
+      'firecrawl-ir-rpc-submit.json'
+    )
+  },
+  @{
     Path = "tools\analyze_code_diff_impact.py"
     Snippets = @(
       'FLOW_IMPACT_HINTS',
