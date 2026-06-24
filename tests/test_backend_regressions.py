@@ -3287,6 +3287,102 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
         self.assertTrue(items[0]["detail_url"].startswith("https://www.ftc.go.kr/www/selectReportUserView.do"))
         self.assertNotIn("body", items[0])
 
+    def test_policy_source_watch_matches_company_name_from_summary(self):
+        from research_os.policy_sources import match_policy_items_to_targets
+
+        items = [
+            {
+                "item_id": "absci-policy",
+                "title": "바이오 AI 임상 데이터 규제 샌드박스 실증 확대",
+                "summary": "Absci Corporation의 AI 신약개발 임상 데이터 활용 사례가 검토 대상에 포함됐다.",
+                "source_provider": "대한민국 정책브리핑",
+                "source_scope": "정부 부처 보도자료",
+                "agency": "보건복지부",
+                "published_at": "2026-06-24",
+                "detail_url": "https://www.korea.kr/example",
+                "source_url": "https://www.korea.kr/briefing/pressReleaseList.do",
+            }
+        ]
+        targets = [
+            {
+                "label": "Absci Corporation",
+                "ticker": "ABSI",
+                "source": "portfolio_holding",
+                "keywords": ["AI 신약개발", "임상 데이터"],
+            }
+        ]
+
+        matched = match_policy_items_to_targets(items, targets)
+
+        self.assertTrue(matched[0]["portfolio_related"])
+        self.assertEqual(matched[0]["match_quality"], "target")
+        self.assertEqual(matched[0]["reference_reason"], "target_keyword_match")
+        self.assertEqual(matched[0]["target_matches"][0]["ticker"], "ABSI")
+        self.assertIn("Absci", matched[0]["target_matches"][0]["matched_keywords"])
+
+    def test_policy_source_watch_ignores_single_generic_target_keyword(self):
+        from research_os.policy_sources import match_policy_items_to_targets
+
+        items = [
+            {
+                "item_id": "generic-ai",
+                "title": "AI 디지털 투자자문 규제 가이드라인 발표",
+                "source_provider": "금융위원회",
+                "source_scope": "금융정책 보도자료 RSS",
+                "agency": "금융위원회",
+                "published_at": "2026-06-24",
+                "detail_url": "https://www.fsc.go.kr/example",
+                "source_url": "http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111",
+            }
+        ]
+        targets = [
+            {
+                "label": "KODEX AI반도체 ETF",
+                "ticker": "395160",
+                "source": "portfolio_holding",
+                "keywords": ["AI"],
+            }
+        ]
+
+        matched = match_policy_items_to_targets(items, targets)
+
+        self.assertIn("AI/디지털", matched[0]["matched_themes"])
+        self.assertFalse(matched[0]["portfolio_related"])
+        self.assertEqual(matched[0]["target_matches"], [])
+        self.assertEqual(matched[0]["match_quality"], "theme")
+        self.assertEqual(matched[0]["reference_reason"], "theme_keyword_reference")
+
+    def test_policy_source_watch_ignores_single_generic_sector_keyword(self):
+        from research_os.policy_sources import match_policy_items_to_targets
+
+        items = [
+            {
+                "item_id": "generic-digital",
+                "title": "디지털정부 데이터 개방 확대 방안 발표",
+                "source_provider": "대한민국 정책브리핑",
+                "source_scope": "정부 부처 보도자료",
+                "agency": "행정안전부",
+                "published_at": "2026-06-24",
+                "detail_url": "https://www.korea.kr/example",
+                "source_url": "https://www.korea.kr/briefing/pressReleaseList.do",
+            }
+        ]
+        targets = [
+            {
+                "label": "의료기기/디지털 헬스",
+                "ticker": None,
+                "source": "interest_sector",
+                "keywords": ["디지털"],
+            }
+        ]
+
+        matched = match_policy_items_to_targets(items, targets)
+
+        self.assertIn("AI/디지털", matched[0]["matched_themes"])
+        self.assertFalse(matched[0]["portfolio_related"])
+        self.assertEqual(matched[0]["target_matches"], [])
+        self.assertEqual(matched[0]["match_quality"], "theme")
+
     def test_kiep_report_source_parser_keeps_metadata_only(self):
         from research_os.regional_sources import (
             KIEP_REPORTS_URL,

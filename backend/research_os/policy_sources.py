@@ -33,6 +33,27 @@ GENERIC_TARGET_KEYWORDS = {
     "성장",
     "정책",
     "시장",
+    "금융",
+    "산업",
+    "디지털",
+    "데이터",
+    "보안",
+    "바이오",
+    "에너지",
+    "환경",
+    "기후",
+    "corp",
+    "corporation",
+    "company",
+    "inc",
+    "incorporated",
+    "co",
+    "ltd",
+    "limited",
+    "group",
+    "holdings",
+    "holding",
+    "pbc",
 }
 SKIP_LINK_TEXTS = {
     "",
@@ -384,6 +405,36 @@ def normalize_policy_keywords(value: object) -> list[str]:
     return [item for item in (clean_policy_text(raw) for raw in raw_items) if item]
 
 
+def _split_policy_target_label(value: object) -> list[str]:
+    label = clean_policy_text(value)
+    if not label:
+        return []
+    tokens = re.split(r"[\s,;|/#·()\[\]{}<>\"'`:+&-]+", label)
+    keywords: list[str] = []
+    for token in tokens:
+        cleaned = clean_policy_text(token).strip(".")
+        if len(cleaned) < 2:
+            continue
+        if cleaned.lower() in GENERIC_TARGET_KEYWORDS:
+            continue
+        keywords.append(cleaned)
+    return list(dict.fromkeys(keywords))
+
+
+def policy_target_keywords(target: dict) -> list[str]:
+    label = clean_policy_text(target.get("label"))
+    ticker = clean_policy_text(target.get("ticker"))
+    keywords = normalize_policy_keywords(
+        [
+            label,
+            ticker,
+            *_split_policy_target_label(label),
+            *(target.get("keywords") or []),
+        ]
+    )
+    return list(dict.fromkeys(keywords))
+
+
 def _keyword_in_text(keyword: str, text: str) -> bool:
     cleaned = clean_policy_text(keyword).lower()
     if not cleaned:
@@ -416,6 +467,7 @@ def match_policy_items_to_targets(items: list[dict], targets: list[dict]) -> lis
         text = " ".join(
             [
                 clean_policy_text(item.get("title")),
+                clean_policy_text(item.get("summary")),
                 clean_policy_text(item.get("agency")),
                 clean_policy_text(item.get("source_provider")),
                 clean_policy_text(item.get("source_scope")),
@@ -431,9 +483,7 @@ def match_policy_items_to_targets(items: list[dict], targets: list[dict]) -> lis
         matched_target_keys: set[tuple[str, str, str]] = set()
         score = min(50, len(matched_themes) * 9)
         for target in targets:
-            keywords = normalize_policy_keywords(
-                [target.get("label"), target.get("ticker"), *(target.get("keywords") or [])]
-            )
+            keywords = policy_target_keywords(target)
             hit_keywords = [keyword for keyword in keywords if _keyword_in_text(keyword, text)]
             if not hit_keywords:
                 continue
@@ -462,6 +512,14 @@ def match_policy_items_to_targets(items: list[dict], targets: list[dict]) -> lis
         enriched["target_matches"] = target_matches[:8]
         enriched["portfolio_related"] = bool(target_matches)
         enriched["relevance_score"] = min(100, score)
+        enriched["match_quality"] = "target" if target_matches else "theme" if matched_themes else "market"
+        enriched["reference_reason"] = (
+            "target_keyword_match"
+            if target_matches
+            else "theme_keyword_reference"
+            if matched_themes
+            else "market_reference_only"
+        )
         enriched["recommended_action"] = (
             "원문 링크에서 정책 시행 범위와 적용 시점을 확인한 뒤 관련 보유/관심 종목 투자 메모에 반영하세요."
             if score > 0
