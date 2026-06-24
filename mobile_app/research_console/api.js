@@ -1188,6 +1188,32 @@ export async function fetchDailyBriefing(accessToken, saveResult = false) {
 }
 
 /**
+ * 시장 데이터, 공시, 정책/법령 뉴스, 일반 뉴스, 투자 심리를 통합한 인사이트를 조회합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @param {Object} options 조회 옵션
+ * @returns {Promise<Object|null>} 통합 투자 인사이트
+ */
+export async function fetchInvestmentInsights(
+  accessToken,
+  { portfolioName = "__all__", days = 7, limit = 12 } = {}
+) {
+  const params = new URLSearchParams();
+  params.set("portfolio_name", portfolioName || "__all__");
+  params.set("days", String(days || 7));
+  params.set("limit", String(limit || 12));
+  try {
+    return request(`/api/v1/investment-insights?${params.toString()}`, {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("통합 투자 인사이트를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
  * 매일 한국/미국 추천 후보 1~3위와 사후 추적 상태를 조회합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰

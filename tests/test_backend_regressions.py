@@ -12627,5 +12627,79 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
         self.assertGreater(plan["scenarios"][0]["suggested_reduction_value"], 0)
 
 
+class InvestmentInsightHubTests(unittest.TestCase):
+    def test_build_investment_insight_hub_integrates_policy_filings_news_and_sentiment(self):
+        from datetime import date
+
+        from research_os.investment_insight_hub import build_investment_insight_hub
+        from research_os.models import PortfolioHolding
+
+        payload = build_investment_insight_hub(
+            portfolio_name="가족 합산",
+            holdings=[
+                PortfolioHolding(
+                    ticker="003230",
+                    name="삼양식품",
+                    market_value=1200000,
+                    unrealized_return=18.5,
+                    price_source="stored",
+                    price_checked_at="2026-06-24T09:00:00+09:00",
+                    sector="음식료",
+                )
+            ],
+            market_journal={
+                "entries": [
+                    {
+                        "market": "KR",
+                        "session_date": "2026-06-24",
+                        "sentiment": "긍정",
+                        "risk_level": "보통",
+                        "regime": "risk-on",
+                        "tags": ["수출", "음식료"],
+                        "summary": "수출주 심리 개선",
+                    }
+                ]
+            },
+            news_inbox={
+                "items": [
+                    {
+                        "created_at": "2026-06-24T10:00:00+09:00",
+                        "title": "라면 수출 규제 완화 정책 논의",
+                        "scope": "POLICY",
+                        "summary": "삼양식품 수출 정책 수혜 가능성",
+                        "tags": ["policy", "regulation"],
+                    }
+                ]
+            },
+            dart_cache={
+                "entries": {
+                    "a": {
+                        "ticker": "003230",
+                        "importance": "높음",
+                        "tags": ["earnings"],
+                        "filing": {
+                            "stock_code": "003230",
+                            "corp_name": "삼양식품",
+                            "receipt_date": "2026-06-24",
+                            "report_name": "분기보고서",
+                        },
+                        "action": "실적 모델 업데이트",
+                    }
+                }
+            },
+            recent_weekly={"counts": {"filing": 1, "report": 2}},
+            generated_at="2026-06-24T12:00:00+09:00",
+            today=date(2026, 6, 24),
+        )
+
+        self.assertEqual(payload["module"], "investment_insight_hub")
+        self.assertEqual(payload["coverage"]["market_journal_items"], 1)
+        self.assertEqual(payload["coverage"]["policy_law_items"], 1)
+        self.assertEqual(payload["coverage"]["official_filing_items"], 1)
+        self.assertGreaterEqual(len(payload["insights"]), 4)
+        self.assertTrue(any(item["source_family"] == "policy_law_news" for item in payload["insights"]))
+        self.assertTrue(any(item["source_family"] == "official_filings" for item in payload["insights"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -107,6 +107,7 @@ from research_os.daily_recommendations import (
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
+from research_os.investment_insight_hub import build_investment_insight_hub
 from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
@@ -9650,6 +9651,29 @@ def read_latest_daily_brief(settings: Settings) -> dict:
     return daily_brief.read_latest_daily_brief(_daily_brief_runtime(), settings)
 
 
+def build_integrated_investment_insights(
+    settings: Settings,
+    *,
+    portfolio_name: str = "__all__",
+    days: int = 7,
+    limit: int = 12,
+) -> dict:
+    resolved_name, holdings, _portfolio_value = _load_saved_portfolios_for_nps_allocation(portfolio_name, settings)
+    recent_weekly = build_recent_weekly_research_brief(settings, days=days, refresh_if_due=False)
+    return build_investment_insight_hub(
+        portfolio_name=resolved_name,
+        holdings=holdings,
+        market_journal=read_market_close_journal(settings),
+        news_inbox=read_news_inbox(settings),
+        dart_cache=read_dart_filing_cache(settings),
+        recent_weekly=recent_weekly,
+        generated_at=current_storage_timestamp(),
+        today=current_storage_date(),
+        days=days,
+        limit=limit,
+    )
+
+
 def build_external_source_schedule_status(settings: Settings) -> list[dict]:
     return automation_status.build_external_source_schedule_status(_automation_status_runtime(), settings)
 
@@ -12735,6 +12759,27 @@ def get_daily_research_briefing(
     if save_result:
         payload = save_daily_brief(payload, settings)
     return {"status": "success", "module": "daily_research_briefing", **payload}
+
+
+@app.get(
+    "/api/v1/investment-insights",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_integrated_investment_insights(
+    portfolio_name: str = "__all__",
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(12, ge=3, le=30),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    시장 데이터, 공시, 정책/법령성 뉴스, 일반 뉴스, 투자 심리 신호를 한 화면용 인사이트로 종합합니다.
+    """
+    return build_integrated_investment_insights(
+        settings,
+        portfolio_name=portfolio_name,
+        days=days,
+        limit=limit,
+    )
 
 
 @app.get(

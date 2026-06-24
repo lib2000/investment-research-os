@@ -21,6 +21,7 @@
   runStorageDuplicateReview,
   runDedupedDossierRefresh,
   fetchDailyBriefing,
+  fetchInvestmentInsights,
   searchAllRagMemoryDocuments,
   searchRagMemoryDocuments,
   synthesizeRagSearchResults,
@@ -93,7 +94,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=04d18c4be253";
+} from "./api.js?v=514c89dce9e6";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -219,6 +220,7 @@ const elements = {
   ragSynthesisButton: document.querySelector("#ragSynthesisButton"),
   dossierButton: document.querySelector("#dossierButton"),
   dailyBriefButton: document.querySelector("#dailyBriefButton"),
+  investmentInsightsButton: document.querySelector("#investmentInsightsButton"),
   researchAutomationButton: document.querySelector("#researchAutomationButton"),
   todayResearchUpdateButton: document.querySelector("#todayResearchUpdateButton"),
   naverResearchStatusButton: document.querySelector("#naverResearchStatusButton"),
@@ -410,6 +412,7 @@ function completionModuleLabel(moduleName) {
     rag_memory_global_search: "전체 저장 데이터 검색",
     rag_query_synthesis: "검색 결과 합성",
     daily_research_briefing: "일일 브리핑",
+    investment_insight_hub: "통합 투자 인사이트",
     news_inbox: "뉴스 인박스",
     news_inbox_list: "뉴스 인박스 조회",
     news_promotion: "뉴스 승격",
@@ -12053,6 +12056,7 @@ const MEMORY_ACTION_MESSAGES = {
   naverResearchRepairButton: "네이버 리서치 캐시 정리와 PDF 신호 백필을 시작했습니다.",
   naverMarketJournalButton: "네이버 국내 마감 시황을 시장일지에 반영합니다.",
   dailyBriefButton: "일일 브리핑 생성을 시작했습니다.",
+  investmentInsightsButton: "시장·공시·법령·뉴스·심리 통합 인사이트를 조회합니다.",
   dailyRecommendationsButton: "오늘 한국/미국 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
@@ -12337,6 +12341,26 @@ elements.dailyBriefButton.addEventListener("click", async () => {
     renderDailyBriefCards(result);
     setOutput(result || "일일 브리핑 결과를 확인하지 못했습니다.");
     await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.investmentInsightsButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  const portfolioName = elements.portfolioSelect?.value || "__all__";
+  startOutputLoading("통합 투자 인사이트 생성 중", [
+    "포트폴리오 시장 데이터 확인",
+    "공시·정책/법령·뉴스 신호 통합",
+    "투자 심리와 핵심 액션 정리",
+  ]);
+  try {
+    const result = await fetchInvestmentInsights(token(), {
+      portfolioName,
+      days: 7,
+      limit: 12,
+    });
+    setOutput(result || "통합 투자 인사이트 결과를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -13266,6 +13290,13 @@ function formatBulletList(items, mapper = (item) => item, empty = "표시할 항
   return items.map((item) => `- ${mapper(item)}`);
 }
 
+function markdownOutputCell(text) {
+  return String(text ?? "n/a")
+    .replace(/\|/g, "/")
+    .replace(/\r?\n/g, " ")
+    .trim() || "n/a";
+}
+
 function formatFileProcessingLines(fileProcessing) {
   if (!fileProcessing) {
     return ["- 첨부 파일 없음"];
@@ -13754,6 +13785,149 @@ function formatNpsDomesticEquityRebalancePlan(value) {
     ``,
     `### 다음 액션`,
     ...((value.next_actions || []).length ? value.next_actions.map((item) => `- ${item}`) : ["- 없음"]),
+  ].join("\n");
+}
+
+function formatInvestmentInsightHub(value) {
+  const coverage = value.coverage || {};
+  const insightRows = Array.isArray(value.insights) ? value.insights : [];
+  const contextRow = (item) => {
+    const evidence = Array.isArray(item.evidence) ? item.evidence : [];
+    const first = evidence[0] || {};
+    return [
+      "|",
+      markdownOutputCell(item.severity || "미확인"),
+      "|",
+      markdownOutputCell(item.source_family || "source"),
+      "|",
+      markdownOutputCell(compactOutputText(item.title || "인사이트", 54)),
+      "|",
+      markdownOutputCell(compactOutputText(item.summary || "", 90)),
+      "|",
+      markdownOutputCell(compactOutputText(item.recommended_action || "", 90)),
+      "|",
+      markdownOutputCell(
+        first.ticker ||
+          first.market ||
+          first.scope ||
+          (Array.isArray(first.related_targets) ? first.related_targets.join(", ") : "") ||
+          "-"
+      ),
+      "|",
+    ].join(" ");
+  };
+  const insightTable = [
+    "| 심각도 | 소스 | 핵심 신호 | 요약 | 권장 확인 | 연결 |",
+    "|---|---|---|---|---|---|",
+    ...(insightRows.length
+      ? insightRows.map(contextRow)
+      : ["| - | - | 인사이트 없음 | 저장된 신호가 부족합니다. | 시장일지/뉴스/공시 수집을 먼저 실행하세요. | - |"]),
+  ];
+  const marketRows = (value.market_context || []).slice(0, 5).map((item) =>
+    [
+      "|",
+      markdownOutputCell(item.date || "-"),
+      "|",
+      markdownOutputCell(item.market || "GLOBAL"),
+      "|",
+      markdownOutputCell(item.sentiment || "미확인"),
+      "|",
+      markdownOutputCell(item.risk_level || "미확인"),
+      "|",
+      markdownOutputCell((item.tags || []).slice(0, 4).join(", ") || "-"),
+      "|",
+      markdownOutputCell(compactOutputText(item.summary || item.regime || "", 90)),
+      "|",
+    ].join(" ")
+  );
+  const filingRows = (value.filing_context || []).slice(0, 6).map((item) =>
+    [
+      "|",
+      markdownOutputCell(item.date || "-"),
+      "|",
+      markdownOutputCell(item.ticker || "-"),
+      "|",
+      markdownOutputCell(item.importance || "보통"),
+      "|",
+      markdownOutputCell(compactOutputText(item.title || "공시", 70)),
+      "|",
+      markdownOutputCell(compactOutputText(item.summary || "", 90)),
+      "|",
+    ].join(" ")
+  );
+  const policyRows = (value.policy_law_context || []).slice(0, 6).map((item) =>
+    [
+      "|",
+      markdownOutputCell(item.date || "-"),
+      "|",
+      markdownOutputCell(item.scope || "POLICY"),
+      "|",
+      markdownOutputCell((item.related_targets || []).join(", ") || "-"),
+      "|",
+      markdownOutputCell(compactOutputText(item.title || "정책/법령 뉴스", 78)),
+      "|",
+      markdownOutputCell(compactOutputText(item.summary || "", 90)),
+      "|",
+    ].join(" ")
+  );
+  const marketDataRows = (value.market_data_context || []).slice(0, 6).map((item) =>
+    [
+      "|",
+      markdownOutputCell(item.ticker || "-"),
+      "|",
+      markdownOutputCell(item.company_name || "-"),
+      "|",
+      markdownOutputCell(formatMoney(item.market_value, "KRW", "n/a")),
+      "|",
+      markdownOutputCell(toPercent(item.unrealized_return)),
+      "|",
+      markdownOutputCell(item.price_source || "-"),
+      "|",
+      markdownOutputCell(item.price_checked_at || "-"),
+      "|",
+    ].join(" ")
+  );
+  return [
+    `### 통합 투자 인사이트`,
+    ``,
+    value.headline || "시장·공시·법령·뉴스·심리 신호를 종합했습니다.",
+    ``,
+    `| 핵심 지표 | 값 |`,
+    `|---|---:|`,
+    `| 포트폴리오 | ${markdownOutputCell(value.portfolio_name || "__all__")} |`,
+    `| 기간 | 최근 ${markdownOutputCell(value.lookback_days || 7)}일 |`,
+    `| 종합 심리 | ${markdownOutputCell(`${value.aggregate_sentiment_label || "미확인"} / ${value.aggregate_sentiment_score ?? "n/a"}`)} |`,
+    `| 시장 데이터 | ${markdownOutputCell(coverage.market_data_items ?? 0)} |`,
+    `| 시장일지 | ${markdownOutputCell(coverage.market_journal_items ?? 0)} |`,
+    `| 공시 | ${markdownOutputCell(coverage.official_filing_items ?? 0)} |`,
+    `| 뉴스 | ${markdownOutputCell(coverage.news_items ?? 0)} |`,
+    `| 정책·법령 | ${markdownOutputCell(coverage.policy_law_items ?? 0)} |`,
+    ``,
+    `### 핵심 인사이트`,
+    ...insightTable,
+    ``,
+    `### 시장 심리`,
+    `| 일자 | 시장 | 심리 | 리스크 | 테마 | 요약 |`,
+    `|---|---|---|---|---|---|`,
+    ...(marketRows.length ? marketRows : ["| - | - | - | - | - | 시장일지 신호가 없습니다. |"]),
+    ``,
+    `### 공시`,
+    `| 일자 | 티커 | 중요도 | 제목 | 확인 포인트 |`,
+    `|---|---|---|---|---|`,
+    ...(filingRows.length ? filingRows : ["| - | - | - | 신규 공시 없음 | DART/SEC 공시 신호가 없습니다. |"]),
+    ``,
+    `### 정책·법령·규제 뉴스`,
+    `| 일자 | 범위 | 연결 | 제목 | 요약 |`,
+    `|---|---|---|---|---|`,
+    ...(policyRows.length ? policyRows : ["| - | - | - | 정책/법령 뉴스 없음 | POLICY/규제 태그가 있는 뉴스가 없습니다. |"]),
+    ``,
+    `### 포트폴리오 시장 데이터`,
+    `| 티커 | 종목 | 평가금액 | 손익률 | 가격 출처 | 확인 시각 |`,
+    `|---|---|---:|---:|---|---|`,
+    ...(marketDataRows.length ? marketDataRows : ["| - | - | - | - | - | 보유 시장 데이터가 없습니다. |"]),
+    ``,
+    `### 다음 액션`,
+    ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 160), "다음 액션이 없습니다."),
   ].join("\n");
 }
 
@@ -16097,6 +16271,9 @@ function formatKoreanResult(value) {
 
   if (value.module === "nps_domestic_equity_rebalance_plan") {
     return formatNpsDomesticEquityRebalancePlan(value);
+  }
+  if (value.module === "investment_insight_hub") {
+    return formatInvestmentInsightHub(value);
   }
 
   if (value.module === "portfolio_nps_institutional_flow") {
