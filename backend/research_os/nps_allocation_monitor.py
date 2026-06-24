@@ -128,8 +128,16 @@ def build_nps_domestic_equity_allocation_monitor(
             {
                 "ticker": _ticker(holding),
                 "holding_name": holding.name,
+                "quantity": holding.quantity,
+                "average_cost": holding.average_cost,
+                "current_price": holding.current_price,
                 "market_value": round(value, 2),
+                "cost_basis": holding.cost_basis,
+                "unrealized_gain": holding.unrealized_gain,
+                "unrealized_return": holding.unrealized_return,
                 "currency": str(holding.currency or "").upper() or None,
+                "sector": holding.sector,
+                "theme_tags": holding.theme_tags or [],
                 "bucket": classification.bucket,
                 "is_domestic_equity": classification.is_domestic_equity,
                 "reason": classification.reason,
@@ -269,7 +277,7 @@ def build_nps_domestic_equity_monitor_from_saved_portfolios(
 
 
 def _candidate_priority(row: dict, total_value: float) -> tuple[int, float]:
-    bucket = str(row.get("bucket") or "")
+    bucket = str(row.get("source_bucket") or row.get("bucket") or "")
     value = float(row.get("market_value") or 0)
     weight = value / total_value if total_value > 0 else 0.0
     if bucket in {"domestic_equity_etf", "domestic_equity_candidate"}:
@@ -279,9 +287,30 @@ def _candidate_priority(row: dict, total_value: float) -> tuple[int, float]:
     return (1, value)
 
 
-def _rebalance_candidate(row: dict, total_value: float) -> dict:
+def _evidence_decision_adjustment(evidence: dict) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if evidence.get("latest_recommendation"):
+        rec = evidence["latest_recommendation"]
+        rank = rec.get("rank")
+        score = rec.get("score")
+        reasons.append(f"최근 추천 편입(rank {rank or 'n/a'}, score {score or 'n/a'})")
+    if int(evidence.get("research_document_count") or 0) >= 5:
+        reasons.append(f"저장 리서치 {int(evidence.get('research_document_count') or 0)}건")
+    nps = evidence.get("nps_signal") if isinstance(evidence.get("nps_signal"), dict) else {}
+    if nps.get("domestic_match_found") or nps.get("large_holding_event_count"):
+        ratio = nps.get("holding_ratio")
+        if ratio is None:
+            reasons.append("국민연금 보유/대량보유 신호 확인")
+        else:
+            reasons.append(f"국민연금 지분율 {float(ratio):.2f}%")
+    return bool(reasons), reasons
+
+
+def _rebalance_candidate(row: dict, total_value: float, evidence: dict | None = None) -> dict:
     value = float(row.get("market_value") or 0)
     priority, _ = _candidate_priority(row, total_value)
+    evidence_payload = evidence or {}
+    has_review_evidence, review_reasons = _evidence_decision_adjustment(evidence_payload)
     if priority >= 3:
         bucket = "축소 후보"
         rationale = "국내주식형 ETF/후보 자산이라 목표 비중 조정 시 먼저 금액 단위로 조절하기 쉽습니다."
@@ -291,6 +320,11 @@ def _rebalance_candidate(row: dict, total_value: float) -> dict:
     else:
         bucket = "유지 후보"
         rationale = "소액 개별주로 14% 초과 해소 효과는 제한적입니다."
+    if has_review_evidence and bucket == "축소 후보":
+        bucket = "추가 검토"
+        rationale = "축소 후보이지만 " + ", ".join(review_reasons) + " 때문에 축소 전 투자 논거 확인이 필요합니다."
+    elif has_review_evidence and bucket == "유지 후보":
+        rationale = rationale + " 다만 " + ", ".join(review_reasons) + " 때문에 유지 논거를 함께 확인하세요."
     return {
         "ticker": row.get("ticker"),
         "holding_name": row.get("holding_name"),
@@ -300,6 +334,14 @@ def _rebalance_candidate(row: dict, total_value: float) -> dict:
         "source_bucket": row.get("bucket"),
         "reason": row.get("reason"),
         "rationale": rationale,
+        "quantity": row.get("quantity"),
+        "current_price": row.get("current_price"),
+        "average_cost": row.get("average_cost"),
+        "unrealized_gain": row.get("unrealized_gain"),
+        "unrealized_return": row.get("unrealized_return"),
+        "sector": row.get("sector"),
+        "theme_tags": row.get("theme_tags") or [],
+        "evidence": evidence_payload,
     }
 
 
@@ -356,9 +398,15 @@ def _scenario(
 
 def build_nps_domestic_equity_rebalance_plan(
     monitor: dict,
+    evidence_by_ticker: dict[str, dict] | None = None,
 ) -> dict:
+    evidence_lookup = {str(key).upper(): value for key, value in (evidence_by_ticker or {}).items()}
     domestic_rows = [
-        _rebalance_candidate(row, float(monitor.get("total_portfolio_value") or 0))
+        _rebalance_candidate(
+            row,
+            float(monitor.get("total_portfolio_value") or 0),
+            evidence_lookup.get(str(row.get("ticker") or "").upper(), {}),
+        )
         for row in monitor.get("classification_rows", [])
         if isinstance(row, dict) and row.get("is_domestic_equity")
     ]

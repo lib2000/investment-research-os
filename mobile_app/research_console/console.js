@@ -13553,12 +13553,34 @@ function formatNpsDomesticEquityAllocation(value) {
 function formatNpsDomesticEquityRebalancePlan(value) {
   const candidates = value.candidates || {};
   const scenarios = value.scenarios || [];
+  const evidenceText = (item) => {
+    const evidence = item.evidence || {};
+    const parts = [];
+    if (evidence.latest_recommendation) {
+      const rec = evidence.latest_recommendation;
+      parts.push(`추천 ${rec.recommendation_date || "최근"} ${rec.market || ""} ${rec.rank || "n/a"}위 score ${rec.score || "n/a"}`.trim());
+    }
+    if (evidence.research_document_count !== undefined && evidence.research_document_count !== null) {
+      parts.push(`리서치 ${evidence.research_document_count}건`);
+    }
+    if (item.unrealized_return !== undefined && item.unrealized_return !== null) {
+      parts.push(`손익률 ${toPercent(item.unrealized_return)}`);
+    }
+    const nps = evidence.nps_signal || {};
+    if (nps.domestic_match_found || nps.large_holding_event_count) {
+      const ratio = nps.holding_ratio === undefined || nps.holding_ratio === null
+        ? "지분율 미확인"
+        : `지분율 ${Number(nps.holding_ratio).toFixed(2)}%`;
+      parts.push(`국민연금 ${ratio}`);
+    }
+    return parts.length ? `근거: ${parts.join(" · ")}` : "근거: 저장 근거 낮음/미확인";
+  };
   const candidateLines = (label, rows) => [
     label,
     ...((rows || []).length
       ? rows.slice(0, 8).map(
           (item, index) =>
-            `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.portfolio_weight)} · ${item.rationale || item.reason || ""}`
+            `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.portfolio_weight)} · ${evidenceText(item)} · ${item.rationale || item.reason || ""}`
         )
       : ["- 없음"]),
   ];

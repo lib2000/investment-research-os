@@ -12599,14 +12599,30 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
             checked_at="2026-06-24T12:00:00+09:00",
         )
 
-        plan = build_nps_domestic_equity_rebalance_plan(monitor)
+        plan = build_nps_domestic_equity_rebalance_plan(
+            monitor,
+            evidence_by_ticker={
+                "395160": {
+                    "latest_recommendation": {
+                        "rank": 2,
+                        "score": 111,
+                        "market": "KR",
+                        "recommendation_date": "2026-06-24",
+                    },
+                    "research_document_count": 6,
+                    "nps_signal": {"domestic_match_found": False, "large_holding_event_count": 0},
+                }
+            },
+        )
 
         self.assertEqual(plan["module"], "nps_domestic_equity_rebalance_plan")
         self.assertEqual(plan["status"], "needs_reduction")
         self.assertEqual(plan["target_domestic_equity_value"], 140.0)
         self.assertEqual(plan["reduction_needed_value"], 660.0)
         self.assertEqual(len(plan["scenarios"]), 3)
-        self.assertEqual(plan["candidates"]["reduce"][0]["ticker"], "395160")
+        self.assertEqual(plan["candidates"]["review"][0]["ticker"], "395160")
+        self.assertEqual(plan["candidates"]["review"][0]["evidence"]["research_document_count"], 6)
+        self.assertTrue(plan["candidates"]["review"][0]["evidence"]["latest_recommendation"])
         self.assertEqual(plan["scenarios"][0]["title"], "ETF/테마 우선 축소")
         self.assertGreater(plan["scenarios"][0]["suggested_reduction_value"], 0)
 

@@ -11501,6 +11501,68 @@ def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_na
     )
 
 
+def _nps_rebalance_evidence_context(
+    holdings: list[PortfolioHolding],
+    settings: Settings,
+) -> dict[str, dict]:
+    tickers = sorted({normalize_ticker(holding.ticker) for holding in holdings if holding.ticker})
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    try:
+        rag_counts = count_research_memory_documents_by_ticker(vault_dir, tickers)
+    except Exception:
+        rag_counts = {}
+
+    recommendation_by_ticker: dict[str, dict] = {}
+    try:
+        recommendation_summary = summarize_daily_recommendation_store(settings, limit=60)
+        for record in recommendation_summary.get("latest_records") or []:
+            if not isinstance(record, dict):
+                continue
+            ticker = normalize_ticker(str(record.get("ticker") or ""))
+            if ticker:
+                recommendation_by_ticker[ticker] = {
+                    "ticker": ticker,
+                    "company_name": record.get("company_name"),
+                    "rank": record.get("rank"),
+                    "market": record.get("market"),
+                    "score": record.get("score"),
+                    "recommendation_date": record.get("recommendation_date")
+                    or recommendation_summary.get("latest_recommendation_date"),
+                }
+    except Exception:
+        recommendation_by_ticker = {}
+
+    evidence: dict[str, dict] = {}
+    for holding in holdings:
+        ticker = normalize_ticker(holding.ticker)
+        payload = {
+            "research_document_count": int(rag_counts.get(ticker, 0) or 0),
+            "latest_recommendation": recommendation_by_ticker.get(ticker),
+            "unrealized_gain": holding.unrealized_gain,
+            "unrealized_return": holding.unrealized_return,
+            "price_source": holding.price_source,
+            "price_checked_at": holding.price_checked_at,
+        }
+        if fullmatch(r"\d{6}", ticker):
+            try:
+                signal = fetch_nps_institutional_signal(ticker, holding.name, settings)
+                payload["nps_signal"] = {
+                    "domestic_match_found": signal.get("domestic_match_found"),
+                    "holding_ratio": signal.get("holding_ratio"),
+                    "domestic_weight": signal.get("domestic_weight"),
+                    "large_holding_event_count": len(signal.get("large_holding_events") or []),
+                    "warnings": signal.get("warnings") or [],
+                }
+            except Exception as exc:
+                payload["nps_signal"] = {
+                    "domestic_match_found": False,
+                    "large_holding_event_count": 0,
+                    "warnings": [provider_error_message(exc, settings)],
+                }
+        evidence[ticker] = payload
+    return evidence
+
+
 @app.get(
     "/api/v1/portfolios/{portfolio_name}/nps-domestic-equity-rebalance-plan",
     dependencies=[Depends(verify_user_token)],
@@ -11523,7 +11585,8 @@ def read_nps_domestic_equity_rebalance_plan(
         warn_tolerance=warn_tolerance,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
     )
-    return build_nps_domestic_equity_rebalance_plan(monitor)
+    evidence = _nps_rebalance_evidence_context(holdings, settings)
+    return build_nps_domestic_equity_rebalance_plan(monitor, evidence_by_ticker=evidence)
 
 
 @app.get(
