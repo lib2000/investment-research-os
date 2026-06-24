@@ -8301,6 +8301,23 @@ class InterestAutomationModuleTests(unittest.TestCase):
 
 
 class NewsBuilderModuleTests(unittest.TestCase):
+    def test_news_inbox_policy_law_classification_detects_regulatory_news(self):
+        from research_os import news_inbox
+
+        item = {
+            "title": "금융위원회 AI 투자자문 규제 가이드라인 발표",
+            "summary": "시행령 개정안과 감독 기준이 함께 공개되었습니다.",
+            "tags": ["news_inbox"],
+        }
+
+        classified = news_inbox.apply_news_policy_law_classification(dict(item))
+
+        self.assertTrue(classified["is_policy_law"])
+        self.assertEqual(classified["scope"], "POLICY")
+        self.assertIn("policy_law", classified["tags"])
+        self.assertIn("regulation", classified["tags"])
+        self.assertIn("legislation", classified["tags"])
+
     def test_news_builder_module_builds_url_only_item_with_body_warning(self):
         from research_os import news_builder
 
@@ -8343,6 +8360,65 @@ class NewsBuilderModuleTests(unittest.TestCase):
         self.assertEqual(item["capture_quality"]["status"], "보강 필요")
         self.assertIn("URL-only 저장", item["capture_quality"]["warnings"])
         self.assertIn("copyright_safe_metadata", item["tags"])
+
+    def test_news_builder_module_marks_policy_law_news_as_policy_scope(self):
+        from research_os import news_builder
+
+        runtime = SimpleNamespace(
+            capture_preview_text=lambda text: str(text or "")[:80],
+            capture_quality_status=lambda **_kwargs: {"status": "정상", "warnings": []},
+            compact_news_safe_text=lambda value, max_length=900: str(value or "")[:max_length],
+            current_storage_timestamp=lambda: "2026-06-24T09:00:00+09:00",
+            data_source_type_news="news",
+            enum_or_str_value=lambda value: str(value),
+            fetch_capture_source_url=lambda _url: {},
+            http_exception=lambda status_code, detail: ValueError(detail),
+            infer_capture_source_type=lambda _content, _attachment: "news",
+            infer_capture_tags=lambda _content, tags: list(tags),
+            infer_capture_ticker=lambda _content, _settings: ("MARKET", "market_keyword"),
+            infer_capture_title=lambda _content, _attachment: "정책 뉴스",
+            is_unusable_source_url=lambda _info: False,
+            news_item_fingerprint=lambda title, content, source_url=None: "policyabcdef1234",
+            news_safe_preview_limit=120,
+            news_scope_label=lambda scope: {"POLICY": "정책/규제", "MARKET": "시장 흐름"}.get(scope, scope),
+            sanitize_news_source_url_processing=lambda info: info,
+            summarize_capture=lambda content: content[:60],
+        )
+
+        item = news_builder.build_news_item_from_payload(
+            runtime,
+            {
+                "title": "공정위 플랫폼 규제 법안 논의",
+                "raw_content": "공정거래위원회가 시행령 개정안과 과징금 기준을 발표했습니다.",
+            },
+            SimpleNamespace(),
+        )
+
+        self.assertEqual(item["scope"], "POLICY")
+        self.assertEqual(item["scope_label"], "정책/규제")
+        self.assertTrue(item["is_policy_law"])
+        self.assertEqual(item["scope_reason"], "policy_law_keyword")
+        self.assertIn("policy_law", item["tags"])
+        self.assertIn("regulatory_risk", item["tags"])
+
+    def test_news_inbox_filter_counts_include_policy_law(self):
+        from research_os import news_inbox
+
+        runtime = SimpleNamespace(storage_quality_entry_is_policy_url_only=lambda _item: False)
+        items = [
+            {
+                "title": "산업부 반도체 보조금 정책 발표",
+                "summary": "세액공제 확대와 수출통제 대응 지원책",
+                "tags": [],
+            },
+            {"title": "일반 뉴스", "summary": "시장 소식", "tags": []},
+        ]
+
+        counts = news_inbox.news_filter_counts(runtime, items)
+        filtered = news_inbox.filter_news_inbox_items(runtime, items, "정책")
+
+        self.assertEqual(counts["policy_law"], 1)
+        self.assertEqual(len(filtered), 1)
 
     def test_news_builder_module_rejects_empty_input(self):
         from research_os import news_builder

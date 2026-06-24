@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from research_os.news_inbox import infer_news_policy_law_classification
+
 
 class NewsBuilderRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
@@ -47,6 +49,17 @@ def build_news_item_from_payload(runtime: NewsBuilderRuntime, payload: dict, set
     if not combined_content.strip():
         raise runtime.http_exception(status_code=422, detail="저장할 뉴스 본문 또는 웹사이트 주소가 비어 있습니다.")
     inferred_scope, scope_reason = runtime.infer_capture_ticker(combined_content, settings)
+    policy_law_classifier = getattr(runtime, "infer_news_policy_law_classification", infer_news_policy_law_classification)
+    policy_law = policy_law_classifier(
+        {
+            "title": payload.get("title") or url_info.get("title") or "",
+            "raw_content": combined_content,
+            "scope": inferred_scope,
+        }
+    )
+    if policy_law.get("is_policy_law"):
+        inferred_scope = "POLICY"
+        scope_reason = "policy_law_keyword"
     source_type = runtime.infer_capture_source_type(combined_content, None)
     if runtime.enum_or_str_value(source_type) != "news":
         source_type = runtime.data_source_type_news
@@ -65,6 +78,7 @@ def build_news_item_from_payload(runtime: NewsBuilderRuntime, payload: dict, set
         combined_content,
         ["news_inbox", "auto_classified", f"auto_scope:{scope_reason}"],
     )
+    tags.extend(policy_law.get("tags") or [])
     if source_url:
         tags.extend(["url_input", "url_only", "copyright_safe_metadata"])
     if url_text_unavailable:
@@ -89,6 +103,8 @@ def build_news_item_from_payload(runtime: NewsBuilderRuntime, payload: dict, set
         "scope": inferred_scope,
         "scope_label": runtime.news_scope_label(inferred_scope),
         "scope_reason": scope_reason,
+        "policy_law_classification": policy_law if policy_law.get("is_policy_law") else None,
+        "is_policy_law": bool(policy_law.get("is_policy_law")),
         "source_type": "news",
         "source_url": source_url_for_storage,
         "raw_content": combined_content,

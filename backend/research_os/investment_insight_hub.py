@@ -169,7 +169,7 @@ def _news_items(news_inbox: dict, today: date, days: int, tickers: set[str], nam
             for key in ["title", "summary", "safe_user_note", "raw_content", "scope", "review_status"]
         )
         related = _matches_targets(text + " " + " ".join(tags), tickers, names, sectors)
-        is_policy = str(item.get("scope") or "").upper() == "POLICY" or any(
+        is_policy = bool(item.get("is_policy_law")) or str(item.get("scope") or "").upper() == "POLICY" or any(
             term.lower() in (text + " " + " ".join(tags)).lower() for term in POLICY_TERMS
         )
         rows.append(

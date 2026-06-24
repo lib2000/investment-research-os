@@ -13501,6 +13501,7 @@ function buildCaptureQualityLines(quality) {
 
 function newsItemTone(item) {
   if (item?.promoted) return "ok";
+  if (item?.is_policy_law || item?.scope === "POLICY") return "warning";
   if ((item?.capture_quality || {}).status && (item.capture_quality || {}).status !== "정상") return "warning";
   if (item?.review_status === "보류") return "muted";
   return "needs-action";
@@ -13522,6 +13523,7 @@ function renderNewsInboxFilterSummary(payload) {
       <span>본문 보강 ${escapeHtml(formatNumber(counts.needs_body || 0))}</span>
       <span>URL-only ${escapeHtml(formatNumber(counts.url_only || 0))}</span>
       <span>시장일지 ${escapeHtml(formatNumber(counts.market_journal || 0))}</span>
+      <span>정책·법령 ${escapeHtml(formatNumber(counts.policy_law || 0))}</span>
       <span>품질 확인 ${escapeHtml(formatNumber(counts.quality_issue || 0))}</span>
     </div>
   `;
@@ -13988,6 +13990,7 @@ function formatKoreanResult(value) {
       `- **품질 확인 필요:** ${formatNumber(value.quality_issue_count || 0)}개`,
       `- **본문 보강 필요:** ${formatNumber(value.filter_counts?.needs_body || 0)}개`,
       `- **URL-only:** ${formatNumber(value.filter_counts?.url_only || 0)}개`,
+      `- **정책·법령·규제:** ${formatNumber(value.filter_counts?.policy_law || 0)}개`,
       ``,
       `### 최근 뉴스`,
       ...formatBulletList(

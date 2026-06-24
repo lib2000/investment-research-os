@@ -55,6 +55,125 @@ def news_scope_label(scope: str) -> str:
 NEWS_SAFE_TEXT_LIMIT = 900
 NEWS_SAFE_PREVIEW_LIMIT = 420
 
+POLICY_LAW_KEYWORDS = {
+    "law": [
+        "법령",
+        "법률",
+        "개정안",
+        "시행령",
+        "시행규칙",
+        "입법예고",
+        "행정예고",
+        "고시",
+        "공포",
+        "국회",
+        "bill",
+        "legislation",
+        "law",
+    ],
+    "regulation": [
+        "규제",
+        "감독",
+        "제재",
+        "조사",
+        "과징금",
+        "허가",
+        "인가",
+        "가이드라인",
+        "수출통제",
+        "관세",
+        "sanction",
+        "regulation",
+        "regulatory",
+        "compliance",
+        "tariff",
+        "export control",
+    ],
+    "policy": [
+        "정책",
+        "금융위원회",
+        "금감원",
+        "금융감독원",
+        "공정위",
+        "공정거래위원회",
+        "산업부",
+        "기획재정부",
+        "한국은행",
+        "보조금",
+        "지원책",
+        "육성책",
+        "세액공제",
+        "tax credit",
+        "policy",
+        "subsidy",
+    ],
+}
+
+
+def infer_news_policy_law_classification(item_or_text: object) -> dict:
+    if isinstance(item_or_text, dict):
+        text = " ".join(
+            str(item_or_text.get(key) or "")
+            for key in [
+                "title",
+                "summary",
+                "safe_user_note",
+                "raw_content",
+                "document_preview",
+                "scope",
+                "review_status",
+            ]
+        )
+        text += " " + " ".join(str(tag) for tag in (item_or_text.get("tags") or []))
+    else:
+        text = str(item_or_text or "")
+    normalized = sub(r"\s+", " ", text).strip().lower()
+    matched: dict[str, list[str]] = {}
+    for category, keywords in POLICY_LAW_KEYWORDS.items():
+        hits = [keyword for keyword in keywords if keyword.lower() in normalized]
+        if hits:
+            matched[category] = sorted(set(hits))
+    if not matched:
+        return {
+            "is_policy_law": False,
+            "scope": None,
+            "tags": [],
+            "reasons": [],
+            "matched_keywords": {},
+        }
+    tags = ["policy_law", "policy_or_regulation", "research_scope:policy"]
+    if "law" in matched:
+        tags.extend(["law", "legislation"])
+    if "regulation" in matched:
+        tags.extend(["regulation", "regulatory_risk"])
+    if "policy" in matched:
+        tags.append("policy")
+    reasons = [
+        f"{category}: {', '.join(keywords[:5])}"
+        for category, keywords in matched.items()
+    ]
+    return {
+        "is_policy_law": True,
+        "scope": "POLICY",
+        "tags": sorted(set(tags)),
+        "reasons": reasons,
+        "matched_keywords": matched,
+    }
+
+
+def apply_news_policy_law_classification(item: dict) -> dict:
+    classification = infer_news_policy_law_classification(item)
+    if not classification["is_policy_law"]:
+        return item
+    item["scope"] = "POLICY"
+    item["scope_label"] = news_scope_label("POLICY")
+    item["policy_law_classification"] = classification
+    item["is_policy_law"] = True
+    item["tags"] = sorted(set([*(item.get("tags") or []), *classification["tags"]]))
+    if not item.get("scope_reason"):
+        item["scope_reason"] = "policy_law_keyword"
+    return item
+
 
 def compact_news_safe_text(value: object, max_length: int = NEWS_SAFE_TEXT_LIMIT) -> str:
     text = sub(r"\s+", " ", str(value or "")).strip()
@@ -64,7 +183,7 @@ def compact_news_safe_text(value: object, max_length: int = NEWS_SAFE_TEXT_LIMIT
 
 
 def news_item_safe_view(item: dict) -> dict:
-    safe_item = dict(item or {})
+    safe_item = apply_news_policy_law_classification(dict(item or {}))
     source_url_processing = sanitize_news_source_url_processing(safe_item.get("source_url_processing"))
     if source_url_processing:
         safe_item["source_url_processing"] = source_url_processing
@@ -115,6 +234,7 @@ def sanitize_news_source_url_processing(url_info: dict | None) -> dict:
 
 
 def news_filter_key(runtime: NewsInboxRuntime, item: dict) -> set[str]:
+    item = apply_news_policy_law_classification(dict(item or {}))
     tags = {str(tag).lower() for tag in (item.get("tags") or [])}
     quality_status = str((item.get("capture_quality") or {}).get("status") or "")
     review_status = str(item.get("review_status") or "")
@@ -135,6 +255,8 @@ def news_filter_key(runtime: NewsInboxRuntime, item: dict) -> set[str]:
         keys.add("quality_issue")
     if item.get("market_journal_candidate") or "시장일지" in review_status:
         keys.add("market_journal")
+    if item.get("is_policy_law") or item.get("scope") == "POLICY" or "policy_law" in tags:
+        keys.add("policy_law")
     if review_status == "보류":
         keys.add("held")
     return keys
@@ -151,6 +273,10 @@ def filter_news_inbox_items(runtime: NewsInboxRuntime, items: list[dict], filter
         "url": "url_only",
         "pending": "unpromoted",
         "시장일지": "market_journal",
+        "policy": "policy_law",
+        "정책": "policy_law",
+        "법령": "policy_law",
+        "규제": "policy_law",
         "quality": "quality_issue",
     }
     normalized = aliases.get(normalized, normalized)
@@ -158,7 +284,7 @@ def filter_news_inbox_items(runtime: NewsInboxRuntime, items: list[dict], filter
 
 
 def news_filter_counts(runtime: NewsInboxRuntime, items: list[dict]) -> dict:
-    keys = ["all", "unpromoted", "needs_body", "url_only", "quality_issue", "market_journal", "held"]
+    keys = ["all", "unpromoted", "needs_body", "url_only", "quality_issue", "market_journal", "policy_law", "held"]
     return {
         key: sum(1 for item in items if key in news_filter_key(runtime, item))
         for key in keys

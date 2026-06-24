@@ -9844,6 +9844,10 @@ def news_filter_counts(items: list[dict]) -> dict:
     return news_inbox.news_filter_counts(_news_inbox_runtime(), items)
 
 
+def infer_news_policy_law_classification(item_or_text: object) -> dict:
+    return news_inbox.infer_news_policy_law_classification(item_or_text)
+
+
 def build_news_inbox_payload(settings: Settings, limit: int = 30, filter_key: str = "all") -> dict:
     return news_inbox.build_news_inbox_payload(_news_inbox_runtime(), settings, limit=limit, filter_key=filter_key)
 
@@ -9953,6 +9957,7 @@ def _news_builder_runtime() -> SimpleNamespace:
         infer_capture_tags=infer_capture_tags,
         infer_capture_ticker=infer_capture_ticker,
         infer_capture_title=infer_capture_title,
+        infer_news_policy_law_classification=infer_news_policy_law_classification,
         is_unusable_source_url=is_unusable_source_url,
         news_item_fingerprint=news_item_fingerprint,
         news_safe_preview_limit=NEWS_SAFE_PREVIEW_LIMIT,
