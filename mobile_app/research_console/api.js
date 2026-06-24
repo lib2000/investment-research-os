@@ -1802,6 +1802,16 @@ export async function fetchNpsDomesticEquityAllocation(accessToken, portfolioNam
   );
 }
 
+export async function fetchNpsDomesticEquityRebalancePlan(accessToken, portfolioName = "__all__") {
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName || "__all__")}/nps-domestic-equity-rebalance-plan`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
 export async function fetchTickerNpsFlow(accessToken, ticker) {
   return request(`/api/v1/institutional-flow/nps/${encodeURIComponent(ticker)}`, {
     method: "GET",

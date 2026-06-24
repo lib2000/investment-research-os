@@ -47,6 +47,7 @@ from research_os.nps_allocation_monitor import (
     DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
     build_nps_domestic_equity_allocation_monitor,
+    build_nps_domestic_equity_rebalance_plan,
     select_saved_portfolios_for_nps_allocation,
 )
 from research_os.opendart_data_provider import OpenDartClient
@@ -11498,6 +11499,31 @@ def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_na
         portfolio_value=portfolio_value,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
     )
+
+
+@app.get(
+    "/api/v1/portfolios/{portfolio_name}/nps-domestic-equity-rebalance-plan",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_nps_domestic_equity_rebalance_plan(
+    portfolio_name: str,
+    target_weight: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TARGET, ge=0, le=1),
+    warn_tolerance: float = Query(DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE, ge=0, le=1),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    국민연금 국내주식 14% 목표에 맞춰 축소/유지/추가검토 후보와 리밸런싱 시나리오를 생성합니다.
+    """
+    resolved_name, holdings, portfolio_value = _load_saved_portfolios_for_nps_allocation(portfolio_name, settings)
+    monitor = build_nps_domestic_equity_allocation_monitor(
+        portfolio_name=resolved_name,
+        holdings=holdings,
+        portfolio_value=portfolio_value,
+        target_weight=target_weight,
+        warn_tolerance=warn_tolerance,
+        checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+    )
+    return build_nps_domestic_equity_rebalance_plan(monitor)
 
 
 @app.get(

@@ -266,3 +266,196 @@ def build_nps_domestic_equity_monitor_from_saved_portfolios(
         warn_tolerance=warn_tolerance,
         checked_at=checked_at,
     )
+
+
+def _candidate_priority(row: dict, total_value: float) -> tuple[int, float]:
+    bucket = str(row.get("bucket") or "")
+    value = float(row.get("market_value") or 0)
+    weight = value / total_value if total_value > 0 else 0.0
+    if bucket in {"domestic_equity_etf", "domestic_equity_candidate"}:
+        return (3, value)
+    if weight >= 0.05:
+        return (2, value)
+    return (1, value)
+
+
+def _rebalance_candidate(row: dict, total_value: float) -> dict:
+    value = float(row.get("market_value") or 0)
+    priority, _ = _candidate_priority(row, total_value)
+    if priority >= 3:
+        bucket = "축소 후보"
+        rationale = "국내주식형 ETF/후보 자산이라 목표 비중 조정 시 먼저 금액 단위로 조절하기 쉽습니다."
+    elif priority == 2:
+        bucket = "추가 검토"
+        rationale = "평가금액 비중이 커서 14% 목표에는 영향이 크지만, 개별 종목 논거 확인 후 조정이 필요합니다."
+    else:
+        bucket = "유지 후보"
+        rationale = "소액 개별주로 14% 초과 해소 효과는 제한적입니다."
+    return {
+        "ticker": row.get("ticker"),
+        "holding_name": row.get("holding_name"),
+        "market_value": round(value, 2),
+        "portfolio_weight": round(value / total_value, 6) if total_value > 0 else 0,
+        "bucket": bucket,
+        "source_bucket": row.get("bucket"),
+        "reason": row.get("reason"),
+        "rationale": rationale,
+    }
+
+
+def _allocate_reductions(rows: list[dict], reduction_needed: float, *, max_fraction: float = 1.0) -> list[dict]:
+    remaining = max(float(reduction_needed or 0), 0.0)
+    reductions: list[dict] = []
+    for row in rows:
+        if remaining <= 0:
+            break
+        value = float(row.get("market_value") or 0)
+        if value <= 0:
+            continue
+        amount = min(value * max_fraction, remaining)
+        remaining -= amount
+        reductions.append(
+            {
+                "ticker": row.get("ticker"),
+                "holding_name": row.get("holding_name"),
+                "current_value": round(value, 2),
+                "suggested_reduction_value": round(amount, 2),
+                "suggested_reduction_pct_of_position": round(amount / value, 6) if value > 0 else 0,
+                "remaining_value_after_reduction": round(max(value - amount, 0), 2),
+                "rationale": row.get("rationale") or row.get("reason"),
+            }
+        )
+    return reductions
+
+
+def _scenario(
+    *,
+    title: str,
+    strategy: str,
+    rows: list[dict],
+    reduction_needed: float,
+    domestic_value: float,
+    total_value: float,
+    max_fraction: float = 1.0,
+) -> dict:
+    reductions = _allocate_reductions(rows, reduction_needed, max_fraction=max_fraction)
+    reduced = sum(float(item.get("suggested_reduction_value") or 0) for item in reductions)
+    remaining_domestic_value = max(domestic_value - reduced, 0.0)
+    return {
+        "title": title,
+        "strategy": strategy,
+        "suggested_reduction_value": round(reduced, 2),
+        "remaining_gap_value": round(max(reduction_needed - reduced, 0.0), 2),
+        "estimated_domestic_equity_value_after": round(remaining_domestic_value, 2),
+        "estimated_domestic_equity_weight_after": round(remaining_domestic_value / total_value, 6)
+        if total_value > 0
+        else 0,
+        "actions": reductions,
+    }
+
+
+def build_nps_domestic_equity_rebalance_plan(
+    monitor: dict,
+) -> dict:
+    domestic_rows = [
+        _rebalance_candidate(row, float(monitor.get("total_portfolio_value") or 0))
+        for row in monitor.get("classification_rows", [])
+        if isinstance(row, dict) and row.get("is_domestic_equity")
+    ]
+    total_value = float(monitor.get("total_portfolio_value") or 0)
+    domestic_value = float(monitor.get("domestic_equity_value") or 0)
+    target_weight = float(monitor.get("target_domestic_equity_weight") or DEFAULT_NPS_DOMESTIC_EQUITY_TARGET)
+    target_value = total_value * target_weight
+    reduction_needed = max(domestic_value - target_value, 0.0)
+    add_needed = max(target_value - domestic_value, 0.0)
+    sorted_by_priority = sorted(
+        domestic_rows,
+        key=lambda row: (_candidate_priority(row, total_value)[0], float(row.get("market_value") or 0)),
+        reverse=True,
+    )
+    etf_first = sorted(
+        domestic_rows,
+        key=lambda row: (
+            0 if row.get("source_bucket") in {"domestic_equity_etf", "domestic_equity_candidate"} else 1,
+            -float(row.get("market_value") or 0),
+        ),
+    )
+    large_first = sorted(domestic_rows, key=lambda row: float(row.get("market_value") or 0), reverse=True)
+    proportional_rows = [
+        {
+            **row,
+            "rationale": "국내주식 전체를 같은 비율로 줄여 종목 선택 편향을 낮추는 방식입니다.",
+        }
+        for row in large_first
+    ]
+    proportional_fraction = min(reduction_needed / domestic_value, 1.0) if domestic_value > 0 else 0.0
+
+    if monitor.get("status") == "below_target":
+        plan_status = "needs_increase"
+        summary = (
+            f"{monitor.get('portfolio_name')} 국내주식이 목표보다 낮아 약 {add_needed:,.0f}원 증액 후보 검토가 필요합니다."
+        )
+        scenarios: list[dict] = []
+    elif reduction_needed <= 0:
+        plan_status = "within_band"
+        summary = f"{monitor.get('portfolio_name')} 국내주식 비중이 목표 범위 안에 있어 축소 시나리오가 필요하지 않습니다."
+        scenarios = []
+    else:
+        plan_status = "needs_reduction"
+        summary = (
+            f"{monitor.get('portfolio_name')} 국내주식 14% 목표까지 약 {reduction_needed:,.0f}원 축소 검토가 필요합니다."
+        )
+        scenarios = [
+            _scenario(
+                title="ETF/테마 우선 축소",
+                strategy="국내주식형 ETF와 후보 자산을 먼저 줄여 개별주 논거 훼손을 줄입니다.",
+                rows=etf_first,
+                reduction_needed=reduction_needed,
+                domestic_value=domestic_value,
+                total_value=total_value,
+            ),
+            _scenario(
+                title="대형 보유 우선 축소",
+                strategy="평가금액이 큰 국내주식부터 줄여 14% 목표에 가장 빠르게 접근합니다.",
+                rows=large_first,
+                reduction_needed=reduction_needed,
+                domestic_value=domestic_value,
+                total_value=total_value,
+            ),
+            _scenario(
+                title="비례 축소",
+                strategy="모든 국내주식 보유를 같은 비율로 낮춰 특정 종목 판단을 최소화합니다.",
+                rows=proportional_rows,
+                reduction_needed=reduction_needed,
+                domestic_value=domestic_value,
+                total_value=total_value,
+                max_fraction=proportional_fraction,
+            ),
+        ]
+
+    return {
+        "status": plan_status,
+        "module": "nps_domestic_equity_rebalance_plan",
+        "portfolio_name": monitor.get("portfolio_name"),
+        "policy_source": monitor.get("policy_source"),
+        "target_domestic_equity_weight": round(target_weight, 6),
+        "current_domestic_equity_weight": monitor.get("current_domestic_equity_weight"),
+        "total_portfolio_value": round(total_value, 2),
+        "domestic_equity_value": round(domestic_value, 2),
+        "target_domestic_equity_value": round(target_value, 2),
+        "reduction_needed_value": round(reduction_needed, 2),
+        "increase_needed_value": round(add_needed, 2),
+        "candidate_count": len(domestic_rows),
+        "candidates": {
+            "reduce": [row for row in sorted_by_priority if row.get("bucket") == "축소 후보"],
+            "review": [row for row in sorted_by_priority if row.get("bucket") == "추가 검토"],
+            "keep": [row for row in sorted_by_priority if row.get("bucket") == "유지 후보"],
+        },
+        "scenarios": scenarios,
+        "summary": summary,
+        "next_actions": [
+            "이 표는 주문 지시가 아니라 14% 정책 비중을 맞추기 위한 검토 후보입니다.",
+            "축소 전 최신 가격, 세금/수수료, 기존 투자 논거, 당일 유동성을 다시 확인하세요.",
+            "ETF 우선/대형 보유 우선/비례 축소 중 투자 논거 훼손이 가장 작은 시나리오를 선택하세요.",
+        ],
+    }

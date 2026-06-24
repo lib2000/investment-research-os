@@ -19,6 +19,7 @@ from research_os.nps_allocation_monitor import (  # noqa: E402
     DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
     build_nps_domestic_equity_monitor_from_saved_portfolios,
+    build_nps_domestic_equity_rebalance_plan,
     select_saved_portfolios_for_nps_allocation,
 )
 
@@ -53,6 +54,7 @@ def main() -> int:
     parser.add_argument("--target-weight", type=float, default=DEFAULT_NPS_DOMESTIC_EQUITY_TARGET, help="목표 국내주식 비중")
     parser.add_argument("--warn-tolerance", type=float, default=DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE, help="허용 오차")
     parser.add_argument("--fail-on-breach", action="store_true", help="목표 허용 범위를 벗어나면 종료 코드 2 반환")
+    parser.add_argument("--rebalance-plan", action="store_true", help="14%% 목표에 맞추는 리밸런싱 후보표를 출력")
     parser.add_argument("--json", action="store_true", help="전체 JSON 출력")
     args = parser.parse_args()
 
@@ -72,9 +74,29 @@ def main() -> int:
         warn_tolerance=args.warn_tolerance,
         checked_at=datetime.now().isoformat(timespec="seconds"),
     )
+    output_payload = build_nps_domestic_equity_rebalance_plan(monitor) if args.rebalance_plan else monitor
 
     if args.json:
-        print(json.dumps(monitor, ensure_ascii=False, indent=2))
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
+    elif args.rebalance_plan:
+        print(output_payload["summary"])
+        print(f"현재 국내주식: {output_payload['domestic_equity_value']:,.0f}")
+        print(f"목표 국내주식: {output_payload['target_domestic_equity_value']:,.0f}")
+        print(f"축소 필요: {output_payload['reduction_needed_value']:,.0f}")
+        for title, rows in output_payload["candidates"].items():
+            print(f"{title}:")
+            for item in rows[:8]:
+                print(
+                    f"- {item['ticker']} {item.get('holding_name') or ''}: "
+                    f"{item['market_value']:,.0f} / {item['bucket']} / {item['rationale']}"
+                )
+        for scenario in output_payload["scenarios"]:
+            print(f"시나리오: {scenario['title']} -> {scenario['suggested_reduction_value']:,.0f} 축소")
+            for action in scenario["actions"][:8]:
+                print(
+                    f"  - {action['ticker']} {action.get('holding_name') or ''}: "
+                    f"{action['suggested_reduction_value']:,.0f} 축소"
+                )
     else:
         print(monitor["summary"])
         print(f"상태: {monitor['status']} / 심각도: {monitor['severity']}")

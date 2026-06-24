@@ -67,6 +67,7 @@
   fetchTargetConsensusScan,
   fetchPortfolioNpsFlow,
   fetchNpsDomesticEquityAllocation,
+  fetchNpsDomesticEquityRebalancePlan,
   fetchTickerNpsFlow,
   fetchPortfolioConnectivity,
   fetchPortfolioAnalysisStatus,
@@ -92,7 +93,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=64c2b7f7f2c8";
+} from "./api.js?v=04d18c4be253";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -152,6 +153,7 @@ const elements = {
   portfolioConnectivityButton: document.querySelector("#portfolioConnectivityButton"),
   portfolioNpsFlowButton: document.querySelector("#portfolioNpsFlowButton"),
   portfolioNpsAllocationButton: document.querySelector("#portfolioNpsAllocationButton"),
+  portfolioNpsRebalanceButton: document.querySelector("#portfolioNpsRebalanceButton"),
   portfolioAnalysisStatusButton: document.querySelector("#portfolioAnalysisStatusButton"),
   portfolioTeamQueueButton: document.querySelector("#portfolioTeamQueueButton"),
   portfolioRunTopTeamButton: document.querySelector("#portfolioRunTopTeamButton"),
@@ -9423,6 +9425,7 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioConnectivityButton: "전체 연결 점검을 시작했습니다.",
   portfolioNpsFlowButton: "국민연금 수급 확인을 시작했습니다.",
   portfolioNpsAllocationButton: "국내주식 14% 비중 점검을 시작했습니다.",
+  portfolioNpsRebalanceButton: "국내주식 14% 리밸런싱 후보 생성을 시작했습니다.",
   portfolioAnalysisStatusButton: "전체 분석 현황 점검을 시작했습니다.",
   portfolioTeamQueueButton: "기준 리포트 큐 정리를 시작했습니다.",
   portfolioRunTopTeamButton: "상위 1개 리포트 실행을 시작했습니다.",
@@ -10823,6 +10826,23 @@ elements.portfolioNpsAllocationButton?.addEventListener("click", async () => {
   ]);
   try {
     const result = await fetchNpsDomesticEquityAllocation(token(), portfolioName);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.portfolioNpsRebalanceButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  const portfolioName = elements.portfolioSelect.value || "__all__";
+  startOutputLoading("국민연금 국내주식 14% 리밸런싱 후보 생성 중", [
+    "현재 국내주식 노출과 목표 금액 계산",
+    "축소 후보, 추가 검토, 유지 후보 분류",
+    "ETF 우선, 대형 보유 우선, 비례 축소 시나리오 생성",
+    "검토 액션과 예상 조정 후 비중 정리",
+  ]);
+  try {
+    const result = await fetchNpsDomesticEquityRebalancePlan(token(), portfolioName);
     setOutput(result);
   } catch (error) {
     setError(error);
@@ -13530,6 +13550,54 @@ function formatNpsDomesticEquityAllocation(value) {
   ].join("\n");
 }
 
+function formatNpsDomesticEquityRebalancePlan(value) {
+  const candidates = value.candidates || {};
+  const scenarios = value.scenarios || [];
+  const candidateLines = (label, rows) => [
+    label,
+    ...((rows || []).length
+      ? rows.slice(0, 8).map(
+          (item, index) =>
+            `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.portfolio_weight)} · ${item.rationale || item.reason || ""}`
+        )
+      : ["- 없음"]),
+  ];
+  const scenarioLines = scenarios.flatMap((scenario, index) => {
+    const actions = scenario.actions || [];
+    return [
+      `${index + 1}. ${scenario.title || "시나리오"} · ${formatMoney(scenario.suggested_reduction_value, "KRW", "n/a")} 축소 · 조정 후 ${toPercent(scenario.estimated_domestic_equity_weight_after)}`,
+      `   ${scenario.strategy || ""}`,
+      ...(actions.length
+        ? actions.slice(0, 8).map(
+            (item) =>
+              `   - ${displayCompanyName(item)}: ${formatMoney(item.suggested_reduction_value, "KRW", "n/a")} 축소 검토 · 잔여 ${formatMoney(item.remaining_value_after_reduction, "KRW", "n/a")}`
+          )
+        : ["   - 제안 액션 없음"]),
+    ];
+  });
+  return [
+    `국민연금 국내주식 14% 리밸런싱 후보`,
+    ``,
+    value.summary || "국내주식 14% 목표에 맞춰 후보를 분류했습니다.",
+    `포트폴리오: ${value.portfolio_name || "__all__"}`,
+    `현재 국내주식: ${formatMoney(value.domestic_equity_value, "KRW", "n/a")} · ${toPercent(value.current_domestic_equity_weight)}`,
+    `목표 국내주식: ${formatMoney(value.target_domestic_equity_value, "KRW", "n/a")} · ${toPercent(value.target_domestic_equity_weight)}`,
+    `축소 필요: ${formatMoney(value.reduction_needed_value, "KRW", "n/a")}`,
+    ``,
+    ...candidateLines("축소 후보", candidates.reduce),
+    ``,
+    ...candidateLines("추가 검토", candidates.review),
+    ``,
+    ...candidateLines("유지 후보", candidates.keep),
+    ``,
+    `리밸런싱 시나리오`,
+    ...(scenarioLines.length ? scenarioLines : ["- 현재 축소 시나리오가 필요하지 않습니다."]),
+    ``,
+    `다음 액션`,
+    ...((value.next_actions || []).length ? value.next_actions.map((item) => `- ${item}`) : ["- 없음"]),
+  ].join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -15866,6 +15934,10 @@ function formatKoreanResult(value) {
 
   if (value.module === "nps_domestic_equity_allocation_monitor") {
     return formatNpsDomesticEquityAllocation(value);
+  }
+
+  if (value.module === "nps_domestic_equity_rebalance_plan") {
+    return formatNpsDomesticEquityRebalancePlan(value);
   }
 
   if (value.module === "portfolio_nps_institutional_flow") {

@@ -12580,6 +12580,36 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
         self.assertEqual(monitor["excluded_count"], 2)
         self.assertEqual(monitor["top_excluded_holdings"][0]["ticker"], "PL")
 
+    def test_rebalance_plan_builds_reduction_scenarios(self):
+        from research_os.models import PortfolioHolding
+        from research_os.nps_allocation_monitor import (
+            build_nps_domestic_equity_allocation_monitor,
+            build_nps_domestic_equity_rebalance_plan,
+        )
+
+        monitor = build_nps_domestic_equity_allocation_monitor(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(ticker="003230", name="삼양식품", market_value=500, currency="KRW"),
+                PortfolioHolding(ticker="395160", name="KODEX AI반도체 ETF", market_value=300, currency="KRW"),
+                PortfolioHolding(ticker="360750", name="TIGER 미국S&P500", market_value=200, currency="KRW"),
+            ],
+            portfolio_value=1000,
+            target_weight=0.14,
+            checked_at="2026-06-24T12:00:00+09:00",
+        )
+
+        plan = build_nps_domestic_equity_rebalance_plan(monitor)
+
+        self.assertEqual(plan["module"], "nps_domestic_equity_rebalance_plan")
+        self.assertEqual(plan["status"], "needs_reduction")
+        self.assertEqual(plan["target_domestic_equity_value"], 140.0)
+        self.assertEqual(plan["reduction_needed_value"], 660.0)
+        self.assertEqual(len(plan["scenarios"]), 3)
+        self.assertEqual(plan["candidates"]["reduce"][0]["ticker"], "395160")
+        self.assertEqual(plan["scenarios"][0]["title"], "ETF/테마 우선 축소")
+        self.assertGreater(plan["scenarios"][0]["suggested_reduction_value"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
