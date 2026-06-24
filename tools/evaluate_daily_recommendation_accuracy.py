@@ -136,8 +136,19 @@ def latest_records(records: list[dict[str, Any]]) -> tuple[str, list[dict[str, A
     dates = [str(record.get("recommendation_date") or "") for record in records if record.get("recommendation_date")]
     latest_date = max(dates) if dates else ""
     latest = [record for record in records if record.get("recommendation_date") == latest_date]
-    latest.sort(key=lambda item: int(item.get("rank") or 999))
+    latest.sort(key=lambda item: (str(item.get("market") or ""), int(item.get("rank") or 999)))
     return latest_date, latest
+
+
+def latest_rank_integrity(latest: list[dict[str, Any]]) -> tuple[bool, dict[str, Any]]:
+    tickers = [normalize_ticker(record.get("ticker")) for record in latest]
+    by_market: dict[str, list[int]] = {}
+    for record in latest:
+        market = str(record.get("market") or "ALL").strip().upper() or "ALL"
+        by_market.setdefault(market, []).append(int(record.get("rank") or 999))
+    market_ok = all(ranks == list(range(1, len(ranks) + 1)) for ranks in by_market.values())
+    ticker_ok = len(tickers) == len(set(tickers))
+    return market_ok and ticker_ok, {"market_ranks": by_market, "tickers": tickers}
 
 
 def score_latest_records(root: Path, latest: list[dict[str, Any]], expected_count: int) -> tuple[float, list[str], dict[str, Any]]:
@@ -148,12 +159,11 @@ def score_latest_records(root: Path, latest: list[dict[str, Any]], expected_coun
         points += 8
     else:
         failures.append(f"latest_count: 최신 추천 {len(latest)}개 / 기대 {expected_count}개")
-    ranks = [int(record.get("rank") or 999) for record in latest]
-    tickers = [normalize_ticker(record.get("ticker")) for record in latest]
-    if ranks == list(range(1, len(latest) + 1)) and len(tickers) == len(set(tickers)):
+    rank_ok, rank_details = latest_rank_integrity(latest)
+    if rank_ok:
         points += 7
     else:
-        failures.append(f"rank_integrity: 순위 또는 티커 중복 확인 필요 ranks={ranks} tickers={tickers}")
+        failures.append(f"rank_integrity: 시장별 순위 또는 티커 중복 확인 필요 {rank_details}")
 
     record_summaries: list[dict[str, Any]] = []
     per_record_max = 65.0 / max(1, expected_count)
@@ -654,7 +664,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="매일 추천 정확도/추적 품질 eval")
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
-    parser.add_argument("--expected-latest-count", type=int, default=3)
+    parser.add_argument("--expected-latest-count", type=int, default=6)
     parser.add_argument("--min-score", type=float, default=0)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()

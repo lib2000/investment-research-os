@@ -6126,6 +6126,97 @@ class DailyRecommendationScoringModuleTests(unittest.TestCase):
         self.assertIn("기준 현재가 미확인", candidate["quality_flags"])
 
 
+class DailyRecommendationPolicyModuleTests(unittest.TestCase):
+    def test_daily_recommendation_policy_signals_add_score_risk_and_evidence(self):
+        from research_os import daily_recommendation_policy
+
+        policy_watch = {
+            "related_items": [
+                {
+                    "title": "AI 반도체 산업 육성 전략 발표",
+                    "source_provider": "산업통상자원부",
+                    "source_scope": "산업·통상 정책자료",
+                    "published_at": "2026-06-23",
+                    "detail_url": "https://www.motie.go.kr/policy/1",
+                    "relevance_score": 90,
+                    "matched_themes": ["AI/디지털", "산업/통상"],
+                    "target_matches": [{"ticker": "005930", "label": "삼성전자"}],
+                },
+                {
+                    "title": "플랫폼 공정화 규제 강화 및 조사 계획",
+                    "source_provider": "공정거래위원회",
+                    "source_scope": "공정거래·플랫폼 규제 보도자료",
+                    "published_at": "2026-06-23",
+                    "detail_url": "https://www.ftc.go.kr/policy/2",
+                    "relevance_score": 75,
+                    "matched_themes": ["공정거래/플랫폼"],
+                    "target_matches": [{"ticker": "005930", "label": "삼성전자"}],
+                },
+            ]
+        }
+        index = daily_recommendation_policy.build_policy_signal_index(policy_watch)
+        candidate = {
+            "ticker": "005930",
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": ["기존 근거"],
+            "evidence_documents": [],
+            "reasons": [],
+            "risk_notes": [],
+        }
+
+        daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
+
+        labels = [component["label"] for component in candidate["score_components"]]
+        self.assertIn("정책 수혜/제도 모멘텀", labels)
+        self.assertIn("정책·규제 리스크 확인", " ".join(candidate["score_penalties"]))
+        self.assertIn("정책·규제 리스크 확인 필요", candidate["quality_flags"])
+        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 2건"))
+        self.assertEqual(candidate["policy_signal_summary"]["count"], 2)
+        self.assertEqual(candidate["policy_signal_summary"]["risk_count"], 1)
+        self.assertEqual(candidate["evidence_documents"][0]["citation_label"], "정책 신호 근거")
+        self.assertEqual(candidate["evidence_documents"][0]["source_type"], "policy_law")
+
+    def test_daily_recommendation_policy_signals_match_theme_when_ticker_is_absent(self):
+        from research_os import daily_recommendation_policy
+
+        index = daily_recommendation_policy.build_policy_signal_index(
+            {
+                "related_items": [
+                    {
+                        "title": "AI 민주정부 실현 전략 발표",
+                        "source_provider": "대한민국 정책브리핑",
+                        "published_at": "2026-06-24",
+                        "detail_url": "https://www.korea.kr/briefing/1",
+                        "relevance_score": 70,
+                        "matched_themes": ["AI/디지털"],
+                        "target_matches": [],
+                    }
+                ]
+            }
+        )
+        candidate = {
+            "ticker": "395160",
+            "company_name": "KODEX AI반도체 ETF",
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": ["AI 반도체 시장일지 연결"],
+            "evidence_documents": [],
+            "reasons": [],
+            "risk_notes": [],
+        }
+
+        daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
+
+        self.assertEqual(candidate["policy_signal_summary"]["count"], 1)
+        self.assertTrue(any(component["label"] == "정책 수혜/제도 모멘텀" for component in candidate["score_components"]))
+        self.assertTrue(candidate["evidence_documents"])
+
+
 class DailyRecommendationProfilesModuleTests(unittest.TestCase):
     def test_daily_recommendation_profiles_apply_freshness_and_overseas_tracking(self):
         from types import SimpleNamespace

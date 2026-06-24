@@ -82,9 +82,11 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_overseas_tracking as _apply_daily_recommendation_overseas_tracking,
     apply_daily_recommendation_price_check as _apply_daily_recommendation_price_check,
     apply_daily_recommendation_priority_target as _apply_daily_recommendation_priority_target,
+    apply_daily_recommendation_policy_signals as _apply_daily_recommendation_policy_signals,
     apply_daily_recommendation_recent_weekly_evidence as _apply_daily_recommendation_recent_weekly_evidence,
     apply_daily_recommendation_tracking_feedback as _apply_daily_recommendation_tracking_feedback,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
+    build_policy_signal_index as _build_policy_signal_index,
     build_daily_recommendation_tracking_feedback as _build_daily_recommendation_tracking_feedback,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_consensus_label as _daily_recommendation_consensus_label,
@@ -14823,6 +14825,19 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         tracking_feedback = _build_daily_recommendation_tracking_feedback(settings)
     except Exception:
         tracking_feedback = {}
+    try:
+        policy_watch = build_policy_sources_watch_payload(
+            settings,
+            limit=settings.policy_sources_max_items,
+            force=False,
+            save_result=True,
+        )
+    except Exception:
+        policy_watch = read_policy_sources_watch(settings)
+    try:
+        policy_signal_index = _build_policy_signal_index(policy_watch, read_news_inbox(settings))
+    except Exception:
+        policy_signal_index = {}
     consensus_scan = build_target_consensus_scan(
         settings,
         portfolio_name=None,
@@ -14903,6 +14918,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
 
         _apply_daily_recommendation_overseas_tracking(candidate)
         _apply_daily_recommendation_tracking_feedback(candidate, tracking_feedback.get(ticker))
+        _apply_daily_recommendation_policy_signals(candidate, policy_signal_index)
         _apply_investment_direction_profile(candidate)
 
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(

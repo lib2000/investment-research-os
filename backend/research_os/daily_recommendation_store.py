@@ -185,6 +185,7 @@ def build_recommendation_record(
         "investment_direction_profile": normalized.get("investment_direction_profile") or {},
         "portfolio_risk_connection": normalized.get("portfolio_risk_connection") or {},
         "overseas_tracking": normalized.get("overseas_tracking") or {},
+        "policy_signal_summary": normalized.get("policy_signal_summary") or {},
         "tracking_milestones": daily_recommendation_tracking.build_tracking_milestones(recommendation_date),
     }
 

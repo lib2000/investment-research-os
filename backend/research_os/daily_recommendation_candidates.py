@@ -44,6 +44,7 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "investment_direction_profile": candidate.get("investment_direction_profile") or {},
         "overseas_tracking": candidate.get("overseas_tracking") or {},
         "portfolio_risk_connection": candidate.get("portfolio_risk_connection") or {},
+        "policy_signal_summary": candidate.get("policy_signal_summary") or {},
     }
 
 

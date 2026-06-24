@@ -14,6 +14,7 @@ from typing import Any, Callable
 from research_os import daily_recommendation_candidates
 from research_os import daily_recommendation_evidence
 from research_os import daily_recommendation_profiles
+from research_os import daily_recommendation_policy
 from research_os import daily_recommendation_quality
 from research_os import daily_recommendation_ranking
 from research_os import daily_recommendation_recent
@@ -169,6 +170,17 @@ def apply_daily_recommendation_recent_weekly_evidence(
         recent_items,
         weekly_groups,
     )
+
+
+def build_policy_signal_index(policy_watch: dict | None, news_inbox: dict | None = None) -> dict[str, Any]:
+    return daily_recommendation_policy.build_policy_signal_index(policy_watch, news_inbox)
+
+
+def apply_daily_recommendation_policy_signals(
+    candidate: dict,
+    policy_signal_index: dict | None,
+) -> dict:
+    return daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, policy_signal_index)
 
 
 def apply_daily_recommendation_evidence_documents(

@@ -8100,6 +8100,29 @@ function dailyRecommendationInvestmentProfileSummary(record = {}) {
   };
 }
 
+function dailyRecommendationPolicySignalSummary(record = {}) {
+  const signal = record.policy_signal_summary || {};
+  const count = Number(signal.count || 0);
+  if (!count) {
+    return "";
+  }
+  const parts = [`정책 신호 ${formatNumber(count)}건`];
+  const supportCount = Number(signal.support_count || 0);
+  const riskCount = Number(signal.risk_count || 0);
+  if (supportCount) {
+    parts.push(`수혜 ${formatNumber(supportCount)}`);
+  }
+  if (riskCount) {
+    parts.push(`규제 ${formatNumber(riskCount)}`);
+  }
+  const themes = Array.isArray(signal.themes) ? signal.themes.filter(Boolean).slice(0, 3).join(" · ") : "";
+  if (themes) {
+    parts.push(themes);
+  }
+  const title = compactOutputText(signal.top_title || "", 88);
+  return `${parts.join(" · ")}${title ? ` · ${title}` : ""}`;
+}
+
 function dailyRecommendationEvidenceRows(record) {
   return [
     ...(record?.evidence_sources || []).slice(0, 3),
@@ -8378,8 +8401,11 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
             .slice()
             .sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
           const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
+          const policySignal = dailyRecommendationPolicySignalSummary(record);
           const keyDriver = investmentProfile.hasProfile
             ? `투자 방향: ${investmentProfile.labelText}`
+            : policySignal
+              ? policySignal
             : scoreComponents[0]?.label || exposure || "추천 근거 확인";
           const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
@@ -8656,6 +8682,7 @@ function renderDailyRecommendationCards(payload) {
       const exposureSummary = dailyRecommendationExposureSummary(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
       const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
+      const policySignal = dailyRecommendationPolicySignalSummary(record);
       const rank = Number(record.rank || index + 1);
       return `
         <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
@@ -8672,6 +8699,7 @@ function renderDailyRecommendationCards(payload) {
           ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
+          ${policySignal ? `<p class="daily-recommendation-investment-profile">정책 신호 반영: ${escapeHtml(policySignal)}</p>` : ""}
           <div class="daily-recommendation-score">
             ${scoreComponents
               .map(
