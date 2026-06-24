@@ -156,6 +156,53 @@ def _policy_item_matches_candidate_theme(item: dict[str, Any], candidate_text: s
     return False
 
 
+def _policy_item_key(item: dict[str, Any]) -> str:
+    return str(item.get("item_id") or item.get("detail_url") or item.get("source_url") or item.get("title") or "")
+
+
+def _rank_policy_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        [item for item in items if isinstance(item, dict)],
+        key=lambda item: (
+            int(item.get("relevance_score") or 0),
+            str(item.get("published_at") or item.get("date") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def candidate_policy_signal_matches(
+    candidate: dict[str, Any],
+    policy_signal_index: dict[str, Any] | None,
+) -> dict[str, list[dict[str, Any]]]:
+    ticker = normalize_policy_ticker(candidate.get("ticker"))
+    direct_items = _rank_policy_items(list(((policy_signal_index or {}).get("by_ticker") or {}).get(ticker) or []))
+    direct_keys = {_policy_item_key(item) for item in direct_items}
+    candidate_text = _candidate_policy_text(candidate)
+    theme_items = _rank_policy_items(
+        [
+            item
+            for item in (policy_signal_index or {}).get("items") or []
+            if isinstance(item, dict)
+            and _policy_item_key(item) not in direct_keys
+            and _policy_item_matches_candidate_theme(item, candidate_text)
+        ]
+    )
+    matched_keys = direct_keys | {_policy_item_key(item) for item in theme_items}
+    market_items = _rank_policy_items(
+        [
+            item
+            for item in (policy_signal_index or {}).get("items") or []
+            if isinstance(item, dict) and _policy_item_key(item) not in matched_keys
+        ]
+    )
+    return {
+        "direct": direct_items[:8],
+        "theme": theme_items[:3],
+        "market": market_items[:3],
+    }
+
+
 def policy_signal_evidence_document(item: dict[str, Any]) -> dict[str, Any] | None:
     title = compact_policy_signal_text(item.get("title"), 140)
     source_url = str(item.get("detail_url") or item.get("source_url") or "").strip()
@@ -225,39 +272,39 @@ def apply_daily_recommendation_policy_signals(
     *,
     as_of: datetime | None = None,
 ) -> dict[str, Any]:
-    ticker = normalize_policy_ticker(candidate.get("ticker"))
-    items = list(((policy_signal_index or {}).get("by_ticker") or {}).get(ticker) or [])
-    if not items:
-        candidate_text = _candidate_policy_text(candidate)
-        items = [
-            item
-            for item in (policy_signal_index or {}).get("items") or []
-            if isinstance(item, dict) and _policy_item_matches_candidate_theme(item, candidate_text)
-        ][:6]
+    matches = candidate_policy_signal_matches(candidate, policy_signal_index)
+    direct_items = matches["direct"]
+    theme_items = matches["theme"]
+    market_items = matches["market"]
+    scored_items = direct_items or theme_items
+    match_level = "direct" if direct_items else "theme" if theme_items else "market" if market_items else ""
+    items = scored_items or market_items
     if not items:
         return candidate
 
     support_items = [item for item in items if policy_signal_tone(item) != "risk"]
     risk_items = [item for item in items if policy_signal_tone(item) == "risk"]
+    score_divisors = (25, 30) if match_level == "direct" else (45, 60)
+    score_caps = (12, 8) if match_level == "direct" else (6, 4)
     support_score = sum(
-        max(1, round((int(item.get("relevance_score") or 50) / 25) * policy_signal_freshness_multiplier(item, as_of=as_of)))
+        max(1, round((int(item.get("relevance_score") or 50) / score_divisors[0]) * policy_signal_freshness_multiplier(item, as_of=as_of)))
         for item in support_items[:3]
-    )
+    ) if scored_items else 0
     risk_score = sum(
-        max(1, round((int(item.get("relevance_score") or 50) / 30) * policy_signal_freshness_multiplier(item, as_of=as_of)))
+        max(1, round((int(item.get("relevance_score") or 50) / score_divisors[1]) * policy_signal_freshness_multiplier(item, as_of=as_of)))
         for item in risk_items[:3]
-    )
+    ) if scored_items else 0
     if support_score:
         daily_recommendation_candidates.add_daily_recommendation_score(
             candidate,
-            min(12, support_score),
-            "정책 수혜/제도 모멘텀",
+            min(score_caps[0], support_score),
+            "정책 수혜/제도 모멘텀" if match_level == "direct" else "정책 테마 모멘텀",
         )
     if risk_score:
         daily_recommendation_candidates.add_daily_recommendation_penalty(
             candidate,
-            "정책·규제 리스크 확인",
-            min(8, risk_score),
+            "정책·규제 리스크 확인" if match_level == "direct" else "정책 테마 규제 리스크 확인",
+            min(score_caps[1], risk_score),
         )
         candidate.setdefault("quality_flags", []).append("정책·규제 리스크 확인 필요")
 
@@ -270,21 +317,37 @@ def apply_daily_recommendation_policy_signals(
             if str(theme or "").strip()
         )
     )
-    evidence_text = f"정책 신호 {len(items)}건" + (f": {theme_text}" if theme_text else "")
+    level_label = {"direct": "직접", "theme": "테마", "market": "시장"}.get(match_level, "참고")
+    evidence_text = (
+        f"정책 신호 {level_label} {len(items)}건"
+        if scored_items
+        else f"시장 정책 참고 {len(items)}건"
+    ) + (f": {theme_text}" if theme_text else "")
     evidence_sources = candidate.setdefault("evidence_sources", [])
     if evidence_text not in evidence_sources:
         evidence_sources.insert(0, evidence_text)
+    reason_prefix = "정책/법령/규제 자료가 추천 점수에 반영됨" if scored_items else "시장 전반 정책자료 참고"
     candidate.setdefault("reasons", []).append(
-        "정책/법령/규제 자료가 추천 점수에 반영됨: "
-        + compact_policy_signal_text(top_items[0].get("title"), 100)
+        f"{reason_prefix}({level_label}): " + compact_policy_signal_text(top_items[0].get("title"), 100)
     )
-    if risk_items:
+    if risk_items and scored_items:
         candidate.setdefault("risk_notes", []).append(
             "규제성 정책자료 확인 필요: "
             + compact_policy_signal_text(risk_items[0].get("title"), 100)
         )
+    elif risk_items:
+        candidate.setdefault("risk_notes", []).append(
+            "시장 전반 규제성 정책자료 참고: "
+            + compact_policy_signal_text(risk_items[0].get("title"), 100)
+        )
     candidate["policy_signal_summary"] = {
         "count": len(items),
+        "match_level": match_level,
+        "match_level_label": level_label,
+        "score_applied": bool(scored_items),
+        "direct_count": len(direct_items),
+        "theme_count": len(theme_items),
+        "market_count": len(market_items),
         "support_count": len(support_items),
         "risk_count": len(risk_items),
         "top_title": compact_policy_signal_text(top_items[0].get("title"), 120),

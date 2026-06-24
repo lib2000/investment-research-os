@@ -8106,7 +8106,8 @@ function dailyRecommendationPolicySignalSummary(record = {}) {
   if (!count) {
     return "";
   }
-  const parts = [`정책 신호 ${formatNumber(count)}건`];
+  const level = signal.match_level_label || (signal.score_applied === false ? "시장" : "정책");
+  const parts = [`정책 ${level} ${formatNumber(count)}건`];
   const supportCount = Number(signal.support_count || 0);
   const riskCount = Number(signal.risk_count || 0);
   if (supportCount) {
@@ -8118,6 +8119,9 @@ function dailyRecommendationPolicySignalSummary(record = {}) {
   const themes = Array.isArray(signal.themes) ? signal.themes.filter(Boolean).slice(0, 3).join(" · ") : "";
   if (themes) {
     parts.push(themes);
+  }
+  if (signal.score_applied === false) {
+    parts.push("점수 미반영");
   }
   const title = compactOutputText(signal.top_title || "", 88);
   return `${parts.join(" · ")}${title ? ` · ${title}` : ""}`;

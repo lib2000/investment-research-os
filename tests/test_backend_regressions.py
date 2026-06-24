@@ -6173,8 +6173,11 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertIn("정책 수혜/제도 모멘텀", labels)
         self.assertIn("정책·규제 리스크 확인", " ".join(candidate["score_penalties"]))
         self.assertIn("정책·규제 리스크 확인 필요", candidate["quality_flags"])
-        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 2건"))
+        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 직접 2건"))
         self.assertEqual(candidate["policy_signal_summary"]["count"], 2)
+        self.assertEqual(candidate["policy_signal_summary"]["match_level"], "direct")
+        self.assertTrue(candidate["policy_signal_summary"]["score_applied"])
+        self.assertEqual(candidate["policy_signal_summary"]["direct_count"], 2)
         self.assertEqual(candidate["policy_signal_summary"]["risk_count"], 1)
         self.assertEqual(candidate["evidence_documents"][0]["citation_label"], "정책 신호 근거")
         self.assertEqual(candidate["evidence_documents"][0]["source_type"], "policy_law")
@@ -6213,8 +6216,50 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
 
         self.assertEqual(candidate["policy_signal_summary"]["count"], 1)
-        self.assertTrue(any(component["label"] == "정책 수혜/제도 모멘텀" for component in candidate["score_components"]))
+        self.assertEqual(candidate["policy_signal_summary"]["match_level"], "theme")
+        self.assertEqual(candidate["policy_signal_summary"]["theme_count"], 1)
+        self.assertTrue(any(component["label"] == "정책 테마 모멘텀" for component in candidate["score_components"]))
         self.assertTrue(candidate["evidence_documents"])
+
+    def test_daily_recommendation_policy_signals_keep_market_reference_out_of_score(self):
+        from research_os import daily_recommendation_policy
+
+        index = daily_recommendation_policy.build_policy_signal_index(
+            {
+                "related_items": [
+                    {
+                        "title": "금융시장 안정 점검 회의",
+                        "source_provider": "금융위원회",
+                        "published_at": "2026-06-24",
+                        "detail_url": "https://www.fsc.go.kr/policy/1",
+                        "relevance_score": 60,
+                        "matched_themes": ["금융/자본시장"],
+                        "target_matches": [],
+                    }
+                ]
+            }
+        )
+        candidate = {
+            "ticker": "ABSI",
+            "company_name": "Absci Corporation",
+            "score": 10,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": ["바이오 임상 근거"],
+            "evidence_documents": [],
+            "reasons": [],
+            "risk_notes": [],
+        }
+
+        daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
+
+        self.assertEqual(candidate["score"], 10)
+        self.assertFalse(candidate["score_components"])
+        self.assertFalse(candidate["score_penalties"])
+        self.assertEqual(candidate["policy_signal_summary"]["match_level"], "market")
+        self.assertFalse(candidate["policy_signal_summary"]["score_applied"])
+        self.assertTrue(candidate["evidence_sources"][0].startswith("시장 정책 참고"))
 
 
 class DailyRecommendationProfilesModuleTests(unittest.TestCase):
