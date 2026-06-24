@@ -89,6 +89,18 @@ def load_operational_readiness_tool():
     return module
 
 
+def load_policy_signal_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_daily_recommendation_policy_signals.py"
+    spec = spec_from_file_location("check_daily_recommendation_policy_signals", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_brief_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -223,8 +235,53 @@ class OfflineReadinessToolTests(unittest.TestCase):
             ],
         )
 
+    def test_offline_readiness_checks_daily_recommendation_policy_signals(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("매일 추천 정책 신호 품질", checks)
+        self.assertEqual(
+            checks["매일 추천 정책 신호 품질"],
+            ["tools/check_daily_recommendation_policy_signals.py", "--strict"],
+        )
+
 
 class OperationalReadinessToolTests(unittest.TestCase):
+    def test_policy_signal_quality_is_part_of_operational_readiness(self):
+        tool = load_operational_readiness_tool()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            system_dir = root / "research_vault" / "_system"
+            system_dir.mkdir(parents=True)
+            store = {
+                "records": [
+                    {
+                        "recommendation_date": "2026-06-24",
+                        "market": "KR",
+                        "rank": 1,
+                        "ticker": "005930",
+                        "policy_signal_summary": {
+                            "match_level": "theme",
+                            "match_level_label": "테마",
+                            "score_applied": True,
+                            "direct_count": 0,
+                            "theme_count": 3,
+                        },
+                        "score_components": [{"label": "정책 테마 모멘텀", "points": 4}],
+                    }
+                ]
+            }
+            (system_dir / "daily_recommendations.json").write_text(json.dumps(store, ensure_ascii=False), encoding="utf-8")
+
+            result = tool.recommendation_policy_signal(system_dir)
+
+        self.assertEqual(result["id"], "daily_recommendation_policy_signals")
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("검토 1개", result["message"])
+
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
         with TemporaryDirectory() as tmp:
@@ -254,6 +311,23 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertIn("상태 above_target", advisory["message"])
         self.assertEqual(enforced["status"], "warning")
         self.assertLess(enforced["score"], 95.0)
+
+
+class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
+    def test_strict_errors_can_fail_on_review(self):
+        tool = load_policy_signal_check_tool()
+        dashboard = {
+            "record_count": 1,
+            "score_applied_count": 1,
+            "review_count": 1,
+            "rows": [{"policy_signal_summary": {"match_level": "theme"}}],
+        }
+
+        advisory = tool.strict_errors(dashboard, fail_on_review=False, require_metadata=True)
+        enforced = tool.strict_errors(dashboard, fail_on_review=True, require_metadata=True)
+
+        self.assertEqual(advisory, [])
+        self.assertEqual(enforced, ["정책 신호 검토 필요 1개"])
 
 
 class WebCaptureRenderingTests(unittest.TestCase):

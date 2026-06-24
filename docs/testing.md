@@ -170,6 +170,7 @@ python tools\check_research_source_store.py --strict
 ```powershell
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
+python tools\check_daily_recommendation_policy_signals.py --strict
 python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker 112610
 ```
 

@@ -138,6 +138,57 @@ def recommendation_citations_signal(root: Path, system_dir: Path) -> dict[str, A
         "python tools\\check_daily_recommendation_citations.py --strict",
     )
 
+
+def latest_recommendation_payload(system_dir: Path) -> dict[str, Any]:
+    store = load_json(system_dir / "daily_recommendations.json", {"records": []})
+    records = store.get("records") if isinstance(store.get("records"), list) else []
+    dated_records = [record for record in records if isinstance(record, dict) and record.get("recommendation_date")]
+    if not dated_records:
+        return {"latest_records": [], "latest_recommendation_date": ""}
+    latest_date = max(str(record.get("recommendation_date") or "") for record in dated_records)
+    latest_records = [record for record in dated_records if str(record.get("recommendation_date") or "") == latest_date]
+    return {
+        "latest_recommendation_date": latest_date,
+        "latest_records": latest_records,
+    }
+
+
+def recommendation_policy_signal(system_dir: Path) -> dict[str, Any]:
+    backend_dir = system_dir.parents[1] / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from research_os.daily_recommendation_policy import build_policy_signal_quality_dashboard
+
+    payload = latest_recommendation_payload(system_dir)
+    dashboard = build_policy_signal_quality_dashboard(payload)
+    record_count = int(dashboard.get("record_count") or 0)
+    review_count = int(dashboard.get("review_count") or 0)
+    score_applied_count = int(dashboard.get("score_applied_count") or 0)
+    level_counts = dashboard.get("level_counts") if isinstance(dashboard.get("level_counts"), dict) else {}
+    direct_count = int(level_counts.get("direct") or 0)
+    theme_count = int(level_counts.get("theme") or 0)
+    market_count = int(level_counts.get("market") or 0)
+    if not record_count:
+        score = 0.0
+        message = "최신 추천 기록 없음"
+    elif score_applied_count == 0 and review_count == 0:
+        score = 85.0
+        message = f"정책 신호 점수 미반영, 추천 {record_count}개"
+    else:
+        score = 95.0 if review_count else 100.0
+        message = (
+            f"추천 {record_count}개, 점수 반영 {score_applied_count}개, 검토 {review_count}개, "
+            f"직접 {direct_count} / 테마 {theme_count} / 시장 {market_count}"
+        )
+    return signal(
+        "daily_recommendation_policy_signals",
+        "추천 정책 신호 품질",
+        score,
+        message,
+        "python tools\\check_daily_recommendation_policy_signals.py --strict",
+    )
+
+
 def storage_signal(vault_dir: Path) -> dict[str, Any]:
     body_missing = 0
     ocr_needed = 0
@@ -360,6 +411,7 @@ def main() -> int:
         graph_signal(system_dir),
         recommendation_signal(system_dir, args.daily_time),
         recommendation_citations_signal(root, system_dir),
+        recommendation_policy_signal(system_dir),
         storage_signal(vault_dir),
         rag_diagnostics_signal(vault_dir),
         source_signal(system_dir),

@@ -86,6 +86,7 @@ CHECKS = [
     ("RAG 합성 저장 상태", ["tools/check_rag_synthesis_store.py", "--require-latest-rag"]),
     ("매일 추천 저장/추적", ["tools/check_daily_recommendations_store.py", "--require-milestones", "--require-quality"]),
     ("매일 추천 RAG 근거 문서", ["tools/check_daily_recommendation_citations.py", "--strict"]),
+    ("매일 추천 정책 신호 품질", ["tools/check_daily_recommendation_policy_signals.py", "--strict"]),
     (
         "매일 추천 후보 정책",
         [
