@@ -204,6 +204,14 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
     daily_recommendations = runtime.summarize_daily_recommendation_store(settings, limit=10)
     daily_recommendation_state = runtime.read_json_store(runtime.daily_recommendation_state_path(settings), {})
     daily_recommendations_due = runtime.should_run_daily_recommendations(settings)
+    try:
+        nps_allocation = runtime.build_nps_domestic_equity_allocation_status(settings)
+    except Exception as exc:
+        nps_allocation = {
+            "status": "needs_data",
+            "summary": "국민연금 국내주식 14% 비중 확인 실패",
+            "recommended_action": runtime.provider_error_message(exc, settings),
+        }
     kcif_watch = runtime.read_kcif_reports_watch(settings)
     kcif_related_count = 0
     kcif_due = True
@@ -259,6 +267,11 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         daily_recommendations_due=daily_recommendations_due,
         daily_recommendations=daily_recommendations,
     )
+    if nps_allocation.get("status") in {"above_target", "below_target", "needs_data"}:
+        next_actions.insert(
+            0,
+            nps_allocation.get("recommended_action") or "국민연금 국내주식 14% 기준 대비 포트폴리오 비중을 확인하세요.",
+        )
 
     return {
         "status": "success",
@@ -307,6 +320,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
             "record_count": daily_recommendations.get("record_count"),
             "state": daily_recommendation_state,
         },
+        "nps_domestic_equity_allocation": nps_allocation,
         "last_run_at": status.get("updated_at"),
         "priority_targets": project_priority_targets(priority_targets),
         "next_actions": next_actions[:5],

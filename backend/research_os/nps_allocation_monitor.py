@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from re import findall, fullmatch
-from typing import Iterable
+from typing import Any, Iterable
 
-from research_os.models import PortfolioHolding
+from research_os.models import PortfolioHolding, SavedPortfolio
 
 
 DEFAULT_NPS_DOMESTIC_EQUITY_TARGET = 0.14
@@ -205,3 +205,64 @@ def build_nps_domestic_equity_allocation_monitor(
             f"/ 목표 {target_weight * 100:.1f}%"
         ),
     }
+
+
+def select_saved_portfolios_for_nps_allocation(
+    portfolios_payload: dict[str, Any],
+    portfolio_name: str = "__all__",
+) -> tuple[str, list[SavedPortfolio]]:
+    normalized = str(portfolio_name or "__all__").strip()
+    portfolios = portfolios_payload if isinstance(portfolios_payload, dict) else {}
+    if normalized in {"__all__", "all", "전체"}:
+        selected = [SavedPortfolio.model_validate(item) for item in portfolios.values() if isinstance(item, dict)]
+        if not selected:
+            return "__all__", []
+        aggregate_candidates = [
+            item
+            for item in selected
+            if "합산" in item.portfolio_name.lower()
+            or "aggregate" in item.portfolio_name.lower()
+            or "consolidated" in item.portfolio_name.lower()
+        ]
+        if aggregate_candidates:
+            aggregate = sorted(
+                aggregate_candidates,
+                key=lambda item: float(item.portfolio_value or 0),
+                reverse=True,
+            )[0]
+            return aggregate.portfolio_name, [aggregate]
+        return "__all__", selected
+
+    for key, payload in portfolios.items():
+        if not isinstance(payload, dict):
+            continue
+        saved = SavedPortfolio.model_validate(payload)
+        if str(key) == normalized or saved.portfolio_name == normalized:
+            return saved.portfolio_name, [saved]
+    return normalized, []
+
+
+def build_nps_domestic_equity_monitor_from_saved_portfolios(
+    portfolios: list[SavedPortfolio],
+    *,
+    portfolio_name: str,
+    target_weight: float = DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
+    warn_tolerance: float = DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
+    checked_at: str | None = None,
+) -> dict:
+    holdings: list[PortfolioHolding] = []
+    total_value = 0.0
+    for portfolio in portfolios:
+        holdings.extend(portfolio.holdings)
+        if portfolio.portfolio_value is not None:
+            total_value += float(portfolio.portfolio_value or 0)
+        else:
+            total_value += sum(float(item.market_value or 0) for item in portfolio.holdings)
+    return build_nps_domestic_equity_allocation_monitor(
+        portfolio_name=portfolio_name,
+        holdings=holdings,
+        portfolio_value=total_value,
+        target_weight=target_weight,
+        warn_tolerance=warn_tolerance,
+        checked_at=checked_at,
+    )

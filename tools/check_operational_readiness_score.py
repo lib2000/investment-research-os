@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
@@ -300,11 +301,56 @@ def portfolio_signal(system_dir: Path) -> dict[str, Any]:
     )
 
 
+def nps_allocation_signal(root: Path, system_dir: Path, *, enforce: bool) -> dict[str, Any]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from research_os.nps_allocation_monitor import (
+        build_nps_domestic_equity_monitor_from_saved_portfolios,
+        select_saved_portfolios_for_nps_allocation,
+    )
+
+    payload = load_json(system_dir / "user_portfolios.json", {"portfolios": {}})
+    portfolios = payload.get("portfolios") if isinstance(payload.get("portfolios"), dict) else {}
+    selected_name, selected = select_saved_portfolios_for_nps_allocation(portfolios, "__all__")
+    if not selected:
+        return signal(
+            "nps_domestic_equity_allocation",
+            "국민연금 국내주식 14%",
+            0.0 if enforce else 100.0,
+            "저장 포트폴리오 없음",
+            "포트폴리오를 저장한 뒤 python tools\\check_nps_domestic_equity_allocation.py --portfolio-name __all__",
+        )
+    monitor = build_nps_domestic_equity_monitor_from_saved_portfolios(
+        selected,
+        portfolio_name=selected_name,
+        checked_at=kst_now().isoformat(timespec="seconds"),
+    )
+    breached = monitor.get("status") in {"above_target", "below_target", "needs_data"}
+    score = 75.0 if enforce and breached else 100.0
+    return signal(
+        "nps_domestic_equity_allocation",
+        "국민연금 국내주식 14%",
+        score,
+        (
+            f"{monitor.get('portfolio_name')} 현재 {float(monitor.get('current_domestic_equity_weight') or 0) * 100:.2f}% "
+            f"/ 목표 {float(monitor.get('target_domestic_equity_weight') or 0) * 100:.1f}% "
+            f"/ 상태 {monitor.get('status')}"
+        ),
+        "python tools\\check_nps_domestic_equity_allocation.py --portfolio-name __all__ --fail-on-breach",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="운영 완성도 95% 기준을 백엔드 없이 점검합니다.")
     parser.add_argument("--min-score", type=float, default=95.0)
     parser.add_argument("--daily-time", default="08:00")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument(
+        "--enforce-nps-allocation",
+        action="store_true",
+        help="국민연금 국내주식 14%% 허용 범위 이탈을 운영 점검 실패로 처리합니다.",
+    )
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -319,6 +365,7 @@ def main() -> int:
         source_signal(system_dir),
         investment_calendar_signal(vault_dir),
         portfolio_signal(system_dir),
+        nps_allocation_signal(root, system_dir, enforce=args.enforce_nps_allocation),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]

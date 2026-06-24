@@ -77,6 +77,18 @@ def load_offline_readiness_tool():
     return module
 
 
+def load_operational_readiness_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_operational_readiness_score.py"
+    spec = spec_from_file_location("check_operational_readiness_score", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_brief_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -210,6 +222,38 @@ class OfflineReadinessToolTests(unittest.TestCase):
                 "docs/examples/firecrawl_ir_registry.sample.json",
             ],
         )
+
+
+class OperationalReadinessToolTests(unittest.TestCase):
+    def test_nps_allocation_signal_is_advisory_until_enforced(self):
+        tool = load_operational_readiness_tool()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            system_dir = root / "research_vault" / "_system"
+            system_dir.mkdir(parents=True)
+            payload = {
+                "portfolios": {
+                    "가족-합산": {
+                        "portfolio_name": "가족 합산",
+                        "portfolio_value": 1000,
+                        "holdings": [
+                            {"ticker": "005930", "name": "삼성전자", "market_value": 600, "currency": "KRW"},
+                            {"ticker": "PL", "name": "Planet Labs", "market_value": 400, "currency": "USD"},
+                        ],
+                    }
+                }
+            }
+            (system_dir / "user_portfolios.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            advisory = tool.nps_allocation_signal(root, system_dir, enforce=False)
+            enforced = tool.nps_allocation_signal(root, system_dir, enforce=True)
+
+        self.assertEqual(advisory["status"], "ok")
+        self.assertIn("상태 above_target", advisory["message"])
+        self.assertEqual(enforced["status"], "warning")
+        self.assertLess(enforced["score"], 95.0)
 
 
 class WebCaptureRenderingTests(unittest.TestCase):

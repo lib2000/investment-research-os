@@ -15,11 +15,11 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from research_os.models import SavedPortfolio  # noqa: E402
 from research_os.nps_allocation_monitor import (  # noqa: E402
     DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
-    build_nps_domestic_equity_allocation_monitor,
+    build_nps_domestic_equity_monitor_from_saved_portfolios,
+    select_saved_portfolios_for_nps_allocation,
 )
 
 
@@ -46,65 +46,6 @@ def load_portfolios(path: Path) -> dict[str, Any]:
     return portfolios
 
 
-def select_portfolio(
-    portfolios: dict[str, Any],
-    portfolio_name: str,
-) -> tuple[str, list[SavedPortfolio]]:
-    normalized = portfolio_name.strip()
-    if normalized in {"__all__", "all", "전체"}:
-        selected = [SavedPortfolio.model_validate(item) for item in portfolios.values() if isinstance(item, dict)]
-        if not selected:
-            raise SystemExit("저장된 포트폴리오가 없습니다.")
-        aggregate_candidates = [
-            item
-            for item in selected
-            if "합산" in item.portfolio_name.lower()
-            or "aggregate" in item.portfolio_name.lower()
-            or "consolidated" in item.portfolio_name.lower()
-        ]
-        if aggregate_candidates:
-            aggregate = sorted(
-                aggregate_candidates,
-                key=lambda item: float(item.portfolio_value or 0),
-                reverse=True,
-            )[0]
-            return aggregate.portfolio_name, [aggregate]
-        return "__all__", selected
-
-    for key, payload in portfolios.items():
-        if not isinstance(payload, dict):
-            continue
-        saved = SavedPortfolio.model_validate(payload)
-        if key == normalized or saved.portfolio_name == normalized:
-            return saved.portfolio_name, [saved]
-    raise SystemExit(f"포트폴리오를 찾지 못했습니다: {portfolio_name}")
-
-
-def build_monitor_for_selection(
-    portfolio_name: str,
-    portfolios: list[SavedPortfolio],
-    *,
-    target_weight: float,
-    warn_tolerance: float,
-) -> dict:
-    holdings = []
-    total_value = 0.0
-    for portfolio in portfolios:
-        holdings.extend(portfolio.holdings)
-        if portfolio.portfolio_value is not None:
-            total_value += float(portfolio.portfolio_value or 0)
-        else:
-            total_value += sum(float(item.market_value or 0) for item in portfolio.holdings)
-    return build_nps_domestic_equity_allocation_monitor(
-        portfolio_name=portfolio_name,
-        holdings=holdings,
-        portfolio_value=total_value,
-        target_weight=target_weight,
-        warn_tolerance=warn_tolerance,
-        checked_at=datetime.now().isoformat(timespec="seconds"),
-    )
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="국민연금 국내주식 14% 기준 대비 저장 포트폴리오 비중을 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="user_portfolios.json 경로")
@@ -121,12 +62,15 @@ def main() -> int:
         store = root / store
 
     portfolios = load_portfolios(store)
-    selected_name, selected = select_portfolio(portfolios, args.portfolio_name)
-    monitor = build_monitor_for_selection(
-        selected_name,
+    selected_name, selected = select_saved_portfolios_for_nps_allocation(portfolios, args.portfolio_name)
+    if not selected:
+        raise SystemExit(f"포트폴리오를 찾지 못했습니다: {args.portfolio_name}")
+    monitor = build_nps_domestic_equity_monitor_from_saved_portfolios(
         selected,
+        portfolio_name=selected_name,
         target_weight=args.target_weight,
         warn_tolerance=args.warn_tolerance,
+        checked_at=datetime.now().isoformat(timespec="seconds"),
     )
 
     if args.json:

@@ -47,6 +47,7 @@ from research_os.nps_allocation_monitor import (
     DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
     build_nps_domestic_equity_allocation_monitor,
+    select_saved_portfolios_for_nps_allocation,
 )
 from research_os.opendart_data_provider import OpenDartClient
 from research_os.dossier_text import (
@@ -9699,6 +9700,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         build_interest_automation_board=build_interest_automation_board,
         build_kcif_reports_watch_payload=build_kcif_reports_watch_payload,
         build_news_inbox_payload=build_news_inbox_payload,
+        build_nps_domestic_equity_allocation_status=build_nps_domestic_equity_allocation_status,
         build_regional_business_sources_watch_payload=build_regional_business_sources_watch_payload,
         build_storage_quality_dashboard=build_storage_quality_dashboard,
         current_storage_timestamp=current_storage_timestamp,
@@ -11449,45 +11451,18 @@ def _load_saved_portfolios_for_nps_allocation(
 ) -> tuple[str, list[PortfolioHolding], float | None]:
     store = read_portfolio_store(settings)
     portfolios = store.get("portfolios", {}) if isinstance(store, dict) else {}
-    if portfolio_name in {"__all__", "all", "전체"}:
-        aggregate_candidates: list[SavedPortfolio] = []
-        for key, payload in portfolios.items():
-            if not isinstance(payload, dict):
-                continue
-            saved = SavedPortfolio.model_validate(payload)
-            label = f"{key} {saved.portfolio_name}".lower()
-            if "합산" in label or "aggregate" in label or "consolidated" in label:
-                aggregate_candidates.append(saved)
-        if aggregate_candidates:
-            selected = sorted(
-                aggregate_candidates,
-                key=lambda item: float(item.portfolio_value or 0),
-                reverse=True,
-            )[0]
-            return selected.portfolio_name, selected.holdings, selected.portfolio_value
-
-        holdings: list[PortfolioHolding] = []
-        total_value = 0.0
-        loaded_names: list[str] = []
-        for payload in portfolios.values():
-            if not isinstance(payload, dict):
-                continue
-            saved = SavedPortfolio.model_validate(payload)
-            holdings.extend(saved.holdings)
-            if saved.portfolio_value is not None:
-                total_value += float(saved.portfolio_value or 0)
-            else:
-                total_value += sum(float(item.market_value or 0) for item in saved.holdings)
-            loaded_names.append(saved.portfolio_name)
-        if not loaded_names:
-            raise HTTPException(status_code=404, detail="저장된 포트폴리오가 없습니다.")
-        return "__all__", holdings, total_value
-
-    portfolio_payload = portfolios.get(portfolio_store_key(portfolio_name))
-    if not portfolio_payload:
+    resolved_name, selected = select_saved_portfolios_for_nps_allocation(portfolios, portfolio_name)
+    if not selected:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
-    portfolio = SavedPortfolio.model_validate(portfolio_payload)
-    return portfolio.portfolio_name, portfolio.holdings, portfolio.portfolio_value
+    holdings: list[PortfolioHolding] = []
+    total_value = 0.0
+    for portfolio in selected:
+        holdings.extend(portfolio.holdings)
+        if portfolio.portfolio_value is not None:
+            total_value += float(portfolio.portfolio_value or 0)
+        else:
+            total_value += sum(float(item.market_value or 0) for item in portfolio.holdings)
+    return resolved_name, holdings, total_value
 
 
 @app.get(
@@ -11511,6 +11486,16 @@ def read_nps_domestic_equity_allocation(
         portfolio_value=portfolio_value,
         target_weight=target_weight,
         warn_tolerance=warn_tolerance,
+        checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+    )
+
+
+def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_name: str = "__all__") -> dict:
+    resolved_name, holdings, portfolio_value = _load_saved_portfolios_for_nps_allocation(portfolio_name, settings)
+    return build_nps_domestic_equity_allocation_monitor(
+        portfolio_name=resolved_name,
+        holdings=holdings,
+        portfolio_value=portfolio_value,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
     )
 
