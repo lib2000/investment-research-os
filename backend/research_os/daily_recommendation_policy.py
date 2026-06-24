@@ -234,13 +234,16 @@ def _policy_item_matches_candidate_theme(item: dict[str, Any], candidate_text: s
             str(item.get("title") or ""),
             str(item.get("summary") or ""),
             str(item.get("source_scope") or ""),
-            " ".join(str(theme) for theme in item.get("matched_themes") or []),
         ]
     ).lower()
     for theme in item.get("matched_themes") or []:
-        for keyword in THEME_KEYWORDS.get(str(theme), []):
-            if keyword.lower() in candidate_text:
-                return True
+        shared_keywords = [
+            keyword
+            for keyword in THEME_KEYWORDS.get(str(theme), [])
+            if keyword.lower() in candidate_text and keyword.lower() in item_text
+        ]
+        if len(shared_keywords) >= 2:
+            return True
     return False
 
 

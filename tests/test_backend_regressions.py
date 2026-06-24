@@ -6311,7 +6311,7 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
             {
                 "related_items": [
                     {
-                        "title": "AI 민주정부 실현 전략 발표",
+                        "title": "AI 반도체 디지털 산업 전략 발표",
                         "source_provider": "대한민국 정책브리핑",
                         "published_at": "2026-06-24",
                         "detail_url": "https://www.korea.kr/briefing/1",
@@ -6344,6 +6344,44 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertFalse(any(component["label"] == "정책 테마 모멘텀" for component in candidate["score_components"]))
         self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 테마 참고"))
         self.assertTrue(candidate["evidence_documents"])
+
+    def test_daily_recommendation_policy_signals_demotes_weak_theme_overlap_to_market(self):
+        from research_os import daily_recommendation_policy
+
+        index = daily_recommendation_policy.build_policy_signal_index(
+            {
+                "related_items": [
+                    {
+                        "title": "산림청 디지털정부 데이터 개방 유공 수상",
+                        "summary": "재난안전 데이터 개방과 행정 혁신 중심 보도자료",
+                        "source_provider": "대한민국 정책브리핑",
+                        "published_at": "2026-06-24",
+                        "detail_url": "https://www.korea.kr/briefing/forest",
+                        "relevance_score": 70,
+                        "matched_themes": ["AI/디지털"],
+                        "target_matches": [],
+                    }
+                ]
+            }
+        )
+        candidate = {
+            "ticker": "ABSI",
+            "company_name": "Absci Corporation",
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": ["AI 신약개발 데이터 클라우드"],
+            "evidence_documents": [],
+            "reasons": [],
+            "risk_notes": [],
+        }
+
+        daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
+
+        self.assertEqual(candidate["policy_signal_summary"]["match_level"], "market")
+        self.assertEqual(candidate["policy_signal_summary"]["theme_count"], 0)
+        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 시장 참고"))
 
     def test_daily_recommendation_policy_signals_promote_company_name_to_direct_match(self):
         from research_os import daily_recommendation_policy
