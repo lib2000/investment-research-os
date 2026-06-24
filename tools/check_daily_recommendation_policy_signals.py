@@ -64,8 +64,10 @@ def strict_errors(dashboard: dict[str, Any], *, fail_on_review: bool, require_me
         errors.append("최신 추천 기록이 없습니다.")
     if require_metadata and missing_metadata:
         errors.append(f"정책 신호 메타데이터 누락 {len(missing_metadata)}개")
-    if record_count and score_applied_count == 0:
-        errors.append("최신 추천에 정책 신호 점수 반영이 없습니다.")
+    level_counts = dashboard.get("level_counts") if isinstance(dashboard.get("level_counts"), dict) else {}
+    direct_count = int(level_counts.get("direct") or 0)
+    if record_count and direct_count and score_applied_count == 0:
+        errors.append("직접 정책 신호가 있는데 점수 반영이 없습니다.")
     if fail_on_review and review_count:
         errors.append(f"정책 신호 검토 필요 {review_count}개")
     return errors

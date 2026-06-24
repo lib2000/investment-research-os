@@ -50,6 +50,25 @@ THEME_KEYWORDS = {
     "환경/ESG": ["ESG", "환경", "탄소", "기후", "재활용", "전기차", "EV"],
 }
 
+GENERIC_DIRECT_ALIAS_WORDS = {
+    "ETF",
+    "ETN",
+    "KODEX",
+    "TIGER",
+    "SOL",
+    "ACE",
+    "PLUS",
+    "AI",
+    "USD",
+    "KRW",
+    "CORP",
+    "CORPORATION",
+    "INC",
+    "LTD",
+    "CO",
+    "GROUP",
+}
+
 
 def normalize_policy_ticker(value: object) -> str:
     return daily_recommendation_evidence.normalize_recommendation_ticker(value)
@@ -140,6 +159,75 @@ def _candidate_policy_text(candidate: dict[str, Any]) -> str:
     return " ".join(str(part or "") for part in parts).lower()
 
 
+def _policy_item_search_text(item: dict[str, Any]) -> str:
+    target_text = " ".join(
+        " ".join(str(target.get(key) or "") for key in ("ticker", "label", "name"))
+        for target in item.get("target_matches") or item.get("matched_targets") or []
+        if isinstance(target, dict)
+    )
+    return " ".join(
+        str(part or "")
+        for part in (
+            item.get("title"),
+            item.get("summary"),
+            item.get("recommended_action"),
+            item.get("agency"),
+            item.get("source_provider"),
+            item.get("source_scope"),
+            target_text,
+            " ".join(str(value) for value in item.get("related_targets") or []),
+        )
+    )
+
+
+def _candidate_direct_aliases(candidate: dict[str, Any]) -> list[str]:
+    aliases: list[str] = []
+    ticker = normalize_policy_ticker(candidate.get("ticker"))
+    if ticker and (ticker.isdigit() or len(ticker) >= 3):
+        aliases.append(ticker)
+    for value in (
+        candidate.get("company_name"),
+        candidate.get("label"),
+        candidate.get("name"),
+        candidate.get("display_name"),
+    ):
+        text = " ".join(str(value or "").replace("(", " ").replace(")", " ").split()).strip()
+        if len(text) >= 4:
+            aliases.append(text)
+        chunks = [
+            chunk.strip(".,·-/ ")
+            for chunk in re.split(r"\s+|/|,", text)
+            if len(chunk.strip(".,·-/ ")) >= 4
+        ]
+        aliases.extend(
+            chunk
+            for chunk in chunks
+            if chunk.upper() not in GENERIC_DIRECT_ALIAS_WORDS
+            and not chunk.upper().endswith(("ETF", "ETN"))
+        )
+    seen: set[str] = set()
+    result: list[str] = []
+    for alias in aliases:
+        key = alias.casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(alias)
+    return result[:12]
+
+
+def _alias_in_policy_text(alias: str, text: str) -> bool:
+    if not alias:
+        return False
+    if re.fullmatch(r"[A-Z0-9._-]{2,10}", alias):
+        return re.search(rf"(?<![A-Z0-9._-]){re.escape(alias)}(?![A-Z0-9._-])", text.upper()) is not None
+    return alias.casefold() in text.casefold()
+
+
+def _policy_item_matches_candidate_direct_text(item: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    search_text = _policy_item_search_text(item)
+    return any(_alias_in_policy_text(alias, search_text) for alias in _candidate_direct_aliases(candidate))
+
+
 def _policy_item_matches_candidate_theme(item: dict[str, Any], candidate_text: str) -> bool:
     item_text = " ".join(
         [
@@ -177,6 +265,18 @@ def candidate_policy_signal_matches(
 ) -> dict[str, list[dict[str, Any]]]:
     ticker = normalize_policy_ticker(candidate.get("ticker"))
     direct_items = _rank_policy_items(list(((policy_signal_index or {}).get("by_ticker") or {}).get(ticker) or []))
+    direct_items = _rank_policy_items(
+        [
+            *direct_items,
+            *[
+                item
+                for item in (policy_signal_index or {}).get("items") or []
+                if isinstance(item, dict)
+                and _policy_item_key(item) not in {_policy_item_key(row) for row in direct_items}
+                and _policy_item_matches_candidate_direct_text(item, candidate)
+            ],
+        ]
+    )
     direct_keys = {_policy_item_key(item) for item in direct_items}
     candidate_text = _candidate_policy_text(candidate)
     theme_items = _rank_policy_items(
@@ -276,9 +376,9 @@ def apply_daily_recommendation_policy_signals(
     direct_items = matches["direct"]
     theme_items = matches["theme"]
     market_items = matches["market"]
-    scored_items = direct_items or theme_items
+    scored_items = direct_items
     match_level = "direct" if direct_items else "theme" if theme_items else "market" if market_items else ""
-    items = scored_items or market_items
+    items = scored_items or theme_items or market_items
     if not items:
         return candidate
 
@@ -321,12 +421,12 @@ def apply_daily_recommendation_policy_signals(
     evidence_text = (
         f"정책 신호 {level_label} {len(items)}건"
         if scored_items
-        else f"시장 정책 참고 {len(items)}건"
+        else f"정책 신호 {level_label} 참고 {len(items)}건"
     ) + (f": {theme_text}" if theme_text else "")
     evidence_sources = candidate.setdefault("evidence_sources", [])
     if evidence_text not in evidence_sources:
         evidence_sources.insert(0, evidence_text)
-    reason_prefix = "정책/법령/규제 자료가 추천 점수에 반영됨" if scored_items else "시장 전반 정책자료 참고"
+    reason_prefix = "정책/법령/규제 자료가 추천 점수에 반영됨" if scored_items else "정책/법령/규제 자료 참고"
     candidate.setdefault("reasons", []).append(
         f"{reason_prefix}({level_label}): " + compact_policy_signal_text(top_items[0].get("title"), 100)
     )
@@ -398,6 +498,8 @@ def _policy_signal_review_status(record: dict[str, Any]) -> tuple[str, str]:
     risk_count = int(signal.get("risk_count") or 0)
     if level == "direct" and direct_count:
         return "ok", "직접 종목 매칭으로 점수 반영"
+    if level == "theme" and not score_applied:
+        return "info", "테마 참고 신호로 점수 미반영"
     if level == "theme" and theme_count >= 3 and direct_count == 0:
         return "review", "직접 매칭 없이 테마 상위 3건이 점수에 반영됨"
     if level == "theme" and score_applied:

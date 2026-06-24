@@ -172,8 +172,8 @@ def recommendation_policy_signal(system_dir: Path) -> dict[str, Any]:
         score = 0.0
         message = "최신 추천 기록 없음"
     elif score_applied_count == 0 and review_count == 0:
-        score = 85.0
-        message = f"정책 신호 점수 미반영, 추천 {record_count}개"
+        score = 100.0
+        message = f"직접 매칭 없음, 테마/시장 신호는 참고 처리, 추천 {record_count}개"
     else:
         score = 95.0 if review_count else 100.0
         message = (

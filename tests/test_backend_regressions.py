@@ -332,6 +332,7 @@ class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
             "record_count": 1,
             "score_applied_count": 1,
             "review_count": 1,
+            "level_counts": {"direct": 0, "theme": 1, "market": 0, "none": 0},
             "rows": [{"policy_signal_summary": {"match_level": "theme"}}],
         }
 
@@ -340,6 +341,18 @@ class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
 
         self.assertEqual(advisory, [])
         self.assertEqual(enforced, ["정책 신호 검토 필요 1개"])
+
+    def test_strict_errors_allow_theme_reference_without_score(self):
+        tool = load_policy_signal_check_tool()
+        dashboard = {
+            "record_count": 1,
+            "score_applied_count": 0,
+            "review_count": 0,
+            "level_counts": {"direct": 0, "theme": 1, "market": 0, "none": 0},
+            "rows": [{"policy_signal_summary": {"match_level": "theme", "score_applied": False}}],
+        }
+
+        self.assertEqual(tool.strict_errors(dashboard, fail_on_review=True, require_metadata=True), [])
 
 
 class DailyRecommendationCitationCheckToolTests(unittest.TestCase):
@@ -6327,8 +6340,48 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertEqual(candidate["policy_signal_summary"]["count"], 1)
         self.assertEqual(candidate["policy_signal_summary"]["match_level"], "theme")
         self.assertEqual(candidate["policy_signal_summary"]["theme_count"], 1)
-        self.assertTrue(any(component["label"] == "정책 테마 모멘텀" for component in candidate["score_components"]))
+        self.assertFalse(candidate["policy_signal_summary"]["score_applied"])
+        self.assertFalse(any(component["label"] == "정책 테마 모멘텀" for component in candidate["score_components"]))
+        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 테마 참고"))
         self.assertTrue(candidate["evidence_documents"])
+
+    def test_daily_recommendation_policy_signals_promote_company_name_to_direct_match(self):
+        from research_os import daily_recommendation_policy
+
+        index = daily_recommendation_policy.build_policy_signal_index(
+            {
+                "related_items": [
+                    {
+                        "title": "Absci Corporation AI 신약개발 규제지원 프로그램 선정",
+                        "summary": "미국 바이오 AI 기업 Absci의 임상 데이터 인프라 지원",
+                        "source_provider": "정책 브리핑",
+                        "published_at": "2026-06-24",
+                        "detail_url": "https://example.gov/policy/absci",
+                        "relevance_score": 80,
+                        "matched_themes": ["바이오/헬스케어", "AI/디지털"],
+                        "target_matches": [],
+                    }
+                ]
+            }
+        )
+        candidate = {
+            "ticker": "ABSI",
+            "company_name": "Absci Corporation",
+            "score": 0,
+            "score_components": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "evidence_sources": ["바이오 임상 근거"],
+            "evidence_documents": [],
+            "reasons": [],
+            "risk_notes": [],
+        }
+
+        daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, index)
+
+        self.assertEqual(candidate["policy_signal_summary"]["match_level"], "direct")
+        self.assertEqual(candidate["policy_signal_summary"]["direct_count"], 1)
+        self.assertTrue(any(component["label"] == "정책 수혜/제도 모멘텀" for component in candidate["score_components"]))
 
     def test_daily_recommendation_policy_signals_keep_market_reference_out_of_score(self):
         from research_os import daily_recommendation_policy
@@ -6368,7 +6421,7 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertFalse(candidate["score_penalties"])
         self.assertEqual(candidate["policy_signal_summary"]["match_level"], "market")
         self.assertFalse(candidate["policy_signal_summary"]["score_applied"])
-        self.assertTrue(candidate["evidence_sources"][0].startswith("시장 정책 참고"))
+        self.assertTrue(candidate["evidence_sources"][0].startswith("정책 신호 시장 참고"))
 
     def test_daily_recommendation_policy_signal_quality_dashboard_flags_theme_review(self):
         from research_os import daily_recommendation_policy
@@ -6438,6 +6491,36 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertEqual(dashboard["total_policy_net_points"], 2)
         self.assertEqual(dashboard["rows"][0]["review_status"], "review")
         self.assertEqual(dashboard["rows"][1]["review_status"], "info")
+
+    def test_daily_recommendation_policy_signal_quality_allows_theme_reference_without_review(self):
+        from research_os import daily_recommendation_policy
+
+        dashboard = daily_recommendation_policy.build_policy_signal_quality_dashboard(
+            {
+                "latest_recommendation_date": "2026-06-25",
+                "latest_records": [
+                    {
+                        "market": "US",
+                        "rank": 1,
+                        "ticker": "ABSI",
+                        "company_name": "Absci",
+                        "policy_signal_summary": {
+                            "match_level": "theme",
+                            "match_level_label": "테마",
+                            "score_applied": False,
+                            "direct_count": 0,
+                            "theme_count": 3,
+                            "market_count": 3,
+                        },
+                        "score_components": [],
+                        "score_penalties": [],
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(dashboard["review_count"], 0)
+        self.assertEqual(dashboard["rows"][0]["review_status"], "info")
 
 
 class DailyRecommendationProfilesModuleTests(unittest.TestCase):
