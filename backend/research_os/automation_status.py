@@ -383,6 +383,20 @@ def run_research_automation_pipeline(
         )
     except Exception as exc:
         source_results.append({"source": "regional_business_sources_watch", "status": "failed", "error": str(exc)})
+    try:
+        source_results.append(
+            {
+                "source": "policy_sources_watch",
+                "result": runtime.build_policy_sources_watch_payload(
+                    settings,
+                    limit=min(limit, 40),
+                    force=False,
+                    save_result=save_result,
+                ),
+            }
+        )
+    except Exception as exc:
+        source_results.append({"source": "policy_sources_watch", "status": "failed", "error": str(exc)})
 
     rag_backfill = runtime.backfill_research_memory_documents_from_manifest(vault_dir)
     dossier_results: list[dict] = []

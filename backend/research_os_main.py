@@ -108,7 +108,7 @@ from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
 from research_os.investment_insight_hub import build_investment_insight_hub
-from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
+from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, policy_sources_watch, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -151,6 +151,12 @@ from research_os.regional_sources import (
     match_regional_business_items_to_targets,
     regional_business_copyright_policy,
     should_refresh_regional_business_cache,
+)
+from research_os.policy_sources import (
+    fetch_policy_sources,
+    match_policy_items_to_targets,
+    policy_sources_copyright_policy,
+    should_refresh_policy_sources_cache,
 )
 from research_os.portfolio_import import (
     parse_portfolio_delimited_text,
@@ -345,6 +351,7 @@ from research_os.state_store import (
     latest_daily_brief_path,
     market_close_journal_path,
     news_inbox_path,
+    policy_sources_watch_path,
     portfolio_store_path,
     read_json_store,
     regional_business_sources_watch_path,
@@ -3606,11 +3613,21 @@ _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED = False
 
 def regional_macro_sources_scheduler_loop() -> None:
     settings = get_settings()
-    interval_seconds = min(max(settings.regional_business_sources_refresh_hours, 1) * 3600, 15 * 60)
+    refresh_hours = min(
+        max(settings.regional_business_sources_refresh_hours, 1),
+        max(settings.policy_sources_refresh_hours, 1),
+    )
+    interval_seconds = min(refresh_hours * 3600, 15 * 60)
     while True:
         try:
             build_kcif_reports_watch_payload(settings, limit=30, force=False, save_result=True)
             build_regional_business_sources_watch_payload(settings, limit=40, force=False, save_result=True)
+            build_policy_sources_watch_payload(
+                settings,
+                limit=settings.policy_sources_max_items,
+                force=False,
+                save_result=True,
+            )
         except Exception:
             pass
         threading.Event().wait(interval_seconds)
@@ -3621,8 +3638,10 @@ def start_regional_macro_sources_scheduler() -> None:
     settings = get_settings()
     if (
         _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED
-        or not settings.regional_business_sources_enabled
-        or not settings.regional_business_sources_auto_refresh
+        or not (
+            (settings.regional_business_sources_enabled and settings.regional_business_sources_auto_refresh)
+            or (settings.policy_sources_enabled and settings.policy_sources_auto_refresh)
+        )
     ):
         return
     _REGIONAL_MACRO_SOURCES_SCHEDULER_STARTED = True
@@ -9726,6 +9745,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         build_kcif_reports_watch_payload=build_kcif_reports_watch_payload,
         build_news_inbox_payload=build_news_inbox_payload,
         build_nps_domestic_equity_allocation_status=build_nps_domestic_equity_allocation_status,
+        build_policy_sources_watch_payload=build_policy_sources_watch_payload,
         build_regional_business_sources_watch_payload=build_regional_business_sources_watch_payload,
         build_storage_quality_dashboard=build_storage_quality_dashboard,
         current_storage_timestamp=current_storage_timestamp,
@@ -9744,6 +9764,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         read_manifest=read_manifest,
         read_naver_research_cache=read_naver_research_cache,
         read_news_inbox=read_news_inbox,
+        read_policy_sources_watch=read_policy_sources_watch,
         read_regional_business_sources_watch=read_regional_business_sources_watch,
         read_shinhan_research_cache=read_shinhan_research_cache,
         refresh_naver_research_cache=refresh_naver_research_cache,
@@ -9753,6 +9774,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         save_daily_brief=save_daily_brief,
         should_refresh_company_ir_cache=should_refresh_company_ir_cache,
         should_refresh_kcif_cache=should_refresh_kcif_cache,
+        should_refresh_policy_sources_cache=should_refresh_policy_sources_cache,
         should_refresh_regional_business_cache=should_refresh_regional_business_cache,
         should_run_daily_recommendations=should_run_daily_recommendations,
         storage_duplicate_review_path=storage_duplicate_review_path,
@@ -10424,6 +10446,56 @@ def build_regional_business_sources_watch_payload(
     )
 
 
+def _policy_sources_watch_runtime() -> SimpleNamespace:
+    return SimpleNamespace(
+        build_kcif_watch_targets=build_kcif_watch_targets,
+        current_storage_timestamp=current_storage_timestamp,
+        fetch_policy_sources=fetch_policy_sources,
+        infer_news_policy_law_classification=infer_news_policy_law_classification,
+        match_policy_items_to_targets=match_policy_items_to_targets,
+        news_item_fingerprint=news_item_fingerprint,
+        news_scope_label=news_scope_label,
+        policy_sources_copyright_policy=policy_sources_copyright_policy,
+        policy_sources_watch_path=policy_sources_watch_path,
+        portfolio_store_response=portfolio_store_response,
+        provider_error_message=provider_error_message,
+        read_interest_list=read_interest_list,
+        read_json_store=read_json_store,
+        read_news_inbox=read_news_inbox,
+        should_refresh_policy_sources_cache=should_refresh_policy_sources_cache,
+        write_json_store=write_json_store,
+        write_news_inbox=write_news_inbox,
+    )
+
+
+def read_policy_sources_watch(settings: Settings) -> dict:
+    return policy_sources_watch.read_policy_sources_watch(_policy_sources_watch_runtime(), settings)
+
+
+def write_policy_sources_watch(settings: Settings, payload: dict) -> None:
+    return policy_sources_watch.write_policy_sources_watch(_policy_sources_watch_runtime(), settings, payload)
+
+
+def build_policy_sources_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
+    return policy_sources_watch.build_policy_sources_next_actions(related_items, warnings)
+
+
+def build_policy_sources_watch_payload(
+    settings: Settings,
+    *,
+    limit: int = 40,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    return policy_sources_watch.build_policy_sources_watch_payload(
+        _policy_sources_watch_runtime(),
+        settings,
+        limit=limit,
+        force=force,
+        save_result=save_result,
+    )
+
+
 @app.get(
     "/api/v1/company-ir-sources/watch",
     dependencies=[Depends(verify_user_token)],
@@ -10487,6 +10559,41 @@ def refresh_regional_business_sources_watch(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_regional_business_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=True,
+        save_result=save_result,
+    )
+
+
+@app.get(
+    "/api/v1/policy-sources/watch",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_policy_sources_watch(
+    limit: int = 40,
+    refresh: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_policy_sources_watch_payload(
+        settings,
+        limit=limit,
+        force=refresh,
+        save_result=save_result,
+    )
+
+
+@app.post(
+    "/api/v1/policy-sources/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_policy_sources_watch(
+    limit: int = 40,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_policy_sources_watch_payload(
         settings,
         limit=limit,
         force=True,

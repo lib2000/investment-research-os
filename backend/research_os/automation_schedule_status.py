@@ -6,6 +6,7 @@ from __future__ import annotations
 def build_external_source_schedule_status(runtime, settings) -> list[dict]:
     kcif_watch = runtime.read_kcif_reports_watch(settings)
     regional_watch = runtime.read_regional_business_sources_watch(settings)
+    policy_watch = runtime.read_policy_sources_watch(settings)
     company_ir_watch = runtime.read_company_ir_sources_watch(settings)
     naver_cache = runtime.read_naver_research_cache(settings)
     shinhan_cache = runtime.read_shinhan_research_cache(settings)
@@ -41,6 +42,21 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
             "related_count": len(regional_watch.get("related_items") or []) if isinstance(regional_watch, dict) else 0,
             "source_status": regional_watch.get("source_status") if isinstance(regional_watch, dict) else "not_checked",
             "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "policy_sources_watch",
+            "label": "공식 정책·법령·규제 자료",
+            "enabled": settings.policy_sources_enabled,
+            "auto_refresh": settings.policy_sources_auto_refresh,
+            "refresh_hours": settings.policy_sources_refresh_hours,
+            "last_checked_at": policy_watch.get("updated_at") if isinstance(policy_watch, dict) else None,
+            "due": runtime.should_refresh_policy_sources_cache(
+                policy_watch,
+                refresh_hours=settings.policy_sources_refresh_hours,
+            ),
+            "related_count": len(policy_watch.get("related_items") or []) if isinstance(policy_watch, dict) else 0,
+            "source_status": policy_watch.get("source_status") if isinstance(policy_watch, dict) else "not_checked",
+            "policy": "official_policy_metadata_only",
         },
         {
             "key": "company_ir_sources_watch",

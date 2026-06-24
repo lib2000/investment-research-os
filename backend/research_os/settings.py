@@ -149,6 +149,12 @@ class Settings(BaseModel):
     regional_business_sources_timeout_seconds: float = 30.0
     regional_business_sources_max_items: int = 40
     regional_business_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    policy_sources_enabled: bool = True
+    policy_sources_auto_refresh: bool = True
+    policy_sources_refresh_hours: float = 12.0
+    policy_sources_timeout_seconds: float = 12.0
+    policy_sources_max_items: int = 40
+    policy_sources_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     company_ir_sources_enabled: bool = True
     company_ir_sources_auto_refresh: bool = True
     company_ir_sources_refresh_hours: float = 24.0
@@ -424,6 +430,15 @@ class Settings(BaseModel):
             ),
             regional_business_sources_user_agent=os.getenv(
                 "REGIONAL_BUSINESS_SOURCES_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            policy_sources_enabled=_read_bool("POLICY_SOURCES_ENABLED", True),
+            policy_sources_auto_refresh=_read_bool("POLICY_SOURCES_AUTO_REFRESH", True),
+            policy_sources_refresh_hours=float(os.getenv("POLICY_SOURCES_REFRESH_HOURS", "12")),
+            policy_sources_timeout_seconds=float(os.getenv("POLICY_SOURCES_TIMEOUT_SECONDS", "12")),
+            policy_sources_max_items=int(os.getenv("POLICY_SOURCES_MAX_ITEMS", "40")),
+            policy_sources_user_agent=os.getenv(
+                "POLICY_SOURCES_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
             company_ir_sources_enabled=_read_bool("COMPANY_IR_SOURCES_ENABLED", True),

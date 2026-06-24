@@ -3109,6 +3109,62 @@ class RegionalBusinessSourcesWatchTests(unittest.TestCase):
         self.assertNotIn("body", item)
         self.assertNotIn("raw_text", item)
 
+    def test_policy_source_rss_parser_extracts_metadata_without_body(self):
+        from research_os.policy_sources import PolicySource, parse_policy_source_rss
+
+        source = PolicySource(
+            source_key="fsc",
+            provider="금융위원회",
+            source_url="http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111",
+            source_scope="금융정책 보도자료 RSS",
+            parser="rss",
+        )
+        xml = """
+        <rss><channel>
+          <item>
+            <title>자본시장 제도 개선 방안 발표</title>
+            <link>https://www.fsc.go.kr/no010101/1</link>
+            <pubDate>Tue, 23 Jun 2026 09:00:00 +0900</pubDate>
+          </item>
+        </channel></rss>
+        """
+
+        items = parse_policy_source_rss(xml, source=source, limit=5)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["source_provider"], "금융위원회")
+        self.assertEqual(items[0]["published_at"], "2026-06-23")
+        self.assertEqual(items[0]["detail_url"], "https://www.fsc.go.kr/no010101/1")
+        self.assertNotIn("body", items[0])
+
+    def test_policy_source_html_parser_extracts_metadata_without_body(self):
+        from research_os.policy_sources import PolicySource, parse_policy_source_html_list
+
+        source = PolicySource(
+            source_key="ftc",
+            provider="공정거래위원회",
+            source_url="https://www.ftc.go.kr/www/sub.do?key=12",
+            source_scope="공정거래·플랫폼 규제 보도자료",
+        )
+        html = """
+        <ul>
+          <li><span>2026.06.23</span><span>시장감시국</span>
+            <a href="/www/selectReportUserView.do?key=12&amp;rpttype=1&amp;report_data_no=100">
+              온라인 플랫폼 공정화 정책 추진 계획
+            </a>
+          </li>
+        </ul>
+        """
+
+        items = parse_policy_source_html_list(html, source=source, limit=5)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["source_provider"], "공정거래위원회")
+        self.assertEqual(items[0]["agency"], "시장감시국")
+        self.assertEqual(items[0]["published_at"], "2026-06-23")
+        self.assertTrue(items[0]["detail_url"].startswith("https://www.ftc.go.kr/www/selectReportUserView.do"))
+        self.assertNotIn("body", items[0])
+
     def test_kiep_report_source_parser_keeps_metadata_only(self):
         from research_os.regional_sources import (
             KIEP_REPORTS_URL,
@@ -3567,6 +3623,7 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         with (
             patch.object(main, "read_kcif_reports_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_reports": [{"id": "k"}], "source_status": "cached"}),
             patch.object(main, "read_regional_business_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "r"}], "source_status": "cached"}),
+            patch.object(main, "read_policy_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "p"}], "source_status": "cached"}),
             patch.object(main, "read_company_ir_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "j", "ticker": "JOBY"}], "source_status": "cached"}),
             patch.object(main, "read_naver_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"a": {}}, "status": "success"}),
             patch.object(main, "read_shinhan_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"b": {}}, "status": "success"}),
@@ -3580,6 +3637,10 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["regional_business_sources_watch"]["label"], "EMERiCs/CSF/KIEP 지역·매크로 자료")
         self.assertTrue(by_key["regional_business_sources_watch"]["auto_refresh"])
         self.assertEqual(by_key["regional_business_sources_watch"]["related_count"], 1)
+        self.assertIn("policy_sources_watch", by_key)
+        self.assertEqual(by_key["policy_sources_watch"]["label"], "공식 정책·법령·규제 자료")
+        self.assertEqual(by_key["policy_sources_watch"]["related_count"], 1)
+        self.assertEqual(by_key["policy_sources_watch"]["policy"], "official_policy_metadata_only")
         self.assertIn("company_ir_sources_watch", by_key)
         self.assertEqual(by_key["company_ir_sources_watch"]["label"], "Joby IR 보도자료")
         self.assertEqual(by_key["company_ir_sources_watch"]["related_count"], 1)
@@ -8011,6 +8072,113 @@ class CompanyIrWatchModuleTests(unittest.TestCase):
         self.assertEqual(result["capture_results"][0]["storage"], "research_vault/JOBY/a.md")
         self.assertEqual(collect_requests[0].target_key, "JOBY")
         self.assertEqual(len(writes), 1)
+
+
+class PolicySourcesWatchModuleTests(unittest.TestCase):
+    def test_policy_sources_watch_module_disabled_payload_uses_cached_items(self):
+        from research_os import policy_sources_watch
+
+        writes = []
+        settings = SimpleNamespace(policy_sources_enabled=False, policy_sources_refresh_hours=12)
+        cached_items = [
+            {
+                "item_id": "policy-1",
+                "source_provider": "금융위원회",
+                "title": "자본시장 제도 개선",
+                "relevance_score": 12,
+                "matched_themes": ["금융/자본시장"],
+            }
+        ]
+        runtime = SimpleNamespace(
+            build_kcif_watch_targets=lambda _portfolio, _interest: [],
+            current_storage_timestamp=lambda: "2026-06-23T09:00:00+09:00",
+            infer_news_policy_law_classification=lambda _text: {"tags": ["policy_law:regulation"]},
+            match_policy_items_to_targets=lambda items, _targets: items,
+            news_item_fingerprint=lambda title, _raw, source_url: f"{title}:{source_url}",
+            news_scope_label=lambda scope: scope,
+            policy_sources_copyright_policy=lambda: {"mode": "official_policy_metadata_only"},
+            policy_sources_watch_path=lambda _settings: Path("policy_sources.json"),
+            portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
+            read_interest_list=lambda _settings: {},
+            read_json_store=lambda _path, _default=None: {
+                "items": cached_items,
+                "source_results": [{"provider": "금융위원회", "status": "success"}],
+            },
+            read_news_inbox=lambda _settings: {"items": []},
+            should_refresh_policy_sources_cache=lambda _cache, refresh_hours=12: False,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+            write_news_inbox=lambda _settings, _payload: None,
+        )
+
+        result = policy_sources_watch.build_policy_sources_watch_payload(runtime, settings, save_result=True)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "disabled")
+        self.assertEqual(result["related_count"], 1)
+        self.assertIn("POLICY_SOURCES_ENABLED", result["warnings"][0])
+        self.assertEqual(writes[0][0], Path("policy_sources.json"))
+
+    def test_policy_sources_watch_module_refreshes_and_syncs_news_inbox(self):
+        from research_os import policy_sources_watch
+
+        writes = []
+        inbox_writes = []
+        settings = SimpleNamespace(
+            policy_sources_enabled=True,
+            policy_sources_refresh_hours=12,
+            policy_sources_timeout_seconds=3,
+            policy_sources_user_agent="agent",
+        )
+        fetched_items = [
+            {
+                "item_id": "policy-1",
+                "source_provider": "공정거래위원회",
+                "source_scope": "공정거래·플랫폼 규제 보도자료",
+                "agency": "시장감시국",
+                "title": "온라인 플랫폼 공정화 정책 추진 계획",
+                "published_at": "2026-06-23",
+                "detail_url": "https://www.ftc.go.kr/policy/1",
+                "source_url": "https://www.ftc.go.kr/www/sub.do?key=12",
+            }
+        ]
+
+        def match_items(items, _targets):
+            return [{**items[0], "relevance_score": 88, "matched_themes": ["공정거래/플랫폼"], "target_matches": []}]
+
+        runtime = SimpleNamespace(
+            build_kcif_watch_targets=lambda _portfolio, _interest: [{"label": "플랫폼", "keywords": ["플랫폼"]}],
+            current_storage_timestamp=lambda: "2026-06-23T09:00:00+09:00",
+            fetch_policy_sources=lambda **_kwargs: (
+                fetched_items,
+                [],
+                [{"provider": "공정거래위원회", "status": "success"}],
+            ),
+            infer_news_policy_law_classification=lambda _text: {"tags": ["policy_law:regulation"]},
+            match_policy_items_to_targets=match_items,
+            news_item_fingerprint=lambda title, _raw, source_url: f"{title}:{source_url}",
+            news_scope_label=lambda scope: "정책/법령" if scope == "POLICY" else scope,
+            policy_sources_copyright_policy=lambda: {"mode": "official_policy_metadata_only"},
+            policy_sources_watch_path=lambda _settings: Path("policy_sources.json"),
+            portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
+            provider_error_message=lambda exc, _settings: str(exc),
+            read_interest_list=lambda _settings: {},
+            read_json_store=lambda _path, _default=None: {},
+            read_news_inbox=lambda _settings: {"items": []},
+            should_refresh_policy_sources_cache=lambda _cache, refresh_hours=12: True,
+            write_json_store=lambda path, payload: writes.append((path, payload)),
+            write_news_inbox=lambda _settings, payload: inbox_writes.append(payload),
+        )
+
+        result = policy_sources_watch.build_policy_sources_watch_payload(runtime, settings, limit=5, save_result=True)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source_status"], "refreshed")
+        self.assertEqual(result["related_count"], 1)
+        self.assertEqual(result["news_inbox_synced_count"], 1)
+        self.assertEqual(inbox_writes[0]["items"][0]["scope"], "POLICY")
+        self.assertTrue(inbox_writes[0]["items"][0]["is_policy_law"])
+        self.assertIn("official_policy_source", inbox_writes[0]["items"][0]["tags"])
+        self.assertEqual(writes[0][0], Path("policy_sources.json"))
 
 
 class RegionalBusinessWatchModuleTests(unittest.TestCase):

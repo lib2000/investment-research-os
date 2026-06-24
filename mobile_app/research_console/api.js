@@ -1604,6 +1604,29 @@ export async function refreshRegionalBusinessSourcesWatch(
   });
 }
 
+export async function fetchPolicySourcesWatch(accessToken, { limit = 40, refresh = false, saveResult = true } = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    refresh: refresh ? "true" : "false",
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/policy-sources/watch?${query.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function refreshPolicySourcesWatch(accessToken, { limit = 40, saveResult = true } = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    save_result: saveResult ? "true" : "false",
+  });
+  return request(`/api/v1/policy-sources/refresh?${query.toString()}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
 export async function ingestNewsInbox(
   accessToken,
   { rawContent = "", sourceUrl = "", title = "", confidence = 0.78 } = {}

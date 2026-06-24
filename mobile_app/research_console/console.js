@@ -48,6 +48,8 @@
   refreshKcifReportsWatch,
   fetchRegionalBusinessSourcesWatch,
   refreshRegionalBusinessSourcesWatch,
+  fetchPolicySourcesWatch,
+  refreshPolicySourcesWatch,
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
   fetchRecentWeeklyResearchBrief,
@@ -94,7 +96,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=514c89dce9e6";
+} from "./api.js?v=5a905b632f80";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -122,6 +124,8 @@ const elements = {
   kcifReportsRefreshButton: document.querySelector("#kcifReportsRefreshButton"),
   regionalBusinessSourcesWatchButton: document.querySelector("#regionalBusinessSourcesWatchButton"),
   regionalBusinessSourcesRefreshButton: document.querySelector("#regionalBusinessSourcesRefreshButton"),
+  policySourcesWatchButton: document.querySelector("#policySourcesWatchButton"),
+  policySourcesRefreshButton: document.querySelector("#policySourcesRefreshButton"),
   sectorForm: document.querySelector("#sectorForm"),
   compounderForm: document.querySelector("#compounderForm"),
   captureForm: document.querySelector("#captureForm"),
@@ -422,6 +426,7 @@ function completionModuleLabel(moduleName) {
     korea_customs_trade_total_trend_status: "관세청 수출입총괄 진단",
     kcif_reports_watch: "KCIF 보고서 Watch",
     regional_business_sources_watch: "EMERiCs/CSF/KIEP 자료 Watch",
+    policy_sources_watch: "공식 정책자료 Watch",
     earnings_filing_note: "모델 업데이트 노트",
     gp_lp_staging: "LP 보고 스테이징",
     source_url_preview: "웹 본문 미리보기",
@@ -10101,6 +10106,41 @@ elements.regionalBusinessSourcesRefreshButton?.addEventListener("click", () => {
   runRegionalBusinessSourcesWatch({ refresh: true });
 });
 
+async function runPolicySourcesWatch({ refresh = false } = {}) {
+  syncApiBaseUrl();
+  startOutputLoading(refresh ? "공식 정책자료 새로 확인 중" : "공식 정책자료 Watch 조회 중", [
+    "금융위원회/FSS-DART 정책자료 확인",
+    "정책브리핑/공정위/산업부 자료 확인",
+    "원문 본문 자동 저장 제외",
+    "정책·법령·규제 분류와 뉴스 인박스 동기화",
+    "보유종목·관심종목·관심섹터 키워드 매칭",
+  ]);
+  try {
+    const result = refresh
+      ? await refreshPolicySourcesWatch(token(), {
+          limit: 40,
+          saveResult: !isClickSmokeMode(),
+        })
+      : await fetchPolicySourcesWatch(token(), {
+          limit: 40,
+          refresh: false,
+          saveResult: !isClickSmokeMode(),
+        });
+    setOutput(result);
+    await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
+elements.policySourcesWatchButton?.addEventListener("click", () => {
+  runPolicySourcesWatch({ refresh: false });
+});
+
+elements.policySourcesRefreshButton?.addEventListener("click", () => {
+  runPolicySourcesWatch({ refresh: true });
+});
+
 elements.sectorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncApiBaseUrl();
@@ -15584,6 +15624,51 @@ function formatKoreanResult(value) {
             return `${index + 1}. ${item.title || "제목 없음"} (${item.published_at || "일자 미확인"})\n   출처: ${item.source_provider || "기관 미확인"} · ${item.agency || "발행기관 미확인"} · 점수 ${item.relevance_score || 0}/100 · ${themes}${targetText}\n   링크: ${item.detail_url || item.source_url || "링크 없음"}`;
           })
         : ["- 표시할 관련 자료가 없습니다."]),
+      ``,
+      `다음 조치`,
+      ...((value.next_actions || []).map((item) => `- ${item}`)),
+      ...((value.warnings || []).length ? [``, `경고`, ...(value.warnings || []).map((item) => `- ${item}`)] : []),
+    ].join("\n");
+  }
+
+  if (value.module === "policy_sources_watch") {
+    const relatedItems = Array.isArray(value.related_items) ? value.related_items : [];
+    const items = relatedItems.length
+      ? relatedItems
+      : Array.isArray(value.items)
+        ? value.items.slice(0, 10)
+        : [];
+    const policy = value.policy || {};
+    const sourceLines = Array.isArray(value.source_results)
+      ? value.source_results.map((item) => {
+          const status = item.status === "success" ? "정상" : item.status || "미확인";
+          return `${item.provider || item.source_key || "소스"} · ${status}`;
+        })
+      : [];
+    return [
+      `공식 정책자료 Watch`,
+      ``,
+      `상태: ${value.source_status || "확인"}`,
+      `자료 목록: ${formatNumber(value.item_count || 0)}개 / 관련 후보 ${formatNumber(value.related_count || 0)}개 / 뉴스 인박스 신규 ${formatNumber(value.news_inbox_synced_count || 0)}개`,
+      `매칭 대상: ${formatNumber(value.target_count || 0)}개`,
+      `저장 정책: ${policy.message || "공식 원문 본문은 자동 저장하지 않고 메타데이터와 자체 분류만 저장합니다."}`,
+      ``,
+      `소스 상태`,
+      ...formatBulletList(sourceLines, (item) => item, "소스 상태가 없습니다."),
+      ``,
+      `관련 정책자료`,
+      ...(items.length
+        ? items.slice(0, 12).map((item, index) => {
+            const targets = (item.target_matches || [])
+              .map((target) => target.label)
+              .filter(Boolean)
+              .slice(0, 3)
+              .join(", ");
+            const themes = (item.matched_themes || []).slice(0, 4).join(", ") || "정책 테마 미확인";
+            const targetText = targets ? ` · 연결: ${targets}` : "";
+            return `${index + 1}. ${item.title || "제목 없음"} (${item.published_at || "일자 미확인"})\n   출처: ${item.source_provider || "기관 미확인"} · ${item.agency || "발행기관 미확인"} · 점수 ${item.relevance_score || 0}/100 · ${themes}${targetText}\n   링크: ${item.detail_url || item.source_url || "링크 없음"}`;
+          })
+        : ["- 표시할 관련 정책자료가 없습니다."]),
       ``,
       `다음 조치`,
       ...((value.next_actions || []).map((item) => `- ${item}`)),

@@ -64,6 +64,10 @@ def regional_business_sources_watch_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "regional_business_sources_watch.json"
 
 
+def policy_sources_watch_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "policy_sources_watch.json"
+
+
 def company_ir_sources_watch_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "company_ir_sources_watch.json"
 
