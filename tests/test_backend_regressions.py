@@ -101,6 +101,18 @@ def load_policy_signal_check_tool():
     return module
 
 
+def load_daily_recommendation_citations_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_daily_recommendation_citations.py"
+    spec = spec_from_file_location("check_daily_recommendation_citations", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_brief_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -328,6 +340,29 @@ class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
 
         self.assertEqual(advisory, [])
         self.assertEqual(enforced, ["정책 신호 검토 필요 1개"])
+
+
+class DailyRecommendationCitationCheckToolTests(unittest.TestCase):
+    def test_policy_source_url_citation_is_usable(self):
+        tool = load_daily_recommendation_citations_tool()
+
+        self.assertTrue(
+            tool.citation_is_usable(
+                {
+                    "source_relative_path": "https://www.fsc.go.kr/policy/example",
+                    "source_type": "policy_law",
+                    "report_type": "official_policy_source",
+                    "citation_label": "정책 신호 근거",
+                },
+                PROJECT_ROOT,
+            )
+        )
+        self.assertFalse(
+            tool.citation_is_usable(
+                {"source_relative_path": "https://example.com/unclassified"},
+                PROJECT_ROOT,
+            )
+        )
 
 
 class WebCaptureRenderingTests(unittest.TestCase):

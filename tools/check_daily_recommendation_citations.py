@@ -7,6 +7,7 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 DEFAULT_STORE = Path("research_vault/_system/daily_recommendations.json")
 
@@ -189,6 +190,16 @@ def citation_is_usable(item: dict[str, Any], root: Path) -> bool:
     relative_path = str(item.get("source_relative_path") or "").strip()
     if not relative_path:
         return False
+    parsed = urlparse(relative_path)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        report_type = str(item.get("report_type") or "").lower()
+        source_type = str(item.get("source_type") or "").lower()
+        citation_label = str(item.get("citation_label") or "")
+        return (
+            source_type == "policy_law"
+            or report_type == "official_policy_source"
+            or citation_label == "정책 신호 근거"
+        )
     path = (root / relative_path).resolve()
     try:
         path.relative_to(root.resolve())
