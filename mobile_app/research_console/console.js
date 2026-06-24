@@ -490,6 +490,50 @@ function renderInlineMarkdown(text) {
   return highlightOutputKeywords(html);
 }
 
+function isMarkdownTableRow(line) {
+  const trimmed = String(line || "").trim();
+  return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.includes("|", 1);
+}
+
+function isMarkdownTableSeparator(line) {
+  if (!isMarkdownTableRow(line)) {
+    return false;
+  }
+  return splitMarkdownTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
+}
+
+function splitMarkdownTableRow(line) {
+  return String(line || "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function renderMarkdownTable(headerLine, separatorLine, bodyLines) {
+  const headers = splitMarkdownTableRow(headerLine);
+  const bodyRows = bodyLines.map(splitMarkdownTableRow);
+  const alignments = splitMarkdownTableRow(separatorLine).map((cell) => {
+    if (/^:-+:$/.test(cell)) return "center";
+    if (/^-+:$/.test(cell)) return "right";
+    return "left";
+  });
+  const th = headers
+    .map((cell, index) => `<th class="markdown-cell-${alignments[index] || "left"}">${renderInlineMarkdown(cell)}</th>`)
+    .join("");
+  const rows = bodyRows
+    .map((row) => {
+      const cells = headers.map((_, index) => {
+        const cell = row[index] || "";
+        return `<td class="markdown-cell-${alignments[index] || "left"}">${renderInlineMarkdown(cell)}</td>`;
+      });
+      return `<tr>${cells.join("")}</tr>`;
+    })
+    .join("");
+  return `<div class="markdown-table-wrap"><table class="markdown-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 async function notifyBackendHealthWarning(error, context = {}) {
   const now = Date.now();
   if (now - lastBackendAlertAt < BACKEND_ALERT_COOLDOWN_MS) {
@@ -553,7 +597,8 @@ function markdownToHtml(markdown) {
     }
   };
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
 
     if (trimmed.startsWith("```")) {
@@ -584,6 +629,23 @@ function markdownToHtml(markdown) {
       closeList();
       const level = Math.min(heading[1].length + 2, 5);
       html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (
+      isMarkdownTableRow(line) &&
+      lineIndex + 1 < lines.length &&
+      isMarkdownTableSeparator(lines[lineIndex + 1])
+    ) {
+      closeList();
+      const bodyLines = [];
+      let cursor = lineIndex + 2;
+      while (cursor < lines.length && isMarkdownTableRow(lines[cursor])) {
+        bodyLines.push(lines[cursor]);
+        cursor += 1;
+      }
+      html.push(renderMarkdownTable(line, lines[lineIndex + 1], bodyLines));
+      lineIndex = cursor - 1;
       continue;
     }
 
@@ -13553,7 +13615,12 @@ function formatNpsDomesticEquityAllocation(value) {
 function formatNpsDomesticEquityRebalancePlan(value) {
   const candidates = value.candidates || {};
   const scenarios = value.scenarios || [];
-  const evidenceText = (item) => {
+  const markdownCell = (text) =>
+    String(text ?? "n/a")
+      .replace(/\|/g, "/")
+      .replace(/\r?\n/g, " ")
+      .trim() || "n/a";
+  const evidenceParts = (item) => {
     const evidence = item.evidence || {};
     const parts = [];
     if (evidence.latest_recommendation) {
@@ -13573,49 +13640,119 @@ function formatNpsDomesticEquityRebalancePlan(value) {
         : `지분율 ${Number(nps.holding_ratio).toFixed(2)}%`;
       parts.push(`국민연금 ${ratio}`);
     }
-    return parts.length ? `근거: ${parts.join(" · ")}` : "근거: 저장 근거 낮음/미확인";
+    return parts;
   };
-  const candidateLines = (label, rows) => [
-    label,
-    ...((rows || []).length
-      ? rows.slice(0, 8).map(
-          (item, index) =>
-            `${index + 1}. ${displayCompanyName(item)} · ${formatMoney(item.market_value, "KRW", "n/a")} · 비중 ${toPercent(item.portfolio_weight)} · ${evidenceText(item)} · ${item.rationale || item.reason || ""}`
-        )
-      : ["- 없음"]),
+  const latestRecommendationText = (item) => {
+    const rec = item.evidence?.latest_recommendation;
+    if (!rec) return "-";
+    return `${rec.market || ""} ${rec.rank || "n/a"}위 / ${rec.score || "n/a"}점`.trim();
+  };
+  const npsSignalText = (item) => {
+    const nps = item.evidence?.nps_signal || {};
+    if (nps.domestic_match_found || nps.large_holding_event_count) {
+      const ratio = nps.holding_ratio === undefined || nps.holding_ratio === null
+        ? "지분율 미확인"
+        : `${Number(nps.holding_ratio).toFixed(2)}%`;
+      return `${ratio}${nps.large_holding_event_count ? ` / 대량 ${nps.large_holding_event_count}건` : ""}`;
+    }
+    return "-";
+  };
+  const candidateRows = [
+    ...(candidates.reduce || []).map((item) => ["축소 후보", item]),
+    ...(candidates.review || []).map((item) => ["추가 검토", item]),
+    ...(candidates.keep || []).map((item) => ["유지 후보", item]),
   ];
-  const scenarioLines = scenarios.flatMap((scenario, index) => {
+  const candidateTable = [
+    "| 구분 | 종목 | 평가금액 | 비중 | 손익률 | 추천 | 리서치 | 국민연금 | 판단 |",
+    "|---|---|---:|---:|---:|---|---:|---|---|",
+    ...(candidateRows.length
+      ? candidateRows.slice(0, 18).map(([label, item]) => {
+          const evidence = item.evidence || {};
+          const rationale = compactOutputText(item.rationale || item.reason || "", 86);
+          return [
+            "|",
+            markdownCell(label),
+            "|",
+            markdownCell(displayCompanyName(item)),
+            "|",
+            markdownCell(formatMoney(item.market_value, "KRW", "n/a")),
+            "|",
+            markdownCell(toPercent(item.portfolio_weight)),
+            "|",
+            markdownCell(toPercent(item.unrealized_return)),
+            "|",
+            markdownCell(latestRecommendationText(item)),
+            "|",
+            markdownCell(formatNumber(evidence.research_document_count || 0)),
+            "|",
+            markdownCell(npsSignalText(item)),
+            "|",
+            markdownCell(rationale),
+            "|",
+          ].join(" ");
+        })
+      : ["| - | 후보 없음 | - | - | - | - | 0 | - | 현재 축소 시나리오가 필요하지 않습니다. |"]),
+  ];
+  const scenarioLines = scenarios.map((scenario, index) => {
     const actions = scenario.actions || [];
+    const actionText = actions.length
+      ? actions
+          .slice(0, 3)
+          .map((item) => `${displayCompanyName(item)} ${formatMoney(item.suggested_reduction_value, "KRW", "n/a")}`)
+          .join(" / ")
+      : "제안 액션 없음";
     return [
-      `${index + 1}. ${scenario.title || "시나리오"} · ${formatMoney(scenario.suggested_reduction_value, "KRW", "n/a")} 축소 · 조정 후 ${toPercent(scenario.estimated_domestic_equity_weight_after)}`,
-      `   ${scenario.strategy || ""}`,
-      ...(actions.length
-        ? actions.slice(0, 8).map(
-            (item) =>
-              `   - ${displayCompanyName(item)}: ${formatMoney(item.suggested_reduction_value, "KRW", "n/a")} 축소 검토 · 잔여 ${formatMoney(item.remaining_value_after_reduction, "KRW", "n/a")}`
-          )
-        : ["   - 제안 액션 없음"]),
-    ];
+      "|",
+      markdownCell(`${index + 1}. ${scenario.title || "시나리오"}`),
+      "|",
+      markdownCell(formatMoney(scenario.suggested_reduction_value, "KRW", "n/a")),
+      "|",
+      markdownCell(toPercent(scenario.estimated_domestic_equity_weight_after)),
+      "|",
+      markdownCell(compactOutputText(scenario.strategy || "", 90)),
+      "|",
+      markdownCell(actionText),
+      "|",
+    ].join(" ");
   });
+  const reviewCount = (candidates.review || []).length;
+  const reduceCount = (candidates.reduce || []).length;
+  const keepCount = (candidates.keep || []).length;
+  const evidenceSummary = candidateRows
+    .slice(0, 8)
+    .map(([, item]) => evidenceParts(item).join(" / "))
+    .filter(Boolean);
   return [
-    `국민연금 국내주식 14% 리밸런싱 후보`,
+    `### 국민연금 국내주식 14% 리밸런싱 후보`,
     ``,
     value.summary || "국내주식 14% 목표에 맞춰 후보를 분류했습니다.",
-    `포트폴리오: ${value.portfolio_name || "__all__"}`,
-    `현재 국내주식: ${formatMoney(value.domestic_equity_value, "KRW", "n/a")} · ${toPercent(value.current_domestic_equity_weight)}`,
-    `목표 국내주식: ${formatMoney(value.target_domestic_equity_value, "KRW", "n/a")} · ${toPercent(value.target_domestic_equity_weight)}`,
-    `축소 필요: ${formatMoney(value.reduction_needed_value, "KRW", "n/a")}`,
     ``,
-    ...candidateLines("축소 후보", candidates.reduce),
+    `| 핵심 지표 | 값 |`,
+    `|---|---:|`,
+    `| 포트폴리오 | ${markdownCell(value.portfolio_name || "__all__")} |`,
+    `| 현재 국내주식 | ${markdownCell(`${formatMoney(value.domestic_equity_value, "KRW", "n/a")} / ${toPercent(value.current_domestic_equity_weight)}`)} |`,
+    `| 목표 국내주식 | ${markdownCell(`${formatMoney(value.target_domestic_equity_value, "KRW", "n/a")} / ${toPercent(value.target_domestic_equity_weight)}`)} |`,
+    `| 축소 필요 | ${markdownCell(formatMoney(value.reduction_needed_value, "KRW", "n/a"))} |`,
+    `| 후보 분포 | ${markdownCell(`축소 ${reduceCount} / 추가 검토 ${reviewCount} / 유지 ${keepCount}`)} |`,
     ``,
-    ...candidateLines("추가 검토", candidates.review),
+    reviewCount
+      ? `**우선 확인:** 기계적 축소 후보라도 추천/리서치/국민연금 신호가 있으면 추가 검토로 올려 표시합니다.`
+      : `**우선 확인:** 즉시 검토가 필요한 근거 충돌 후보는 없습니다.`,
     ``,
-    ...candidateLines("유지 후보", candidates.keep),
+    `### 후보표`,
+    ...candidateTable,
     ``,
-    `리밸런싱 시나리오`,
-    ...(scenarioLines.length ? scenarioLines : ["- 현재 축소 시나리오가 필요하지 않습니다."]),
+    `### 리밸런싱 시나리오`,
+    `| 시나리오 | 축소 금액 | 조정 후 비중 | 전략 | 우선 액션 |`,
+    `|---|---:|---:|---|---|`,
+    ...(scenarioLines.length ? scenarioLines : ["| - | - | - | 현재 축소 시나리오가 필요하지 않습니다. | - |"]),
     ``,
-    `다음 액션`,
+    `### 근거 하이라이트`,
+    ...(evidenceSummary.length
+      ? evidenceSummary.map((item) => `- ${item}`)
+      : ["- 추천/리서치/국민연금 신호가 낮거나 아직 확인되지 않았습니다."]),
+    ``,
+    `### 다음 액션`,
     ...((value.next_actions || []).length ? value.next_actions.map((item) => `- ${item}`) : ["- 없음"]),
   ].join("\n");
 }

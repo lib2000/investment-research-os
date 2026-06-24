@@ -4371,6 +4371,68 @@ label {
   font-size: 0.92em;
 }
 
+.markdown-table-wrap {
+  max-width: 100%;
+  margin: 10px 0 16px;
+  overflow: auto;
+  border: 1px solid #33475a;
+  border-radius: 8px;
+  background: #0d131a;
+}
+
+.markdown-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.markdown-table th,
+.markdown-table td {
+  max-width: 260px;
+  padding: 9px 10px;
+  border-right: 1px solid #263546;
+  border-bottom: 1px solid #263546;
+  vertical-align: top;
+  white-space: normal;
+}
+
+.markdown-table th:last-child,
+.markdown-table td:last-child {
+  border-right: 0;
+}
+
+.markdown-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #d7fff5;
+  background: #182331;
+  font-weight: 900;
+}
+
+.markdown-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.markdown-table tbody tr:hover td {
+  background: rgba(20, 184, 166, 0.1);
+}
+
+.markdown-cell-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-cell-center {
+  text-align: center;
+}
+
 
 .output-highlight-success,
 .output-highlight-warning,
