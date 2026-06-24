@@ -87,6 +87,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_tracking_feedback as _apply_daily_recommendation_tracking_feedback,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
     build_policy_signal_index as _build_policy_signal_index,
+    build_policy_signal_quality_dashboard as _build_policy_signal_quality_dashboard,
     build_daily_recommendation_tracking_feedback as _build_daily_recommendation_tracking_feedback,
     daily_recommendation_candidate_is_valid as _daily_recommendation_candidate_is_valid,
     daily_recommendation_consensus_label as _daily_recommendation_consensus_label,
@@ -15103,6 +15104,15 @@ def start_daily_recommendations_scheduler() -> None:
 )
 def get_daily_recommendations_status(settings: Settings = Depends(get_settings)) -> dict:
     return daily_recommendation_status_payload(settings, today=current_storage_date().isoformat())
+
+
+@app.get(
+    "/api/v1/daily-recommendations/policy-signals",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_daily_recommendation_policy_signals(settings: Settings = Depends(get_settings)) -> dict:
+    status_payload = daily_recommendation_status_payload(settings, today=current_storage_date().isoformat())
+    return _build_policy_signal_quality_dashboard(status_payload)
 
 
 @app.post(

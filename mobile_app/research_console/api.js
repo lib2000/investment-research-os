@@ -1231,6 +1231,18 @@ export async function fetchDailyRecommendationsStatus(accessToken) {
   }
 }
 
+export async function fetchDailyRecommendationPolicySignals(accessToken) {
+  try {
+    return request("/api/v1/daily-recommendations/policy-signals", {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("추천 정책 신호 점검 중 오류 발생:", error);
+    return null;
+  }
+}
+
 /**
  * 오늘의 한국/미국 추천 후보 1~3위를 생성하고 별도 항목으로 저장합니다.
  *

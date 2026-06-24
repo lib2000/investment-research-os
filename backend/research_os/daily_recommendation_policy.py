@@ -359,3 +359,133 @@ def apply_daily_recommendation_policy_signals(
         if document:
             candidate.setdefault("evidence_documents", []).append(document)
     return candidate
+
+
+def _policy_score_impact(record: dict[str, Any]) -> dict[str, Any]:
+    positive = [
+        component
+        for component in record.get("score_components") or []
+        if isinstance(component, dict)
+        and ("정책" in str(component.get("label") or "") or "규제" in str(component.get("label") or ""))
+    ]
+    penalties = [
+        str(item)
+        for item in record.get("score_penalties") or []
+        if "정책" in str(item) or "규제" in str(item)
+    ]
+    positive_points = sum(int(component.get("points") or 0) for component in positive)
+    penalty_points = 0
+    for item in penalties:
+        match = re.search(r"\(-(\d+)\)", item)
+        if match:
+            penalty_points += int(match.group(1))
+    return {
+        "positive_components": positive,
+        "penalties": penalties,
+        "positive_points": positive_points,
+        "penalty_points": penalty_points,
+        "net_points": positive_points - penalty_points,
+    }
+
+
+def _policy_signal_review_status(record: dict[str, Any]) -> tuple[str, str]:
+    signal = record.get("policy_signal_summary") if isinstance(record.get("policy_signal_summary"), dict) else {}
+    level = str(signal.get("match_level") or "")
+    score_applied = bool(signal.get("score_applied"))
+    direct_count = int(signal.get("direct_count") or 0)
+    theme_count = int(signal.get("theme_count") or 0)
+    market_count = int(signal.get("market_count") or 0)
+    risk_count = int(signal.get("risk_count") or 0)
+    if level == "direct" and direct_count:
+        return "ok", "직접 종목 매칭으로 점수 반영"
+    if level == "theme" and theme_count >= 3 and direct_count == 0:
+        return "review", "직접 매칭 없이 테마 상위 3건이 점수에 반영됨"
+    if level == "theme" and score_applied:
+        return "watch", "테마 매칭 점수 반영"
+    if level == "market" and not score_applied:
+        return "info", "시장 참고 신호로 점수 미반영"
+    if risk_count and not score_applied:
+        return "watch", "규제성 시장 참고 신호 확인"
+    if market_count and not level:
+        return "info", "정책 신호 미반영"
+    return "info", "정책 신호 없음"
+
+
+def build_policy_signal_quality_dashboard(recommendation_payload: dict[str, Any]) -> dict[str, Any]:
+    records = [
+        item
+        for item in (
+            recommendation_payload.get("latest_records")
+            or recommendation_payload.get("today_records")
+            or recommendation_payload.get("records")
+            or []
+        )
+        if isinstance(item, dict)
+    ]
+    rows: list[dict[str, Any]] = []
+    level_counts: dict[str, int] = {"direct": 0, "theme": 0, "market": 0, "none": 0}
+    score_applied_count = 0
+    review_count = 0
+    market_reference_count = 0
+    total_net_points = 0
+    for record in records:
+        signal = record.get("policy_signal_summary") if isinstance(record.get("policy_signal_summary"), dict) else {}
+        level = str(signal.get("match_level") or "none")
+        level_counts[level] = level_counts.get(level, 0) + 1
+        if signal.get("score_applied"):
+            score_applied_count += 1
+        if level == "market":
+            market_reference_count += 1
+        score_impact = _policy_score_impact(record)
+        total_net_points += int(score_impact["net_points"] or 0)
+        review_status, review_reason = _policy_signal_review_status(record)
+        if review_status == "review":
+            review_count += 1
+        policy_documents = [
+            document
+            for document in record.get("evidence_documents") or []
+            if isinstance(document, dict)
+            and (
+                document.get("source_type") == "policy_law"
+                or document.get("report_type") == "official_policy_source"
+                or document.get("citation_label") == "정책 신호 근거"
+            )
+        ][:3]
+        rows.append(
+            {
+                "market": record.get("market"),
+                "market_label": record.get("market_label"),
+                "rank": record.get("rank"),
+                "ticker": record.get("ticker"),
+                "company_name": record.get("company_name"),
+                "score": record.get("score"),
+                "policy_signal_summary": signal,
+                "match_level": level,
+                "match_level_label": signal.get("match_level_label") or {"direct": "직접", "theme": "테마", "market": "시장"}.get(level, "없음"),
+                "score_applied": bool(signal.get("score_applied")),
+                "score_impact": score_impact,
+                "review_status": review_status,
+                "review_reason": review_reason,
+                "policy_documents": policy_documents,
+            }
+        )
+    review_rows = [row for row in rows if row["review_status"] == "review"]
+    return {
+        "status": "success",
+        "module": "daily_recommendation_policy_signal_quality",
+        "recommendation_date": recommendation_payload.get("latest_recommendation_date")
+        or recommendation_payload.get("recommendation_date")
+        or recommendation_payload.get("today_recommendation_date"),
+        "record_count": len(records),
+        "level_counts": level_counts,
+        "score_applied_count": score_applied_count,
+        "market_reference_count": market_reference_count,
+        "review_count": review_count,
+        "total_policy_net_points": total_net_points,
+        "rows": rows,
+        "review_rows": review_rows,
+        "summary": (
+            f"정책 신호 {score_applied_count}/{len(records)}개 추천에 점수 반영, "
+            f"검토 필요 {review_count}개, 시장 참고 {market_reference_count}개"
+        ),
+    }

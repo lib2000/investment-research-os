@@ -183,6 +183,10 @@ def apply_daily_recommendation_policy_signals(
     return daily_recommendation_policy.apply_daily_recommendation_policy_signals(candidate, policy_signal_index)
 
 
+def build_policy_signal_quality_dashboard(recommendation_payload: dict[str, Any]) -> dict[str, Any]:
+    return daily_recommendation_policy.build_policy_signal_quality_dashboard(recommendation_payload)
+
+
 def apply_daily_recommendation_evidence_documents(
     candidate: dict,
     rag_evidence_documents: list[dict] | None,

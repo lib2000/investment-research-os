@@ -52,6 +52,7 @@
   refreshPolicySourcesWatch,
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
+  fetchDailyRecommendationPolicySignals,
   fetchRecentWeeklyResearchBrief,
   fetchPublicIrSecStatus,
   collectPublicIrSec,
@@ -96,7 +97,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=5a905b632f80";
+} from "./api.js?v=1c583807557a";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -236,6 +237,7 @@ const elements = {
   recentWeeklyEvidenceSynthesisButton: document.querySelector("#recentWeeklyEvidenceSynthesisButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
+  dailyRecommendationPolicySignalsButton: document.querySelector("#dailyRecommendationPolicySignalsButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -12479,6 +12481,23 @@ async function runDailyRecommendationsStatusFlow() {
   }
 }
 
+async function runDailyRecommendationPolicySignalsFlow() {
+  syncApiBaseUrl();
+  activateTab("memory");
+  startOutputLoading("추천 정책 신호 점검 중", [
+    "최신 한국/미국 추천 1~3위 조회",
+    "정책 직접/테마/시장 매칭 등급 집계",
+    "점수 반영 여부와 검토 필요 후보 확인",
+    "정책 근거 문서와 기관·제목 요약",
+  ]);
+  try {
+    const result = await fetchDailyRecommendationPolicySignals(token());
+    setOutput(result || "추천 정책 신호 점검 결과를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+}
+
 async function runRecentWeeklyBriefFlow() {
   syncApiBaseUrl();
   activateTab("dashboard");
@@ -12609,6 +12628,8 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
 [elements.dailyRecommendationsStatusButton, elements.dailyRecommendationsStatusQuickButton]
   .filter(Boolean)
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
+
+elements.dailyRecommendationPolicySignalsButton?.addEventListener("click", runDailyRecommendationPolicySignalsFlow);
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
 elements.recentWeeklyEvidenceSynthesisButton?.addEventListener("click", runRecentWeeklyEvidenceSynthesisFlow);
@@ -14760,6 +14781,41 @@ function formatKoreanResult(value) {
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  if (value.module === "daily_recommendation_policy_signal_quality") {
+    const levelCounts = value.level_counts || {};
+    const rows = Array.isArray(value.rows) ? value.rows : [];
+    const rowLines = rows.map((row) => {
+      const signal = row.policy_signal_summary || {};
+      const impact = row.score_impact || {};
+      const docs = (row.policy_documents || [])
+        .slice(0, 2)
+        .map((doc) => `${doc.source_date || "일자 미확인"} ${doc.title || doc.source_relative_path || "정책 근거"}`)
+        .join(" / ");
+      const scoreText = row.score_applied
+        ? `점수 영향 ${formatNumber(impact.net_points || 0)}점(+${formatNumber(impact.positive_points || 0)}/-${formatNumber(impact.penalty_points || 0)})`
+        : "점수 미반영";
+      return `${row.market || "-"} ${row.rank || "-"}위 ${row.ticker || ""} ${row.company_name || ""} · ${row.match_level_label || row.match_level || "등급 없음"} · ${scoreText} · ${row.review_status || "info"}: ${row.review_reason || "사유 없음"}\n  직접 ${formatNumber(signal.direct_count || 0)} / 테마 ${formatNumber(signal.theme_count || 0)} / 시장 ${formatNumber(signal.market_count || 0)} · 수혜 ${formatNumber(signal.support_count || 0)} / 규제 ${formatNumber(signal.risk_count || 0)}\n  대표 정책: ${compactOutputText(signal.top_title || "대표 정책 없음", 160)}${docs ? `\n  근거 문서: ${docs}` : ""}`;
+    });
+    const reviewLines = (value.review_rows || []).map(
+      (row) => `${row.market || "-"} ${row.rank || "-"}위 ${row.ticker || ""} · ${row.review_reason || "검토 필요"}`
+    );
+    return [
+      `### 추천 정책 신호 품질 점검`,
+      ``,
+      `- **추천일:** ${value.recommendation_date || "미확인"}`,
+      `- **요약:** ${value.summary || "요약 없음"}`,
+      `- **등급:** 직접 ${formatNumber(levelCounts.direct || 0)}개 / 테마 ${formatNumber(levelCounts.theme || 0)}개 / 시장 ${formatNumber(levelCounts.market || 0)}개 / 없음 ${formatNumber(levelCounts.none || 0)}개`,
+      `- **점수 반영:** ${formatNumber(value.score_applied_count || 0)}/${formatNumber(value.record_count || 0)}개 · 순 정책점수 ${formatNumber(value.total_policy_net_points || 0)}점`,
+      `- **검토 필요:** ${formatNumber(value.review_count || 0)}개 · 시장 참고 ${formatNumber(value.market_reference_count || 0)}개`,
+      ``,
+      `### 추천별 정책 신호`,
+      ...formatBulletList(rowLines, (item) => item, "정책 신호가 붙은 최신 추천이 없습니다."),
+      ``,
+      `### 검토 필요 후보`,
+      ...formatBulletList(reviewLines, (item) => item, "검토 필요 후보가 없습니다."),
+    ].join("\n");
   }
 
   if (value.module === "research_automation_feature_status") {

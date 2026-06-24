@@ -6261,6 +6261,75 @@ class DailyRecommendationPolicyModuleTests(unittest.TestCase):
         self.assertFalse(candidate["policy_signal_summary"]["score_applied"])
         self.assertTrue(candidate["evidence_sources"][0].startswith("시장 정책 참고"))
 
+    def test_daily_recommendation_policy_signal_quality_dashboard_flags_theme_review(self):
+        from research_os import daily_recommendation_policy
+
+        payload = {
+            "latest_recommendation_date": "2026-06-24",
+            "latest_records": [
+                {
+                    "market": "KR",
+                    "rank": 1,
+                    "ticker": "005930",
+                    "company_name": "삼성전자",
+                    "score": 120,
+                    "policy_signal_summary": {
+                        "match_level": "theme",
+                        "match_level_label": "테마",
+                        "score_applied": True,
+                        "direct_count": 0,
+                        "theme_count": 3,
+                        "market_count": 3,
+                        "support_count": 1,
+                        "risk_count": 2,
+                        "top_title": "AI 반도체 정책",
+                    },
+                    "score_components": [{"label": "정책 테마 모멘텀", "points": 4}],
+                    "score_penalties": ["정책 테마 규제 리스크 확인 (-2)"],
+                    "evidence_documents": [
+                        {
+                            "title": "AI 반도체 정책",
+                            "source_type": "policy_law",
+                            "report_type": "official_policy_source",
+                            "source_date": "2026-06-24",
+                        }
+                    ],
+                },
+                {
+                    "market": "US",
+                    "rank": 1,
+                    "ticker": "ABSI",
+                    "company_name": "Absci",
+                    "score": 90,
+                    "policy_signal_summary": {
+                        "match_level": "market",
+                        "match_level_label": "시장",
+                        "score_applied": False,
+                        "direct_count": 0,
+                        "theme_count": 0,
+                        "market_count": 3,
+                        "support_count": 1,
+                        "risk_count": 0,
+                        "top_title": "시장 안정 정책",
+                    },
+                    "score_components": [],
+                    "score_penalties": [],
+                    "evidence_documents": [],
+                },
+            ],
+        }
+
+        dashboard = daily_recommendation_policy.build_policy_signal_quality_dashboard(payload)
+
+        self.assertEqual(dashboard["module"], "daily_recommendation_policy_signal_quality")
+        self.assertEqual(dashboard["level_counts"]["theme"], 1)
+        self.assertEqual(dashboard["level_counts"]["market"], 1)
+        self.assertEqual(dashboard["score_applied_count"], 1)
+        self.assertEqual(dashboard["review_count"], 1)
+        self.assertEqual(dashboard["total_policy_net_points"], 2)
+        self.assertEqual(dashboard["rows"][0]["review_status"], "review")
+        self.assertEqual(dashboard["rows"][1]["review_status"], "info")
+
 
 class DailyRecommendationProfilesModuleTests(unittest.TestCase):
     def test_daily_recommendation_profiles_apply_freshness_and_overseas_tracking(self):
