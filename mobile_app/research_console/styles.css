@@ -670,7 +670,7 @@ label {
 
 .daily-recommendation-signal-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -4681,10 +4681,6 @@ pre {
 
   .daily-recommendation-rank-metrics {
     grid-template-columns: 1fr;
-  }
-
-  .daily-recommendation-signal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .daily-recommendation-signal-grid.compact {
