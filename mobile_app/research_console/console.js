@@ -8129,6 +8129,89 @@ function dailyRecommendationPolicySignalSummary(record = {}) {
   return `${parts.join(" · ")}${title ? ` · ${title}` : ""}`;
 }
 
+function dailyRecommendationSignalBreakdown(record = {}) {
+  if (Array.isArray(record.signal_breakdown) && record.signal_breakdown.length) {
+    return record.signal_breakdown.slice(0, 5);
+  }
+  const policySignal = dailyRecommendationPolicySignalSummary(record);
+  const scoreLabels = (record.score_components || []).map((component) => String(component.label || ""));
+  const evidenceDocuments = Array.isArray(record.evidence_documents) ? record.evidence_documents : [];
+  const filingCount = evidenceDocuments.filter((item) =>
+    /filing|dart/i.test(`${item.source_type || ""} ${item.report_type || ""}`)
+  ).length;
+  const newsCount = evidenceDocuments.filter((item) =>
+    !/policy|filing|dart/i.test(`${item.source_type || ""} ${item.report_type || ""}`)
+  ).length;
+  const marketLabel = scoreLabels.find((label) => /시장|목표가|현재가|가격|보유|포트폴리오/.test(label));
+  const sentimentLabel = scoreLabels.find((label) => /투자 방향|심리|센티먼트|추세/.test(label));
+  return [
+    {
+      key: "market",
+      label: "시장",
+      summary: marketLabel || "시장/가격 신호 참고",
+      count: marketLabel ? 1 : 0,
+      score_applied: Boolean(marketLabel),
+      tone: marketLabel ? "ok" : "neutral",
+    },
+    {
+      key: "filing",
+      label: "공시",
+      summary: filingCount ? `공시 ${formatNumber(filingCount)}건` : "직접 공시 없음",
+      count: filingCount,
+      score_applied: scoreLabels.some((label) => /공시|DART/.test(label)),
+      tone: filingCount ? "ok" : "neutral",
+    },
+    {
+      key: "policy",
+      label: "정책",
+      summary: policySignal || "직접 정책 신호 없음",
+      count: Number(record.policy_signal_summary?.count || 0),
+      score_applied: Boolean(record.policy_signal_summary?.score_applied),
+      tone: record.policy_signal_summary?.score_applied ? "ok" : policySignal ? "reference" : "neutral",
+    },
+    {
+      key: "news",
+      label: "뉴스",
+      summary: newsCount ? `뉴스/리포트 ${formatNumber(newsCount)}건` : "뉴스 근거 없음",
+      count: newsCount,
+      score_applied: scoreLabels.some((label) => /리포트|자료|RAG/.test(label)),
+      tone: newsCount ? "ok" : "neutral",
+    },
+    {
+      key: "sentiment",
+      label: "심리",
+      summary: sentimentLabel || "심리/방향성 신호 없음",
+      count: sentimentLabel ? 1 : 0,
+      score_applied: Boolean(sentimentLabel),
+      tone: sentimentLabel ? "ok" : "neutral",
+    },
+  ];
+}
+
+function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = {}) {
+  const items = dailyRecommendationSignalBreakdown(record);
+  if (!items.length) {
+    return "";
+  }
+  return `
+    <div class="daily-recommendation-signal-grid${compact ? " compact" : ""}" aria-label="추천 핵심 신호">
+      ${items
+        .map((item) => {
+          const tone = String(item.tone || (item.score_applied ? "ok" : "neutral")).replace(/[^a-z0-9_-]/gi, "");
+          const status = item.score_applied ? "반영" : Number(item.count || 0) ? "참고" : "없음";
+          return `
+            <span class="${escapeHtml(tone || "neutral")}" title="${escapeHtml(item.summary || "")}">
+              <b>${escapeHtml(item.label || item.key || "신호")}</b>
+              <em>${escapeHtml(status)}</em>
+              ${compact ? "" : `<small>${escapeHtml(compactOutputText(item.summary || "", 64))}</small>`}
+            </span>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function dailyRecommendationEvidenceRows(record) {
   return [
     ...(record?.evidence_sources || []).slice(0, 3),
@@ -8421,6 +8504,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
                 <strong title="${escapeHtml(record.ticker || "")}">${escapeHtml(displayCompanyName(record))}</strong>
                 <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(price)}</span>
                 <small>${escapeHtml(keyDriver)}</small>
+                ${renderDailyRecommendationSignalGrid(record, { compact: true })}
                 <p>${escapeHtml(exposure || topReason)}</p>
               </div>
             </article>
@@ -8706,6 +8790,7 @@ function renderDailyRecommendationCards(payload) {
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
           ${policySignal ? `<p class="daily-recommendation-investment-profile">정책 신호 반영: ${escapeHtml(policySignal)}</p>` : ""}
+          ${renderDailyRecommendationSignalGrid(record)}
           <div class="daily-recommendation-score">
             ${scoreComponents
               .map(

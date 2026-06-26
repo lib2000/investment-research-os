@@ -668,6 +668,70 @@ label {
   overflow-wrap: anywhere;
 }
 
+.daily-recommendation-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.daily-recommendation-signal-grid.compact {
+  grid-template-columns: repeat(5, minmax(38px, 1fr));
+  gap: 4px;
+}
+
+.daily-recommendation-signal-grid span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.daily-recommendation-signal-grid.compact span {
+  padding: 4px 5px;
+}
+
+.daily-recommendation-signal-grid span.ok {
+  border-color: #99d5cb;
+  background: #eefaf7;
+}
+
+.daily-recommendation-signal-grid span.reference {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.daily-recommendation-signal-grid b,
+.daily-recommendation-signal-grid em,
+.daily-recommendation-signal-grid small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-signal-grid b {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.daily-recommendation-signal-grid em {
+  color: #0f766e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.daily-recommendation-signal-grid small {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .daily-recommendation-top-empty {
   gap: 5px;
 }
@@ -4617,6 +4681,14 @@ pre {
 
   .daily-recommendation-rank-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .daily-recommendation-signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily-recommendation-signal-grid.compact {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .daily-recommendation-top-head button {

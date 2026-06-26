@@ -9,6 +9,151 @@ from typing import Any
 from research_os import daily_recommendation_evidence
 
 
+def _contains_any(value: object, terms: tuple[str, ...]) -> bool:
+    text = str(value or "").lower()
+    return any(term.lower() in text for term in terms)
+
+
+def _signal_item(
+    *,
+    key: str,
+    label: str,
+    summary: str,
+    count: int = 0,
+    score_applied: bool = False,
+    tone: str = "neutral",
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "summary": summary,
+        "count": max(0, int(count or 0)),
+        "score_applied": bool(score_applied),
+        "tone": tone,
+    }
+
+
+def build_recommendation_signal_breakdown(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    components = [
+        item
+        for item in candidate.get("score_components", [])
+        if isinstance(item, dict) and str(item.get("label") or "").strip()
+    ]
+    evidence_sources = [str(item or "").strip() for item in candidate.get("evidence_sources", []) if str(item or "").strip()]
+    documents = [
+        item
+        for item in candidate.get("evidence_documents", [])
+        if isinstance(item, dict)
+    ]
+    component_labels = [str(item.get("label") or "") for item in components]
+    market_components = [
+        item
+        for item in components
+        if _contains_any(item.get("label"), ("시장", "목표가", "현재가", "가격", "보유", "포트폴리오", "투자 방향"))
+    ]
+    filing_documents = [
+        item
+        for item in documents
+        if _contains_any(item.get("source_type"), ("filing", "dart"))
+        or _contains_any(item.get("report_type"), ("filing", "dart"))
+    ]
+    policy_signal = candidate.get("policy_signal_summary") if isinstance(candidate.get("policy_signal_summary"), dict) else {}
+    policy_count = int(policy_signal.get("count") or 0)
+    policy_level = str(policy_signal.get("match_level_label") or policy_signal.get("match_level") or "참고").strip()
+    policy_summary = (
+        f"{policy_level} {policy_count}건 · {'점수 반영' if policy_signal.get('score_applied') else '참고만'}"
+        if policy_count
+        else "직접 정책 신호 없음"
+    )
+    news_documents = [
+        item
+        for item in documents
+        if item not in filing_documents
+        and not _contains_any(item.get("source_type"), ("policy", "filing", "dart"))
+        and not _contains_any(item.get("report_type"), ("official_policy", "filing", "dart"))
+    ]
+    news_sources = [
+        item
+        for item in evidence_sources
+        if _contains_any(item, ("뉴스", "리포트", "자료 묶음", "공개 IR", "SEC", "RAG"))
+    ]
+    profile = candidate.get("investment_direction_profile") if isinstance(candidate.get("investment_direction_profile"), dict) else {}
+    profile_labels: list[str] = []
+    if profile:
+        for item in (profile.get("matched_directions") or profile.get("directions") or profile.get("labels") or []):
+            label = item.get("label") or item.get("name") if isinstance(item, dict) else item
+            label_text = str(label or "").strip()
+            if label_text:
+                profile_labels.append(label_text)
+    sentiment_sources = [
+        *[label for label in component_labels if _contains_any(label, ("투자 방향", "심리", "센티먼트", "추세"))],
+        *[item for item in evidence_sources if _contains_any(item, ("시장일지", "심리", "센티먼트", "투자 방향"))],
+        *profile_labels,
+    ]
+    market_summary = (
+        f"{market_components[0].get('label')} +{int(market_components[0].get('points') or 0)}점"
+        if market_components
+        else "시장/가격 신호는 참고 수준"
+    )
+    filing_summary = (
+        f"최근 공시 {len(filing_documents)}건 연결"
+        if filing_documents
+        else "직접 공시 근거 없음"
+    )
+    news_summary = (
+        f"뉴스/리포트 근거 {max(len(news_documents), len(news_sources))}건"
+        if news_documents or news_sources
+        else "뉴스 근거 없음"
+    )
+    sentiment_summary = (
+        " · ".join(dict.fromkeys(sentiment_sources[:3]))
+        if sentiment_sources
+        else "심리/방향성 신호 없음"
+    )
+    return [
+        _signal_item(
+            key="market",
+            label="시장",
+            summary=market_summary,
+            count=len(market_components),
+            score_applied=bool(market_components),
+            tone="ok" if market_components else "neutral",
+        ),
+        _signal_item(
+            key="filing",
+            label="공시",
+            summary=filing_summary,
+            count=len(filing_documents),
+            score_applied=any(_contains_any(label, ("공시", "DART")) for label in component_labels),
+            tone="ok" if filing_documents else "neutral",
+        ),
+        _signal_item(
+            key="policy",
+            label="정책",
+            summary=policy_summary,
+            count=policy_count,
+            score_applied=bool(policy_signal.get("score_applied")),
+            tone="ok" if policy_signal.get("score_applied") else "reference" if policy_count else "neutral",
+        ),
+        _signal_item(
+            key="news",
+            label="뉴스",
+            summary=news_summary,
+            count=max(len(news_documents), len(news_sources)),
+            score_applied=any(_contains_any(label, ("리포트", "자료", "RAG")) for label in component_labels),
+            tone="ok" if news_documents or news_sources else "neutral",
+        ),
+        _signal_item(
+            key="sentiment",
+            label="심리",
+            summary=sentiment_summary,
+            count=len(sentiment_sources),
+            score_applied=bool(sentiment_sources),
+            tone="ok" if sentiment_sources else "neutral",
+        ),
+    ]
+
+
 def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     ticker = str(candidate.get("ticker") or "").strip().upper()
     company_name = str(candidate.get("company_name") or candidate.get("name") or ticker).strip()
@@ -45,6 +190,7 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "overseas_tracking": candidate.get("overseas_tracking") or {},
         "portfolio_risk_connection": candidate.get("portfolio_risk_connection") or {},
         "policy_signal_summary": candidate.get("policy_signal_summary") or {},
+        "signal_breakdown": candidate.get("signal_breakdown") or build_recommendation_signal_breakdown(candidate),
     }
 
 
@@ -163,4 +309,5 @@ def finalize_daily_recommendation_candidate(candidate: dict[str, Any]) -> dict[s
                 for component in score_components[:8]
             ],
         }
+    candidate["signal_breakdown"] = build_recommendation_signal_breakdown(candidate)
     return candidate

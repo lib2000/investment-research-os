@@ -6119,6 +6119,42 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertEqual(candidate["score_explanation"]["top_component"]["label"], "리포트")
         self.assertEqual(candidate["evidence_documents"][0]["citation_label"], "근거 문서")
 
+    def test_daily_recommendation_candidates_build_signal_breakdown(self):
+        from research_os import daily_recommendation_candidates
+
+        candidate = {
+            "score": 31,
+            "reasons": ["시장일지 연결"],
+            "evidence_sources": ["시장일지 연결", "최근 1주 핵심 리포트 2건"],
+            "score_components": [
+                {"label": "시장일지 연결", "points": 10},
+                {"label": "최근 중요 공시 반영", "points": 5},
+                {"label": "최근 핵심 리포트 반영", "points": 3},
+                {"label": "첨부 투자 방향: AI 반도체 2차 병목", "points": 8},
+            ],
+            "policy_signal_summary": {
+                "count": 1,
+                "match_level": "theme",
+                "match_level_label": "테마",
+                "score_applied": False,
+            },
+            "evidence_documents": [
+                {"source_type": "filing", "report_type": "filing", "title": "DART 공시"},
+                {"source_type": "analyst_report", "report_type": "report", "title": "증권사 리포트"},
+            ],
+        }
+
+        finalized = daily_recommendation_candidates.finalize_daily_recommendation_candidate(candidate)
+        breakdown = {item["key"]: item for item in finalized["signal_breakdown"]}
+
+        self.assertEqual([item["key"] for item in finalized["signal_breakdown"]], ["market", "filing", "policy", "news", "sentiment"])
+        self.assertTrue(breakdown["market"]["score_applied"])
+        self.assertEqual(breakdown["filing"]["count"], 1)
+        self.assertEqual(breakdown["policy"]["summary"], "테마 1건 · 참고만")
+        self.assertFalse(breakdown["policy"]["score_applied"])
+        self.assertTrue(breakdown["news"]["score_applied"])
+        self.assertIn("AI 반도체", breakdown["sentiment"]["summary"])
+
 
 class DailyRecommendationStoreModuleTests(unittest.TestCase):
     def test_daily_recommendation_store_builds_records_and_skips_existing_date(self):
@@ -6156,6 +6192,7 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(first["records"][0]["record_id"], "2026-06-18-KR-01-003230")
         self.assertEqual(first["records"][0]["market"], "KR")
         self.assertEqual(first["records"][0]["tracking_milestones"][0]["target_date"], "2026-06-25")
+        self.assertEqual(first["records"][0]["signal_breakdown"][0]["key"], "market")
         self.assertEqual(second["status"], "skipped_existing")
         self.assertEqual(second["records"][0]["ticker"], "003230")
 
@@ -9562,6 +9599,9 @@ class AutomationStatusModuleTests(unittest.TestCase):
             shinhan_research_enabled=True,
             shinhan_research_auto_refresh=True,
             shinhan_research_refresh_hours=24,
+            policy_sources_enabled=True,
+            policy_sources_auto_refresh=True,
+            policy_sources_refresh_hours=24,
             dart_api_key="dummy",
             dart_filing_auto_refresh=True,
             dart_filing_refresh_hours=24,
@@ -9572,18 +9612,22 @@ class AutomationStatusModuleTests(unittest.TestCase):
             read_dart_filing_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "status": "success"},
             read_kcif_reports_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_reports": [{}, {}], "source_status": "cached"},
             read_naver_research_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "entries": {"a": {}}, "status": "success"},
+            read_policy_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
             read_regional_business_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
             read_shinhan_research_cache=lambda _settings: {"entries": {"a": {}, "b": {}}, "status": "success"},
             should_refresh_company_ir_cache=lambda _watch, refresh_hours=24: False,
             should_refresh_kcif_cache=lambda _watch: False,
+            should_refresh_policy_sources_cache=lambda _watch, refresh_hours=24: False,
             should_refresh_regional_business_cache=lambda _watch: False,
         )
 
         rows = automation_schedule_status.build_external_source_schedule_status(runtime, settings)
         by_key = {row["key"]: row for row in rows}
 
-        self.assertEqual(len(rows), 6)
+        self.assertEqual(len(rows), 7)
         self.assertEqual(by_key["kcif_reports_watch"]["related_count"], 2)
+        self.assertEqual(by_key["policy_sources_watch"]["related_count"], 1)
+        self.assertFalse(by_key["policy_sources_watch"]["due"])
         self.assertTrue(by_key["shinhan_research"]["due"])
         self.assertEqual(by_key["dart_filing_watch"]["related_count"], 3)
         self.assertTrue(by_key["dart_filing_watch"]["due"])
