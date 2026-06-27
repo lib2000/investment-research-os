@@ -4940,6 +4940,8 @@ def enrich_portfolio_holding(
             )
         else:
             price_refresh_status = "unavailable"
+            if current_price is not None and not price_source:
+                price_source = "saved_portfolio"
     elif refresh_price:
         price_refresh_status = "skipped"
 
@@ -14909,7 +14911,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             candidate["risk_notes"].append(f"티커/신선도 점검 일부 제한: {provider_error_message(exc, settings)}")
 
         if candidate.get("baseline_price") is None:
-            price, source = latest_provider_price(ticker, settings, force_refresh=True)
+            price, source = _daily_recommendation_price_lookup(settings)(ticker)
             _apply_daily_recommendation_price_check(
                 candidate,
                 price=price,
