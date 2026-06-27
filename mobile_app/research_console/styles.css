@@ -680,7 +680,8 @@ label {
   gap: 4px;
 }
 
-.daily-recommendation-signal-grid span {
+.daily-recommendation-signal-grid span,
+.daily-recommendation-signal-grid details {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -694,12 +695,67 @@ label {
   padding: 4px 5px;
 }
 
-.daily-recommendation-signal-grid span.ok {
+.daily-recommendation-signal-grid details {
+  align-content: start;
+}
+
+.daily-recommendation-signal-grid details[open] {
+  border-color: #0f766e;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.1);
+}
+
+.daily-recommendation-signal-grid details summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.daily-recommendation-signal-grid details summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-recommendation-signal-grid details summary::after {
+  content: "보기";
+  justify-self: start;
+  margin-top: 2px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.daily-recommendation-signal-grid details[open] summary::after {
+  content: "접기";
+}
+
+.daily-recommendation-signal-grid details ul {
+  display: grid;
+  gap: 4px;
+  margin: 5px 0 0;
+  padding: 6px 0 0 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+.daily-recommendation-signal-grid details li {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.daily-recommendation-signal-grid span.ok,
+.daily-recommendation-signal-grid details.ok {
   border-color: #99d5cb;
   background: #eefaf7;
 }
 
-.daily-recommendation-signal-grid span.reference {
+.daily-recommendation-signal-grid span.reference,
+.daily-recommendation-signal-grid details.reference {
   border-color: #c7d2fe;
   background: #eef2ff;
 }

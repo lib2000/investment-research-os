@@ -8188,6 +8188,90 @@ function dailyRecommendationSignalBreakdown(record = {}) {
   ];
 }
 
+function dailyRecommendationSignalDetailRows(record = {}, item = {}) {
+  const key = String(item.key || "").toLowerCase();
+  const rows = [];
+  const addRow = (value, limit = 128) => {
+    const text = compactOutputText(value || "", limit);
+    if (text && !rows.includes(text)) {
+      rows.push(text);
+    }
+  };
+  const scoreComponents = Array.isArray(record.score_components) ? record.score_components : [];
+  const evidenceDocuments = Array.isArray(record.evidence_documents) ? record.evidence_documents : [];
+  const evidenceSources = Array.isArray(record.evidence_sources) ? record.evidence_sources : [];
+  const sourceText = (source = {}) =>
+    [
+      source.source_date || source.date || "",
+      source.report_type || source.source_type || "",
+      source.title || source.source_relative_path || source.name || "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  if (key === "market") {
+    scoreComponents
+      .filter((component) => /시장|목표가|현재가|가격|보유|포트폴리오|투자 방향/.test(String(component.label || "")))
+      .slice(0, 3)
+      .forEach((component) => addRow(component.label));
+    const baselinePrice = Number(record.baseline_price || record.price || 0);
+    if (baselinePrice) {
+      addRow(`기준가 ${formatSmartPrice(baselinePrice, record.currency || "KRW", "미확인")}`);
+    }
+    if (record.price_source) {
+      addRow(`가격 출처 ${record.price_source}`);
+    }
+  } else if (key === "filing") {
+    evidenceDocuments
+      .filter((source) => /filing|dart/i.test(`${source.source_type || ""} ${source.report_type || ""}`))
+      .slice(0, 4)
+      .forEach((source) => addRow(sourceText(source)));
+  } else if (key === "policy") {
+    const signal = record.policy_signal_summary || {};
+    const count = Number(signal.count || 0);
+    if (count) {
+      addRow(`정책 ${signal.match_level_label || "신호"} ${formatNumber(count)}건 · ${signal.score_applied === false ? "점수 미반영" : "점수 반영"}`);
+      if (signal.support_count || signal.risk_count) {
+        addRow(`수혜 ${formatNumber(signal.support_count || 0)} · 규제 ${formatNumber(signal.risk_count || 0)}`);
+      }
+      const themes = Array.isArray(signal.themes) ? signal.themes.filter(Boolean).slice(0, 3).join(" · ") : "";
+      addRow(themes);
+      addRow(signal.top_title);
+    } else {
+      addRow("직접 정책 신호 없음");
+    }
+  } else if (key === "news") {
+    evidenceDocuments
+      .filter((source) => !/policy|filing|dart/i.test(`${source.source_type || ""} ${source.report_type || ""}`))
+      .slice(0, 3)
+      .forEach((source) => addRow(sourceText(source)));
+    evidenceSources
+      .filter((source) => /뉴스|리포트|자료|RAG|IR|SEC|공개/i.test(String(source)))
+      .slice(0, 2)
+      .forEach((source) => addRow(source));
+  } else if (key === "sentiment") {
+    const profile = record.investment_direction_profile || {};
+    const themes = Array.isArray(profile.themes) ? profile.themes : [];
+    themes
+      .map((theme) => theme?.label || theme?.key || "")
+      .filter(Boolean)
+      .slice(0, 3)
+      .forEach((theme) => addRow(`투자 방향 ${theme}`));
+    (Array.isArray(profile.watch_triggers) ? profile.watch_triggers : [])
+      .slice(0, 2)
+      .forEach((trigger) => addRow(trigger));
+    if (Number(profile.score_bonus || 0)) {
+      addRow(`방향성 가점 ${formatNumber(profile.score_bonus)}`);
+    }
+  }
+
+  addRow(item.summary);
+  if (!rows.length) {
+    addRow("세부 근거 없음");
+  }
+  return rows.slice(0, 4);
+}
+
 function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = {}) {
   const items = dailyRecommendationSignalBreakdown(record);
   if (!items.length) {
@@ -8199,11 +8283,25 @@ function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = 
         .map((item) => {
           const tone = String(item.tone || (item.score_applied ? "ok" : "neutral")).replace(/[^a-z0-9_-]/gi, "");
           const status = item.score_applied ? "반영" : Number(item.count || 0) ? "참고" : "없음";
+          if (!compact) {
+            const details = dailyRecommendationSignalDetailRows(record, item);
+            return `
+              <details class="${escapeHtml(tone || "neutral")}" title="${escapeHtml(item.summary || "")}">
+                <summary>
+                  <b>${escapeHtml(item.label || item.key || "신호")}</b>
+                  <em>${escapeHtml(status)}</em>
+                  <small>${escapeHtml(compactOutputText(item.summary || "", 64))}</small>
+                </summary>
+                <ul>
+                  ${details.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}
+                </ul>
+              </details>
+            `;
+          }
           return `
             <span class="${escapeHtml(tone || "neutral")}" title="${escapeHtml(item.summary || "")}">
               <b>${escapeHtml(item.label || item.key || "신호")}</b>
               <em>${escapeHtml(status)}</em>
-              ${compact ? "" : `<small>${escapeHtml(compactOutputText(item.summary || "", 64))}</small>`}
             </span>
           `;
         })
