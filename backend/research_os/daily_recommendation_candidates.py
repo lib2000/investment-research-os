@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from re import fullmatch
 from re import search
 from typing import Any
@@ -154,6 +155,123 @@ def build_recommendation_signal_breakdown(candidate: dict[str, Any]) -> list[dic
     ]
 
 
+def _document_source_family(document: dict[str, Any]) -> str:
+    combined = f"{document.get('source_type') or ''} {document.get('report_type') or ''}".lower()
+    if "filing" in combined or "dart" in combined:
+        return "filing"
+    if "policy" in combined or "official" in combined:
+        return "policy"
+    if "news" in combined:
+        return "news"
+    if "report" in combined or "dossier" in combined or "rag" in combined:
+        return "report"
+    return "other"
+
+
+def _parse_source_date(value: object) -> date | None:
+    text = str(value or "").strip()[:10]
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> dict[str, Any]:
+    documents = [
+        item
+        for item in candidate.get("evidence_documents", [])
+        if isinstance(item, dict)
+    ]
+    signal_items = [
+        item
+        for item in candidate.get("signal_breakdown", [])
+        if isinstance(item, dict)
+    ] or build_recommendation_signal_breakdown(candidate)
+    source_counts: dict[str, int] = {}
+    traced_count = 0
+    recent_7d_count = 0
+    recent_30d_count = 0
+    today = date.today()
+    for document in documents:
+        family = _document_source_family(document)
+        source_counts[family] = source_counts.get(family, 0) + 1
+        if (
+            str(document.get("source_relative_path") or document.get("json_relative_path") or "").strip()
+            and str(document.get("title") or "").strip()
+            and (document.get("matched_claims") or document.get("citation_label"))
+        ):
+            traced_count += 1
+        source_date = _parse_source_date(document.get("source_date") or document.get("date"))
+        if source_date:
+            age_days = max(0, (today - source_date).days)
+            if age_days <= 7:
+                recent_7d_count += 1
+            if age_days <= 30:
+                recent_30d_count += 1
+
+    document_count = len(documents)
+    source_mix_count = len([count for count in source_counts.values() if count > 0])
+    signal_coverage_count = sum(
+        1
+        for item in signal_items
+        if int(item.get("count") or 0) > 0 or bool(item.get("score_applied"))
+    )
+    quality_flags = [str(item).strip() for item in candidate.get("quality_flags", []) if str(item or "").strip()]
+    penalties = [str(item).strip() for item in candidate.get("score_penalties", []) if str(item or "").strip()]
+    policy_signal = candidate.get("policy_signal_summary") if isinstance(candidate.get("policy_signal_summary"), dict) else {}
+    needs_review_reasons: list[str] = []
+    if document_count < 4:
+        needs_review_reasons.append("근거 문서 부족")
+    if traced_count < min(document_count, 3):
+        needs_review_reasons.append("출처 추적 보강")
+    if source_mix_count < 2:
+        needs_review_reasons.append("출처 다양성 부족")
+    if recent_30d_count < min(document_count, 2):
+        needs_review_reasons.append("최신 근거 부족")
+    if signal_coverage_count < 4:
+        needs_review_reasons.append("신호 커버리지 부족")
+    if int(policy_signal.get("count") or 0) and not policy_signal.get("score_applied"):
+        needs_review_reasons.append("정책 신호 참고 수준")
+    needs_review_reasons.extend(quality_flags[:2])
+
+    trace_score = round((traced_count / max(1, document_count)) * 30)
+    mix_score = min(20, source_mix_count * 7)
+    freshness_score = min(20, recent_7d_count * 5 + max(0, recent_30d_count - recent_7d_count) * 3)
+    signal_score = min(20, signal_coverage_count * 4)
+    penalty_score = min(20, len(penalties) * 4 + len(quality_flags) * 3 + max(0, len(needs_review_reasons) - 2) * 2)
+    score = max(0, min(100, 10 + trace_score + mix_score + freshness_score + signal_score - penalty_score))
+    if score >= 85:
+        grade, tone, label = "A", "ok", "근거 품질 우수"
+    elif score >= 70:
+        grade, tone, label = "B", "watch", "근거 품질 양호"
+    elif score >= 55:
+        grade, tone, label = "C", "warning", "근거 보강 권장"
+    else:
+        grade, tone, label = "D", "danger", "원문 확인 필요"
+    summary = (
+        f"추적 {traced_count}/{document_count} · 출처 {source_mix_count}종 · "
+        f"최근 30일 {recent_30d_count}건 · 신호 {signal_coverage_count}/5"
+    )
+    return {
+        "score": score,
+        "grade": grade,
+        "tone": tone,
+        "label": label,
+        "summary": summary,
+        "document_count": document_count,
+        "traced_document_count": traced_count,
+        "recent_7d_count": recent_7d_count,
+        "recent_30d_count": recent_30d_count,
+        "source_mix_count": source_mix_count,
+        "source_type_counts": source_counts,
+        "signal_coverage_count": signal_coverage_count,
+        "needs_review_count": len(needs_review_reasons),
+        "needs_review_reasons": needs_review_reasons[:5],
+    }
+
+
 def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     ticker = str(candidate.get("ticker") or "").strip().upper()
     company_name = str(candidate.get("company_name") or candidate.get("name") or ticker).strip()
@@ -164,7 +282,7 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         for item in candidate.get("score_components", [])
         if isinstance(item, dict) and str(item.get("label") or "").strip()
     ]
-    return {
+    normalized = {
         **candidate,
         "ticker": ticker,
         "company_name": company_name,
@@ -192,6 +310,8 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "policy_signal_summary": candidate.get("policy_signal_summary") or {},
         "signal_breakdown": candidate.get("signal_breakdown") or build_recommendation_signal_breakdown(candidate),
     }
+    normalized["evidence_quality_summary"] = candidate.get("evidence_quality_summary") or build_recommendation_evidence_quality_summary(normalized)
+    return normalized
 
 
 def daily_recommendation_candidate_is_valid(ticker: str, company_name: str) -> bool:
@@ -310,4 +430,5 @@ def finalize_daily_recommendation_candidate(candidate: dict[str, Any]) -> dict[s
             ],
         }
     candidate["signal_breakdown"] = build_recommendation_signal_breakdown(candidate)
+    candidate["evidence_quality_summary"] = build_recommendation_evidence_quality_summary(candidate)
     return candidate

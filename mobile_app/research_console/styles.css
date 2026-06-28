@@ -675,6 +675,89 @@ label {
   min-width: 0;
 }
 
+.daily-recommendation-quality {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.daily-recommendation-quality strong {
+  grid-row: span 3;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.daily-recommendation-quality span,
+.daily-recommendation-quality small,
+.daily-recommendation-quality em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-quality span {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.daily-recommendation-quality small {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.daily-recommendation-quality em {
+  color: #0f766e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.daily-recommendation-quality.watch strong {
+  background: #2563eb;
+}
+
+.daily-recommendation-quality.warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.daily-recommendation-quality.warning strong {
+  background: #ea580c;
+}
+
+.daily-recommendation-quality.warning em {
+  color: #c2410c;
+}
+
+.daily-recommendation-quality.danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.daily-recommendation-quality.danger strong {
+  background: #dc2626;
+}
+
+.daily-recommendation-quality.danger em {
+  color: #b91c1c;
+}
+
 .daily-recommendation-signal-grid.compact {
   grid-template-columns: repeat(5, minmax(38px, 1fr));
   gap: 4px;

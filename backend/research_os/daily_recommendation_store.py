@@ -176,6 +176,7 @@ def build_recommendation_record(
         "reasons": normalized["reasons"],
         "evidence_sources": normalized["evidence_sources"],
         "evidence_documents": normalized.get("evidence_documents") or [],
+        "evidence_quality_summary": normalized.get("evidence_quality_summary") or {},
         "risk_notes": [
             str(item).strip()
             for item in normalized.get("risk_notes", [])

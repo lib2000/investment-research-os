@@ -389,6 +389,33 @@ def validate_score_evidence_alignment(record: dict[str, Any], errors: list[str])
         errors.append(f"{label} 최근 1주 자료 묶음 근거가 있으나 최근 자료 점수 구성 누락")
 
 
+def validate_evidence_quality_summary(record: dict[str, Any], errors: list[str]) -> None:
+    label = record.get("company_name") or record.get("ticker") or record.get("record_id")
+    summary = record.get("evidence_quality_summary")
+    if not isinstance(summary, dict) or not summary:
+        errors.append(f"{label} 근거 품질 요약 누락")
+        return
+    score = summary.get("score")
+    grade = str(summary.get("grade") or "").strip()
+    document_count = summary.get("document_count")
+    traced_count = summary.get("traced_document_count")
+    signal_count = summary.get("signal_coverage_count")
+    if not isinstance(score, (int, float)) or not 0 <= float(score) <= 100:
+        errors.append(f"{label} 근거 품질 점수 확인 필요: {score}")
+    if grade not in {"A", "B", "C", "D"}:
+        errors.append(f"{label} 근거 품질 등급 확인 필요: {grade or '미확인'}")
+    if not isinstance(document_count, int) or document_count < 1:
+        errors.append(f"{label} 근거 품질 문서 수 확인 필요: {document_count}")
+    if not isinstance(traced_count, int) or traced_count < 1 or traced_count > max(1, int(document_count or 0)):
+        errors.append(f"{label} 근거 품질 추적 문서 수 확인 필요: {traced_count}/{document_count}")
+    if not isinstance(signal_count, int) or signal_count < 3:
+        errors.append(f"{label} 근거 품질 신호 커버리지 확인 필요: {signal_count}")
+    if not str(summary.get("summary") or "").strip():
+        errors.append(f"{label} 근거 품질 요약 문구 누락")
+    if not isinstance(summary.get("needs_review_reasons"), list):
+        errors.append(f"{label} 근거 품질 보강 사유 배열 누락")
+
+
 def latest_policy_alignment(root: Path, records: list[dict[str, Any]], latest: list[dict[str, Any]]) -> dict[str, Any]:
     backend_dir = root / "backend"
     if str(backend_dir) not in sys.path:
@@ -572,6 +599,7 @@ def main() -> int:
             if isinstance(portfolio_risk, dict) and portfolio_risk.get("linked") is True and not portfolio_risk.get("message"):
                 errors.append(f"{label} 포트폴리오 연결 설명 누락")
             validate_score_evidence_alignment(record, errors)
+            validate_evidence_quality_summary(record, errors)
             validate_investment_direction_profile(record, errors)
             validate_tracking_milestones(record, errors)
 
@@ -601,6 +629,12 @@ def main() -> int:
         evidence_categories = len(evidence_category_names(evidence))
         nearest = nearest_milestone_label(record)
         score_component_count = len(record.get("score_components") or [])
+        evidence_quality = record.get("evidence_quality_summary") if isinstance(record.get("evidence_quality_summary"), dict) else {}
+        evidence_quality_text = (
+            f" | 근거품질 {evidence_quality.get('grade') or '-'} {evidence_quality.get('score') if evidence_quality.get('score') is not None else 'n/a'}점"
+            if evidence_quality
+            else ""
+        )
         profile = record.get("investment_direction_profile") if isinstance(record.get("investment_direction_profile"), dict) else {}
         profile_themes = profile.get("themes") if isinstance(profile.get("themes"), list) else []
         profile_labels = [
@@ -611,7 +645,7 @@ def main() -> int:
         profile_text = f" | 투자방향 {', '.join(profile_labels[:2])}" if profile_labels else ""
         print(
             f"{record_market(record)} {record_rank(record)}위 {company} | 점수 {score} | 점수구성 {score_component_count}개 | "
-            f"근거 {evidence_count}개/{evidence_categories}범주 | 추적 {milestones}개 | 다음 추적 {nearest}{profile_text}"
+            f"근거 {evidence_count}개/{evidence_categories}범주{evidence_quality_text} | 추적 {milestones}개 | 다음 추적 {nearest}{profile_text}"
         )
     if policy_alignment.get("status") == "drift":
         drift_rows = policy_alignment.get("review_hold_records") or []

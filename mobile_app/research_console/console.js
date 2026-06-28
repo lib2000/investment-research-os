@@ -8290,6 +8290,90 @@ function dailyRecommendationSignalNeedsEvidence(record = {}, item = {}) {
   return !count;
 }
 
+function dailyRecommendationEvidenceQualitySummary(record = {}) {
+  const saved = record.evidence_quality_summary || {};
+  if (Number.isFinite(Number(saved.score)) && saved.grade) {
+    return saved;
+  }
+  const documents = Array.isArray(record.evidence_documents) ? record.evidence_documents : [];
+  const tracedCount = documents.filter((item) =>
+    (item.source_relative_path || item.json_relative_path) &&
+    item.title &&
+    ((Array.isArray(item.matched_claims) && item.matched_claims.length) || item.citation_label)
+  ).length;
+  const now = Date.now();
+  const sourceTypes = new Set();
+  let recent7 = 0;
+  let recent30 = 0;
+  documents.forEach((item) => {
+    const familyText = `${item.source_type || ""} ${item.report_type || ""}`.toLowerCase();
+    if (/filing|dart/.test(familyText)) sourceTypes.add("filing");
+    else if (/policy|official/.test(familyText)) sourceTypes.add("policy");
+    else if (/news/.test(familyText)) sourceTypes.add("news");
+    else if (/report|dossier|rag/.test(familyText)) sourceTypes.add("report");
+    else sourceTypes.add("other");
+    const sourceTime = Date.parse(String(item.source_date || item.date || "").slice(0, 10));
+    if (Number.isFinite(sourceTime)) {
+      const ageDays = Math.max(0, Math.floor((now - sourceTime) / 86400000));
+      if (ageDays <= 7) recent7 += 1;
+      if (ageDays <= 30) recent30 += 1;
+    }
+  });
+  const signals = dailyRecommendationSignalBreakdown(record);
+  const signalCoverage = signals.filter((item) => Number(item.count || 0) > 0 || item.score_applied).length;
+  const qualityFlags = Array.isArray(record.quality_flags) ? record.quality_flags.filter(Boolean) : [];
+  const penalties = Array.isArray(record.score_penalties) ? record.score_penalties.filter(Boolean) : [];
+  const reviewReasons = [];
+  if (documents.length < 4) reviewReasons.push("근거 문서 부족");
+  if (tracedCount < Math.min(documents.length, 3)) reviewReasons.push("출처 추적 보강");
+  if (sourceTypes.size < 2) reviewReasons.push("출처 다양성 부족");
+  if (recent30 < Math.min(documents.length, 2)) reviewReasons.push("최신 근거 부족");
+  if (signalCoverage < 4) reviewReasons.push("신호 커버리지 부족");
+  if (Number(record.policy_signal_summary?.count || 0) && !record.policy_signal_summary?.score_applied) {
+    reviewReasons.push("정책 신호 참고 수준");
+  }
+  reviewReasons.push(...qualityFlags.slice(0, 2));
+  const traceScore = Math.round((tracedCount / Math.max(1, documents.length)) * 30);
+  const mixScore = Math.min(20, sourceTypes.size * 7);
+  const freshnessScore = Math.min(20, recent7 * 5 + Math.max(0, recent30 - recent7) * 3);
+  const signalScore = Math.min(20, signalCoverage * 4);
+  const penaltyScore = Math.min(20, penalties.length * 4 + qualityFlags.length * 3 + Math.max(0, reviewReasons.length - 2) * 2);
+  const score = Math.max(0, Math.min(100, 10 + traceScore + mixScore + freshnessScore + signalScore - penaltyScore));
+  const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : "D";
+  const tone = grade === "A" ? "ok" : grade === "B" ? "watch" : grade === "C" ? "warning" : "danger";
+  const label = grade === "A" ? "근거 품질 우수" : grade === "B" ? "근거 품질 양호" : grade === "C" ? "근거 보강 권장" : "원문 확인 필요";
+  return {
+    score,
+    grade,
+    tone,
+    label,
+    document_count: documents.length,
+    traced_document_count: tracedCount,
+    recent_7d_count: recent7,
+    recent_30d_count: recent30,
+    source_mix_count: sourceTypes.size,
+    signal_coverage_count: signalCoverage,
+    needs_review_count: reviewReasons.length,
+    needs_review_reasons: reviewReasons.slice(0, 5),
+    summary: `추적 ${formatNumber(tracedCount)}/${formatNumber(documents.length)} · 출처 ${formatNumber(sourceTypes.size)}종 · 최근 30일 ${formatNumber(recent30)}건 · 신호 ${formatNumber(signalCoverage)}/5`,
+  };
+}
+
+function renderDailyRecommendationEvidenceQuality(record = {}) {
+  const quality = dailyRecommendationEvidenceQualitySummary(record);
+  const tone = String(quality.tone || "warning").replace(/[^a-z0-9_-]/gi, "");
+  const score = Number.isFinite(Number(quality.score)) ? formatNumber(Math.round(Number(quality.score))) : "n/a";
+  const reasons = Array.isArray(quality.needs_review_reasons) ? quality.needs_review_reasons.filter(Boolean).slice(0, 3) : [];
+  return `
+    <div class="daily-recommendation-quality ${escapeHtml(tone)}" aria-label="추천 근거 품질">
+      <strong>${escapeHtml(quality.grade || "-")}</strong>
+      <span>${escapeHtml(quality.label || "근거 품질 미평가")} · ${escapeHtml(score)}점</span>
+      <small>${escapeHtml(quality.summary || "근거 품질 계산 대기")}</small>
+      ${reasons.length ? `<em>${escapeHtml(`보강: ${reasons.join(" · ")}`)}</em>` : "<em>보강 필요 없음</em>"}
+    </div>
+  `;
+}
+
 function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = {}) {
   const items = dailyRecommendationSignalBreakdown(record);
   if (!items.length) {
@@ -8896,6 +8980,7 @@ function renderDailyRecommendationCards(payload) {
       const weeklyEvidenceRows = dailyRecommendationWeeklyEvidenceRows(record);
       const evidenceRows = dailyRecommendationEvidenceRows(record);
       const citationRows = dailyRecommendationCitationRows(record);
+      const evidenceQuality = dailyRecommendationEvidenceQualitySummary(record);
       const exposureSummary = dailyRecommendationExposureSummary(record);
       const publicIrSecLinked = categories.includes("공개 IR/SEC");
       const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
@@ -8913,6 +8998,7 @@ function renderDailyRecommendationCards(payload) {
             <span>점수 ${escapeHtml(record.score ?? "n/a")}</span>
             <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
           </div>
+          ${renderDailyRecommendationEvidenceQuality(record)}
           ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
           <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
           ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
@@ -8934,6 +9020,7 @@ function renderDailyRecommendationCards(payload) {
               : "점수 비중은 다음 추천 생성부터 표시됩니다."
           )}</small>
           <small>${escapeHtml(`근거 분류: ${categories.join(" · ")}`)}</small>
+          <small>${escapeHtml(`근거 품질: ${evidenceQuality.grade || "-"} · ${evidenceQuality.label || "미평가"} · 보강 ${formatNumber(evidenceQuality.needs_review_count || 0)}건`)}</small>
           <div class="daily-recommendation-evidence">
             <b>최근 1주 자료 묶음</b>
             ${weeklyEvidenceRows.length
@@ -8996,6 +9083,12 @@ function renderDailyRecommendationCards(payload) {
       ${policyDriftRecords.length ? `<p class="daily-recommendation-warning">최신 추천 정책 이탈: ${escapeHtml(policyDriftText)} · 다음 자동 추천에서 재정렬 필요</p>` : ""}
       <small>${escapeHtml(
         `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
+      )}</small>
+      <small>${escapeHtml(
+        `근거 품질: ${records.map((record) => {
+          const quality = dailyRecommendationEvidenceQualitySummary(record);
+          return `${displayCompanyName(record)} ${quality.grade || "-"}(${formatNumber(Math.round(Number(quality.score) || 0))})`;
+        }).join(" · ")}`
       )}</small>
       <small>${escapeHtml(recommendationDates.length ? `추천 이력: ${recommendationDates.join(" · ")}` : "추천 이력은 저장 후 누적됩니다.")}</small>
     </article>
