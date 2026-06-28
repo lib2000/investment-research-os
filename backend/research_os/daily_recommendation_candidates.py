@@ -178,6 +178,36 @@ def _parse_source_date(value: object) -> date | None:
         return None
 
 
+def _evidence_quality_guardrail(grade: str) -> dict[str, Any]:
+    if grade == "A":
+        return {
+            "level": "review_priority",
+            "label": "검토 우선",
+            "action": "추천 근거 품질이 높아 우선 검토 대상으로 유지합니다.",
+            "blocks_buy": False,
+        }
+    if grade == "B":
+        return {
+            "level": "source_check",
+            "label": "원문 1회 확인 후 검토",
+            "action": "핵심 원문 1개 이상을 확인한 뒤 검토합니다.",
+            "blocks_buy": False,
+        }
+    if grade == "C":
+        return {
+            "level": "needs_evidence",
+            "label": "보강 후 검토",
+            "action": "부족한 근거를 보강한 뒤 검토합니다.",
+            "blocks_buy": True,
+        }
+    return {
+        "level": "hold_buy_decision",
+        "label": "매수 판단 보류",
+        "action": "근거 품질이 낮아 원문 확인 전 매수 판단을 보류합니다.",
+        "blocks_buy": True,
+    }
+
+
 def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> dict[str, Any]:
     documents = [
         item
@@ -250,6 +280,7 @@ def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> 
         grade, tone, label = "C", "warning", "근거 보강 권장"
     else:
         grade, tone, label = "D", "danger", "원문 확인 필요"
+    guardrail = _evidence_quality_guardrail(grade)
     summary = (
         f"추적 {traced_count}/{document_count} · 출처 {source_mix_count}종 · "
         f"최근 30일 {recent_30d_count}건 · 신호 {signal_coverage_count}/5"
@@ -259,6 +290,10 @@ def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> 
         "grade": grade,
         "tone": tone,
         "label": label,
+        "guardrail": guardrail,
+        "guardrail_label": guardrail["label"],
+        "guardrail_action": guardrail["action"],
+        "blocks_buy_decision": guardrail["blocks_buy"],
         "summary": summary,
         "document_count": document_count,
         "traced_document_count": traced_count,

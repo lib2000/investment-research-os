@@ -8293,7 +8293,10 @@ function dailyRecommendationSignalNeedsEvidence(record = {}, item = {}) {
 function dailyRecommendationEvidenceQualitySummary(record = {}) {
   const saved = record.evidence_quality_summary || {};
   if (Number.isFinite(Number(saved.score)) && saved.grade) {
-    return saved;
+    return {
+      ...saved,
+      ...dailyRecommendationEvidenceQualityGuardrail(saved),
+    };
   }
   const documents = Array.isArray(record.evidence_documents) ? record.evidence_documents : [];
   const tracedCount = documents.filter((item) =>
@@ -8342,7 +8345,7 @@ function dailyRecommendationEvidenceQualitySummary(record = {}) {
   const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : "D";
   const tone = grade === "A" ? "ok" : grade === "B" ? "watch" : grade === "C" ? "warning" : "danger";
   const label = grade === "A" ? "근거 품질 우수" : grade === "B" ? "근거 품질 양호" : grade === "C" ? "근거 보강 권장" : "원문 확인 필요";
-  return {
+  const quality = {
     score,
     grade,
     tone,
@@ -8357,6 +8360,53 @@ function dailyRecommendationEvidenceQualitySummary(record = {}) {
     needs_review_reasons: reviewReasons.slice(0, 5),
     summary: `추적 ${formatNumber(tracedCount)}/${formatNumber(documents.length)} · 출처 ${formatNumber(sourceTypes.size)}종 · 최근 30일 ${formatNumber(recent30)}건 · 신호 ${formatNumber(signalCoverage)}/5`,
   };
+  return {
+    ...quality,
+    ...dailyRecommendationEvidenceQualityGuardrail(quality),
+  };
+}
+
+function dailyRecommendationEvidenceQualityGuardrail(quality = {}) {
+  if (quality.guardrail || quality.guardrail_label || quality.guardrail_action) {
+    const guardrail = quality.guardrail || {};
+    return {
+      guardrail,
+      guardrail_label: quality.guardrail_label || guardrail.label || "검토 기준 확인",
+      guardrail_action: quality.guardrail_action || guardrail.action || "",
+      blocks_buy_decision: Boolean(quality.blocks_buy_decision || guardrail.blocks_buy),
+    };
+  }
+  const grade = String(quality.grade || "").toUpperCase();
+  if (grade === "A") {
+    return {
+      guardrail: { level: "review_priority", label: "검토 우선", blocks_buy: false },
+      guardrail_label: "검토 우선",
+      guardrail_action: "추천 근거 품질이 높아 우선 검토 대상으로 유지합니다.",
+      blocks_buy_decision: false,
+    };
+  }
+  if (grade === "B") {
+    return {
+      guardrail: { level: "source_check", label: "원문 1회 확인 후 검토", blocks_buy: false },
+      guardrail_label: "원문 1회 확인 후 검토",
+      guardrail_action: "핵심 원문 1개 이상을 확인한 뒤 검토합니다.",
+      blocks_buy_decision: false,
+    };
+  }
+  if (grade === "C") {
+    return {
+      guardrail: { level: "needs_evidence", label: "보강 후 검토", blocks_buy: true },
+      guardrail_label: "보강 후 검토",
+      guardrail_action: "부족한 근거를 보강한 뒤 검토합니다.",
+      blocks_buy_decision: true,
+    };
+  }
+  return {
+    guardrail: { level: "hold_buy_decision", label: "매수 판단 보류", blocks_buy: true },
+    guardrail_label: "매수 판단 보류",
+    guardrail_action: "근거 품질이 낮아 원문 확인 전 매수 판단을 보류합니다.",
+    blocks_buy_decision: true,
+  };
 }
 
 function renderDailyRecommendationEvidenceQuality(record = {}) {
@@ -8368,7 +8418,9 @@ function renderDailyRecommendationEvidenceQuality(record = {}) {
     <div class="daily-recommendation-quality ${escapeHtml(tone)}" aria-label="추천 근거 품질">
       <strong>${escapeHtml(quality.grade || "-")}</strong>
       <span>${escapeHtml(quality.label || "근거 품질 미평가")} · ${escapeHtml(score)}점</span>
+      <b>${escapeHtml(quality.guardrail_label || "검토 기준 확인")}</b>
       <small>${escapeHtml(quality.summary || "근거 품질 계산 대기")}</small>
+      <small>${escapeHtml(quality.guardrail_action || "")}</small>
       ${reasons.length ? `<em>${escapeHtml(`보강: ${reasons.join(" · ")}`)}</em>` : "<em>보강 필요 없음</em>"}
     </div>
   `;
@@ -8957,6 +9009,13 @@ function renderDailyRecommendationCards(payload) {
     },
     { penaltyCount: 0, flagCount: 0, overseasCount: 0, portfolioLinkedCount: 0 }
   );
+  const evidenceQualityRows = records.map((record) => ({
+    record,
+    quality: dailyRecommendationEvidenceQualitySummary(record),
+  }));
+  const blockedEvidenceQualityRows = evidenceQualityRows.filter((item) =>
+    item.quality.blocks_buy_decision || ["C", "D"].includes(String(item.quality.grade || "").toUpperCase())
+  );
   const cards = records
     .map((record, index) => {
       const reasons = (record.reasons || []).slice(0, 3);
@@ -9085,10 +9144,14 @@ function renderDailyRecommendationCards(payload) {
         `품질 가드: 감점 ${formatNumber(qualitySummary.penaltyCount)}개 · 확인 ${formatNumber(qualitySummary.flagCount)}개 · 포트폴리오 연결 ${formatNumber(qualitySummary.portfolioLinkedCount)}개 · 해외 추적 ${formatNumber(qualitySummary.overseasCount)}개`
       )}</small>
       <small>${escapeHtml(
-        `근거 품질: ${records.map((record) => {
-          const quality = dailyRecommendationEvidenceQualitySummary(record);
-          return `${displayCompanyName(record)} ${quality.grade || "-"}(${formatNumber(Math.round(Number(quality.score) || 0))})`;
-        }).join(" · ")}`
+        `근거 품질: ${evidenceQualityRows.map(({ record, quality }) => `${displayCompanyName(record)} ${quality.grade || "-"}(${formatNumber(Math.round(Number(quality.score) || 0))})`).join(" · ")}`
+      )}</small>
+      <small>${escapeHtml(
+        blockedEvidenceQualityRows.length
+          ? `보강 필요 후보 ${formatNumber(blockedEvidenceQualityRows.length)}개: ${blockedEvidenceQualityRows
+              .map(({ record, quality }) => `${displayCompanyName(record)} ${quality.guardrail_label || quality.grade || ""}`)
+              .join(" · ")}`
+          : "보강 필요 후보 없음: 품질 가드레일 통과"
       )}</small>
       <small>${escapeHtml(recommendationDates.length ? `추천 이력: ${recommendationDates.join(" · ")}` : "추천 이력은 저장 후 누적됩니다.")}</small>
     </article>

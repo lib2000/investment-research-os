@@ -400,6 +400,9 @@ def validate_evidence_quality_summary(record: dict[str, Any], errors: list[str])
     document_count = summary.get("document_count")
     traced_count = summary.get("traced_document_count")
     signal_count = summary.get("signal_coverage_count")
+    guardrail = summary.get("guardrail") if isinstance(summary.get("guardrail"), dict) else {}
+    guardrail_label = str(summary.get("guardrail_label") or guardrail.get("label") or "").strip()
+    guardrail_action = str(summary.get("guardrail_action") or guardrail.get("action") or "").strip()
     if not isinstance(score, (int, float)) or not 0 <= float(score) <= 100:
         errors.append(f"{label} 근거 품질 점수 확인 필요: {score}")
     if grade not in {"A", "B", "C", "D"}:
@@ -414,6 +417,16 @@ def validate_evidence_quality_summary(record: dict[str, Any], errors: list[str])
         errors.append(f"{label} 근거 품질 요약 문구 누락")
     if not isinstance(summary.get("needs_review_reasons"), list):
         errors.append(f"{label} 근거 품질 보강 사유 배열 누락")
+    if not guardrail_label or not guardrail_action:
+        errors.append(f"{label} 근거 품질 판단 가드레일 누락")
+    if grade in {"C", "D"}:
+        reasons = summary.get("needs_review_reasons") if isinstance(summary.get("needs_review_reasons"), list) else []
+        if not any(str(item or "").strip() for item in reasons):
+            errors.append(f"{label} {grade}등급 보강 사유 누락")
+        if grade == "C" and "보강" not in f"{guardrail_label} {guardrail_action}":
+            errors.append(f"{label} C등급 가드레일 문구 확인 필요: {guardrail_label}")
+        if grade == "D" and not any(token in f"{guardrail_label} {guardrail_action}" for token in ("보류", "원문")):
+            errors.append(f"{label} D등급 가드레일 문구 확인 필요: {guardrail_label}")
 
 
 def latest_policy_alignment(root: Path, records: list[dict[str, Any]], latest: list[dict[str, Any]]) -> dict[str, Any]:

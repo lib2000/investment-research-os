@@ -701,17 +701,26 @@ label {
 }
 
 .daily-recommendation-quality span,
+.daily-recommendation-quality b,
 .daily-recommendation-quality small,
 .daily-recommendation-quality em {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .daily-recommendation-quality span {
   color: #0f172a;
   font-size: 12px;
+  font-weight: 950;
+}
+
+.daily-recommendation-quality b {
+  justify-self: start;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 11px;
   font-weight: 950;
 }
 
@@ -741,6 +750,11 @@ label {
   background: #ea580c;
 }
 
+.daily-recommendation-quality.warning b {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 .daily-recommendation-quality.warning em {
   color: #c2410c;
 }
@@ -752,6 +766,11 @@ label {
 
 .daily-recommendation-quality.danger strong {
   background: #dc2626;
+}
+
+.daily-recommendation-quality.danger b {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .daily-recommendation-quality.danger em {
