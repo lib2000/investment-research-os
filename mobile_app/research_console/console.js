@@ -8191,23 +8191,28 @@ function dailyRecommendationSignalBreakdown(record = {}) {
 function dailyRecommendationSignalDetailRows(record = {}, item = {}) {
   const key = String(item.key || "").toLowerCase();
   const rows = [];
-  const addRow = (value, limit = 128) => {
+  const addRow = (value, limit = 128, extra = {}) => {
     const text = compactOutputText(value || "", limit);
-    if (text && !rows.includes(text)) {
-      rows.push(text);
+    if (text && !rows.some((row) => row.text === text && row.path === extra.path)) {
+      rows.push({ text, ...extra });
     }
   };
   const scoreComponents = Array.isArray(record.score_components) ? record.score_components : [];
   const evidenceDocuments = Array.isArray(record.evidence_documents) ? record.evidence_documents : [];
   const evidenceSources = Array.isArray(record.evidence_sources) ? record.evidence_sources : [];
-  const sourceText = (source = {}) =>
-    [
-      source.source_date || source.date || "",
-      source.report_type || source.source_type || "",
-      source.title || source.source_relative_path || source.name || "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
+  const sourceKindText = (source = {}) => source.report_type || source.source_type || "근거";
+  const sourceMetaText = (source = {}) =>
+    [source.source_date || source.date || "", sourceKindText(source), source.citation_label || ""].filter(Boolean).join(" · ");
+  const sourceTitleText = (source = {}) => source.title || source.source_relative_path || source.name || "근거 문서";
+  const addSourceRow = (source = {}) => {
+    const claims = Array.isArray(source.matched_claims) ? source.matched_claims : [];
+    addRow(sourceTitleText(source), 118, {
+      meta: sourceMetaText(source),
+      path: source.source_relative_path || source.json_relative_path || "",
+      badge: sourceKindText(source),
+      claim: compactOutputText(claims[0] || "", 88),
+    });
+  };
 
   if (key === "market") {
     scoreComponents
@@ -8225,7 +8230,7 @@ function dailyRecommendationSignalDetailRows(record = {}, item = {}) {
     evidenceDocuments
       .filter((source) => /filing|dart/i.test(`${source.source_type || ""} ${source.report_type || ""}`))
       .slice(0, 4)
-      .forEach((source) => addRow(sourceText(source)));
+      .forEach((source) => addSourceRow(source));
   } else if (key === "policy") {
     const signal = record.policy_signal_summary || {};
     const count = Number(signal.count || 0);
@@ -8236,19 +8241,23 @@ function dailyRecommendationSignalDetailRows(record = {}, item = {}) {
       }
       const themes = Array.isArray(signal.themes) ? signal.themes.filter(Boolean).slice(0, 3).join(" · ") : "";
       addRow(themes);
-      addRow(signal.top_title);
+      addRow(signal.top_title, 128, {
+        meta: signal.top_source_url ? "정책 원문 URL 연결" : "",
+        path: signal.top_source_url || "",
+        badge: signal.score_applied === false ? "참고" : "정책",
+      });
     } else {
-      addRow("직접 정책 신호 없음");
+      addRow("직접 정책 신호 없음", 128, { badge: "보강 필요" });
     }
   } else if (key === "news") {
     evidenceDocuments
       .filter((source) => !/policy|filing|dart/i.test(`${source.source_type || ""} ${source.report_type || ""}`))
       .slice(0, 3)
-      .forEach((source) => addRow(sourceText(source)));
+      .forEach((source) => addSourceRow(source));
     evidenceSources
       .filter((source) => /뉴스|리포트|자료|RAG|IR|SEC|공개/i.test(String(source)))
       .slice(0, 2)
-      .forEach((source) => addRow(source));
+      .forEach((source) => addRow(source, 128, { badge: "요약" }));
   } else if (key === "sentiment") {
     const profile = record.investment_direction_profile || {};
     const themes = Array.isArray(profile.themes) ? profile.themes : [];
@@ -8267,9 +8276,18 @@ function dailyRecommendationSignalDetailRows(record = {}, item = {}) {
 
   addRow(item.summary);
   if (!rows.length) {
-    addRow("세부 근거 없음");
+    addRow("세부 근거 없음", 128, { badge: "보강 필요" });
   }
   return rows.slice(0, 4);
+}
+
+function dailyRecommendationSignalNeedsEvidence(record = {}, item = {}) {
+  const key = String(item.key || "").toLowerCase();
+  const count = Number(item.count || 0);
+  if (key === "policy") {
+    return !count || record.policy_signal_summary?.score_applied === false;
+  }
+  return !count;
 }
 
 function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = {}) {
@@ -8285,15 +8303,26 @@ function renderDailyRecommendationSignalGrid(record = {}, { compact = false } = 
           const status = item.score_applied ? "반영" : Number(item.count || 0) ? "참고" : "없음";
           if (!compact) {
             const details = dailyRecommendationSignalDetailRows(record, item);
+            const count = Number(item.count || 0);
+            const needsEvidence = dailyRecommendationSignalNeedsEvidence(record, item);
             return `
-              <details class="${escapeHtml(tone || "neutral")}" title="${escapeHtml(item.summary || "")}">
+              <details class="${escapeHtml(`${tone || "neutral"}${needsEvidence ? " needs-evidence" : ""}`)}" title="${escapeHtml(item.summary || "")}">
                 <summary>
                   <b>${escapeHtml(item.label || item.key || "신호")}</b>
                   <em>${escapeHtml(status)}</em>
+                  <i>${escapeHtml(count ? `근거 ${formatNumber(count)}` : "근거 보강")}</i>
                   <small>${escapeHtml(compactOutputText(item.summary || "", 64))}</small>
                 </summary>
                 <ul>
-                  ${details.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}
+                  ${details.map((row) => `
+                    <li>
+                      <strong>${escapeHtml(row.text)}</strong>
+                      ${row.meta ? `<small>${escapeHtml(row.meta)}</small>` : ""}
+                      ${row.claim ? `<small>연결 근거: ${escapeHtml(row.claim)}</small>` : ""}
+                      ${row.path ? `<code>${escapeHtml(compactOutputText(row.path, 116))}</code>` : ""}
+                      ${row.badge ? `<mark>${escapeHtml(row.badge)}</mark>` : ""}
+                    </li>
+                  `).join("")}
                 </ul>
               </details>
             `;

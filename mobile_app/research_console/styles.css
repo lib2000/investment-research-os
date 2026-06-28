@@ -704,6 +704,10 @@ label {
   box-shadow: 0 8px 20px rgba(15, 118, 110, 0.1);
 }
 
+.daily-recommendation-signal-grid details.needs-evidence {
+  border-style: dashed;
+}
+
 .daily-recommendation-signal-grid details summary {
   display: grid;
   gap: 2px;
@@ -736,16 +740,67 @@ label {
   display: grid;
   gap: 4px;
   margin: 5px 0 0;
-  padding: 6px 0 0 14px;
+  padding: 6px 0 0;
   border-top: 1px solid rgba(148, 163, 184, 0.32);
+  list-style: none;
 }
 
 .daily-recommendation-signal-grid details li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
   color: #334155;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.daily-recommendation-signal-grid details li strong,
+.daily-recommendation-signal-grid details li code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-signal-grid details li strong {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.daily-recommendation-signal-grid details li code {
+  color: #64748b;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.daily-recommendation-signal-grid details li mark,
+.daily-recommendation-signal-grid details summary i {
+  justify-self: start;
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.daily-recommendation-signal-grid details li mark {
+  order: -1;
+  padding: 1px 5px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 10px;
+}
+
+.daily-recommendation-signal-grid details.needs-evidence li mark,
+.daily-recommendation-signal-grid details.needs-evidence summary i {
+  background: #fff7ed;
+  color: #c2410c;
 }
 
 .daily-recommendation-signal-grid span.ok,
@@ -762,6 +817,7 @@ label {
 
 .daily-recommendation-signal-grid b,
 .daily-recommendation-signal-grid em,
+.daily-recommendation-signal-grid i,
 .daily-recommendation-signal-grid small {
   min-width: 0;
   overflow: hidden;
@@ -780,6 +836,13 @@ label {
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
+}
+
+.daily-recommendation-signal-grid i {
+  padding: 1px 5px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 10px;
 }
 
 .daily-recommendation-signal-grid small {
