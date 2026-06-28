@@ -403,6 +403,7 @@ def validate_evidence_quality_summary(record: dict[str, Any], errors: list[str])
     guardrail = summary.get("guardrail") if isinstance(summary.get("guardrail"), dict) else {}
     guardrail_label = str(summary.get("guardrail_label") or guardrail.get("label") or "").strip()
     guardrail_action = str(summary.get("guardrail_action") or guardrail.get("action") or "").strip()
+    repair_queue = summary.get("evidence_repair_queue")
     if not isinstance(score, (int, float)) or not 0 <= float(score) <= 100:
         errors.append(f"{label} 근거 품질 점수 확인 필요: {score}")
     if grade not in {"A", "B", "C", "D"}:
@@ -423,6 +424,17 @@ def validate_evidence_quality_summary(record: dict[str, Any], errors: list[str])
         reasons = summary.get("needs_review_reasons") if isinstance(summary.get("needs_review_reasons"), list) else []
         if not any(str(item or "").strip() for item in reasons):
             errors.append(f"{label} {grade}등급 보강 사유 누락")
+        if not isinstance(repair_queue, list) or not repair_queue:
+            errors.append(f"{label} {grade}등급 근거 보강 큐 누락")
+        else:
+            for index, item in enumerate(repair_queue, start=1):
+                if not isinstance(item, dict):
+                    errors.append(f"{label} 근거 보강 큐 {index} 형식 오류")
+                    continue
+                if not str(item.get("task_type") or "").strip() or not str(item.get("next_action") or "").strip():
+                    errors.append(f"{label} 근거 보강 큐 {index} 작업/액션 누락")
+                if str(item.get("status") or "") != "queued":
+                    errors.append(f"{label} 근거 보강 큐 {index} 상태 확인 필요: {item.get('status')}")
         if grade == "C" and "보강" not in f"{guardrail_label} {guardrail_action}":
             errors.append(f"{label} C등급 가드레일 문구 확인 필요: {guardrail_label}")
         if grade == "D" and not any(token in f"{guardrail_label} {guardrail_action}" for token in ("보류", "원문")):

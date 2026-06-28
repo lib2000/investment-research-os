@@ -208,6 +208,80 @@ def _evidence_quality_guardrail(grade: str) -> dict[str, Any]:
     }
 
 
+def _evidence_repair_task(reason: str) -> dict[str, str]:
+    reason_text = str(reason or "").strip()
+    lowered = reason_text.lower()
+    if "추적" in reason_text or "출처" in reason_text and "다양" not in reason_text:
+        return {
+            "task_type": "source_trace",
+            "label": "출처 추적 보강",
+            "next_action": "문서 제목, 저장 경로, 연결 주장을 확인해 근거 추적성을 보강합니다.",
+        }
+    if "최신" in reason_text or "신선" in reason_text or "recent" in lowered:
+        return {
+            "task_type": "fresh_evidence",
+            "label": "최신 근거 보강",
+            "next_action": "최근 7~30일 공시, 뉴스, 리포트 자료를 추가 확인합니다.",
+        }
+    if "다양" in reason_text:
+        return {
+            "task_type": "source_diversity",
+            "label": "출처 다양성 보강",
+            "next_action": "공시, 리포트, 뉴스, 정책 근거가 한쪽으로 쏠리지 않도록 다른 출처를 보강합니다.",
+        }
+    if "커버리지" in reason_text or "신호" in reason_text:
+        return {
+            "task_type": "signal_coverage",
+            "label": "신호 커버리지 보강",
+            "next_action": "시장, 공시, 정책, 뉴스, 심리 신호 중 비어 있는 축을 추가 점검합니다.",
+        }
+    if "원문" in reason_text or "본문" in reason_text or "OCR" in reason_text:
+        return {
+            "task_type": "source_body",
+            "label": "원문 확인 필요",
+            "next_action": "원문 본문, PDF, OCR 또는 직접 붙여넣기로 분석 가능한 내용을 보강합니다.",
+        }
+    return {
+        "task_type": "general_review",
+        "label": "근거 품질 보강",
+        "next_action": "보강 사유를 확인하고 관련 원천 자료를 추가 수집합니다.",
+    }
+
+
+def _evidence_repair_queue(candidate: dict[str, Any], quality: dict[str, Any]) -> list[dict[str, Any]]:
+    if not quality.get("blocks_buy_decision") and str(quality.get("grade") or "").upper() not in {"C", "D"}:
+        return []
+    reasons = [
+        str(item or "").strip()
+        for item in quality.get("needs_review_reasons", [])
+        if str(item or "").strip()
+    ]
+    if not reasons:
+        reasons = [quality.get("guardrail_label") or "근거 품질 보강 필요"]
+    queue: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, reason in enumerate(reasons, start=1):
+        task = _evidence_repair_task(reason)
+        key = task["task_type"]
+        if key in seen:
+            continue
+        seen.add(key)
+        queue.append(
+            {
+                "queue_id": f"{candidate.get('ticker') or 'UNKNOWN'}-{key}",
+                "priority": index,
+                "ticker": candidate.get("ticker"),
+                "company_name": candidate.get("company_name"),
+                "grade": quality.get("grade"),
+                "score": quality.get("score"),
+                "reason": reason,
+                **task,
+                "status": "queued",
+            }
+        )
+    return queue
+
+
 def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> dict[str, Any]:
     documents = [
         item
@@ -285,7 +359,7 @@ def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> 
         f"추적 {traced_count}/{document_count} · 출처 {source_mix_count}종 · "
         f"최근 30일 {recent_30d_count}건 · 신호 {signal_coverage_count}/5"
     )
-    return {
+    quality = {
         "score": score,
         "grade": grade,
         "tone": tone,
@@ -304,6 +378,11 @@ def build_recommendation_evidence_quality_summary(candidate: dict[str, Any]) -> 
         "signal_coverage_count": signal_coverage_count,
         "needs_review_count": len(needs_review_reasons),
         "needs_review_reasons": needs_review_reasons[:5],
+    }
+    quality["evidence_repair_queue"] = _evidence_repair_queue(candidate, quality)
+    quality["repair_queue_count"] = len(quality["evidence_repair_queue"])
+    return {
+        **quality,
     }
 
 

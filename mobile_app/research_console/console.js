@@ -8374,6 +8374,8 @@ function dailyRecommendationEvidenceQualityGuardrail(quality = {}) {
       guardrail_label: quality.guardrail_label || guardrail.label || "검토 기준 확인",
       guardrail_action: quality.guardrail_action || guardrail.action || "",
       blocks_buy_decision: Boolean(quality.blocks_buy_decision || guardrail.blocks_buy),
+      evidence_repair_queue: dailyRecommendationEvidenceRepairQueue(quality),
+      repair_queue_count: dailyRecommendationEvidenceRepairQueue(quality).length,
     };
   }
   const grade = String(quality.grade || "").toUpperCase();
@@ -8383,6 +8385,8 @@ function dailyRecommendationEvidenceQualityGuardrail(quality = {}) {
       guardrail_label: "검토 우선",
       guardrail_action: "추천 근거 품질이 높아 우선 검토 대상으로 유지합니다.",
       blocks_buy_decision: false,
+      evidence_repair_queue: [],
+      repair_queue_count: 0,
     };
   }
   if (grade === "B") {
@@ -8391,22 +8395,82 @@ function dailyRecommendationEvidenceQualityGuardrail(quality = {}) {
       guardrail_label: "원문 1회 확인 후 검토",
       guardrail_action: "핵심 원문 1개 이상을 확인한 뒤 검토합니다.",
       blocks_buy_decision: false,
+      evidence_repair_queue: [],
+      repair_queue_count: 0,
     };
   }
   if (grade === "C") {
+    const repairQueue = dailyRecommendationEvidenceRepairQueue(quality);
     return {
       guardrail: { level: "needs_evidence", label: "보강 후 검토", blocks_buy: true },
       guardrail_label: "보강 후 검토",
       guardrail_action: "부족한 근거를 보강한 뒤 검토합니다.",
       blocks_buy_decision: true,
+      evidence_repair_queue: repairQueue,
+      repair_queue_count: repairQueue.length,
     };
   }
+  const repairQueue = dailyRecommendationEvidenceRepairQueue(quality);
   return {
     guardrail: { level: "hold_buy_decision", label: "매수 판단 보류", blocks_buy: true },
     guardrail_label: "매수 판단 보류",
     guardrail_action: "근거 품질이 낮아 원문 확인 전 매수 판단을 보류합니다.",
     blocks_buy_decision: true,
+    evidence_repair_queue: repairQueue,
+    repair_queue_count: repairQueue.length,
   };
+}
+
+function dailyRecommendationEvidenceRepairTask(reason = "") {
+  const text = String(reason || "").trim();
+  if (/추적|출처(?!.*다양)/.test(text)) {
+    return { task_type: "source_trace", label: "출처 추적 보강", next_action: "문서 제목, 저장 경로, 연결 주장을 확인합니다." };
+  }
+  if (/최신|신선|recent/i.test(text)) {
+    return { task_type: "fresh_evidence", label: "최신 근거 보강", next_action: "최근 공시, 뉴스, 리포트 자료를 추가 확인합니다." };
+  }
+  if (/다양/.test(text)) {
+    return { task_type: "source_diversity", label: "출처 다양성 보강", next_action: "공시, 리포트, 뉴스, 정책 출처를 균형 있게 보강합니다." };
+  }
+  if (/커버리지|신호/.test(text)) {
+    return { task_type: "signal_coverage", label: "신호 커버리지 보강", next_action: "비어 있는 신호 축을 추가 점검합니다." };
+  }
+  if (/원문|본문|OCR/.test(text)) {
+    return { task_type: "source_body", label: "원문 확인 필요", next_action: "원문 본문, PDF, OCR 내용을 보강합니다." };
+  }
+  return { task_type: "general_review", label: "근거 품질 보강", next_action: "관련 원천 자료를 추가 수집합니다." };
+}
+
+function dailyRecommendationEvidenceRepairQueue(quality = {}) {
+  const savedQueue = Array.isArray(quality.evidence_repair_queue) ? quality.evidence_repair_queue.filter(Boolean) : [];
+  if (savedQueue.length) {
+    return savedQueue;
+  }
+  const grade = String(quality.grade || "").toUpperCase();
+  if (!quality.blocks_buy_decision && !["C", "D"].includes(grade)) {
+    return [];
+  }
+  const reasons = Array.isArray(quality.needs_review_reasons)
+    ? quality.needs_review_reasons.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const sourceReasons = reasons.length ? reasons : [quality.guardrail_label || "근거 품질 보강 필요"];
+  const seen = new Set();
+  return sourceReasons
+    .map((reason, index) => {
+      const task = dailyRecommendationEvidenceRepairTask(reason);
+      if (seen.has(task.task_type)) return null;
+      seen.add(task.task_type);
+      return {
+        queue_id: `${task.task_type}-${index + 1}`,
+        priority: index + 1,
+        reason,
+        grade,
+        score: quality.score,
+        status: "queued",
+        ...task,
+      };
+    })
+    .filter(Boolean);
 }
 
 function renderDailyRecommendationEvidenceQuality(record = {}) {
@@ -8414,6 +8478,7 @@ function renderDailyRecommendationEvidenceQuality(record = {}) {
   const tone = String(quality.tone || "warning").replace(/[^a-z0-9_-]/gi, "");
   const score = Number.isFinite(Number(quality.score)) ? formatNumber(Math.round(Number(quality.score))) : "n/a";
   const reasons = Array.isArray(quality.needs_review_reasons) ? quality.needs_review_reasons.filter(Boolean).slice(0, 3) : [];
+  const repairQueue = dailyRecommendationEvidenceRepairQueue(quality);
   return `
     <div class="daily-recommendation-quality ${escapeHtml(tone)}" aria-label="추천 근거 품질">
       <strong>${escapeHtml(quality.grade || "-")}</strong>
@@ -8421,6 +8486,11 @@ function renderDailyRecommendationEvidenceQuality(record = {}) {
       <b>${escapeHtml(quality.guardrail_label || "검토 기준 확인")}</b>
       <small>${escapeHtml(quality.summary || "근거 품질 계산 대기")}</small>
       <small>${escapeHtml(quality.guardrail_action || "")}</small>
+      <small>${escapeHtml(
+        repairQueue.length
+          ? `보강 큐 등록 ${formatNumber(repairQueue.length)}건: ${repairQueue.map((item) => item.label || item.task_type).join(" · ")}`
+          : "보강 큐 없음"
+      )}</small>
       ${reasons.length ? `<em>${escapeHtml(`보강: ${reasons.join(" · ")}`)}</em>` : "<em>보강 필요 없음</em>"}
     </div>
   `;
@@ -9016,6 +9086,10 @@ function renderDailyRecommendationCards(payload) {
   const blockedEvidenceQualityRows = evidenceQualityRows.filter((item) =>
     item.quality.blocks_buy_decision || ["C", "D"].includes(String(item.quality.grade || "").toUpperCase())
   );
+  const evidenceRepairQueueCount = evidenceQualityRows.reduce(
+    (sum, item) => sum + dailyRecommendationEvidenceRepairQueue(item.quality).length,
+    0
+  );
   const cards = records
     .map((record, index) => {
       const reasons = (record.reasons || []).slice(0, 3);
@@ -9151,7 +9225,7 @@ function renderDailyRecommendationCards(payload) {
           ? `보강 필요 후보 ${formatNumber(blockedEvidenceQualityRows.length)}개: ${blockedEvidenceQualityRows
               .map(({ record, quality }) => `${displayCompanyName(record)} ${quality.guardrail_label || quality.grade || ""}`)
               .join(" · ")}`
-          : "보강 필요 후보 없음: 품질 가드레일 통과"
+          : `보강 필요 후보 없음: 품질 가드레일 통과 · 보강 큐 ${formatNumber(evidenceRepairQueueCount)}건`
       )}</small>
       <small>${escapeHtml(recommendationDates.length ? `추천 이력: ${recommendationDates.join(" · ")}` : "추천 이력은 저장 후 누적됩니다.")}</small>
     </article>
