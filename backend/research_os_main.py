@@ -124,7 +124,10 @@ from research_os.file_extraction import (
     safe_attachment_file_name,
 )
 from research_os.kiwoom_auth import KiwoomAuthClient, KiwoomMaskedTokenStatus
-from research_os.kiwoom_interest import build_kiwoom_interest_groups_status
+from research_os.kiwoom_interest import (
+    build_kiwoom_interest_groups_status,
+    build_kiwoom_interest_sync_preview,
+)
 import research_os.dart_filing_watch as dart_filing_watch
 from research_os.investment_calendar import (
     build_investment_calendar_earnings_events as build_calendar_earnings_events,
@@ -12314,11 +12317,17 @@ def read_kiwoom_interest_groups(
     """
     키움 REST API 관심종목 그룹 목록(ka01300)과 선택적 상세(ka01301)를 조회합니다.
     """
-    return build_kiwoom_interest_groups_status(
+    result = build_kiwoom_interest_groups_status(
         settings,
         include_details=include_details,
         max_groups=max_groups,
     )
+    if include_details:
+        result["sync_preview"] = build_kiwoom_interest_sync_preview(
+            result,
+            read_interest_list(settings),
+        )
+    return result
 
 
 @app.get(

@@ -13352,7 +13352,10 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
 
 class KiwoomResearchOsIntegrationTests(unittest.TestCase):
     def test_kiwoom_interest_group_status_normalizes_groups_and_details(self):
-        from research_os.kiwoom_interest import build_kiwoom_interest_groups_status
+        from research_os.kiwoom_interest import (
+            build_kiwoom_interest_groups_status,
+            build_kiwoom_interest_sync_preview,
+        )
         from research_os.settings import Settings
 
         settings = Settings(
@@ -13401,6 +13404,17 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertEqual(post.call_args_list[0].kwargs["headers"]["api-id"], "ka01300")
         self.assertEqual(post.call_args_list[1].kwargs["headers"]["api-id"], "ka01301")
         self.assertEqual(post.call_args_list[1].kwargs["json"], {"grp_no": "001"})
+
+        preview = build_kiwoom_interest_sync_preview(
+            result,
+            {"tickers": [{"ticker": "000660", "company_name": "SK하이닉스"}]},
+        )
+
+        self.assertEqual(preview["write_mode"], "preview_only")
+        self.assertEqual(preview["already_tracked_count"], 1)
+        self.assertEqual(preview["add_candidate_count"], 1)
+        self.assertEqual(preview["candidates"][0]["action"], "already_tracked")
+        self.assertEqual(preview["candidates"][1]["action"], "add_candidate")
 
     def test_research_os_kiwoom_token_cache_reuses_valid_token_without_network(self):
         from research_os.kiwoom_auth import KiwoomAuthClient

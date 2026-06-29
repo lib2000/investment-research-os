@@ -46,6 +46,10 @@ def _clean_ticker(value: Any) -> str:
     return str(value or "").strip().upper().lstrip("A")
 
 
+def _ticker_key(value: Any) -> str:
+    return _clean_ticker(value)
+
+
 def _normalize_group(row: dict[str, Any]) -> dict[str, Any]:
     group_id = _first_value(
         row,
@@ -195,4 +199,65 @@ def build_kiwoom_interest_groups_status(
         "groups": selected_groups,
         "details": details,
         "raw_response_keys": sorted(raw_groups.keys()),
+    }
+
+
+def build_kiwoom_interest_sync_preview(
+    status_payload: dict[str, Any],
+    interest_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Compare Kiwoom interest details with the local interest list without writing changes."""
+
+    existing_tickers = {
+        _ticker_key(item.get("ticker"))
+        for item in (interest_payload or {}).get("tickers", [])
+        if isinstance(item, dict) and _ticker_key(item.get("ticker"))
+    }
+    candidates: list[dict[str, Any]] = []
+    seen_candidate_keys: set[str] = set()
+    for detail in status_payload.get("details") or []:
+        if not isinstance(detail, dict):
+            continue
+        group_id = str(detail.get("group_id") or "").strip()
+        group_name = str(detail.get("group_name") or "").strip()
+        for item in detail.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            ticker = _ticker_key(item.get("ticker"))
+            company_name = str(item.get("company_name") or "").strip()
+            candidate_key = ticker or company_name.lower()
+            if not candidate_key or candidate_key in seen_candidate_keys:
+                continue
+            seen_candidate_keys.add(candidate_key)
+            already_tracked = bool(ticker and ticker in existing_tickers)
+            candidates.append(
+                {
+                    "ticker": ticker,
+                    "company_name": company_name,
+                    "group_id": group_id,
+                    "group_name": group_name,
+                    "action": "already_tracked" if already_tracked else "add_candidate",
+                    "reason": (
+                        "이미 로컬 관심종목에 등록되어 있습니다."
+                        if already_tracked
+                        else "키움 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
+                    ),
+                }
+            )
+    add_candidates = [item for item in candidates if item.get("action") == "add_candidate"]
+    already_tracked = [item for item in candidates if item.get("action") == "already_tracked"]
+    return {
+        "status": "success",
+        "module": "kiwoom_interest_sync_preview",
+        "write_mode": "preview_only",
+        "existing_local_ticker_count": len(existing_tickers),
+        "kiwoom_candidate_count": len(candidates),
+        "add_candidate_count": len(add_candidates),
+        "already_tracked_count": len(already_tracked),
+        "candidates": candidates,
+        "next_action": (
+            "추가 후보를 검토한 뒤 /api/v1/interests/tickers 또는 콘솔 관심종목 저장으로 반영하세요."
+            if add_candidates
+            else "키움 관심그룹과 로컬 관심종목의 티커 기준 차이가 없습니다."
+        ),
     }
