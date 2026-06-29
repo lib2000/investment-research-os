@@ -3011,8 +3011,12 @@ function renderKiwoomInterestCandidatePanel(payload = null) {
     return;
   }
   const preview = payload?.sync_preview || {};
-  const candidates = (preview.candidates || []).filter((item) => item?.action === "add_candidate");
-  const alreadyTrackedCount = Number(preview.already_tracked_count || 0);
+  const allCandidates = preview.candidates || [];
+  const candidates = allCandidates.filter((item) => item?.action === "add_candidate");
+  const alreadyTrackedCount =
+    allCandidates.filter((item) => item?.action && item.action !== "add_candidate").length ||
+    Number(preview.already_tracked_count || 0);
+  const savedCount = Number(preview.last_saved_count || 0);
   if (!payload) {
     elements.kiwoomInterestCandidatePanel.replaceChildren();
     elements.kiwoomInterestCandidatePanel.hidden = true;
@@ -3023,6 +3027,7 @@ function renderKiwoomInterestCandidatePanel(payload = null) {
   header.innerHTML = `
     <strong>키움 추가 후보 ${escapeHtml(String(candidates.length))}개</strong>
     <span>이미 등록 ${escapeHtml(String(alreadyTrackedCount))}개</span>
+    ${savedCount ? `<span>방금 저장 ${escapeHtml(String(savedCount))}개</span>` : ""}
   `;
   if (!candidates.length) {
     const empty = document.createElement("p");
@@ -3066,6 +3071,42 @@ function selectedKiwoomInterestCandidates() {
   return [...elements.kiwoomInterestCandidatePanel.querySelectorAll('input[name="kiwoomInterestCandidate"]:checked')]
     .map((input) => candidates[Number(input.dataset.index)])
     .filter(Boolean);
+}
+
+function normalizeKiwoomInterestTickerKey(value) {
+  const ticker = normalizeTickerDraft(value);
+  return /^A\d+$/.test(ticker) ? ticker.slice(1) : ticker;
+}
+
+function markKiwoomInterestCandidatesSynced(syncResult = {}, selectedCandidates = []) {
+  if (!lastKiwoomInterestGroups?.sync_preview) {
+    return;
+  }
+  const savedKeys = new Set(
+    (syncResult.prepared_tickers || selectedCandidates)
+      .map((item) => normalizeKiwoomInterestTickerKey(item?.ticker || ""))
+      .filter(Boolean)
+  );
+  let savedCount = 0;
+  lastKiwoomInterestGroups.sync_preview.candidates = (lastKiwoomInterestGroups.sync_preview.candidates || []).map(
+    (item) => {
+      const ticker = normalizeKiwoomInterestTickerKey(item?.ticker || "");
+      if (item?.action === "add_candidate" && ticker && savedKeys.has(ticker)) {
+        savedCount += 1;
+        return {
+          ...item,
+          action: "saved",
+          reason: "이번 동기화에서 로컬 관심종목에 저장했습니다.",
+        };
+      }
+      return item;
+    }
+  );
+  lastKiwoomInterestGroups.sync_preview.last_saved_count = savedCount;
+  lastKiwoomInterestGroups.sync_preview.add_candidate_count = (
+    lastKiwoomInterestGroups.sync_preview.candidates || []
+  ).filter((item) => item?.action === "add_candidate").length;
+  renderKiwoomInterestCandidatePanel(lastKiwoomInterestGroups);
 }
 
 function initializeEditableLists() {
@@ -12302,6 +12343,7 @@ elements.kiwoomInterestSyncButton?.addEventListener("click", async () => {
     });
     const interests = await fetchInterests(token());
     fillInterestsForm(interests);
+    markKiwoomInterestCandidatesSynced(result, candidates);
     setOutput({ sync_result: result, interests });
     await runSecondaryRefresh("관심종목/섹터 상태 새로고침", () => refreshStatus(false));
   } catch (error) {
