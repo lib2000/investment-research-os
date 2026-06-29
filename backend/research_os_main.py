@@ -125,8 +125,11 @@ from research_os.file_extraction import (
 )
 from research_os.kiwoom_auth import KiwoomAuthClient, KiwoomMaskedTokenStatus
 from research_os.kiwoom_interest import (
+    append_kiwoom_interest_sync_history,
     build_kiwoom_interest_groups_status,
     build_kiwoom_interest_sync_preview,
+    kiwoom_interest_sync_history_path,
+    read_kiwoom_interest_sync_history,
 )
 import research_os.dart_filing_watch as dart_filing_watch
 from research_os.investment_calendar import (
@@ -12424,6 +12427,7 @@ def sync_kiwoom_interest_candidates(
     if request.dry_run:
         result["write_mode"] = "preview_only"
         result["next_action"] = "검토 후 dry_run=false로 다시 호출하면 선택 후보를 로컬 관심종목에 저장합니다."
+        append_kiwoom_interest_sync_history(settings, summary=result)
         return result
     write_json_store(
         interest_list_path(settings),
@@ -12436,7 +12440,28 @@ def sync_kiwoom_interest_candidates(
     result["write_mode"] = "saved"
     result["updated_at"] = response.updated_at
     result["next_action"] = "관심종목 자동화 보드를 다시 실행해 새 수집 대상을 확인하세요."
+    append_kiwoom_interest_sync_history(settings, summary=result)
     return result
+
+
+@app.get(
+    "/api/v1/brokerage/kiwoom/interest-groups/sync-history",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_kiwoom_interest_sync_history(
+    limit: int = 10,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    capped_limit = max(1, min(int(limit or 10), 100))
+    history = read_kiwoom_interest_sync_history(settings, limit=capped_limit)
+    return {
+        "status": "success",
+        "module": "kiwoom_interest_sync_history",
+        "history": history,
+        "history_count": len(history),
+        "latest": history[0] if history else None,
+        "storage_path": str(kiwoom_interest_sync_history_path(settings)),
+    }
 
 
 @app.get(

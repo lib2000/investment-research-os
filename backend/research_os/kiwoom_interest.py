@@ -2,16 +2,35 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
 from research_os.kiwoom_auth import KiwoomAuthClient
+from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
 
 
 GROUP_LIST_API_ID = "ka01300"
 GROUP_DETAIL_API_ID = "ka01301"
+
+
+def _current_history_timestamp() -> str:
+    try:
+        korea_timezone = ZoneInfo("Asia/Seoul")
+    except ZoneInfoNotFoundError:
+        korea_timezone = timezone(timedelta(hours=9))
+    return datetime.now(korea_timezone).isoformat(timespec="seconds")
+
+
+def kiwoom_interest_sync_history_path(settings: Settings) -> Path:
+    state_dir = resolve_vault_dir(settings.research_vault_dir) / "_system"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return state_dir / "kiwoom_interest_sync_history.jsonl"
 
 
 def _first_value(payload: dict[str, Any], keys: list[str]) -> Any:
@@ -261,3 +280,53 @@ def build_kiwoom_interest_sync_preview(
             else "키움 관심그룹과 로컬 관심종목의 티커 기준 차이가 없습니다."
         ),
     }
+
+
+def append_kiwoom_interest_sync_history(
+    settings: Settings,
+    *,
+    summary: dict[str, Any],
+) -> None:
+    path = kiwoom_interest_sync_history_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "created_at": _current_history_timestamp(),
+        "broker": "KIWOOM",
+        "module": summary.get("module") or "kiwoom_interest_sync",
+        "mode": "dry_run" if summary.get("dry_run") else "apply",
+        "write_mode": summary.get("write_mode"),
+        "requested_count": summary.get("requested_count", 0),
+        "prepared_count": summary.get("prepared_count", 0),
+        "skipped_count": summary.get("skipped_count", 0),
+        "interest_ticker_count": summary.get("interest_ticker_count", 0),
+        "prepared_tickers": summary.get("prepared_tickers", []),
+        "skipped": summary.get("skipped", []),
+        "message": summary.get("next_action"),
+    }
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(payload, ensure_ascii=False))
+        file.write("\n")
+
+
+def read_kiwoom_interest_sync_history(settings: Settings, *, limit: int = 10) -> list[dict[str, Any]]:
+    path = kiwoom_interest_sync_history_path(settings)
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in reversed(lines):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            records.append(payload)
+        if len(records) >= limit:
+            break
+    return records

@@ -13455,10 +13455,13 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
             patch.object(main, "read_interest_list", return_value=interest_payload),
             patch.object(main, "local_interest_verification_response", side_effect=fake_verify),
             patch.object(main, "write_json_store") as write_json,
+            patch.object(main, "append_kiwoom_interest_sync_history") as append_history,
         ):
             dry_run = main.sync_kiwoom_interest_candidates(request, settings)
 
         write_json.assert_not_called()
+        append_history.assert_called_once()
+        self.assertTrue(append_history.call_args.kwargs["summary"]["dry_run"])
         self.assertEqual(dry_run["write_mode"], "preview_only")
         self.assertEqual(dry_run["prepared_count"], 1)
         self.assertEqual(dry_run["skipped_count"], 3)
@@ -13469,6 +13472,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
             patch.object(main, "read_interest_list", return_value=interest_payload),
             patch.object(main, "local_interest_verification_response", side_effect=fake_verify),
             patch.object(main, "write_json_store") as write_json,
+            patch.object(main, "append_kiwoom_interest_sync_history") as append_history,
         ):
             saved = main.sync_kiwoom_interest_candidates(request, settings)
 
@@ -13478,6 +13482,54 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         saved_payload = write_json.call_args.args[1]
         self.assertEqual([item["ticker"] for item in saved_payload["tickers"]], ["000660", "042660"])
         self.assertIn("kiwoom_interest_sync", saved_payload["tickers"][1]["tags"])
+        append_history.assert_called_once()
+        self.assertFalse(append_history.call_args.kwargs["summary"]["dry_run"])
+
+    def test_kiwoom_interest_sync_history_records_newest_valid_rows(self):
+        from research_os.kiwoom_interest import (
+            append_kiwoom_interest_sync_history,
+            read_kiwoom_interest_sync_history,
+        )
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(research_vault_dir=temp_dir)
+            append_kiwoom_interest_sync_history(
+                settings,
+                summary={
+                    "module": "kiwoom_interest_sync",
+                    "dry_run": True,
+                    "write_mode": "preview_only",
+                    "requested_count": 2,
+                    "prepared_count": 1,
+                    "skipped_count": 1,
+                    "interest_ticker_count": 3,
+                    "prepared_tickers": [{"ticker": "042660"}],
+                    "skipped": [{"ticker": "000660", "reason": "duplicate"}],
+                    "next_action": "검토 필요",
+                },
+            )
+            append_kiwoom_interest_sync_history(
+                settings,
+                summary={
+                    "module": "kiwoom_interest_sync",
+                    "dry_run": False,
+                    "write_mode": "saved",
+                    "requested_count": 1,
+                    "prepared_count": 1,
+                    "skipped_count": 0,
+                    "interest_ticker_count": 4,
+                    "prepared_tickers": [{"ticker": "042660"}],
+                    "next_action": "저장 완료",
+                },
+            )
+
+            history = read_kiwoom_interest_sync_history(settings, limit=5)
+
+        self.assertEqual([item["mode"] for item in history], ["apply", "dry_run"])
+        self.assertEqual(history[0]["write_mode"], "saved")
+        self.assertEqual(history[0]["prepared_tickers"][0]["ticker"], "042660")
+        self.assertEqual(history[1]["skipped"][0]["reason"], "duplicate")
 
     def test_research_os_kiwoom_token_cache_reuses_valid_token_without_network(self):
         from research_os.kiwoom_auth import KiwoomAuthClient
