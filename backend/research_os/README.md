@@ -62,6 +62,7 @@
 - `kcif_report_parsing.py`: KCIF 목록 HTML에서 보고서 메타데이터만 추출하는 parser
 - `kcif_reports.py`: KCIF 보고서 수집/상세 신호 분석과 시장일지 연결
 - `kiwoom_auth.py`: 키움 인증/토큰 상태 확인
+- `kiwoom_interest.py`: 키움 관심종목 그룹 조회(ka01300/ka01301)와 응답 정규화 helper
 - `kis_data_provider.py`: KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper
 - `llm_bridge_status.py`: LLM 응답 저장과 RAG 연결 상태 요약
 - `market_journal.py`: 네이버 마감 시황 시장일지 출처 메타데이터

@@ -2038,6 +2038,18 @@ export async function fetchInterestAutomationBoard(accessToken, saveResult = tru
   );
 }
 
+export async function fetchKiwoomInterestGroups(accessToken, { includeDetails = false, maxGroups = 20 } = {}) {
+  return request(
+    `/api/v1/brokerage/kiwoom/interest-groups?include_details=${
+      includeDetails ? "true" : "false"
+    }&max_groups=${encodeURIComponent(String(maxGroups))}`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
 export async function fetchMarketCloseJournal(accessToken, market = "ALL") {
   return request(
     `/api/v1/market-close-journal?market=${encodeURIComponent(market)}`,

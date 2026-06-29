@@ -124,6 +124,7 @@ from research_os.file_extraction import (
     safe_attachment_file_name,
 )
 from research_os.kiwoom_auth import KiwoomAuthClient, KiwoomMaskedTokenStatus
+from research_os.kiwoom_interest import build_kiwoom_interest_groups_status
 import research_os.dart_filing_watch as dart_filing_watch
 from research_os.investment_calendar import (
     build_investment_calendar_earnings_events as build_calendar_earnings_events,
@@ -12299,6 +12300,25 @@ def test_kiwoom_token_issue(
     보안상 실제 token 원문은 반환하지 않고 마스킹된 값만 반환합니다.
     """
     return KiwoomAuthClient(settings).issue_masked_token_status()
+
+
+@app.get(
+    "/api/v1/brokerage/kiwoom/interest-groups",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_kiwoom_interest_groups(
+    include_details: bool = False,
+    max_groups: int = 20,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    키움 REST API 관심종목 그룹 목록(ka01300)과 선택적 상세(ka01301)를 조회합니다.
+    """
+    return build_kiwoom_interest_groups_status(
+        settings,
+        include_details=include_details,
+        max_groups=max_groups,
+    )
 
 
 @app.get(

@@ -13351,6 +13351,57 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
 
 
 class KiwoomResearchOsIntegrationTests(unittest.TestCase):
+    def test_kiwoom_interest_group_status_normalizes_groups_and_details(self):
+        from research_os.kiwoom_interest import build_kiwoom_interest_groups_status
+        from research_os.settings import Settings
+
+        settings = Settings(
+            brokerage_api_key="fake-key",
+            brokerage_api_secret="fake-secret",
+            kiwoom_interest_endpoint_path="/api/dostk/stkinfo",
+        )
+
+        with (
+            patch(
+                "research_os.kiwoom_interest.KiwoomAuthClient.issue_access_token",
+                return_value=SimpleNamespace(token="token"),
+            ),
+            patch(
+                "research_os.kiwoom_interest.httpx.post",
+                side_effect=[
+                    SimpleNamespace(
+                        raise_for_status=lambda: None,
+                        json=lambda: {
+                            "atn_stk_grp": [
+                                {"grp_no": "001", "grp_nm": "AI 반도체"},
+                                {"grp_no": "002", "grp_nm": "방산"},
+                            ]
+                        },
+                    ),
+                    SimpleNamespace(
+                        raise_for_status=lambda: None,
+                        json=lambda: {
+                            "atn_stk_list": [
+                                {"stk_cd": "A000660", "stk_nm": "SK하이닉스"},
+                                {"stk_cd": "A042660", "stk_nm": "한화오션"},
+                            ]
+                        },
+                    ),
+                ],
+            ) as post,
+        ):
+            result = build_kiwoom_interest_groups_status(settings, include_details=True, max_groups=1)
+
+        self.assertEqual(result["api_ids"], ["ka01300", "ka01301"])
+        self.assertEqual(result["endpoint_path"], "/api/dostk/stkinfo")
+        self.assertEqual(result["group_count"], 2)
+        self.assertEqual(result["groups"][0]["group_id"], "001")
+        self.assertEqual(result["details"][0]["item_count"], 2)
+        self.assertEqual(result["details"][0]["items"][0]["ticker"], "000660")
+        self.assertEqual(post.call_args_list[0].kwargs["headers"]["api-id"], "ka01300")
+        self.assertEqual(post.call_args_list[1].kwargs["headers"]["api-id"], "ka01301")
+        self.assertEqual(post.call_args_list[1].kwargs["json"], {"grp_no": "001"})
+
     def test_research_os_kiwoom_token_cache_reuses_valid_token_without_network(self):
         from research_os.kiwoom_auth import KiwoomAuthClient
         from research_os.settings import Settings

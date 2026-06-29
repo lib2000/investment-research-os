@@ -88,6 +88,7 @@
   addInterestTicker,
   addInterestSector,
   fetchInterestAutomationBoard,
+  fetchKiwoomInterestGroups,
   fetchMarketCloseJournal,
   fetchNaverResearchStatus,
   repairNaverResearchCache,
@@ -98,7 +99,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=7f5e52136164";
+} from "./api.js?v=cc487759cf9d";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -200,6 +201,7 @@ const elements = {
   interestsSummary: document.querySelector("#interestsSummary"),
   interestsLoadButton: document.querySelector("#interestsLoadButton"),
   interestAutomationButton: document.querySelector("#interestAutomationButton"),
+  kiwoomInterestGroupsButton: document.querySelector("#kiwoomInterestGroupsButton"),
   interestTickerDraft: document.querySelector("#interestTickerDraft"),
   interestTickerEditor: document.querySelector("#interestTickerEditor"),
   addInterestTickerButton: document.querySelector("#addInterestTickerButton"),
@@ -9993,6 +9995,7 @@ attachButtonActionFeedback(document.querySelector("#interests"), {
   submit: "관심종목/섹터 저장을 시작했습니다.",
   interestsLoadButton: "관심종목/섹터 불러오기를 시작했습니다.",
   interestAutomationButton: "관심종목/섹터 자동 수집 보드를 생성합니다.",
+  kiwoomInterestGroupsButton: "키움 관심종목 그룹 조회를 시작합니다.",
   addInterestTickerButton: "관심종목 추가를 시작했습니다.",
   addInterestSectorButton: "관심섹터 추가를 시작했습니다.",
 });
@@ -12185,6 +12188,26 @@ elements.interestAutomationButton?.addEventListener("click", async () => {
     setError(error);
   } finally {
     elements.interestAutomationButton.disabled = false;
+  }
+});
+
+elements.kiwoomInterestGroupsButton?.addEventListener("click", async () => {
+  elements.kiwoomInterestGroupsButton.disabled = true;
+  startOutputLoading("키움 관심종목 그룹 조회 중", [
+    "ka01300 관심종목 그룹 리스트 조회",
+    "ka01301 관심종목 그룹 상세 조회",
+    "로컬 관심목록 동기화 후보 정리",
+  ]);
+  try {
+    const result = await fetchKiwoomInterestGroups(token(), {
+      includeDetails: true,
+      maxGroups: 20,
+    });
+    setOutput(result || "키움 관심종목 그룹 조회 결과를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  } finally {
+    elements.kiwoomInterestGroupsButton.disabled = false;
   }
 });
 

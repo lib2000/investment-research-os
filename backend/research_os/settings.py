@@ -66,6 +66,7 @@ class Settings(BaseModel):
     kiwoom_token_expiry_buffer_seconds: int = 300
     kiwoom_page_delay_seconds: float = 0.4
     kiwoom_balance_max_pages: int = 10
+    kiwoom_interest_endpoint_path: str = "/api/dostk/stkinfo"
     secret_salt: str = Field(default="********")
     dev_user_token: str = Field(default="dev-local-token")
     research_vault_dir: str = "../research_vault"
@@ -234,6 +235,7 @@ class Settings(BaseModel):
             kiwoom_token_expiry_buffer_seconds=_read_int("KIWOOM_TOKEN_EXPIRY_BUFFER_SECONDS", 300),
             kiwoom_page_delay_seconds=_read_float("KIWOOM_PAGE_DELAY_SECONDS", 0.4),
             kiwoom_balance_max_pages=_read_int("KIWOOM_BALANCE_MAX_PAGES", 10),
+            kiwoom_interest_endpoint_path=os.getenv("KIWOOM_INTEREST_ENDPOINT_PATH", "/api/dostk/stkinfo"),
             secret_salt=os.getenv("SECRET_SALT", "********"),
             dev_user_token=os.getenv("DEV_USER_TOKEN", "dev-local-token"),
             research_vault_dir=os.getenv("RESEARCH_VAULT_DIR", "../research_vault"),
