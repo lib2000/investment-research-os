@@ -204,6 +204,7 @@ const elements = {
   interestAutomationButton: document.querySelector("#interestAutomationButton"),
   kiwoomInterestGroupsButton: document.querySelector("#kiwoomInterestGroupsButton"),
   kiwoomInterestSyncButton: document.querySelector("#kiwoomInterestSyncButton"),
+  kiwoomInterestCandidatePanel: document.querySelector("#kiwoomInterestCandidatePanel"),
   interestTickerDraft: document.querySelector("#interestTickerDraft"),
   interestTickerEditor: document.querySelector("#interestTickerEditor"),
   addInterestTickerButton: document.querySelector("#addInterestTickerButton"),
@@ -3005,6 +3006,68 @@ function updateInterestsSummary(response = {}) {
   );
 }
 
+function renderKiwoomInterestCandidatePanel(payload = null) {
+  if (!elements.kiwoomInterestCandidatePanel) {
+    return;
+  }
+  const preview = payload?.sync_preview || {};
+  const candidates = (preview.candidates || []).filter((item) => item?.action === "add_candidate");
+  const alreadyTrackedCount = Number(preview.already_tracked_count || 0);
+  if (!payload) {
+    elements.kiwoomInterestCandidatePanel.replaceChildren();
+    elements.kiwoomInterestCandidatePanel.hidden = true;
+    return;
+  }
+  const header = document.createElement("div");
+  header.className = "kiwoom-interest-candidate-header";
+  header.innerHTML = `
+    <strong>키움 추가 후보 ${escapeHtml(String(candidates.length))}개</strong>
+    <span>이미 등록 ${escapeHtml(String(alreadyTrackedCount))}개</span>
+  `;
+  if (!candidates.length) {
+    const empty = document.createElement("p");
+    empty.className = "helper-text";
+    empty.textContent = "추가 후보가 없습니다. 이미 등록된 관심종목과 중복되는지 확인했습니다.";
+    elements.kiwoomInterestCandidatePanel.replaceChildren(header, empty);
+    elements.kiwoomInterestCandidatePanel.hidden = false;
+    return;
+  }
+  const list = document.createElement("div");
+  list.className = "kiwoom-interest-candidate-list";
+  candidates.forEach((item, index) => {
+    const row = document.createElement("label");
+    row.className = "kiwoom-interest-candidate-row";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "kiwoomInterestCandidate";
+    checkbox.checked = true;
+    checkbox.dataset.index = String(index);
+    const main = document.createElement("span");
+    main.className = "kiwoom-interest-candidate-main";
+    const title = item.company_name || item.ticker || "회사명 확인 필요";
+    main.innerHTML = `
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(item.ticker || "티커 확인 필요")} · ${escapeHtml(item.group_name || item.group_id || "키움 관심그룹")}</small>
+    `;
+    row.append(checkbox, main);
+    list.append(row);
+  });
+  elements.kiwoomInterestCandidatePanel.replaceChildren(header, list);
+  elements.kiwoomInterestCandidatePanel.hidden = false;
+}
+
+function selectedKiwoomInterestCandidates() {
+  const candidates = (lastKiwoomInterestGroups?.sync_preview?.candidates || []).filter(
+    (item) => item?.action === "add_candidate"
+  );
+  if (!elements.kiwoomInterestCandidatePanel) {
+    return candidates;
+  }
+  return [...elements.kiwoomInterestCandidatePanel.querySelectorAll('input[name="kiwoomInterestCandidate"]:checked')]
+    .map((input) => candidates[Number(input.dataset.index)])
+    .filter(Boolean);
+}
+
 function initializeEditableLists() {
   renderEditorRows(
     elements.holdingsEditor,
@@ -3027,6 +3090,7 @@ function initializeEditableLists() {
   );
   resetInterestDrafts();
   updateInterestsSummary();
+  renderKiwoomInterestCandidatePanel(null);
 }
 
 function currentPortfolioPayload() {
@@ -12208,6 +12272,7 @@ elements.kiwoomInterestGroupsButton?.addEventListener("click", async () => {
       maxGroups: 20,
     });
     lastKiwoomInterestGroups = result || null;
+    renderKiwoomInterestCandidatePanel(lastKiwoomInterestGroups);
     setOutput(result || "키움 관심종목 그룹 조회 결과를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
@@ -12217,11 +12282,9 @@ elements.kiwoomInterestGroupsButton?.addEventListener("click", async () => {
 });
 
 elements.kiwoomInterestSyncButton?.addEventListener("click", async () => {
-  const candidates = (lastKiwoomInterestGroups?.sync_preview?.candidates || []).filter(
-    (item) => item?.action === "add_candidate"
-  );
+  const candidates = selectedKiwoomInterestCandidates();
   if (!candidates.length) {
-    setError(new Error("먼저 키움 관심그룹 조회를 실행하고 추가 후보가 있는지 확인하세요."));
+    setError(new Error("먼저 키움 관심그룹 조회를 실행하고 저장할 후보를 1개 이상 선택하세요."));
     return;
   }
   elements.kiwoomInterestSyncButton.disabled = true;

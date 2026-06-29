@@ -3069,6 +3069,87 @@ label {
   color: var(--accent);
 }
 
+.kiwoom-interest-candidates {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fbfd;
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+}
+
+.kiwoom-interest-candidates[hidden] {
+  display: none;
+}
+
+.kiwoom-interest-candidate-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.kiwoom-interest-candidate-header strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.kiwoom-interest-candidate-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.kiwoom-interest-candidate-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  min-width: 0;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+}
+
+.kiwoom-interest-candidate-row input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.kiwoom-interest-candidate-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kiwoom-interest-candidate-main strong,
+.kiwoom-interest-candidate-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kiwoom-interest-candidate-main strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.kiwoom-interest-candidate-main small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: normal;
+}
+
 .interest-ticker-row,
 .interest-sector-row {
   align-items: stretch;
