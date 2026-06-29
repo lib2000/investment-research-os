@@ -648,12 +648,17 @@ def main() -> int:
             repair_status = load_state(repair_status_path)
             if repair_status.get("module") != "daily_recommendation_evidence_repair_queue":
                 errors.append(f"근거 보강 큐 실행 결과 모듈 불일치: {repair_status.get('module')}")
-            if repair_status.get("status") not in {"dry_run", "queued"}:
+            if repair_status.get("status") not in {"dry_run", "queued", "partial_completed", "completed", "completed_with_errors"}:
                 errors.append(f"근거 보강 큐 실행 상태 확인 필요: {repair_status.get('status')}")
             if not isinstance(repair_status.get("queue_count"), int):
                 errors.append("근거 보강 큐 queue_count 누락")
             if not isinstance(repair_status.get("queue"), list):
                 errors.append("근거 보강 큐 목록 누락")
+            if repair_status.get("status") in {"partial_completed", "completed", "completed_with_errors"}:
+                if not isinstance(repair_status.get("status_counts"), dict):
+                    errors.append("근거 보강 큐 실행 상태 집계 누락")
+                if not isinstance(repair_status.get("completed_count"), int):
+                    errors.append("근거 보강 큐 completed_count 누락")
             if not str(repair_status.get("storage_path") or "").strip():
                 errors.append("근거 보강 큐 저장 경로 누락")
 

@@ -116,6 +116,50 @@ def daily_recommendation_repair_queue_action(queue_item: dict[str, Any]) -> dict
     }
 
 
+def daily_recommendation_repair_queue_execution(
+    record: dict[str, Any],
+    queue_item: dict[str, Any],
+    action: dict[str, Any],
+) -> dict[str, Any]:
+    ticker = str(record.get("ticker") or "").strip()
+    company_name = str(record.get("company_name") or "").strip()
+    task_type = str(queue_item.get("task_type") or "general_review")
+    target = " ".join(part for part in [ticker, company_name] if part).strip()
+    if not target:
+        return {
+            "status": "skipped",
+            "reason": "ticker_or_company_missing",
+            "message": "티커/회사명이 없어 자동 보강 계획을 생성하지 않았습니다.",
+        }
+    if task_type == "fresh_evidence":
+        query = f"{target} 최근 30일 공시 뉴스 리포트 실적"
+        next_step = "최근 7~30일 저장 자료, 공시, 뉴스 인박스 재조회 대상에 등록"
+    elif task_type == "source_diversity":
+        query = f"{target} 공시 리포트 뉴스 정책 투자심리"
+        next_step = "부족한 출처 유형을 균형 보강하기 위한 검색 후보 생성"
+    elif task_type == "signal_coverage":
+        query = f"{target} 시장 공시 정책 뉴스 심리 신호"
+        next_step = "비어 있는 신호 축을 재스캔할 후보 쿼리 생성"
+    elif task_type == "source_body":
+        query = f"{target} 원문 PDF OCR 본문"
+        next_step = "본문/PDF/OCR 보강 대기 목록에 연결할 후보 생성"
+    elif task_type == "source_trace":
+        query = f"{target} 근거 문서 출처 추적"
+        next_step = "연결 문서 메타데이터 재검증 후보 생성"
+    else:
+        query = f"{target} 투자 근거 리스크 최신 자료"
+        next_step = "보강 사유 검토와 관련 원천 자료 후보 생성"
+    return {
+        "status": "completed",
+        "mode": "safe_local",
+        "handler": action["handler"],
+        "generated_query": query,
+        "next_step": next_step,
+        "side_effects": ["repair_queue_status_file"],
+        "message": "안전 실행 모드에서 보강 계획과 검색 후보를 생성했습니다.",
+    }
+
+
 def run_daily_recommendation_evidence_repair_queue(
     settings: Settings,
     *,
@@ -136,6 +180,16 @@ def run_daily_recommendation_evidence_repair_queue(
             if not isinstance(item, dict):
                 continue
             action = daily_recommendation_repair_queue_action(item)
+            execution = (
+                {
+                    "status": "dry_run",
+                    "mode": "preview",
+                    "handler": action["handler"],
+                    "message": "dry-run 미리보기만 수행했습니다.",
+                }
+                if dry_run
+                else daily_recommendation_repair_queue_execution(record, item, action)
+            )
             queue_rows.append(
                 {
                     "record_id": record.get("record_id"),
@@ -152,7 +206,8 @@ def run_daily_recommendation_evidence_repair_queue(
                     "next_action": item.get("next_action") or action["action"],
                     "handler": action["handler"],
                     "planned_action": action["action"],
-                    "status": "dry_run" if dry_run else "queued_for_execution",
+                    "status": execution["status"],
+                    "execution": execution,
                 }
             )
     queue_rows.sort(
@@ -164,15 +219,44 @@ def run_daily_recommendation_evidence_repair_queue(
         ),
         reverse=True,
     )
-    limited_rows = queue_rows[: max(1, min(int(limit or 50), 200))]
+    row_limit = max(1, min(int(limit or 50), 200))
+    if not dry_run:
+        for index, item in enumerate(queue_rows):
+            if index < row_limit:
+                continue
+            item["status"] = "queued"
+            item["execution"] = {
+                "status": "queued",
+                "mode": "safe_local",
+                "handler": item.get("handler"),
+                "message": "이번 안전 실행 한도 밖의 항목이라 다음 실행 대기 상태로 남겼습니다.",
+            }
+    limited_rows = queue_rows[:row_limit]
     by_task_type: dict[str, int] = {}
     for item in queue_rows:
         task_type = str(item.get("task_type") or "general_review")
         by_task_type[task_type] = by_task_type.get(task_type, 0) + 1
+    by_status: dict[str, int] = {}
+    for item in queue_rows:
+        status = str(item.get("status") or "unknown")
+        by_status[status] = by_status.get(status, 0) + 1
+    failed_count = by_status.get("failed", 0)
+    completed_count = by_status.get("completed", 0)
+    skipped_count = by_status.get("skipped", 0)
+    queued_count = by_status.get("queued", 0)
+    if dry_run:
+        payload_status = "dry_run"
+    elif failed_count:
+        payload_status = "completed_with_errors"
+    elif queued_count:
+        payload_status = "partial_completed"
+    else:
+        payload_status = "completed"
     payload = {
-        "status": "dry_run" if dry_run else "queued",
+        "status": payload_status,
         "module": "daily_recommendation_evidence_repair_queue",
         "dry_run": dry_run,
+        "execution_mode": "preview" if dry_run else "safe_local",
         "latest_only": latest_only,
         "latest_recommendation_date": latest_date,
         "checked_at": current_recommendation_datetime().isoformat(),
@@ -180,11 +264,16 @@ def run_daily_recommendation_evidence_repair_queue(
         "queue_count": len(queue_rows),
         "returned_count": len(limited_rows),
         "task_type_counts": by_task_type,
+        "status_counts": by_status,
+        "completed_count": completed_count,
+        "queued_count": queued_count,
+        "skipped_count": skipped_count,
+        "failed_count": failed_count,
         "queue": limited_rows,
         "message": (
             "근거 보강 큐 dry-run 미리보기를 저장했습니다."
             if dry_run
-            else "근거 보강 큐 실행 대상을 저장했습니다."
+            else "근거 보강 큐 안전 실행 계획과 항목별 처리 결과를 저장했습니다."
         ),
         "storage_path": str(daily_recommendation_repair_queue_status_path(settings)),
     }

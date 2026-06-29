@@ -240,6 +240,7 @@ const elements = {
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationPolicySignalsButton: document.querySelector("#dailyRecommendationPolicySignalsButton"),
   dailyRecommendationRepairQueueButton: document.querySelector("#dailyRecommendationRepairQueueButton"),
+  dailyRecommendationRepairQueueExecuteButton: document.querySelector("#dailyRecommendationRepairQueueExecuteButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -12578,6 +12579,7 @@ const MEMORY_ACTION_MESSAGES = {
   dailyRecommendationsButton: "오늘 한국/미국 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   dailyRecommendationRepairQueueButton: "추천 근거 보강 큐 dry-run을 실행합니다.",
+  dailyRecommendationRepairQueueExecuteButton: "추천 근거 보강 큐 상위 항목을 안전 실행합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
@@ -12964,6 +12966,27 @@ async function runDailyRecommendationRepairQueueFlow() {
   }
 }
 
+async function runDailyRecommendationRepairQueueExecuteFlow() {
+  syncApiBaseUrl();
+  activateTab("memory");
+  startOutputLoading("추천 근거 보강 큐 안전 실행 중", [
+    "보강 큐 상위 25건 선택",
+    "외부 수집 없이 안전 실행 계획 생성",
+    "항목별 completed/skipped/failed 상태 저장",
+    "다음 내부 액션과 검색 후보 기록",
+  ]);
+  try {
+    const result = await runDailyRecommendationRepairQueue(token(), {
+      latestOnly: false,
+      dryRun: false,
+      limit: 25,
+    });
+    setOutput(result || "추천 근거 보강 큐 안전 실행 결과를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+}
+
 async function runRecentWeeklyBriefFlow() {
   syncApiBaseUrl();
   activateTab("dashboard");
@@ -13097,6 +13120,7 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
 
 elements.dailyRecommendationPolicySignalsButton?.addEventListener("click", runDailyRecommendationPolicySignalsFlow);
 elements.dailyRecommendationRepairQueueButton?.addEventListener("click", runDailyRecommendationRepairQueueFlow);
+elements.dailyRecommendationRepairQueueExecuteButton?.addEventListener("click", runDailyRecommendationRepairQueueExecuteFlow);
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
 elements.recentWeeklyEvidenceSynthesisButton?.addEventListener("click", runRecentWeeklyEvidenceSynthesisFlow);
