@@ -275,6 +275,7 @@ from research_os.models import (
     InterestSector,
     InterestListResponse,
     InterestListUpdateRequest,
+    KiwoomInterestSyncRequest,
     MarketCloseEntry,
     MarketCloseHistoryResponse,
     MarketCloseReviewRequest,
@@ -12327,6 +12328,114 @@ def read_kiwoom_interest_groups(
             result,
             read_interest_list(settings),
         )
+    return result
+
+
+@app.post(
+    "/api/v1/brokerage/kiwoom/interest-groups/sync",
+    dependencies=[Depends(verify_user_token)],
+)
+def sync_kiwoom_interest_candidates(
+    request: KiwoomInterestSyncRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    키움 관심그룹 조회 후보 중 사용자가 선택한 종목만 로컬 관심종목에 반영합니다.
+    기본값은 dry_run=True라 저장하지 않고 추가 예정 목록만 반환합니다.
+    """
+    payload = read_interest_list(settings)
+    existing_tickers = [
+        InterestTicker.model_validate(item)
+        for item in payload.get("tickers", [])
+        if isinstance(item, dict)
+    ]
+    existing_sectors = [
+        InterestSector.model_validate(item)
+        for item in payload.get("sectors", [])
+        if isinstance(item, dict)
+    ]
+    existing_keys = {normalize_ticker(item.ticker) for item in existing_tickers if item.ticker}
+    prepared: list[InterestTicker] = []
+    seen_keys: set[str] = set()
+    skipped: list[dict] = []
+    for candidate in request.candidates:
+        raw_ticker = normalize_ticker(candidate.ticker)
+        ticker = raw_ticker[1:] if raw_ticker.startswith("A") and raw_ticker[1:].isdigit() else raw_ticker
+        label = candidate.company_name or candidate.ticker or ""
+        if not ticker or ticker in {"UNKNOWN", "CASH"}:
+            skipped.append(
+                {
+                    "ticker": candidate.ticker,
+                    "company_name": candidate.company_name,
+                    "reason": "유효한 티커가 없어 건너뜁니다.",
+                }
+            )
+            continue
+        if ticker in existing_keys or ticker in seen_keys:
+            skipped.append(
+                {
+                    "ticker": ticker,
+                    "company_name": candidate.company_name,
+                    "reason": "이미 로컬 관심종목에 있거나 요청 안에서 중복입니다.",
+                }
+            )
+            continue
+        seen_keys.add(ticker)
+        group_label = candidate.group_name or candidate.group_id or "키움 관심그룹"
+        tags = sorted(
+            {
+                tag
+                for tag in [
+                    *(request.tags or []),
+                    "kiwoom_interest_sync",
+                    candidate.group_name,
+                ]
+                if str(tag or "").strip()
+            }
+        )
+        prepared.append(
+            InterestTicker(
+                ticker=ticker,
+                priority=request.priority or "medium",
+                thesis=f"{group_label}에서 동기화 후보로 확인",
+                notes=f"키움 관심그룹 선택 동기화 후보: {label or ticker}",
+                tags=tags,
+            )
+        )
+    response = normalize_interest_list(
+        InterestListUpdateRequest(
+            tickers=[*existing_tickers, *prepared],
+            sectors=existing_sectors,
+        ),
+        settings,
+    )
+    result = {
+        "status": "success",
+        "module": "kiwoom_interest_sync",
+        "dry_run": request.dry_run,
+        "requested_count": len(request.candidates),
+        "prepared_count": len(prepared),
+        "skipped_count": len(skipped),
+        "skipped": skipped,
+        "prepared_tickers": [item.model_dump(mode="json") for item in prepared],
+        "interest_ticker_count": len(response.tickers),
+        "storage_path": str(interest_list_path(settings)),
+    }
+    if request.dry_run:
+        result["write_mode"] = "preview_only"
+        result["next_action"] = "검토 후 dry_run=false로 다시 호출하면 선택 후보를 로컬 관심종목에 저장합니다."
+        return result
+    write_json_store(
+        interest_list_path(settings),
+        {
+            "tickers": [item.model_dump(mode="json") for item in response.tickers],
+            "sectors": [item.model_dump(mode="json") for item in response.sectors],
+            "updated_at": response.updated_at,
+        },
+    )
+    result["write_mode"] = "saved"
+    result["updated_at"] = response.updated_at
+    result["next_action"] = "관심종목 자동화 보드를 다시 실행해 새 수집 대상을 확인하세요."
     return result
 
 

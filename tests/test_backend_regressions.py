@@ -13416,6 +13416,69 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertEqual(preview["candidates"][0]["action"], "already_tracked")
         self.assertEqual(preview["candidates"][1]["action"], "add_candidate")
 
+    def test_kiwoom_interest_sync_candidates_dry_run_and_save(self):
+        import research_os_main as main
+        from research_os.models import KiwoomInterestSyncCandidate, KiwoomInterestSyncRequest, TickerVerificationResponse
+        from research_os.settings import Settings
+
+        settings = Settings()
+        request = KiwoomInterestSyncRequest(
+            candidates=[
+                KiwoomInterestSyncCandidate(ticker="A000660", company_name="SK하이닉스", group_name="AI 반도체"),
+                KiwoomInterestSyncCandidate(ticker="A042660", company_name="한화오션", group_name="방산"),
+                KiwoomInterestSyncCandidate(ticker="042660", company_name="한화오션", group_name="방산"),
+                KiwoomInterestSyncCandidate(ticker="", company_name="티커 없음", group_name="기타"),
+            ],
+            dry_run=True,
+        )
+        interest_payload = {
+            "tickers": [{"ticker": "000660", "priority": "high", "tags": ["existing"]}],
+            "sectors": [],
+        }
+
+        def fake_verify(symbol, _settings):
+            return (
+                main.normalize_ticker(symbol),
+                TickerVerificationResponse(
+                    requested_symbol=symbol,
+                    official_symbol=main.normalize_ticker(symbol),
+                    company_name="한화오션" if main.normalize_ticker(symbol) == "042660" else "SK하이닉스",
+                    exchange="KRX",
+                    country="KR",
+                    verified=True,
+                    verification_source="test",
+                    message="verified",
+                ),
+            )
+
+        with (
+            patch.object(main, "read_interest_list", return_value=interest_payload),
+            patch.object(main, "local_interest_verification_response", side_effect=fake_verify),
+            patch.object(main, "write_json_store") as write_json,
+        ):
+            dry_run = main.sync_kiwoom_interest_candidates(request, settings)
+
+        write_json.assert_not_called()
+        self.assertEqual(dry_run["write_mode"], "preview_only")
+        self.assertEqual(dry_run["prepared_count"], 1)
+        self.assertEqual(dry_run["skipped_count"], 3)
+        self.assertEqual(dry_run["prepared_tickers"][0]["ticker"], "042660")
+
+        request.dry_run = False
+        with (
+            patch.object(main, "read_interest_list", return_value=interest_payload),
+            patch.object(main, "local_interest_verification_response", side_effect=fake_verify),
+            patch.object(main, "write_json_store") as write_json,
+        ):
+            saved = main.sync_kiwoom_interest_candidates(request, settings)
+
+        self.assertEqual(saved["write_mode"], "saved")
+        self.assertEqual(saved["prepared_count"], 1)
+        write_json.assert_called_once()
+        saved_payload = write_json.call_args.args[1]
+        self.assertEqual([item["ticker"] for item in saved_payload["tickers"]], ["000660", "042660"])
+        self.assertIn("kiwoom_interest_sync", saved_payload["tickers"][1]["tags"])
+
     def test_research_os_kiwoom_token_cache_reuses_valid_token_without_network(self):
         from research_os.kiwoom_auth import KiwoomAuthClient
         from research_os.settings import Settings

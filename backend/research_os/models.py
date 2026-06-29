@@ -880,6 +880,20 @@ class InterestListResponse(BaseModel):
     storage_path: Optional[str] = None
 
 
+class KiwoomInterestSyncCandidate(BaseModel):
+    ticker: str = ""
+    company_name: Optional[str] = None
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
+
+
+class KiwoomInterestSyncRequest(BaseModel):
+    candidates: List[KiwoomInterestSyncCandidate] = Field(default_factory=list)
+    dry_run: bool = True
+    priority: str = "medium"
+    tags: List[str] = Field(default_factory=lambda: ["kiwoom_interest"])
+
+
 class MarketCloseReviewRequest(BaseModel):
     market: str = "US"
     session_date: Optional[str] = None

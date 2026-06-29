@@ -2050,6 +2050,17 @@ export async function fetchKiwoomInterestGroups(accessToken, { includeDetails = 
   );
 }
 
+export async function syncKiwoomInterestCandidates(
+  accessToken,
+  { candidates = [], dryRun = true, priority = "medium", tags = ["kiwoom_interest"] } = {}
+) {
+  return request("/api/v1/brokerage/kiwoom/interest-groups/sync", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ candidates, dry_run: dryRun, priority, tags }),
+  });
+}
+
 export async function fetchMarketCloseJournal(accessToken, market = "ALL") {
   return request(
     `/api/v1/market-close-journal?market=${encodeURIComponent(market)}`,

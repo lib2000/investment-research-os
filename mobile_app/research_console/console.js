@@ -89,6 +89,7 @@
   addInterestSector,
   fetchInterestAutomationBoard,
   fetchKiwoomInterestGroups,
+  syncKiwoomInterestCandidates,
   fetchMarketCloseJournal,
   fetchNaverResearchStatus,
   repairNaverResearchCache,
@@ -99,7 +100,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=cc487759cf9d";
+} from "./api.js?v=3dede9cc3d3a";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -202,6 +203,7 @@ const elements = {
   interestsLoadButton: document.querySelector("#interestsLoadButton"),
   interestAutomationButton: document.querySelector("#interestAutomationButton"),
   kiwoomInterestGroupsButton: document.querySelector("#kiwoomInterestGroupsButton"),
+  kiwoomInterestSyncButton: document.querySelector("#kiwoomInterestSyncButton"),
   interestTickerDraft: document.querySelector("#interestTickerDraft"),
   interestTickerEditor: document.querySelector("#interestTickerEditor"),
   addInterestTickerButton: document.querySelector("#addInterestTickerButton"),
@@ -308,6 +310,7 @@ let lastPortfolioAnalysisStatus = null;
 let lastPortfolioTeamReportQueue = null;
 let lastInterestList = null;
 let lastInterestAutomationBoard = null;
+let lastKiwoomInterestGroups = null;
 let lastTodayResearchUpdate = null;
 let latestDailyRecommendations = null;
 let activeMemoryPreviewFile = null;
@@ -9996,6 +9999,7 @@ attachButtonActionFeedback(document.querySelector("#interests"), {
   interestsLoadButton: "관심종목/섹터 불러오기를 시작했습니다.",
   interestAutomationButton: "관심종목/섹터 자동 수집 보드를 생성합니다.",
   kiwoomInterestGroupsButton: "키움 관심종목 그룹 조회를 시작합니다.",
+  kiwoomInterestSyncButton: "키움 관심그룹 추가 후보 저장을 시작합니다.",
   addInterestTickerButton: "관심종목 추가를 시작했습니다.",
   addInterestSectorButton: "관심섹터 추가를 시작했습니다.",
 });
@@ -12203,11 +12207,44 @@ elements.kiwoomInterestGroupsButton?.addEventListener("click", async () => {
       includeDetails: true,
       maxGroups: 20,
     });
+    lastKiwoomInterestGroups = result || null;
     setOutput(result || "키움 관심종목 그룹 조회 결과를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   } finally {
     elements.kiwoomInterestGroupsButton.disabled = false;
+  }
+});
+
+elements.kiwoomInterestSyncButton?.addEventListener("click", async () => {
+  const candidates = (lastKiwoomInterestGroups?.sync_preview?.candidates || []).filter(
+    (item) => item?.action === "add_candidate"
+  );
+  if (!candidates.length) {
+    setError(new Error("먼저 키움 관심그룹 조회를 실행하고 추가 후보가 있는지 확인하세요."));
+    return;
+  }
+  elements.kiwoomInterestSyncButton.disabled = true;
+  startOutputLoading("키움 관심종목 후보 저장 중", [
+    "마지막 조회 결과의 추가 후보 확인",
+    "로컬 관심종목 중복 제거",
+    "선택 후보 저장",
+  ]);
+  try {
+    const result = await syncKiwoomInterestCandidates(token(), {
+      candidates,
+      dryRun: false,
+      priority: "medium",
+      tags: ["kiwoom_interest", "kiwoom_interest_sync"],
+    });
+    const interests = await fetchInterests(token());
+    fillInterestsForm(interests);
+    setOutput({ sync_result: result, interests });
+    await runSecondaryRefresh("관심종목/섹터 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  } finally {
+    elements.kiwoomInterestSyncButton.disabled = false;
   }
 });
 
