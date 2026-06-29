@@ -3078,6 +3078,18 @@ label {
   border-radius: 8px;
 }
 
+.kiwoom-interest-sync-status {
+  display: block;
+}
+
+.kiwoom-interest-sync-status[hidden] {
+  display: none;
+}
+
+.kiwoom-interest-sync-card {
+  margin: 0;
+}
+
 .kiwoom-interest-candidates[hidden] {
   display: none;
 }

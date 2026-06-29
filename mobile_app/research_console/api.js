@@ -2061,6 +2061,16 @@ export async function syncKiwoomInterestCandidates(
   });
 }
 
+export async function fetchKiwoomInterestSyncHistory(accessToken, { limit = 5 } = {}) {
+  return request(
+    `/api/v1/brokerage/kiwoom/interest-groups/sync-history?limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: "GET",
+      accessToken,
+    }
+  );
+}
+
 export async function fetchMarketCloseJournal(accessToken, market = "ALL") {
   return request(
     `/api/v1/market-close-journal?market=${encodeURIComponent(market)}`,

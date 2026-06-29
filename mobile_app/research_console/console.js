@@ -90,6 +90,7 @@
   fetchInterestAutomationBoard,
   fetchKiwoomInterestGroups,
   syncKiwoomInterestCandidates,
+  fetchKiwoomInterestSyncHistory,
   fetchMarketCloseJournal,
   fetchNaverResearchStatus,
   repairNaverResearchCache,
@@ -100,7 +101,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=3dede9cc3d3a";
+} from "./api.js?v=73932106778d";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -204,6 +205,7 @@ const elements = {
   interestAutomationButton: document.querySelector("#interestAutomationButton"),
   kiwoomInterestGroupsButton: document.querySelector("#kiwoomInterestGroupsButton"),
   kiwoomInterestSyncButton: document.querySelector("#kiwoomInterestSyncButton"),
+  kiwoomInterestSyncStatus: document.querySelector("#kiwoomInterestSyncStatus"),
   kiwoomInterestCandidatePanel: document.querySelector("#kiwoomInterestCandidatePanel"),
   interestTickerDraft: document.querySelector("#interestTickerDraft"),
   interestTickerEditor: document.querySelector("#interestTickerEditor"),
@@ -3006,6 +3008,54 @@ function updateInterestsSummary(response = {}) {
   );
 }
 
+function renderKiwoomInterestSyncStatus(payload = null) {
+  if (!elements.kiwoomInterestSyncStatus) {
+    return;
+  }
+  const latest = payload?.latest || null;
+  if (!payload || !latest) {
+    elements.kiwoomInterestSyncStatus.replaceChildren();
+    elements.kiwoomInterestSyncStatus.hidden = true;
+    return;
+  }
+  const saved = Number(latest.prepared_count || 0);
+  const skipped = Number(latest.skipped_count || 0);
+  const requested = Number(latest.requested_count || 0);
+  const modeLabel = latest.mode === "apply" ? "저장" : "미리보기";
+  const tone = latest.mode === "apply" && saved > 0 ? "ok" : skipped ? "warning" : "";
+  elements.kiwoomInterestSyncStatus.innerHTML = `
+    <article class="dashboard-card ${escapeHtml(tone)} kiwoom-interest-sync-card">
+      <span>키움 관심그룹 동기화</span>
+      <strong>${escapeHtml(modeLabel)} · ${escapeHtml(formatDateTime(latest.created_at || ""))}</strong>
+      <p>${escapeHtml(compactOutputText(latest.message || "최근 키움 관심그룹 동기화 이력을 확인했습니다.", 120))}</p>
+      <div class="dashboard-mini-metrics">
+        <b>요청 <i>${escapeHtml(formatNumber(requested))}</i></b>
+        <b>저장 후보 <i>${escapeHtml(formatNumber(saved))}</i></b>
+        <b>제외 <i>${escapeHtml(formatNumber(skipped))}</i></b>
+        <b>현재 관심 <i>${escapeHtml(formatNumber(latest.interest_ticker_count || 0))}</i></b>
+      </div>
+    </article>
+  `;
+  elements.kiwoomInterestSyncStatus.hidden = false;
+}
+
+async function refreshKiwoomInterestSyncStatus({ silent = true } = {}) {
+  if (!token()) {
+    renderKiwoomInterestSyncStatus(null);
+    return null;
+  }
+  try {
+    const result = await fetchKiwoomInterestSyncHistory(token(), { limit: 5 });
+    renderKiwoomInterestSyncStatus(result);
+    return result;
+  } catch (error) {
+    if (!silent) {
+      setError(error);
+    }
+    return null;
+  }
+}
+
 function renderKiwoomInterestCandidatePanel(payload = null) {
   if (!elements.kiwoomInterestCandidatePanel) {
     return;
@@ -3131,6 +3181,7 @@ function initializeEditableLists() {
   );
   resetInterestDrafts();
   updateInterestsSummary();
+  refreshKiwoomInterestSyncStatus({ silent: true });
   renderKiwoomInterestCandidatePanel(null);
 }
 
@@ -12314,6 +12365,7 @@ elements.kiwoomInterestGroupsButton?.addEventListener("click", async () => {
     });
     lastKiwoomInterestGroups = result || null;
     renderKiwoomInterestCandidatePanel(lastKiwoomInterestGroups);
+    await refreshKiwoomInterestSyncStatus({ silent: true });
     setOutput(result || "키움 관심종목 그룹 조회 결과를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
@@ -12344,6 +12396,7 @@ elements.kiwoomInterestSyncButton?.addEventListener("click", async () => {
     const interests = await fetchInterests(token());
     fillInterestsForm(interests);
     markKiwoomInterestCandidatesSynced(result, candidates);
+    await refreshKiwoomInterestSyncStatus({ silent: true });
     setOutput({ sync_result: result, interests });
     await runSecondaryRefresh("관심종목/섹터 상태 새로고침", () => refreshStatus(false));
   } catch (error) {
