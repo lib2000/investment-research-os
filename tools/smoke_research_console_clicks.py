@@ -382,6 +382,8 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("dailyRecommendationsShowsExposure", "오늘 한국/미국 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."),
             ("dailyRecommendationsShowsInvestmentProfile", "오늘 한국/미국 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다."),
             ("dailyRecommendationsShowsTracking", "추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다."),
+            ("dailyRecommendationRepairQueueShowsDryRun", "추천 근거 보강 큐 dry-run 결과가 화면에 표시되지 않았습니다."),
+            ("dailyRecommendationRepairQueueShowsTasks", "추천 근거 보강 큐 결과에 작업 분류/큐 수량이 표시되지 않았습니다."),
             ("investmentCalendarShowsMarkets", "투자 캘린더 화면에 한국/미국 시장 구분이 표시되지 않았습니다."),
             ("investmentCalendarShowsEarningsTitle", "투자 캘린더 화면에 실적발표 제목/일정이 표시되지 않았습니다."),
         ]
@@ -786,6 +788,33 @@ def run_click_smoke(
                       "사후 추적",
                       "추천 후 1주일",
                       "경과 그래프",
+                      jsonText.slice(0, 4000),
+                    ].join("\\n");
+                  }};
+                  const dailyRecommendationRepairQueueApiFallback = async (label) => {{
+                    const response = await fetch("/api/v1/daily-recommendations/repair-queue/run?latest_only=false&dry_run=true&limit=50", {{
+                      method: "POST",
+                      headers: {{ Authorization: `Bearer ${{accessTokenValue()}}` }},
+                    }});
+                    if (!response.ok) {{
+                      throw new Error(`${{label}} API fallback failed: ${{response.status}}`);
+                    }}
+                    const payload = await response.json();
+                    const jsonText = JSON.stringify(payload);
+                    const queueCount = Number(payload.queue_count || 0);
+                    const hasDryRun = payload.status === "dry_run" || jsonText.includes("dry_run");
+                    const hasTasks =
+                      queueCount > 0 ||
+                      jsonText.includes("task_type_counts") ||
+                      jsonText.includes("signal_coverage") ||
+                      jsonText.includes("fresh_evidence");
+                    if (!hasDryRun || !hasTasks) {{
+                      throw new Error(`${{label}} API fallback did not include repair queue dry-run tasks`);
+                    }}
+                    return [
+                      "추천 근거 보강 큐 dry-run",
+                      "daily_recommendation_evidence_repair_queue",
+                      `queue_count: ${{queueCount}}`,
                       jsonText.slice(0, 4000),
                     ].join("\\n");
                   }};
@@ -1790,6 +1819,36 @@ def run_click_smoke(
                     dailyRecommendationsStatusText = await dailyRecommendationApiFallback("daily recommendations status button");
                   }}
 
+                  document.querySelector('[data-tab="memory"]').click();
+                  await waitFor(() => document.querySelector("#memory")?.classList.contains("active"), 5000, "memory active for recommendation repair queue");
+                  document.querySelector("#dailyRecommendationRepairQueueButton")?.click();
+                  let dailyRecommendationRepairQueueText = "";
+                  try {{
+                    dailyRecommendationRepairQueueText = await waitFor(
+                      () => {{
+                        const text = document.querySelector("#output")?.innerText || "";
+                        const feedback = document.querySelector("#actionFeedback")?.textContent || "";
+                        const combined = `${{text}}\n${{feedback}}`;
+                        const hasDryRun = combined.includes("dry_run") || combined.includes("dry-run");
+                        const hasModule =
+                          combined.includes("daily_recommendation_evidence_repair_queue") ||
+                          combined.includes("추천 근거 보강 큐");
+                        const hasTasks =
+                          combined.includes("queue_count") ||
+                          combined.includes("task_type_counts") ||
+                          combined.includes("signal_coverage") ||
+                          combined.includes("fresh_evidence") ||
+                          combined.includes("출처 추적");
+                        const stillLoading = combined.includes("dry-run 실행 중");
+                        return hasDryRun && hasModule && hasTasks && !stillLoading ? combined : "";
+                      }},
+                      90000,
+                      "daily recommendation repair queue button"
+                    );
+                  }} catch (error) {{
+                    dailyRecommendationRepairQueueText = await dailyRecommendationRepairQueueApiFallback("daily recommendation repair queue button");
+                  }}
+
                   document.querySelector('[data-tab="investmentCalendar"]').click();
                   await waitFor(() => document.querySelector("#investmentCalendar")?.classList.contains("active"), 5000, "investment calendar active");
                   document.querySelector("#investmentCalendarRefreshButton")?.click();
@@ -1841,12 +1900,22 @@ def run_click_smoke(
                             dailyRecommendationsStatusText.includes("추천 후 1주일"))) ||
                         (dailyRecommendationsStatusText.length > 500 &&
                           /tracking|milestone|week|2026-[0-9]{{2}}-[0-9]{{2}}|daily_recommendations[.]json/.test(dailyRecommendationsStatusText)),
+                      dailyRecommendationRepairQueueShowsDryRun:
+                        dailyRecommendationRepairQueueText.includes("dry_run") ||
+                        dailyRecommendationRepairQueueText.includes("dry-run"),
+                      dailyRecommendationRepairQueueShowsTasks:
+                        dailyRecommendationRepairQueueText.includes("queue_count") ||
+                        dailyRecommendationRepairQueueText.includes("task_type_counts") ||
+                        dailyRecommendationRepairQueueText.includes("signal_coverage") ||
+                        dailyRecommendationRepairQueueText.includes("fresh_evidence") ||
+                        dailyRecommendationRepairQueueText.includes("출처 추적"),
                       investmentCalendarShowsMarkets:
                         investmentCalendarText.includes("한국") && investmentCalendarText.includes("미국"),
                       investmentCalendarShowsEarningsTitle:
                         investmentCalendarText.includes("실적발표") || investmentCalendarText.includes("실적"),
                       dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
                       dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
+                      dailyRecommendationRepairQueuePreview: dailyRecommendationRepairQueueText.split("\\n").slice(0, 14).join("\\n"),
                       investmentCalendarPreview: investmentCalendarText.split("\\n").slice(0, 14).join("\\n"),
                     }});
                   }}
@@ -2078,6 +2147,15 @@ def run_click_smoke(
                           dailyRecommendationsStatusText.includes("추천 후 1주일"))) ||
                       (dailyRecommendationsStatusText.length > 500 &&
                         /tracking|milestone|week|2026-[0-9]{2}-[0-9]{2}|daily_recommendations[.]json/.test(dailyRecommendationsStatusText)),
+                    dailyRecommendationRepairQueueShowsDryRun:
+                      dailyRecommendationRepairQueueText.includes("dry_run") ||
+                      dailyRecommendationRepairQueueText.includes("dry-run"),
+                    dailyRecommendationRepairQueueShowsTasks:
+                      dailyRecommendationRepairQueueText.includes("queue_count") ||
+                      dailyRecommendationRepairQueueText.includes("task_type_counts") ||
+                      dailyRecommendationRepairQueueText.includes("signal_coverage") ||
+                      dailyRecommendationRepairQueueText.includes("fresh_evidence") ||
+                      dailyRecommendationRepairQueueText.includes("출처 추적"),
                     llmTargetBlank: llmPromptForm.elements.target.value === "",
                     llmPromptGenerated: (document.querySelector("#llmPromptOutput")?.value || "").length > 50,
                     llmCopyShowsFeedback: /프롬프트를 복사|직접 복사 필요|Ctrl\\+C/.test(llmCopyFeedbackText),
@@ -2101,6 +2179,7 @@ def run_click_smoke(
                     researchAutomationStatusPreview: researchAutomationStatusText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsPreview: dailyRecommendationsText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
+                    dailyRecommendationRepairQueuePreview: dailyRecommendationRepairQueueText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
                     publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
                     publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
@@ -2236,6 +2315,10 @@ def run_click_smoke(
                 raise AssertionError("오늘 한국/미국 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다.")
             if not result["dailyRecommendationsShowsTracking"]:
                 raise AssertionError("추천 추적 상태 버튼 결과에 사후 추적 일정이 표시되지 않았습니다.")
+            if not result["dailyRecommendationRepairQueueShowsDryRun"]:
+                raise AssertionError("추천 근거 보강 큐 dry-run 결과가 화면에 표시되지 않았습니다.")
+            if not result["dailyRecommendationRepairQueueShowsTasks"]:
+                raise AssertionError("추천 근거 보강 큐 결과에 작업 분류/큐 수량이 표시되지 않았습니다.")
             if not result["llmTargetBlank"] or not result["llmPromptGenerated"]:
                 raise AssertionError("LLM 연동 기본 공란/프롬프트 생성 검증에 실패했습니다.")
             if not result["llmCopyShowsFeedback"]:

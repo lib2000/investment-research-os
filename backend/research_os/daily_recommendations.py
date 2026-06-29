@@ -28,6 +28,7 @@ from research_os.daily_recommendation_store import (
     parse_daily_recommendations_time,
     read_daily_recommendation_store,
     read_json_payload,
+    run_daily_recommendation_evidence_repair_queue as store_run_daily_recommendation_evidence_repair_queue,
     should_run_daily_recommendations,
     daily_recommendation_status_payload as store_daily_recommendation_status_payload,
     summarize_daily_recommendation_store as store_summarize_daily_recommendation_store,
@@ -403,3 +404,18 @@ def update_recommendation_tracking(
 
 def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30) -> dict:
     return store_summarize_daily_recommendation_store(settings, limit=limit)
+
+
+def run_daily_recommendation_evidence_repair_queue(
+    settings: Settings,
+    *,
+    latest_only: bool = False,
+    dry_run: bool = True,
+    limit: int = 50,
+) -> dict[str, Any]:
+    return store_run_daily_recommendation_evidence_repair_queue(
+        settings,
+        latest_only=latest_only,
+        dry_run=dry_run,
+        limit=limit,
+    )

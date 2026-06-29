@@ -101,6 +101,7 @@ from research_os.daily_recommendations import (
     daily_recommendation_status_payload,
     daily_recommendation_target_key as _daily_recommendation_target_key,
     daily_recommendation_target_label as _daily_recommendation_target_label,
+    run_daily_recommendation_evidence_repair_queue,
     saved_portfolio_price_lookup as _saved_portfolio_price_lookup,
     should_run_daily_recommendations,
     summarize_daily_recommendation_store,
@@ -15139,6 +15140,24 @@ def track_daily_recommendations_endpoint(settings: Settings = Depends(get_settin
         as_of=current_storage_date(),
         checked_at=current_storage_timestamp(),
         price_lookup=_daily_recommendation_price_lookup(settings),
+    )
+
+
+@app.post(
+    "/api/v1/daily-recommendations/repair-queue/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_daily_recommendation_repair_queue_endpoint(
+    latest_only: bool = False,
+    dry_run: bool = True,
+    limit: int = 50,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return run_daily_recommendation_evidence_repair_queue(
+        settings,
+        latest_only=latest_only,
+        dry_run=dry_run,
+        limit=limit,
     )
 
 

@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 DEFAULT_STORE = Path("research_vault/_system/daily_recommendations.json")
 DEFAULT_STATE = Path("research_vault/_system/daily_recommendations_state.json")
+DEFAULT_REPAIR_QUEUE_STATUS = Path("research_vault/_system/daily_recommendation_evidence_repair_queue_status.json")
 EXPECTED_MILESTONE_DAYS = {"7d": 7, "15d": 15, "1m": 30, "3m": 90, "6m": 180}
 EXPECTED_MILESTONES = set(EXPECTED_MILESTONE_DAYS)
 EXPECTED_STATE_STATUSES = {"success", "skipped_existing", "tracked", "no_candidates"}
@@ -465,6 +466,7 @@ def main() -> int:
     parser.add_argument("--max-latest-age-days", type=int, default=1, help="최신 추천일이 오늘 기준 며칠 전까지 허용되는지")
     parser.add_argument("--require-milestones", action="store_true", help="1주/15일/1월/3월/6월 추적표 존재 강제")
     parser.add_argument("--require-quality", action="store_true", help="점수, 근거, 리스크, 기준가 등 추천 품질 필드 존재 강제")
+    parser.add_argument("--require-repair-queue-status", action="store_true", help="근거 보강 큐 dry-run 실행 결과 저장 상태를 강제 확인")
     parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
     parser.add_argument("--daily-time", default="08:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
     parser.add_argument("--skip-all-date-integrity", action="store_true", help="전체 추천 이력의 날짜별 1~3위 무결성 점검을 건너뜁니다.")
@@ -477,6 +479,7 @@ def main() -> int:
     state_path = args.state if args.state else root / DEFAULT_STATE
     if not state_path.is_absolute():
         state_path = root / state_path
+    repair_status_path = root / DEFAULT_REPAIR_QUEUE_STATUS
     data = load_store(store)
     state = load_state(state_path)
     raw_records = data.get("records") or []
@@ -638,8 +641,26 @@ def main() -> int:
         if duplicate_companies:
             errors.append(f"최신 추천 회사명 중복: {', '.join(sorted(duplicate_companies))}")
 
+    if args.require_repair_queue_status:
+        if not repair_status_path.exists():
+            errors.append(f"근거 보강 큐 실행 결과 파일 누락: {repair_status_path}")
+        else:
+            repair_status = load_state(repair_status_path)
+            if repair_status.get("module") != "daily_recommendation_evidence_repair_queue":
+                errors.append(f"근거 보강 큐 실행 결과 모듈 불일치: {repair_status.get('module')}")
+            if repair_status.get("status") not in {"dry_run", "queued"}:
+                errors.append(f"근거 보강 큐 실행 상태 확인 필요: {repair_status.get('status')}")
+            if not isinstance(repair_status.get("queue_count"), int):
+                errors.append("근거 보강 큐 queue_count 누락")
+            if not isinstance(repair_status.get("queue"), list):
+                errors.append("근거 보강 큐 목록 누락")
+            if not str(repair_status.get("storage_path") or "").strip():
+                errors.append("근거 보강 큐 저장 경로 누락")
+
     print(f"저장 파일: {store}")
     print(f"상태 파일: {state_path}")
+    if args.require_repair_queue_status:
+        print(f"근거 보강 큐 상태 파일: {repair_status_path}")
     print(f"스케줄 상태: {state.get('status') or '미확인'} | 마지막 실행 {state.get('last_run_date') or '미확인'} | 마지막 추적 {state.get('last_tracking_date') or '미확인'} | 선택 {state.get('selected_count') or 0}개")
     print(f"전체 추천 기록: {len(records)}개")
     print("일자별 추천 수: " + ", ".join(f"{date}={count}" for date, count in sorted(counts.items())))

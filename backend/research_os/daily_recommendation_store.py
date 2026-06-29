@@ -27,6 +27,10 @@ def daily_recommendation_state_path(settings: Settings) -> Path:
     return resolve_vault_dir(settings.research_vault_dir) / "_system" / "daily_recommendations_state.json"
 
 
+def daily_recommendation_repair_queue_status_path(settings: Settings) -> Path:
+    return resolve_vault_dir(settings.research_vault_dir) / "_system" / "daily_recommendation_evidence_repair_queue_status.json"
+
+
 def current_recommendation_datetime() -> datetime:
     try:
         korea_timezone = ZoneInfo("Asia/Seoul")
@@ -83,6 +87,109 @@ def read_daily_recommendation_store(settings: Settings) -> dict:
 def write_daily_recommendation_store(settings: Settings, payload: dict) -> None:
     payload["module"] = "daily_stock_recommendations"
     write_json_payload(daily_recommendation_store_path(settings), payload)
+
+
+def daily_recommendation_repair_queue_action(queue_item: dict[str, Any]) -> dict[str, Any]:
+    task_type = str(queue_item.get("task_type") or "general_review")
+    if task_type == "source_trace":
+        action = "연결 문서의 title, source_relative_path, matched_claims를 재검증하고 누락된 추적 메타데이터를 보강합니다."
+        handler = "repair_source_trace_metadata"
+    elif task_type == "fresh_evidence":
+        action = "최근 7~30일 DART/SEC 공시, 뉴스 인박스, 리서치 저장소를 재조회합니다."
+        handler = "refresh_recent_evidence_sources"
+    elif task_type == "source_diversity":
+        action = "부족한 출처 유형을 찾아 공시, 리포트, 뉴스, 정책 근거 균형을 보강합니다."
+        handler = "scan_missing_source_families"
+    elif task_type == "signal_coverage":
+        action = "시장, 공시, 정책, 뉴스, 심리 신호별 누락 축을 다시 스캔합니다."
+        handler = "rescan_signal_coverage"
+    elif task_type == "source_body":
+        action = "원문/PDF/OCR/본문 보강 대기 항목으로 등록합니다."
+        handler = "queue_source_body_supplement"
+    else:
+        action = "근거 품질 보강 사유를 확인하고 관련 원천 자료 수집 계획을 생성합니다."
+        handler = "review_evidence_quality_gap"
+    return {
+        "handler": handler,
+        "action": action,
+        "dry_run_supported": True,
+    }
+
+
+def run_daily_recommendation_evidence_repair_queue(
+    settings: Settings,
+    *,
+    latest_only: bool = False,
+    dry_run: bool = True,
+    limit: int = 50,
+) -> dict[str, Any]:
+    store = read_daily_recommendation_store(settings)
+    records = [item for item in store.get("records", []) if isinstance(item, dict)]
+    latest_date = str(store.get("latest_recommendation_date") or "")
+    if latest_only and latest_date:
+        records = [item for item in records if item.get("recommendation_date") == latest_date]
+    queue_rows: list[dict[str, Any]] = []
+    for record in records:
+        quality = record.get("evidence_quality_summary") if isinstance(record.get("evidence_quality_summary"), dict) else {}
+        queue = quality.get("evidence_repair_queue") if isinstance(quality.get("evidence_repair_queue"), list) else []
+        for item in queue:
+            if not isinstance(item, dict):
+                continue
+            action = daily_recommendation_repair_queue_action(item)
+            queue_rows.append(
+                {
+                    "record_id": record.get("record_id"),
+                    "recommendation_date": record.get("recommendation_date"),
+                    "ticker": record.get("ticker"),
+                    "company_name": record.get("company_name"),
+                    "rank": record.get("rank"),
+                    "market": recommendation_market(record),
+                    "grade": quality.get("grade"),
+                    "score": quality.get("score"),
+                    "reason": item.get("reason"),
+                    "task_type": item.get("task_type"),
+                    "label": item.get("label"),
+                    "next_action": item.get("next_action") or action["action"],
+                    "handler": action["handler"],
+                    "planned_action": action["action"],
+                    "status": "dry_run" if dry_run else "queued_for_execution",
+                }
+            )
+    queue_rows.sort(
+        key=lambda item: (
+            str(item.get("recommendation_date") or ""),
+            -int(item.get("rank") or 999),
+            str(item.get("ticker") or ""),
+            str(item.get("task_type") or ""),
+        ),
+        reverse=True,
+    )
+    limited_rows = queue_rows[: max(1, min(int(limit or 50), 200))]
+    by_task_type: dict[str, int] = {}
+    for item in queue_rows:
+        task_type = str(item.get("task_type") or "general_review")
+        by_task_type[task_type] = by_task_type.get(task_type, 0) + 1
+    payload = {
+        "status": "dry_run" if dry_run else "queued",
+        "module": "daily_recommendation_evidence_repair_queue",
+        "dry_run": dry_run,
+        "latest_only": latest_only,
+        "latest_recommendation_date": latest_date,
+        "checked_at": current_recommendation_datetime().isoformat(),
+        "record_count": len(records),
+        "queue_count": len(queue_rows),
+        "returned_count": len(limited_rows),
+        "task_type_counts": by_task_type,
+        "queue": limited_rows,
+        "message": (
+            "근거 보강 큐 dry-run 미리보기를 저장했습니다."
+            if dry_run
+            else "근거 보강 큐 실행 대상을 저장했습니다."
+        ),
+        "storage_path": str(daily_recommendation_repair_queue_status_path(settings)),
+    }
+    write_json_payload(daily_recommendation_repair_queue_status_path(settings), payload)
+    return payload
 
 
 def parse_date(value: object) -> date | None:

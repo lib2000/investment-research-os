@@ -53,6 +53,7 @@
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
   fetchDailyRecommendationPolicySignals,
+  runDailyRecommendationRepairQueue,
   fetchRecentWeeklyResearchBrief,
   fetchPublicIrSecStatus,
   collectPublicIrSec,
@@ -97,7 +98,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1c583807557a";
+} from "./api.js?v=7f5e52136164";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -238,6 +239,7 @@ const elements = {
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
   dailyRecommendationsStatusQuickButton: document.querySelector("#dailyRecommendationsStatusQuickButton"),
   dailyRecommendationPolicySignalsButton: document.querySelector("#dailyRecommendationPolicySignalsButton"),
+  dailyRecommendationRepairQueueButton: document.querySelector("#dailyRecommendationRepairQueueButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -12575,6 +12577,7 @@ const MEMORY_ACTION_MESSAGES = {
   investmentInsightsButton: "시장·공시·법령·뉴스·심리 통합 인사이트를 조회합니다.",
   dailyRecommendationsButton: "오늘 한국/미국 추천 후보 1~3위 생성과 추적 저장을 시작했습니다.",
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
+  dailyRecommendationRepairQueueButton: "추천 근거 보강 큐 dry-run을 실행합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
@@ -12940,6 +12943,27 @@ async function runDailyRecommendationPolicySignalsFlow() {
   }
 }
 
+async function runDailyRecommendationRepairQueueFlow() {
+  syncApiBaseUrl();
+  activateTab("memory");
+  startOutputLoading("추천 근거 보강 큐 dry-run 실행 중", [
+    "C/D 등급 추천의 보강 큐 조회",
+    "출처 추적·최신 근거·신호 커버리지 작업 분류",
+    "실행 핸들러와 다음 액션 미리보기",
+    "dry-run 결과 저장",
+  ]);
+  try {
+    const result = await runDailyRecommendationRepairQueue(token(), {
+      latestOnly: false,
+      dryRun: true,
+      limit: 50,
+    });
+    setOutput(result || "추천 근거 보강 큐 실행 결과를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+}
+
 async function runRecentWeeklyBriefFlow() {
   syncApiBaseUrl();
   activateTab("dashboard");
@@ -13072,6 +13096,7 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsStatusFlow));
 
 elements.dailyRecommendationPolicySignalsButton?.addEventListener("click", runDailyRecommendationPolicySignalsFlow);
+elements.dailyRecommendationRepairQueueButton?.addEventListener("click", runDailyRecommendationRepairQueueFlow);
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
 elements.recentWeeklyEvidenceSynthesisButton?.addEventListener("click", runRecentWeeklyEvidenceSynthesisFlow);

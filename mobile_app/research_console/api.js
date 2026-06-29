@@ -1288,6 +1288,26 @@ export async function trackDailyRecommendations(accessToken) {
   }
 }
 
+export async function runDailyRecommendationRepairQueue(
+  accessToken,
+  { latestOnly = false, dryRun = true, limit = 50 } = {}
+) {
+  try {
+    return request(
+      `/api/v1/daily-recommendations/repair-queue/run?latest_only=${latestOnly ? "true" : "false"}&dry_run=${
+        dryRun ? "true" : "false"
+      }&limit=${encodeURIComponent(String(limit))}`,
+      {
+        method: "POST",
+        accessToken,
+      }
+    );
+  } catch (error) {
+    console.error("추천 근거 보강 큐 실행 중 오류 발생:", error);
+    return null;
+  }
+}
+
 /**
  * 티커 또는 리서치 키 기준으로 검색 가능한 RAG 문서를 조회합니다.
  *
