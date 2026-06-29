@@ -13350,6 +13350,99 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
 
 
 
+class KiwoomResearchOsIntegrationTests(unittest.TestCase):
+    def test_research_os_kiwoom_token_cache_reuses_valid_token_without_network(self):
+        from research_os.kiwoom_auth import KiwoomAuthClient
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "kiwoom_access_token.json"
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "broker": "KIWOOM",
+                        "environment": "mock",
+                        "token_type": "Bearer",
+                        "token": "cached-research-os-token",
+                        "expires_dt": "20991231235959",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(
+                brokerage_api_key="fake-key",
+                brokerage_api_secret="fake-secret",
+                kiwoom_use_mock=True,
+                kiwoom_token_cache_file=str(cache_path),
+            )
+
+            with patch("research_os.kiwoom_auth.httpx.post") as post:
+                result = KiwoomAuthClient(settings).issue_access_token()
+
+            post.assert_not_called()
+            self.assertEqual(result.token, "cached-research-os-token")
+
+    def test_research_os_kiwoom_domestic_balance_reads_continuation_pages(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        class FakeResponse:
+            def __init__(self, payload: dict, headers: dict):
+                self._payload = payload
+                self.headers = headers
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._payload
+
+        responses = [
+            FakeResponse(
+                {
+                    "tot_pur_amt": "1,000",
+                    "tot_evlt_amt": "1,200",
+                    "acnt_evlt_remn_indv_tot": [
+                        {"stk_cd": "A003230", "stk_nm": "삼양식품", "rmnd_qty": "1"}
+                    ],
+                },
+                {"cont-yn": "Y", "next-key": "NEXT1", "api-id": "kt00018"},
+            ),
+            FakeResponse(
+                {
+                    "tot_pur_amt": "1,000",
+                    "tot_evlt_amt": "1,200",
+                    "acnt_evlt_remn_indv_tot": [
+                        {"stk_cd": "A033500", "stk_nm": "동성화인텍", "rmnd_qty": "2"}
+                    ],
+                },
+                {"cont-yn": "N", "next-key": "", "api-id": "kt00018"},
+            ),
+        ]
+        settings = Settings(
+            brokerage_api_key="fake-key",
+            brokerage_api_secret="fake-secret",
+            kiwoom_balance_max_pages=5,
+            kiwoom_page_delay_seconds=0,
+        )
+
+        with (
+            patch.object(main.KiwoomAuthClient, "issue_access_token", return_value=SimpleNamespace(token="token")),
+            patch.object(main.httpx, "post", side_effect=responses) as post,
+        ):
+            result = main.fetch_kiwoom_domestic_balance(settings)
+
+        self.assertEqual(post.call_count, 2)
+        first_headers = post.call_args_list[0].kwargs["headers"]
+        second_headers = post.call_args_list[1].kwargs["headers"]
+        self.assertEqual(first_headers["cont-yn"], "N")
+        self.assertEqual(second_headers["cont-yn"], "Y")
+        self.assertEqual(second_headers["next-key"], "NEXT1")
+        self.assertEqual(result["pages_read"], 2)
+        self.assertFalse(result["has_next"])
+        self.assertEqual([item["ticker"] for item in result["holdings"]], ["003230", "033500"])
+
+
 class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
     def test_classifies_domestic_equity_and_excludes_overseas_exposure(self):
         from research_os.models import PortfolioHolding

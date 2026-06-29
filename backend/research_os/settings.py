@@ -20,6 +20,26 @@ def _read_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y"}
 
 
+def _read_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value.strip())
+    except ValueError:
+        return default
+
+
+def _read_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value.strip())
+    except ValueError:
+        return default
+
+
 def _resolve_market_signal_graph_rpc_url(
     explicit_rpc_url: str | None = None,
     supabase_url: str | None = None,
@@ -42,6 +62,10 @@ class Settings(BaseModel):
     kiwoom_mock_base_url: str = "https://mockapi.kiwoom.com"
     kiwoom_use_mock: bool = True
     kiwoom_registered_ip: str = Field(default="********")
+    kiwoom_token_cache_file: str = "../research_vault/_system/kiwoom_access_token.json"
+    kiwoom_token_expiry_buffer_seconds: int = 300
+    kiwoom_page_delay_seconds: float = 0.4
+    kiwoom_balance_max_pages: int = 10
     secret_salt: str = Field(default="********")
     dev_user_token: str = Field(default="dev-local-token")
     research_vault_dir: str = "../research_vault"
@@ -203,6 +227,13 @@ class Settings(BaseModel):
             ),
             kiwoom_use_mock=_read_bool("KIWOOM_USE_MOCK", True),
             kiwoom_registered_ip=os.getenv("KIWOOM_REGISTERED_IP", "********"),
+            kiwoom_token_cache_file=os.getenv(
+                "KIWOOM_TOKEN_CACHE_FILE",
+                "../research_vault/_system/kiwoom_access_token.json",
+            ),
+            kiwoom_token_expiry_buffer_seconds=_read_int("KIWOOM_TOKEN_EXPIRY_BUFFER_SECONDS", 300),
+            kiwoom_page_delay_seconds=_read_float("KIWOOM_PAGE_DELAY_SECONDS", 0.4),
+            kiwoom_balance_max_pages=_read_int("KIWOOM_BALANCE_MAX_PAGES", 10),
             secret_salt=os.getenv("SECRET_SALT", "********"),
             dev_user_token=os.getenv("DEV_USER_TOKEN", "dev-local-token"),
             research_vault_dir=os.getenv("RESEARCH_VAULT_DIR", "../research_vault"),

@@ -4820,38 +4820,65 @@ def normalize_kiwoom_balance_item(item: dict) -> dict:
 
 def fetch_kiwoom_domestic_balance(settings: Settings) -> dict:
     token = KiwoomAuthClient(settings).issue_access_token()
-    response = httpx.post(
-        f"{settings.kiwoom_api_base_url}/api/dostk/acnt",
-        headers={
-            "Content-Type": "application/json;charset=UTF-8",
-            "authorization": f"Bearer {token.token}",
-            "cont-yn": "N",
-            "next-key": "",
-            "api-id": "kt00018",
-        },
-        json={
-            "qry_tp": "1",
-            "dmst_stex_tp": "KRX",
-        },
-        timeout=10,
-        trust_env=False,
-    )
-    response.raise_for_status()
-    raw = response.json()
-    items = [
-        normalize_kiwoom_balance_item(item)
-        for item in raw.get("acnt_evlt_remn_indv_tot", [])
-        if isinstance(item, dict)
-    ]
+    endpoint = f"{settings.kiwoom_api_base_url}/api/dostk/acnt"
+    cont_yn = "N"
+    next_key = ""
+    pages_read = 0
+    max_pages = max(1, int(settings.kiwoom_balance_max_pages or 1))
+    items: list[dict] = []
+    raw: dict = {}
+    summary_raw: dict = {}
+    headers: dict[str, str | None] = {}
+    while pages_read < max_pages:
+        response = httpx.post(
+            endpoint,
+            headers={
+                "Content-Type": "application/json;charset=UTF-8",
+                "authorization": f"Bearer {token.token}",
+                "cont-yn": cont_yn,
+                "next-key": next_key,
+                "api-id": "kt00018",
+            },
+            json={
+                "qry_tp": "1",
+                "dmst_stex_tp": "KRX",
+            },
+            timeout=10,
+            trust_env=False,
+        )
+        response.raise_for_status()
+        raw = response.json()
+        if pages_read == 0:
+            summary_raw = raw
+        headers = {
+            "cont_yn": response.headers.get("cont-yn"),
+            "next_key": response.headers.get("next-key"),
+            "api_id": response.headers.get("api-id"),
+        }
+        items.extend(
+            normalize_kiwoom_balance_item(item)
+            for item in raw.get("acnt_evlt_remn_indv_tot", [])
+            if isinstance(item, dict)
+        )
+        pages_read += 1
+        cont_yn = "Y" if headers.get("cont_yn") == "Y" else "N"
+        next_key = headers.get("next_key") or ""
+        if cont_yn != "Y" or not next_key:
+            break
+        if settings.kiwoom_page_delay_seconds > 0:
+            time.sleep(settings.kiwoom_page_delay_seconds)
     return {
         "status": "success",
         "api_id": "kt00018",
         "holdings": [item for item in items if item.get("ticker") and item.get("ticker") != "UNKNOWN"],
+        "pages_read": pages_read,
+        "cont_yn": headers.get("cont_yn"),
+        "has_next": headers.get("cont_yn") == "Y" and bool(headers.get("next_key")),
         "summary": {
-            "total_purchase_amount": parse_kiwoom_number(raw.get("tot_pur_amt")),
-            "total_evaluation_amount": parse_kiwoom_number(raw.get("tot_evlt_amt")),
-            "total_evaluation_profit_loss": parse_kiwoom_number(raw.get("tot_evlt_pl")),
-            "total_profit_rate": parse_kiwoom_number(raw.get("tot_prft_rt")),
+            "total_purchase_amount": parse_kiwoom_number(summary_raw.get("tot_pur_amt")),
+            "total_evaluation_amount": parse_kiwoom_number(summary_raw.get("tot_evlt_amt")),
+            "total_evaluation_profit_loss": parse_kiwoom_number(summary_raw.get("tot_evlt_pl")),
+            "total_profit_rate": parse_kiwoom_number(summary_raw.get("tot_prft_rt")),
         },
         "return_code": raw.get("return_code"),
         "return_msg": raw.get("return_msg"),
