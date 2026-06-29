@@ -79,6 +79,7 @@ def _normalize_group(row: dict[str, Any]) -> dict[str, Any]:
             "groupNo",
             "grp_id",
             "group_id",
+            "gcod",
             "관심그룹번호",
             "관심종목그룹번호",
         ],
@@ -103,7 +104,7 @@ def _normalize_group(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_item(row: dict[str, Any]) -> dict[str, Any]:
-    ticker = _first_value(row, ["stk_cd", "stkCd", "code", "ticker", "종목코드"])
+    ticker = _first_value(row, ["stk_cd", "stkCd", "cod2", "code", "ticker", "종목코드"])
     name = _first_value(row, ["stk_nm", "stkNm", "name", "company_name", "종목명"])
     return {
         "ticker": _clean_ticker(ticker),
@@ -142,7 +143,7 @@ class KiwoomInterestClient:
     def fetch_group_detail_raw(self, group_id: str, request_body: dict[str, Any] | None = None) -> dict[str, Any]:
         body = dict(request_body or {})
         if group_id and not body:
-            body["grp_no"] = group_id
+            body["arn_grp_id"] = group_id
         return self._post(GROUP_DETAIL_API_ID, body)
 
 
@@ -151,6 +152,7 @@ def normalize_kiwoom_interest_groups(raw: dict[str, Any]) -> list[dict[str, Any]
         raw,
         [
             "atn_stk_grp",
+            "nofi",
             "atn_stk_grplist",
             "atn_stk_group",
             "grp_list",
@@ -169,6 +171,7 @@ def normalize_kiwoom_interest_items(raw: dict[str, Any]) -> list[dict[str, Any]]
         [
             "atn_stk",
             "atn_stk_list",
+            "nofj",
             "stk_list",
             "item_list",
             "items",

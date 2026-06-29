@@ -13361,7 +13361,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         settings = Settings(
             brokerage_api_key="fake-key",
             brokerage_api_secret="fake-secret",
-            kiwoom_interest_endpoint_path="/api/dostk/stkinfo",
+            kiwoom_interest_endpoint_path="/api/dostk/watchlist",
         )
 
         with (
@@ -13375,18 +13375,18 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
                     SimpleNamespace(
                         raise_for_status=lambda: None,
                         json=lambda: {
-                            "atn_stk_grp": [
-                                {"grp_no": "001", "grp_nm": "AI 반도체"},
-                                {"grp_no": "002", "grp_nm": "방산"},
+                            "nofi": [
+                                {"gcod": "001", "name": "AI 반도체"},
+                                {"gcod": "002", "name": "방산"},
                             ]
                         },
                     ),
                     SimpleNamespace(
                         raise_for_status=lambda: None,
                         json=lambda: {
-                            "atn_stk_list": [
-                                {"stk_cd": "A000660", "stk_nm": "SK하이닉스"},
-                                {"stk_cd": "A042660", "stk_nm": "한화오션"},
+                            "nofj": [
+                                {"cod2": "000660"},
+                                {"cod2": "042660"},
                             ]
                         },
                     ),
@@ -13396,14 +13396,14 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
             result = build_kiwoom_interest_groups_status(settings, include_details=True, max_groups=1)
 
         self.assertEqual(result["api_ids"], ["ka01300", "ka01301"])
-        self.assertEqual(result["endpoint_path"], "/api/dostk/stkinfo")
+        self.assertEqual(result["endpoint_path"], "/api/dostk/watchlist")
         self.assertEqual(result["group_count"], 2)
         self.assertEqual(result["groups"][0]["group_id"], "001")
         self.assertEqual(result["details"][0]["item_count"], 2)
         self.assertEqual(result["details"][0]["items"][0]["ticker"], "000660")
         self.assertEqual(post.call_args_list[0].kwargs["headers"]["api-id"], "ka01300")
         self.assertEqual(post.call_args_list[1].kwargs["headers"]["api-id"], "ka01301")
-        self.assertEqual(post.call_args_list[1].kwargs["json"], {"grp_no": "001"})
+        self.assertEqual(post.call_args_list[1].kwargs["json"], {"arn_grp_id": "001"})
 
         preview = build_kiwoom_interest_sync_preview(
             result,
