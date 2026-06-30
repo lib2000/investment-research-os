@@ -128,6 +128,7 @@ from research_os.kiwoom_interest import (
     append_kiwoom_interest_sync_history,
     build_kiwoom_interest_groups_status,
     build_kiwoom_interest_sync_preview,
+    is_standard_domestic_stock_ticker,
     kiwoom_interest_sync_history_path,
     read_kiwoom_interest_sync_history,
 )
@@ -12330,6 +12331,7 @@ def read_kiwoom_interest_groups(
         result["sync_preview"] = build_kiwoom_interest_sync_preview(
             result,
             read_interest_list(settings),
+            ticker_resolver=lambda ticker: local_interest_verification_response(ticker, settings)[1],
         )
     return result
 
@@ -12371,6 +12373,15 @@ def sync_kiwoom_interest_candidates(
                     "ticker": candidate.ticker,
                     "company_name": candidate.company_name,
                     "reason": "유효한 티커가 없어 건너뜁니다.",
+                }
+            )
+            continue
+        if not is_standard_domestic_stock_ticker(ticker):
+            skipped.append(
+                {
+                    "ticker": ticker,
+                    "company_name": candidate.company_name,
+                    "reason": "일반 국내주식 6자리 코드가 아니라 자동 저장 전 확인이 필요합니다.",
                 }
             )
             continue

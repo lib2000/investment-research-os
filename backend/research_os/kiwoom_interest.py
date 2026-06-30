@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -62,11 +63,34 @@ def _candidate_rows(payload: Any, keys: list[str]) -> list[dict[str, Any]]:
 
 
 def _clean_ticker(value: Any) -> str:
-    return str(value or "").strip().upper().lstrip("A")
+    raw = str(value or "").strip().upper()
+    return raw[1:] if raw.startswith("A") and raw[1:].isdigit() else raw
 
 
 def _ticker_key(value: Any) -> str:
     return _clean_ticker(value)
+
+
+def is_standard_domestic_stock_ticker(value: Any) -> bool:
+    return bool(re.fullmatch(r"\d{6}", _ticker_key(value)))
+
+
+def _resolved_company_name(
+    ticker: str,
+    fallback: str,
+    resolver: Callable[[str], Any] | None,
+) -> str:
+    if not ticker or not resolver:
+        return fallback
+    try:
+        resolved = resolver(ticker)
+    except Exception:
+        return fallback
+    if isinstance(resolved, tuple) and len(resolved) >= 2:
+        resolved = resolved[1]
+    if isinstance(resolved, dict):
+        return str(resolved.get("company_name") or fallback).strip()
+    return str(getattr(resolved, "company_name", "") or fallback).strip()
 
 
 def _normalize_group(row: dict[str, Any]) -> dict[str, Any]:
@@ -227,6 +251,8 @@ def build_kiwoom_interest_groups_status(
 def build_kiwoom_interest_sync_preview(
     status_payload: dict[str, Any],
     interest_payload: dict[str, Any] | None,
+    *,
+    ticker_resolver: Callable[[str], Any] | None = None,
 ) -> dict[str, Any]:
     """Compare Kiwoom interest details with the local interest list without writing changes."""
 
@@ -246,28 +272,45 @@ def build_kiwoom_interest_sync_preview(
             if not isinstance(item, dict):
                 continue
             ticker = _ticker_key(item.get("ticker"))
-            company_name = str(item.get("company_name") or "").strip()
+            company_name = _resolved_company_name(
+                ticker,
+                str(item.get("company_name") or "").strip(),
+                ticker_resolver,
+            )
             candidate_key = ticker or company_name.lower()
             if not candidate_key or candidate_key in seen_candidate_keys:
                 continue
             seen_candidate_keys.add(candidate_key)
             already_tracked = bool(ticker and ticker in existing_tickers)
+            standard_domestic_stock = is_standard_domestic_stock_ticker(ticker)
+            if already_tracked:
+                action = "already_tracked"
+                reason = "이미 로컬 관심종목에 등록되어 있습니다."
+            elif not standard_domestic_stock:
+                action = "needs_review"
+                reason = "일반 국내주식 6자리 코드가 아니라 자동 저장 전 확인이 필요합니다."
+            else:
+                action = "add_candidate"
+                reason = "키움 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
             candidates.append(
                 {
                     "ticker": ticker,
                     "company_name": company_name,
                     "group_id": group_id,
                     "group_name": group_name,
-                    "action": "already_tracked" if already_tracked else "add_candidate",
-                    "reason": (
-                        "이미 로컬 관심종목에 등록되어 있습니다."
-                        if already_tracked
-                        else "키움 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
+                    "ticker_quality": (
+                        "standard_domestic_stock"
+                        if standard_domestic_stock
+                        else "needs_review"
                     ),
+                    "sync_eligible": action == "add_candidate",
+                    "action": action,
+                    "reason": reason,
                 }
             )
     add_candidates = [item for item in candidates if item.get("action") == "add_candidate"]
     already_tracked = [item for item in candidates if item.get("action") == "already_tracked"]
+    needs_review = [item for item in candidates if item.get("action") == "needs_review"]
     return {
         "status": "success",
         "module": "kiwoom_interest_sync_preview",
@@ -276,10 +319,13 @@ def build_kiwoom_interest_sync_preview(
         "kiwoom_candidate_count": len(candidates),
         "add_candidate_count": len(add_candidates),
         "already_tracked_count": len(already_tracked),
+        "needs_review_count": len(needs_review),
         "candidates": candidates,
         "next_action": (
             "추가 후보를 검토한 뒤 /api/v1/interests/tickers 또는 콘솔 관심종목 저장으로 반영하세요."
             if add_candidates
+            else "비표준 코드는 확인 필요로 분리했습니다. 저장할 신규 6자리 국내주식 후보는 없습니다."
+            if needs_review
             else "키움 관심그룹과 로컬 관심종목의 티커 기준 차이가 없습니다."
         ),
     }

@@ -3063,8 +3063,9 @@ function renderKiwoomInterestCandidatePanel(payload = null) {
   const preview = payload?.sync_preview || {};
   const allCandidates = preview.candidates || [];
   const candidates = allCandidates.filter((item) => item?.action === "add_candidate");
+  const reviewCandidates = allCandidates.filter((item) => item?.action === "needs_review");
   const alreadyTrackedCount =
-    allCandidates.filter((item) => item?.action && item.action !== "add_candidate").length ||
+    allCandidates.filter((item) => item?.action === "already_tracked" || item?.action === "saved").length ||
     Number(preview.already_tracked_count || 0);
   const savedCount = Number(preview.last_saved_count || 0);
   if (!payload) {
@@ -3077,9 +3078,10 @@ function renderKiwoomInterestCandidatePanel(payload = null) {
   header.innerHTML = `
     <strong>키움 추가 후보 ${escapeHtml(String(candidates.length))}개</strong>
     <span>이미 등록 ${escapeHtml(String(alreadyTrackedCount))}개</span>
+    <span>확인 필요 ${escapeHtml(String(reviewCandidates.length || Number(preview.needs_review_count || 0)))}개</span>
     ${savedCount ? `<span>방금 저장 ${escapeHtml(String(savedCount))}개</span>` : ""}
   `;
-  if (!candidates.length) {
+  if (!candidates.length && !reviewCandidates.length) {
     const empty = document.createElement("p");
     empty.className = "helper-text";
     empty.textContent = "추가 후보가 없습니다. 이미 등록된 관심종목과 중복되는지 확인했습니다.";
@@ -3089,23 +3091,30 @@ function renderKiwoomInterestCandidatePanel(payload = null) {
   }
   const list = document.createElement("div");
   list.className = "kiwoom-interest-candidate-list";
-  candidates.forEach((item, index) => {
+  const appendCandidateRow = (item, index, { review = false } = {}) => {
     const row = document.createElement("label");
-    row.className = "kiwoom-interest-candidate-row";
+    row.className = `kiwoom-interest-candidate-row${review ? " is-review" : ""}`;
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.name = "kiwoomInterestCandidate";
-    checkbox.checked = true;
+    checkbox.checked = !review;
+    checkbox.disabled = review;
     checkbox.dataset.index = String(index);
     const main = document.createElement("span");
     main.className = "kiwoom-interest-candidate-main";
     const title = item.company_name || item.ticker || "회사명 확인 필요";
     main.innerHTML = `
       <strong>${escapeHtml(title)}</strong>
-      <small>${escapeHtml(item.ticker || "티커 확인 필요")} · ${escapeHtml(item.group_name || item.group_id || "키움 관심그룹")}</small>
+      <small>${escapeHtml(item.ticker || "티커 확인 필요")} · ${escapeHtml(item.group_name || item.group_id || "키움 관심그룹")}${review ? ` · ${escapeHtml(item.reason || "확인 필요")}` : ""}</small>
     `;
     row.append(checkbox, main);
     list.append(row);
+  };
+  candidates.forEach((item, index) => {
+    appendCandidateRow(item, index);
+  });
+  reviewCandidates.slice(0, 8).forEach((item, index) => {
+    appendCandidateRow(item, index, { review: true });
   });
   elements.kiwoomInterestCandidatePanel.replaceChildren(header, list);
   elements.kiwoomInterestCandidatePanel.hidden = false;

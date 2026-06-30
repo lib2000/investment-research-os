@@ -13385,6 +13385,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
                         raise_for_status=lambda: None,
                         json=lambda: {
                             "nofj": [
+                                {"cod2": "0117V0"},
                                 {"cod2": "000660"},
                                 {"cod2": "042660"},
                             ]
@@ -13399,22 +13400,36 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertEqual(result["endpoint_path"], "/api/dostk/watchlist")
         self.assertEqual(result["group_count"], 2)
         self.assertEqual(result["groups"][0]["group_id"], "001")
-        self.assertEqual(result["details"][0]["item_count"], 2)
-        self.assertEqual(result["details"][0]["items"][0]["ticker"], "000660")
+        self.assertEqual(result["details"][0]["item_count"], 3)
+        self.assertEqual(result["details"][0]["items"][0]["ticker"], "0117V0")
         self.assertEqual(post.call_args_list[0].kwargs["headers"]["api-id"], "ka01300")
         self.assertEqual(post.call_args_list[1].kwargs["headers"]["api-id"], "ka01301")
         self.assertEqual(post.call_args_list[1].kwargs["json"], {"arn_grp_id": "001"})
 
+        def fake_resolver(ticker):
+            return SimpleNamespace(
+                company_name={
+                    "000660": "SK하이닉스",
+                    "042660": "한화오션",
+                }.get(ticker, "")
+            )
+
         preview = build_kiwoom_interest_sync_preview(
             result,
             {"tickers": [{"ticker": "000660", "company_name": "SK하이닉스"}]},
+            ticker_resolver=fake_resolver,
         )
 
         self.assertEqual(preview["write_mode"], "preview_only")
         self.assertEqual(preview["already_tracked_count"], 1)
         self.assertEqual(preview["add_candidate_count"], 1)
-        self.assertEqual(preview["candidates"][0]["action"], "already_tracked")
-        self.assertEqual(preview["candidates"][1]["action"], "add_candidate")
+        self.assertEqual(preview["needs_review_count"], 1)
+        self.assertEqual(preview["candidates"][0]["action"], "needs_review")
+        self.assertFalse(preview["candidates"][0]["sync_eligible"])
+        self.assertEqual(preview["candidates"][1]["action"], "already_tracked")
+        self.assertEqual(preview["candidates"][1]["company_name"], "SK하이닉스")
+        self.assertEqual(preview["candidates"][2]["action"], "add_candidate")
+        self.assertEqual(preview["candidates"][2]["company_name"], "한화오션")
 
     def test_kiwoom_interest_sync_candidates_dry_run_and_save(self):
         import research_os_main as main
@@ -13425,6 +13440,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         request = KiwoomInterestSyncRequest(
             candidates=[
                 KiwoomInterestSyncCandidate(ticker="A000660", company_name="SK하이닉스", group_name="AI 반도체"),
+                KiwoomInterestSyncCandidate(ticker="0117V0", company_name="비표준", group_name="매수종목"),
                 KiwoomInterestSyncCandidate(ticker="A042660", company_name="한화오션", group_name="방산"),
                 KiwoomInterestSyncCandidate(ticker="042660", company_name="한화오션", group_name="방산"),
                 KiwoomInterestSyncCandidate(ticker="", company_name="티커 없음", group_name="기타"),
@@ -13464,7 +13480,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertTrue(append_history.call_args.kwargs["summary"]["dry_run"])
         self.assertEqual(dry_run["write_mode"], "preview_only")
         self.assertEqual(dry_run["prepared_count"], 1)
-        self.assertEqual(dry_run["skipped_count"], 3)
+        self.assertEqual(dry_run["skipped_count"], 4)
         self.assertEqual(dry_run["prepared_tickers"][0]["ticker"], "042660")
 
         request.dry_run = False

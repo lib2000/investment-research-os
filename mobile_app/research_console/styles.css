@@ -3136,6 +3136,15 @@ label {
   accent-color: var(--accent);
 }
 
+.kiwoom-interest-candidate-row.is-review {
+  background: #fff8ed;
+  border-color: #f4c27a;
+}
+
+.kiwoom-interest-candidate-row.is-review input {
+  accent-color: #b7791f;
+}
+
 .kiwoom-interest-candidate-main {
   display: grid;
   gap: 3px;
