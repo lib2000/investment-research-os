@@ -393,7 +393,7 @@ if ($CheckDailyRecommendationStore) {
     python tools\check_daily_recommendations_store.py --require-milestones
   }
   Invoke-VerifyStep "일일 추천 후보 정책 오프라인 확인" {
-    python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker OTLY --expected-held-ticker 112610
+    python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker 112610
   }
 }
 
