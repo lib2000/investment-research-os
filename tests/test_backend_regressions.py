@@ -4962,6 +4962,69 @@ class NaverResearchIngestTests(unittest.TestCase):
             self.assertFalse(duplicate_path.exists())
             self.assertEqual((vault_dir / "MARKET-US" / first.file_name).read_text(encoding="utf-8"), "# second")
 
+    def test_duplicate_market_journal_cleanup_keeps_state_referenced_file(self):
+        from tools import cleanup_duplicate_market_journals as cleanup
+
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            root = Path(temp_dir)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("# marker", encoding="utf-8")
+            market_dir = root / "research_vault" / "MARKET-US"
+            system_dir = root / "research_vault" / "_system"
+            market_dir.mkdir(parents=True)
+            system_dir.mkdir(parents=True)
+            names = [
+                "MARKET-US-market-close-review-2026-06-30.md",
+                "MARKET-US-market-close-review-2026-06-30-002.md",
+                "MARKET-US-market-close-review-2026-06-30-003.md",
+                "MARKET-US-market-close-review-2026-06-30-news-inbox.md",
+            ]
+            for name in names:
+                (market_dir / name).write_text(f"# {name}", encoding="utf-8")
+                (market_dir / name.replace(".md", ".json")).write_text(
+                    json.dumps(
+                        {
+                            "entry": {
+                                "entry_id": "US-2026-06-30",
+                                "market": "US",
+                                "session_date": "2026-06-30",
+                                "updated_at": f"2026-07-02T00:0{names.index(name)}:00+09:00",
+                            }
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            (system_dir / "telegram_market_close_journal_state.json").write_text(
+                json.dumps(
+                    {
+                        "storage": {
+                            "relative_path": "research_vault/MARKET-US/MARKET-US-market-close-review-2026-06-30-003.md",
+                            "json_relative_path": "research_vault/MARKET-US/MARKET-US-market-close-review-2026-06-30-003.json",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "research_vault" / "manifest.json").write_text("[]", encoding="utf-8")
+
+            plan = cleanup.build_cleanup_plan(root)
+
+            self.assertEqual(plan["duplicate_group_count"], 1)
+            self.assertEqual(plan["duplicate_candidate_count"], 2)
+            self.assertEqual(plan["groups"][0]["keep_file"], "MARKET-US-market-close-review-2026-06-30-003.md")
+
+            applied = cleanup.apply_cleanup(root, plan)
+            self.assertEqual(applied["archived_count"], 2)
+            kept_payload = json.loads((market_dir / "MARKET-US-market-close-review-2026-06-30-003.json").read_text(encoding="utf-8"))
+            archived_payload = json.loads((market_dir / "MARKET-US-market-close-review-2026-06-30.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(kept_payload.get("status"), "archived")
+            self.assertEqual(archived_payload["status"], "archived")
+            manifest = json.loads((root / "research_vault" / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(sum(1 for item in manifest if item.get("status") == "archived"), 2)
+
     def test_naver_holding_interest_impact_marks_positive_linked_report(self):
         import research_os_main as main
 
