@@ -262,6 +262,7 @@ def save_market_close_review_response(
             "interest_implications": entry.interest_implications,
         },
         report_date=report_date,
+        overwrite_existing=True,
     )
     return response
 

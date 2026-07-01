@@ -181,6 +181,7 @@ def save_research_markdown(
     manifest_entry: dict[str, Any] | None = None,
     report_date: date | None = None,
     file_suffix: str | None = None,
+    overwrite_existing: bool = False,
 ) -> ResearchStorageInfo:
     selected_date = report_date or date.today()
     file_name = build_research_file_name_with_suffix(
@@ -191,9 +192,10 @@ def save_research_markdown(
     )
     ticker_dir = vault_dir / _safe_part(ticker.upper())
     ticker_dir.mkdir(parents=True, exist_ok=True)
-    file_name, json_file_name = _next_available_file_names(
-        ticker_dir, file_name, json_file_name
-    )
+    if not overwrite_existing:
+        file_name, json_file_name = _next_available_file_names(
+            ticker_dir, file_name, json_file_name
+        )
 
     file_path = ticker_dir / file_name
     file_path.write_text(markdown, encoding="utf-8")

@@ -4930,6 +4930,38 @@ class NaverResearchIngestTests(unittest.TestCase):
             self.assertEqual(len(all_files), 2)
             self.assertEqual(sum(1 for file in all_files if file.archived), 1)
 
+    def test_save_research_markdown_can_overwrite_existing_file_name(self):
+        import research_os_main as main
+
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            first = main.save_research_markdown(
+                vault_dir=vault_dir,
+                ticker="MARKET-US",
+                report_type="market-close-review",
+                markdown="# first",
+                structured_payload={"version": 1},
+                report_date=date(2026, 6, 30),
+                overwrite_existing=True,
+            )
+            second = main.save_research_markdown(
+                vault_dir=vault_dir,
+                ticker="MARKET-US",
+                report_type="market-close-review",
+                markdown="# second",
+                structured_payload={"version": 2},
+                report_date=date(2026, 6, 30),
+                overwrite_existing=True,
+            )
+
+            self.assertEqual(first.file_name, second.file_name)
+            self.assertEqual(first.json_file_name, second.json_file_name)
+            duplicate_path = vault_dir / "MARKET-US" / "MARKET-US-market-close-review-2026-06-30-002.md"
+            self.assertFalse(duplicate_path.exists())
+            self.assertEqual((vault_dir / "MARKET-US" / first.file_name).read_text(encoding="utf-8"), "# second")
+
     def test_naver_holding_interest_impact_marks_positive_linked_report(self):
         import research_os_main as main
 
@@ -9365,6 +9397,7 @@ class NewsMarketJournalModuleTests(unittest.TestCase):
         self.assertEqual(saves[0]["manifest_entry"]["risk_level"], "보통")
         self.assertEqual(saves[0]["manifest_entry"]["auto_utilization_focus"], {"focus": "risk"})
         self.assertEqual(saves[0]["manifest_entry"]["interest_implications"], ["관심종목 점검"])
+        self.assertTrue(saves[0]["overwrite_existing"])
 
     def test_news_market_journal_module_saves_entry_and_markdown(self):
         from research_os import news_market_journal
