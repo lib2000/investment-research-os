@@ -63,11 +63,11 @@ def source_family(source_url: object) -> str:
 def expected_source_type(entry: dict) -> set[str]:
     family = source_family(entry.get("source_url"))
     if family == "sec":
-        return {"official_filing"}
+        return {"official_filing", "sec_company_submissions"}
     if family == "benzinga":
         return {"earnings_data"}
     if family == "company_ir":
-        return {"ir_presentation", "ir_press_release", "other"}
+        return {"company_ir_press_releases", "ir_presentation", "ir_press_release", "other"}
     return {"other", "public_ir_sec"}
 
 

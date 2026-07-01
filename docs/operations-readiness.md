@@ -106,6 +106,7 @@ python tools\analyze_code_diff_impact.py --refresh --strict
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckCoreSafeguards -CheckSourceAutomationStatus -CheckSourceAutomationStore -CheckDailyRecommendations -CheckDailyRecommendationStore -CheckStorageQualitySafeguards -CheckPortfolioQuantityProtection -CheckPortfolioStore -StorageQualityMaxBodyMissing 0 -StorageQualityMaxOcrNeeded 0
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -SkipWriteSmoke -CheckNpsDomesticEquityAllocation
 python tools\smoke_research_console_clicks.py --url http://127.0.0.1:8001/console/index.html?smoke=clicks --progress --progress-heartbeat-seconds 30
 python tools\smoke_research_console_clicks.py --list-stages
 python tools\smoke_research_console_clicks.py --only-public-ir-sec --progress --progress-heartbeat-seconds 20
@@ -114,6 +115,7 @@ python tools\smoke_research_console_external_sources.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
 python tools\check_daily_recommendation_policy_signals.py --strict
+python tools\check_nps_domestic_equity_allocation.py --rebalance-plan
 ```
 
 Firecrawl IR RPC 실전 전환은 `docs\examples\firecrawl_ir_rpc.env.example`을 ignored secret env 파일로 복사해 값을 채운 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 먼저 `--require-env-registry --require-rpc-ready`를 통과해야 한다. 이 단계는 secret 원문을 출력하지 않고 output JSON에는 configured 여부와 readiness error만 남긴다. 실제 적재는 같은 파일로 `-Mode Submit`을 붙였을 때만 실행하며, 전부 `skipped`/`failed`인 batch는 성공으로 보지 않는다.

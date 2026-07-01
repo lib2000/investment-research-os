@@ -75,6 +75,7 @@ node --check mobile_app\research_console\console.js
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckCoreSafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioQuantityProtection
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckPortfolioStore
+.\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckNpsDomesticEquityAllocation
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckStorageQualitySafeguards
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckSourceAutomationStore
 .\tools\verify_research_console.ps1 -SkipLiveSmoke -CheckDailyRecommendationStore
