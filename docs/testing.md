@@ -68,6 +68,7 @@ node --check mobile_app\research_console\console.js
 .\tools\check_core_safeguards.ps1 -Strict
 .\tools\check_portfolio_quantity_protection.ps1 -Strict
 .\tools\check_storage_quality_safeguards.ps1 -Strict
+.\tools\run_daily_research_operations.ps1
 .\tools\verify_research_console.ps1
 .\tools\verify_research_console.ps1 -SkipLiveSmoke
 .\tools\verify_research_console.ps1 -SkipWriteSmoke
