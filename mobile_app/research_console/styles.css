@@ -3693,6 +3693,77 @@ label {
   grid-column: 1 / -1;
 }
 
+.daily-recommendation-market-section {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.daily-recommendation-market-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+}
+
+.daily-recommendation-market-head div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.daily-recommendation-market-head span {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.daily-recommendation-market-head small {
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-market-head strong {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #5eead4;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.daily-recommendation-market-section.market-us .daily-recommendation-market-head {
+  border-color: #c7d2fe;
+  background: #f8fbff;
+}
+
+.daily-recommendation-market-section.market-us .daily-recommendation-market-head strong {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.daily-recommendation-market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
 .daily-recommendation-rank-card {
   align-content: start;
   min-height: 0;
@@ -5028,6 +5099,7 @@ pre {
   .dashboard-link-list,
   .ticker-cache-list,
   .daily-recommendation-cards,
+  .daily-recommendation-market-grid,
   .daily-recommendation-rank-board-head,
   .daily-recommendation-rank-board-row,
   .daily-recommendation-date-groups,

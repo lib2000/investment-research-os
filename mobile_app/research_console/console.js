@@ -9259,7 +9259,7 @@ function renderDailyRecommendationCards(payload) {
     (sum, item) => sum + dailyRecommendationEvidenceRepairQueue(item.quality).length,
     0
   );
-  const cards = records
+  const cardItems = records
     .map((record, index) => {
       const reasons = (record.reasons || []).slice(0, 3);
       const scoreComponents = (record.score_components || []).slice(0, 4);
@@ -9300,7 +9300,9 @@ function renderDailyRecommendationCards(payload) {
       ]
         .filter(Boolean)
         .join(" · ");
-      return `
+      return {
+        record,
+        html: `
         <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
           <div class="daily-recommendation-rank-head">
             <b>${escapeHtml(rank)}위</b>
@@ -9390,6 +9392,29 @@ function renderDailyRecommendationCards(payload) {
               .join("")}
           </div>
         </article>
+      `,
+      };
+    });
+  const cardMarkupByRecord = new Map(cardItems.map((item) => [item.record, item.html]));
+  const cards = dailyRecommendationMarketGroups(records)
+    .map((group) => {
+      const marketLabel = dailyRecommendationMarketLabel(group.market);
+      const groupPreview = group.records
+        .map((record, index) => `${record.rank || index + 1}위 ${displayCompanyName(record)}`)
+        .join(" · ");
+      return `
+        <section class="daily-recommendation-market-section market-${escapeHtml(String(group.market || "unknown").toLowerCase())}">
+          <header class="daily-recommendation-market-head">
+            <div>
+              <span>${escapeHtml(marketLabel)} 추천 1~3위</span>
+              <small>${escapeHtml(groupPreview || `${marketLabel} 추천 후보`)}</small>
+            </div>
+            <strong>${escapeHtml(formatNumber(group.records.length))}개</strong>
+          </header>
+          <div class="daily-recommendation-market-grid">
+            ${group.records.map((record) => cardMarkupByRecord.get(record)).filter(Boolean).join("")}
+          </div>
+        </section>
       `;
     })
     .join("");
