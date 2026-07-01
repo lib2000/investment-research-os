@@ -2306,6 +2306,25 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertTrue(payload["latest_entries"][0]["rag_connected"])
         self.assertEqual(payload["latest_entries"][0]["display_label"], "섹터/산업 자료")
 
+    def test_research_manifest_reader_ignores_corrupt_trailing_bytes(self):
+        from research_os.research_memory import read_manifest
+
+        with TemporaryDirectory() as tmp:
+            vault_dir = Path(tmp) / "research_vault"
+            vault_dir.mkdir(parents=True)
+            manifest = [
+                {
+                    "ticker": "005930",
+                    "type": "research-capture",
+                    "date": "2026-07-01",
+                    "file_name": "005930-research-capture.md",
+                }
+            ]
+            payload = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+            (vault_dir / "manifest.json").write_bytes(payload + b"\x8b\x88broken tail")
+
+            self.assertEqual(read_manifest(vault_dir), manifest)
+
     def test_data_provider_status_payload_builder_is_in_backend_module(self):
         from research_os.settings import Settings
         from research_os.system_health import build_data_provider_status_payload

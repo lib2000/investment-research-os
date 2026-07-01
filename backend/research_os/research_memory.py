@@ -115,8 +115,12 @@ def _read_manifest(vault_dir: Path) -> list[dict[str, Any]]:
 
     try:
         content = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        try:
+            raw_text = manifest_path.read_bytes().decode("utf-8", errors="replace")
+            content, _ = json.JSONDecoder().raw_decode(raw_text)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return []
 
     if not isinstance(content, list):
         return []
