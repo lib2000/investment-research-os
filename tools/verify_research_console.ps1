@@ -72,14 +72,14 @@ function Resolve-VerifyPython {
   if (Test-Path -LiteralPath $nativePython) {
     return @{ Mode = "native"; Command = $nativePython }
   }
+  $pythonCommand = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -ne $pythonCommand) {
+    return @{ Mode = "native"; Command = $pythonCommand.Source }
+  }
   $wslPython = Join-Path $ProjectRootPath ".venv\bin\python"
   $wslCommand = Get-Command wsl.exe -ErrorAction SilentlyContinue
   if ((Test-Path -LiteralPath $wslPython) -and $null -ne $wslCommand) {
     return @{ Mode = "wsl"; Command = $wslCommand.Source; Cwd = (Convert-ToWslPath $ProjectRootPath); Runtime = ".venv/bin/python" }
-  }
-  $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-  if ($null -ne $pythonCommand) {
-    return @{ Mode = "native"; Command = $pythonCommand.Source }
   }
   throw "Python 실행 파일을 찾지 못했습니다. .venv를 만들거나 Python을 PATH에 추가하세요."
 }
@@ -153,7 +153,7 @@ function Invoke-VerifyStep {
 Set-Location -LiteralPath $ProjectRootPath
 
 Invoke-VerifyStep "클래식 콘솔 자산 해시 확인" {
-  python tools\update_console_asset_hashes.py --check | Out-Null
+  python tools\update_console_asset_hashes.py --check
 }
 
 Invoke-VerifyStep "클래식 콘솔 JavaScript 문법 확인" {
