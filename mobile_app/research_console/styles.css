@@ -678,7 +678,7 @@ label {
 .daily-recommendation-quality {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 3px 8px;
+  gap: 4px 8px;
   align-items: center;
   min-width: 0;
   padding: 8px;
@@ -688,7 +688,7 @@ label {
 }
 
 .daily-recommendation-quality strong {
-  grid-row: span 3;
+  grid-row: span 2;
   display: grid;
   place-items: center;
   width: 38px;
@@ -705,7 +705,9 @@ label {
 .daily-recommendation-quality small,
 .daily-recommendation-quality em {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .daily-recommendation-quality span {
@@ -725,12 +727,17 @@ label {
 }
 
 .daily-recommendation-quality small {
+  grid-column: 1 / -1;
   color: #475569;
   font-size: 11px;
   font-weight: 800;
 }
 
 .daily-recommendation-quality em {
+  justify-self: start;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
   color: #0f766e;
   font-size: 11px;
   font-style: normal;
@@ -778,7 +785,7 @@ label {
 }
 
 .daily-recommendation-signal-grid.compact {
-  grid-template-columns: repeat(5, minmax(38px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -794,7 +801,7 @@ label {
 }
 
 .daily-recommendation-signal-grid.compact span {
-  padding: 4px 5px;
+  padding: 5px 6px;
 }
 
 .daily-recommendation-signal-grid details {
@@ -3651,14 +3658,16 @@ label {
 
 .daily-recommendation-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  gap: 12px;
   margin-top: 14px;
 }
 
 .daily-recommendation-card {
   display: grid;
   gap: 8px;
+  min-width: 0;
   min-height: 146px;
   padding: 12px;
   background: #f8fbfd;
@@ -3686,6 +3695,7 @@ label {
 
 .daily-recommendation-rank-card {
   align-content: start;
+  min-height: 0;
   border-color: #d8e1ec;
   background: #ffffff;
 }
@@ -3711,6 +3721,7 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .daily-recommendation-rank-head b {
@@ -3748,7 +3759,9 @@ label {
   border-radius: 7px;
   font-size: 12px;
   font-weight: 850;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .daily-recommendation-badges {
@@ -3783,8 +3796,11 @@ label {
 }
 
 .daily-recommendation-card strong {
+  min-width: 0;
   color: var(--text);
   font-size: 18px;
+  line-height: 1.25;
+  overflow-wrap: break-word;
 }
 
 .daily-recommendation-card p {
@@ -3827,11 +3843,14 @@ label {
 }
 
 .daily-recommendation-score-summary {
+  padding: 7px 8px;
+  border-radius: 7px;
   color: #134e4a;
   background: #ecfdf5;
   border: 1px solid #99f6e4;
   font-size: 12px;
   font-weight: 850;
+  line-height: 1.35;
 }
 
 .daily-recommendation-score {
@@ -3851,11 +3870,74 @@ label {
   font-weight: 750;
 }
 
-.daily-recommendation-card ul {
+.daily-recommendation-card ul,
+.daily-recommendation-primary-reasons {
   margin: 0;
   padding-left: 18px;
   color: #0f172a;
   font-size: 12px;
+}
+
+.daily-recommendation-primary-reasons {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px 8px 26px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  line-height: 1.35;
+}
+
+.daily-recommendation-detail {
+  display: block;
+  min-width: 0;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+}
+
+.daily-recommendation-detail summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.daily-recommendation-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-recommendation-detail summary b {
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.daily-recommendation-detail summary span {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-detail[open] {
+  border-color: #99d5cb;
+  box-shadow: 0 8px 22px rgba(15, 118, 110, 0.08);
+}
+
+.daily-recommendation-detail:not([open]) > :not(summary) {
+  display: none;
+}
+
+.daily-recommendation-detail[open] > :not(summary) {
+  margin-top: 8px;
 }
 
 .daily-recommendation-evidence {

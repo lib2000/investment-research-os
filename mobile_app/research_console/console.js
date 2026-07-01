@@ -8652,19 +8652,15 @@ function renderDailyRecommendationEvidenceQuality(record = {}) {
   const score = Number.isFinite(Number(quality.score)) ? formatNumber(Math.round(Number(quality.score))) : "n/a";
   const reasons = Array.isArray(quality.needs_review_reasons) ? quality.needs_review_reasons.filter(Boolean).slice(0, 3) : [];
   const repairQueue = dailyRecommendationEvidenceRepairQueue(quality);
+  const summary = compactOutputText(quality.summary || "근거 품질 계산 대기", 82);
+  const guardrail = compactOutputText(quality.guardrail_label || "검토 기준 확인", 52);
   return `
     <div class="daily-recommendation-quality ${escapeHtml(tone)}" aria-label="추천 근거 품질">
       <strong>${escapeHtml(quality.grade || "-")}</strong>
       <span>${escapeHtml(quality.label || "근거 품질 미평가")} · ${escapeHtml(score)}점</span>
-      <b>${escapeHtml(quality.guardrail_label || "검토 기준 확인")}</b>
-      <small>${escapeHtml(quality.summary || "근거 품질 계산 대기")}</small>
-      <small>${escapeHtml(quality.guardrail_action || "")}</small>
-      <small>${escapeHtml(
-        repairQueue.length
-          ? `보강 큐 등록 ${formatNumber(repairQueue.length)}건: ${repairQueue.map((item) => item.label || item.task_type).join(" · ")}`
-          : "보강 큐 없음"
-      )}</small>
-      ${reasons.length ? `<em>${escapeHtml(`보강: ${reasons.join(" · ")}`)}</em>` : "<em>보강 필요 없음</em>"}
+      <b>${escapeHtml(guardrail)}</b>
+      <small>${escapeHtml(summary)}</small>
+      <em>${escapeHtml(repairQueue.length ? `보강 큐 ${formatNumber(repairQueue.length)}건` : reasons.length ? `확인 ${formatNumber(reasons.length)}건` : "보강 필요 없음")}</em>
     </div>
   `;
 }
@@ -9266,7 +9262,6 @@ function renderDailyRecommendationCards(payload) {
   const cards = records
     .map((record, index) => {
       const reasons = (record.reasons || []).slice(0, 3);
-      const evidence = (record.evidence_sources || []).slice(0, 3);
       const scoreComponents = (record.score_components || []).slice(0, 4);
       const scoreWeights = (record.score_explanation?.component_weights || []).slice(0, 3);
       const penalties = (record.score_penalties || []).slice(0, 3);
@@ -9292,6 +9287,19 @@ function renderDailyRecommendationCards(payload) {
       const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
       const policySignal = dailyRecommendationPolicySignalSummary(record);
       const rank = Number(record.rank || index + 1);
+      const primaryReasons = [
+        ...reasons.map((item) => compactOutputText(item, 76)),
+        ...evidenceRows.map((item) => compactOutputText(item, 76)),
+      ]
+        .filter(Boolean)
+        .slice(0, 2);
+      const detailSummary = [
+        categories.length ? `근거 ${categories.slice(0, 3).join(" · ")}` : "",
+        citationRows.length ? `문서 ${formatNumber(citationRows.length)}개` : "",
+        weeklyEvidenceRows.length ? `최근자료 ${formatNumber(weeklyEvidenceRows.length)}묶음` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       return `
         <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
           <div class="daily-recommendation-rank-head">
@@ -9305,67 +9313,71 @@ function renderDailyRecommendationCards(payload) {
             <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
           </div>
           ${renderDailyRecommendationEvidenceQuality(record)}
-          ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
-          <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(topScoreComponent?.label || "저장 전")}</p>
-          ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
-          ${policySignal ? `<p class="daily-recommendation-investment-profile">정책 신호 반영: ${escapeHtml(policySignal)}</p>` : ""}
-          ${renderDailyRecommendationSignalGrid(record)}
-          <div class="daily-recommendation-score">
-            ${scoreComponents
-              .map(
-                (component) =>
-                  `<em>${escapeHtml(component.label)} +${escapeHtml(formatNumber(component.points || 0))}</em>`
-              )
-              .join("") || "<em>점수 구성 저장 전</em>"}
-          </div>
-          <small>${escapeHtml(
-            scoreWeights.length
-              ? `주요 비중: ${scoreWeights
-                  .map((component) => `${component.label} ${component.weight_pct}%`)
-                  .join(" · ")}`
-              : "점수 비중은 다음 추천 생성부터 표시됩니다."
-          )}</small>
-          <small>${escapeHtml(`근거 분류: ${categories.join(" · ")}`)}</small>
-          <small>${escapeHtml(`근거 품질: ${evidenceQuality.grade || "-"} · ${evidenceQuality.label || "미평가"} · 보강 ${formatNumber(evidenceQuality.needs_review_count || 0)}건`)}</small>
-          <div class="daily-recommendation-evidence">
-            <b>최근 1주 자료 묶음</b>
-            ${weeklyEvidenceRows.length
-              ? weeklyEvidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
-              : "<span>최근 1주 자료 묶음은 다음 추천 갱신부터 표시됩니다.</span>"}
-            <b>주요 근거</b>
-            ${evidenceRows.length
-              ? evidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
-              : "<span>저장 근거 없음</span>"}
-            <b>근거 문서</b>
-            ${citationRows.length
-              ? citationRows.map((item) => `<span class="daily-recommendation-citation">${escapeHtml(item)}</span>`).join("")
-              : "<span>연결된 RAG 근거 문서는 다음 추천 갱신부터 표시됩니다.</span>"}
-          </div>
-          ${
-            penalties.length || qualityFlags.length
-              ? `<p class="daily-recommendation-warning">확인/감점: ${escapeHtml(
-                  [...penalties, ...qualityFlags].join(" · ")
-                )}</p>`
-              : ""
-          }
-          ${
-            overseasTracking.needs_fx_conversion
-              ? `<p class="daily-recommendation-fx">해외 추적: ${escapeHtml(
-                  overseasTracking.currency || record.currency || "USD"
-                )} 기준 가격과 USD/KRW 환율 반영 상태를 함께 확인합니다.</p>`
-              : ""
-          }
-          ${
-            portfolioRisk.linked
-              ? `<p class="daily-recommendation-portfolio">포트폴리오 연결: ${escapeHtml(
-                  portfolioRisk.message || "보유/관심 노출과 함께 확인하세요."
-                )}</p>`
-              : ""
-          }
-          <ul>
-            ${reasons.map((item) => `<li>${escapeHtml(compactOutputText(item, 110))}</li>`).join("") || "<li>근거 요약 없음</li>"}
+          <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(compactOutputText(topScoreComponent?.label || "저장 전", 46))}</p>
+          <ul class="daily-recommendation-primary-reasons">
+            ${primaryReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>근거 요약 없음</li>"}
           </ul>
-          <small>${escapeHtml(evidence.join(" · ") || "저장 근거 없음")}</small>
+          <details class="daily-recommendation-detail">
+            <summary>
+              <b>상세 근거</b>
+              <span>${escapeHtml(detailSummary || "근거 세부 보기")}</span>
+            </summary>
+            ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
+            ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
+            ${policySignal ? `<p class="daily-recommendation-investment-profile">정책 신호 반영: ${escapeHtml(policySignal)}</p>` : ""}
+            ${renderDailyRecommendationSignalGrid(record, { compact: true })}
+            <div class="daily-recommendation-score">
+              ${scoreComponents
+                .map(
+                  (component) =>
+                    `<em>${escapeHtml(component.label)} +${escapeHtml(formatNumber(component.points || 0))}</em>`
+                )
+                .join("") || "<em>점수 구성 저장 전</em>"}
+            </div>
+            <small>${escapeHtml(
+              scoreWeights.length
+                ? `주요 비중: ${scoreWeights
+                    .map((component) => `${component.label} ${component.weight_pct}%`)
+                    .join(" · ")}`
+                : "점수 비중은 다음 추천 생성부터 표시됩니다."
+            )}</small>
+            <small>${escapeHtml(`근거 품질: ${evidenceQuality.grade || "-"} · ${evidenceQuality.label || "미평가"} · 보강 ${formatNumber(evidenceQuality.needs_review_count || 0)}건`)}</small>
+            <div class="daily-recommendation-evidence">
+              <b>최근 1주 자료 묶음</b>
+              ${weeklyEvidenceRows.length
+                ? weeklyEvidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+                : "<span>최근 1주 자료 묶음은 다음 추천 갱신부터 표시됩니다.</span>"}
+              <b>주요 근거</b>
+              ${evidenceRows.length
+                ? evidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+                : "<span>저장 근거 없음</span>"}
+              <b>근거 문서</b>
+              ${citationRows.length
+                ? citationRows.map((item) => `<span class="daily-recommendation-citation">${escapeHtml(item)}</span>`).join("")
+                : "<span>연결된 RAG 근거 문서는 다음 추천 갱신부터 표시됩니다.</span>"}
+            </div>
+            ${
+              penalties.length || qualityFlags.length
+                ? `<p class="daily-recommendation-warning">확인/감점: ${escapeHtml(
+                    [...penalties, ...qualityFlags].join(" · ")
+                  )}</p>`
+                : ""
+            }
+            ${
+              overseasTracking.needs_fx_conversion
+                ? `<p class="daily-recommendation-fx">해외 추적: ${escapeHtml(
+                    overseasTracking.currency || record.currency || "USD"
+                  )} 기준 가격과 USD/KRW 환율 반영 상태를 함께 확인합니다.</p>`
+                : ""
+            }
+            ${
+              portfolioRisk.linked
+                ? `<p class="daily-recommendation-portfolio">포트폴리오 연결: ${escapeHtml(
+                    portfolioRisk.message || "보유/관심 노출과 함께 확인하세요."
+                  )}</p>`
+                : ""
+            }
+          </details>
           <div class="daily-recommendation-milestones">
             ${milestones
               .map(
