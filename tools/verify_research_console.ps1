@@ -13,6 +13,8 @@
   [switch]$CheckDailyRecommendationStore,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckPortfolioStore,
+  [switch]$CheckNpsDomesticEquityAllocation,
+  [switch]$FailOnNpsDomesticEquityBreach,
   [switch]$CheckStorageQualitySafeguards,
   [string]$ClickSmokeStopAfter = "",
   [switch]$ClickSmokeOnlyPublicIrSec,
@@ -30,6 +32,9 @@
   [double]$PortfolioQuantityExpected = 100,
   [string]$PortfolioQuantityCurrency = "USD",
   [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW",
+  [string]$NpsDomesticEquityPortfolioName = "__all__",
+  [double]$NpsDomesticEquityTargetWeight = 0.14,
+  [double]$NpsDomesticEquityWarnTolerance = 0.01,
   [string]$StorageQualityBaseUrl = "http://127.0.0.1:8001",
   [string]$StorageQualityDevUserToken = "dev-local-token",
   [int]$StorageQualityMaxBodyMissing = 0,
@@ -286,6 +291,24 @@ if ($CheckPortfolioStore) {
   }
   Invoke-VerifyStep "전체 포트폴리오 저장 구조 확인" {
     python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero
+  }
+}
+
+if ($CheckNpsDomesticEquityAllocation) {
+  Invoke-VerifyStep "국민연금 국내주식 14% 비중 확인" {
+    $npsArgs = @(
+      "tools\check_nps_domestic_equity_allocation.py",
+      "--portfolio-name",
+      $NpsDomesticEquityPortfolioName,
+      "--target-weight",
+      ([string]$NpsDomesticEquityTargetWeight),
+      "--warn-tolerance",
+      ([string]$NpsDomesticEquityWarnTolerance)
+    )
+    if ($FailOnNpsDomesticEquityBreach) {
+      $npsArgs += "--fail-on-breach"
+    }
+    python @npsArgs
   }
 }
 
