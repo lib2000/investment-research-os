@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
@@ -33,7 +33,7 @@ function Invoke-DailyResearchStep {
   Write-Host "정상 $Name"
 }
 
-if (-not $SkipPortfolioRefresh) {
+if (-not $SkipPortfolioRefresh.IsPresent) {
   Invoke-DailyResearchStep "포트폴리오 가격 갱신" {
     python tools\refresh_portfolio_prices.py `
       --base-url $BaseUrl `
@@ -42,13 +42,14 @@ if (-not $SkipPortfolioRefresh) {
   }
 }
 
-if (-not $SkipRecommendationRun) {
+if (-not $SkipRecommendationRun.IsPresent) {
   Invoke-DailyResearchStep "오늘 추천 강제 재분석" {
     $headers = @{
       Authorization = "Bearer $DevUserToken"
       "Content-Type" = "application/json"
     }
-    $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/daily-recommendations/run?force=true&save_result=true"
+    $query = "force=true" + [char]38 + "save_result=true"
+    $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/daily-recommendations/run?$query"
     $result = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -TimeoutSec $RecommendationRunTimeoutSeconds
     Write-Host (
       "상태={0}; 추천일={1}; 최신추천일={2}; 전체기록={3}; 저장={4}" -f
@@ -61,7 +62,7 @@ if (-not $SkipRecommendationRun) {
   }
 }
 
-if (-not $SkipVerification) {
+if (-not $SkipVerification.IsPresent) {
   Invoke-DailyResearchStep "운영 검증" {
     & (Join-Path $PSScriptRoot "verify_research_console.ps1") `
       -ProjectRoot $ProjectRootPath `
@@ -69,7 +70,8 @@ if (-not $SkipVerification) {
       -SkipWriteSmoke `
       -CheckPortfolioStore `
       -CheckNpsDomesticEquityAllocation `
-      -CheckDailyRecommendationStore
+      -CheckDailyRecommendationStore `
+      -CheckInvestmentInsightHub
   }
 }
 

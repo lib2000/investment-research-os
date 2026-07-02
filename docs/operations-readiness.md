@@ -122,7 +122,7 @@ python tools\check_daily_recommendation_policy_signals.py --strict
 python tools\check_nps_domestic_equity_allocation.py --rebalance-plan
 ```
 
-`run_daily_research_operations.ps1`는 포트폴리오 가격을 갱신하고, 오늘 추천을 `force=true`로 재분석한 뒤, 포트폴리오 저장/NPS 14%/일일 추천 저장 검증을 이어서 실행한다. 백엔드가 이미 `127.0.0.1:8001`에서 실행 중일 때 쓰는 일일 운영 래퍼이며, 필요하면 `-SkipPortfolioRefresh`, `-SkipRecommendationRun`, `-SkipVerification`로 일부 단계를 건너뛴다.
+`run_daily_research_operations.ps1`는 포트폴리오 가격을 갱신하고, 오늘 추천을 `force=true`로 재분석한 뒤, 포트폴리오 저장/NPS 14%/일일 추천 저장/통합 투자 인사이트 허브 검증을 이어서 실행한다. 백엔드가 이미 `127.0.0.1:8001`에서 실행 중일 때 쓰는 일일 운영 래퍼이며, 필요하면 `-SkipPortfolioRefresh`, `-SkipRecommendationRun`, `-SkipVerification`로 일부 단계를 건너뛴다.
 
 Firecrawl IR RPC 실전 전환은 `docs\examples\firecrawl_ir_rpc.env.example`을 ignored secret env 파일로 복사해 값을 채운 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 먼저 `--require-env-registry --require-rpc-ready`를 통과해야 한다. 이 단계는 secret 원문을 출력하지 않고 output JSON에는 configured 여부와 readiness error만 남긴다. 실제 적재는 같은 파일로 `-Mode Submit`을 붙였을 때만 실행하며, 전부 `skipped`/`failed`인 batch는 성공으로 보지 않는다.
 

@@ -349,11 +349,15 @@ $contracts = @(
     Path = "tools\run_daily_research_operations.ps1"
     Snippets = @(
       'refresh_portfolio_prices.py',
-      '/api/v1/daily-recommendations/run?force=true&save_result=true',
+      '$SkipVerification.IsPresent',
+      '/api/v1/daily-recommendations/run?',
+      '[char]38',
+      'save_result=true',
       'verify_research_console.ps1',
       '-CheckPortfolioStore',
       '-CheckNpsDomesticEquityAllocation',
       '-CheckDailyRecommendationStore',
+      '-CheckInvestmentInsightHub',
       '포트폴리오 가격 갱신',
       '오늘 추천 강제 재분석',
       '운영 검증',

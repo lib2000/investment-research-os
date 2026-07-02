@@ -245,6 +245,11 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("backend\\research_os\\investment_insight_hub.py", verify_source)
         self.assertIn("통합 투자 인사이트 허브 오프라인 확인", verify_source)
 
+    def test_daily_research_operations_is_windows_powershell_utf8_bom(self):
+        script_bytes = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_bytes()
+
+        self.assertTrue(script_bytes.startswith(b"\xef\xbb\xbf"))
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
