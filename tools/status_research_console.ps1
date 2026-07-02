@@ -278,7 +278,9 @@ if ($dailyRecommendations) {
       foreach ($item in ($previewMismatches | Select-Object -First 6)) {
         $storedTicker = if ($item.stored_ticker) { $item.stored_ticker } else { "-" }
         $previewTicker = if ($item.preview_ticker) { $item.preview_ticker } else { "-" }
-        $previewMismatchLabels += "$($item.market) $($item.rank)위 저장 $storedTicker / 재계산 $previewTicker"
+        $storedScore = if ($item.stored_score) { $item.stored_score } else { "-" }
+        $previewScore = if ($item.preview_score) { $item.preview_score } else { "-" }
+        $previewMismatchLabels += "$($item.market) $($item.rank)위 저장 $storedTicker($storedScore) / 재계산 $previewTicker($previewScore)"
       }
       Write-Host "추천 저장/재계산 차이: $($previewMismatchLabels -join ', ')"
     } else {

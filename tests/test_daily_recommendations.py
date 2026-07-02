@@ -485,7 +485,16 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(stored[0]["ticker"], "OLD")
         self.assertEqual(
             mismatches,
-            [{"market": "KR", "rank": 1, "stored_ticker": "OLD", "preview_ticker": "NEW"}],
+            [
+                {
+                    "market": "KR",
+                    "rank": 1,
+                    "stored_ticker": "OLD",
+                    "stored_score": 90,
+                    "preview_ticker": "NEW",
+                    "preview_score": None,
+                }
+            ],
         )
         self.assertEqual(result["stored_preview_mismatches"], mismatches)
 

@@ -340,6 +340,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("저장 중복 대표 후보", script_source)
         self.assertIn("daily_recommendation_candidate_policy_preview.json", script_source)
         self.assertIn("stored_preview_mismatches", script_source)
+        self.assertIn("stored_score", script_source)
+        self.assertIn("preview_score", script_source)
         self.assertIn("generated_at", script_source)
         self.assertIn("Format-LocalDateTime", script_source)
         self.assertIn("Get-DateTimeAgeHours", script_source)

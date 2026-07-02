@@ -169,23 +169,27 @@ def latest_stored_top_records(root: Path, *, top_limit: int) -> list[dict[str, A
 def stored_preview_mismatches(stored: list[dict[str, Any]], preview: list[dict[str, Any]]) -> list[dict[str, Any]]:
     mismatches: list[dict[str, Any]] = []
     stored_by_slot = {
-        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): normalize_ticker(item.get("ticker"))
+        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): item
         for item in stored
     }
     preview_by_slot = {
-        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): normalize_ticker(item.get("ticker"))
+        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): item
         for item in preview
     }
     for slot in sorted(set(stored_by_slot) | set(preview_by_slot)):
-        stored_ticker = stored_by_slot.get(slot, "")
-        preview_ticker = preview_by_slot.get(slot, "")
+        stored_item = stored_by_slot.get(slot) or {}
+        preview_item = preview_by_slot.get(slot) or {}
+        stored_ticker = normalize_ticker(stored_item.get("ticker"))
+        preview_ticker = normalize_ticker(preview_item.get("ticker"))
         if stored_ticker != preview_ticker:
             mismatches.append(
                 {
                     "market": slot[0],
                     "rank": slot[1],
                     "stored_ticker": stored_ticker,
+                    "stored_score": stored_item.get("score"),
                     "preview_ticker": preview_ticker,
+                    "preview_score": preview_item.get("score"),
                 }
             )
     return mismatches
@@ -251,7 +255,9 @@ def main() -> int:
         print("범위: 저장된 최신 추천을 변경하지 않고 현재 런타임 후보 생성 정책만 재계산합니다.")
         if result["stored_preview_mismatches"]:
             mismatch_label = ", ".join(
-                f"{item['market']} {item['rank']}위 저장 {item['stored_ticker'] or '-'} / 재계산 {item['preview_ticker'] or '-'}"
+                f"{item['market']} {item['rank']}위 저장 {item['stored_ticker'] or '-'}"
+                f"({item.get('stored_score') or '-'}) / 재계산 {item['preview_ticker'] or '-'}"
+                f"({item.get('preview_score') or '-'})"
                 for item in result["stored_preview_mismatches"][:6]
             )
             print(f"저장 추천/재계산 차이: {mismatch_label}")
