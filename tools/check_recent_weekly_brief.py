@@ -254,7 +254,10 @@ def main() -> int:
 
     latest_records = latest_recommendation_records(load_json(root / DEFAULT_RECOMMENDATIONS, {"records": []}))
     evidence_paths = recommendation_path_index(latest_records)
-    existing_evidence = [path for path in evidence_paths if (root / path).exists()]
+    external_evidence = [path for path in evidence_paths if str(path).startswith(("http://", "https://"))]
+    local_evidence_paths = [path for path in evidence_paths if path not in external_evidence]
+    existing_evidence = [path for path in local_evidence_paths if (root / path).exists()]
+    missing_local_evidence = [path for path in local_evidence_paths if not (root / path).exists()]
     recent_paths = {path_key(item.get("relative_path")) for item in recent_items if path_key(item.get("relative_path"))}
     linked_recent_paths = sorted(recent_paths & evidence_paths)
     linked_recent_items = [
@@ -315,7 +318,18 @@ def main() -> int:
     print(f"표시 자료 묶음: {len(visible_groups)}개 | " + ", ".join(f"{group.get('label')}={group.get('count')}" for group in visible_groups))
     print(f"자료 묶음 품질 요약: {len(quality_ready_groups)}/{len(visible_groups)}개 | 종목별 자료 묶음 {len(target_digest)}개")
     latest_date = latest_records[0].get("recommendation_date") if latest_records else "미확인"
-    print(f"최신 추천일: {latest_date} | 추천 {len(latest_records)}개 | 근거 문서 {len(existing_evidence)}/{len(evidence_paths)}개")
+    print(
+        f"최신 추천일: {latest_date} | 추천 {len(latest_records)}개 | "
+        f"로컬 근거 문서 {len(existing_evidence)}/{len(local_evidence_paths)}개 | 외부 URL 근거 {len(external_evidence)}개"
+    )
+    if missing_local_evidence:
+        print(f"추천 로컬 근거 경로 확인 필요: {len(missing_local_evidence)}개")
+        for path in missing_local_evidence[:5]:
+            print(f"- 로컬 경로 확인: {path}")
+    if external_evidence:
+        print(f"추천 외부 URL 근거: {len(external_evidence)}개")
+        for path in external_evidence[:5]:
+            print(f"- 외부 URL: {path}")
     print(f"최근 1주-추천 근거 직접 연결: {len(linked_recent_paths)}개")
     print(
         "추천 연결 표시 보강: "
