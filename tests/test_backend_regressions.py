@@ -363,12 +363,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         script_source = (PROJECT_ROOT / "scripts" / "enter-investment-research-os.ps1").read_text(
             encoding="utf-8-sig"
         )
+        readme_source = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("[switch]$RestartBackend", script_source)
         self.assertIn("restart-research-backend.ps1 -Port 8001", script_source)
         self.assertIn("-RestartBackend -OpenConsole", script_source)
         self.assertIn("status_research_console.ps1 -Strict", script_source)
         self.assertIn("http://127.0.0.1:8001/console/index.html", script_source)
+        self.assertIn("-RestartBackend -OpenConsole", readme_source)
 
     def test_backend_runtime_env_recommends_research_backend_restart(self):
         script_source = (PROJECT_ROOT / "tools" / "check_backend_runtime_env.py").read_text(
