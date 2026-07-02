@@ -4760,14 +4760,22 @@ class NaverResearchIngestTests(unittest.TestCase):
         )
 
         self.assertEqual(summary["target_count"], 3)
+        self.assertEqual(summary["ticker_target_count"], 2)
+        self.assertEqual(summary["sector_target_count"], 1)
         self.assertEqual(summary["linked_target_count"], 2)
+        self.assertEqual(summary["linked_ticker_count"], 1)
+        self.assertEqual(summary["linked_sector_count"], 1)
+        self.assertEqual(summary["unlinked_target_count"], 1)
         self.assertAlmostEqual(summary["linked_target_ratio"], 2 / 3)
         self.assertEqual(summary["match_count"], 3)
         self.assertEqual(summary["market_counts"], {"KR": 1, "US": 2})
         self.assertEqual(summary["latest_session_date"], "2026-06-18")
         self.assertEqual(summary["sample_targets"], ["AAPL", "AI"])
-        self.assertIn("매칭 3건", check_research_source_store.format_market_journal_impact(summary))
-        self.assertIn("연결률 66.7%", check_research_source_store.format_market_journal_impact(summary))
+        formatted = check_research_source_store.format_market_journal_impact(summary)
+        self.assertIn("매칭 3건", formatted)
+        self.assertIn("연결률 66.7%", formatted)
+        self.assertIn("미연결 1개", formatted)
+        self.assertIn("티커 1/2, 섹터 1/1", formatted)
         self.assertIn(
             "설명 같은 원본이라 중복 저장하지 않았습니다.",
             check_research_source_store.format_market_journal_attempt(

@@ -176,24 +176,25 @@ def format_market_journal_summary(market: str, summary: dict[str, Any]) -> str:
 
 
 def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    target_rows = [
-        row
-        for row in [
-            *(payload.get("ticker_targets") or []),
-            *(payload.get("sector_targets") or []),
-        ]
-        if isinstance(row, dict)
-    ]
+    ticker_rows = [row for row in (payload.get("ticker_targets") or []) if isinstance(row, dict)]
+    sector_rows = [row for row in (payload.get("sector_targets") or []) if isinstance(row, dict)]
+    target_rows = [*ticker_rows, *sector_rows]
     market_counts: Counter[str] = Counter()
     latest_session_date = ""
     linked_target_count = 0
+    linked_ticker_count = 0
+    linked_sector_count = 0
     match_count = 0
     samples: list[str] = []
-    for row in target_rows:
+    for row, group in [(row, "ticker") for row in ticker_rows] + [(row, "sector") for row in sector_rows]:
         matches = [match for match in (row.get("market_journal_matches") or []) if isinstance(match, dict)]
         if not matches:
             continue
         linked_target_count += 1
+        if group == "ticker":
+            linked_ticker_count += 1
+        else:
+            linked_sector_count += 1
         match_count += len(matches)
         label = str(row.get("ticker") or row.get("name") or "").strip()
         if label and len(samples) < 5:
@@ -208,7 +209,12 @@ def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
     target_count = len(target_rows)
     return {
         "target_count": target_count,
+        "ticker_target_count": len(ticker_rows),
+        "sector_target_count": len(sector_rows),
         "linked_target_count": linked_target_count,
+        "linked_ticker_count": linked_ticker_count,
+        "linked_sector_count": linked_sector_count,
+        "unlinked_target_count": max(0, target_count - linked_target_count),
         "linked_target_ratio": linked_target_count / target_count if target_count else 0.0,
         "match_count": match_count,
         "market_counts": dict(sorted(market_counts.items())),
@@ -226,6 +232,9 @@ def format_market_journal_impact(summary: dict[str, Any]) -> str:
     return (
         f"대상 {summary.get('target_count', 0)}개 중 {summary.get('linked_target_count', 0)}개 연결"
         f"(연결률 {ratio:.1%}) | "
+        f"미연결 {summary.get('unlinked_target_count', 0)}개 | "
+        f"티커 {summary.get('linked_ticker_count', 0)}/{summary.get('ticker_target_count', 0)}, "
+        f"섹터 {summary.get('linked_sector_count', 0)}/{summary.get('sector_target_count', 0)} | "
         f"매칭 {summary.get('match_count', 0)}건({market_label}) | "
         f"최신 세션 {summary.get('latest_session_date') or '미확인'} | 샘플 {sample_label}"
     )
