@@ -290,6 +290,18 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Official policy/law/regulation sources", script_source)
         self.assertIn("Company IR public sources", script_source)
 
+    def test_status_research_console_summarizes_automation_digest(self):
+        script_source = (PROJECT_ROOT / "tools" / "status_research_console.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("/api/v1/research-automation/status", script_source)
+        self.assertIn("dashboard_digest", script_source)
+        self.assertIn("news_priority_preview", script_source)
+        self.assertIn("news_duplicate_priority_group_count", script_source)
+        self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
+        self.assertIn("candidates.reduce", script_source)
+
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
         verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
 

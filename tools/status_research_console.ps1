@@ -111,6 +111,7 @@ $provider = Invoke-JsonStatus -Name "data providers" -Path "/api/v1/data-provide
 $ocr = Invoke-JsonStatus -Name "ocr status" -Path "/api/v1/ocr/status"
 $storageQuality = Invoke-JsonStatus -Name "storage quality" -Path "/api/v1/storage/quality-dashboard" -Headers $authHeaders
 $dailyRecommendations = Invoke-JsonStatus -Name "daily recommendations" -Path "/api/v1/daily-recommendations/status" -Headers $authHeaders
+$researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/v1/research-automation/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 
 if ($root -and $root.message) {
@@ -137,6 +138,34 @@ if ($dailyRecommendations) {
   Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
   Write-Host "일일 추천 저장 건수: $($dailyRecommendations.record_count)"
   Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
+}
+if ($researchAutomation) {
+  $dashboardDigest = $researchAutomation.dashboard_digest
+  $nextActionCount = if ($researchAutomation.next_actions) { @($researchAutomation.next_actions).Count } else { 0 }
+  if ($dashboardDigest -and $dashboardDigest.next_actions) {
+    $nextActionCount = @($dashboardDigest.next_actions).Count
+  }
+  Write-Host "자동화 상태: $($researchAutomation.status)"
+  Write-Host "자동화 다음 조치: $nextActionCount"
+  if ($dashboardDigest) {
+    $priorityNewsCount = if ($dashboardDigest.news_priority_preview) { @($dashboardDigest.news_priority_preview).Count } else { 0 }
+    Write-Host "우선 뉴스: $($priorityNewsCount)개, 중복 후보 $($dashboardDigest.news_duplicate_priority_group_count)묶음/$($dashboardDigest.news_duplicate_priority_entry_count)개"
+    $npsPlan = $dashboardDigest.nps_domestic_equity_rebalance_plan
+    if ($npsPlan) {
+      $reduceCandidates = if ($npsPlan.candidates -and $npsPlan.candidates.reduce) {
+        @($npsPlan.candidates.reduce)
+      } elseif ($npsPlan.reduce_candidates) {
+        @($npsPlan.reduce_candidates)
+      } else {
+        @()
+      }
+      $reduceCandidateCount = $reduceCandidates.Count
+      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 후보 $($reduceCandidateCount)개"
+    }
+  }
+  if ($researchAutomation.status -and $researchAutomation.status -ne "success") {
+    Add-StatusFailure "research automation 상태가 success가 아닙니다: $($researchAutomation.status)"
+  }
 }
 if ($console) {
   $consoleSize = if ($console.RawContentLength) { $console.RawContentLength } else { $console.DecodedContentLength }
