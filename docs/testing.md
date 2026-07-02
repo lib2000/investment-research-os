@@ -139,6 +139,8 @@ python tools\check_console_asset_and_js.py
 Firecrawl Monitor 변화 감지는 `python tools\check_firecrawl_monitor_collector.py --input-json docs\examples\firecrawl_monitor_registry.sample.json`로 페이지/검색 target, schedule, goal, changeTracking payload를 먼저 확인합니다. 실제 `/v2/monitor` 생성 전에는 ignored secret env 파일을 만든 뒤 `--require-env-registry --require-create-ready`를 통과시켜야 합니다. 이벤트 수신 모델은 `CompanyIrSourcesWatchTests`의 Firecrawl Monitor 이벤트 정규화/저장/엔드포인트 테스트로 `monitor.page`, `monitor.check.completed`, 중복 upsert, 공개 IR/SEC 상태 연결을 확인합니다. Webhook 테스트는 secret 미설정, secret 불일치, `Authorization: Bearer` 정상 수신 세 가지를 고정합니다.
 
 Firecrawl Monitor 운영 전환은 `python tools\check_firecrawl_monitor_operational_preflight.py --env-file path\to\firecrawl-monitor.env --env-override --require-env-registry --require-webhook-secret`로 점검합니다. 기본값은 임시 vault를 사용하므로 실제 저장 데이터를 변경하지 않습니다. 실제 저장소에 수신 테스트 이벤트를 남겨야 할 때만 `--use-live-vault`를 명시합니다.
+
+Firecrawl Monitor env 템플릿은 `python tools\create_firecrawl_monitor_env_template.py --output tmp\firecrawl-monitor.local.env`로 생성합니다. 테스트는 신규 생성, 기존 파일 덮어쓰기 방지, placeholder 기반 출력이 실제 secret을 포함하지 않는지를 확인합니다.
 실전 RPC 전환 전에는 ignored secret env 파일을 만든 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 `--require-rpc-ready`를 먼저 통과시키고, 실제 적재가 필요한 경우에만 `-Mode Submit`을 추가합니다.
 
 개별 점검은 아래 명령을 사용합니다.

@@ -4426,6 +4426,84 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertIn("[success] firecrawl_monitor_operational_preflight", result.stdout)
         self.assertIn("reject=401 accept=200 saved=1", result.stdout)
 
+    def test_firecrawl_monitor_env_template_creates_safe_defaults(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "firecrawl-monitor.local.env"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "create_firecrawl_monitor_env_template.py"),
+                    "--output",
+                    str(output),
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+            content = output.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[created] firecrawl_monitor_env_template", result.stdout)
+        self.assertIn("FIRECRAWL_MONITOR_ENABLED=false", content)
+        self.assertIn("FIRECRAWL_MONITOR_DRY_RUN=true", content)
+        self.assertIn("FIRECRAWL_API_KEY=replace-with-firecrawl-api-key", content)
+        self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET=replace-with-long-random-webhook-secret", content)
+        self.assertIn("FIRECRAWL_MONITOR_SOURCES_JSON=", content)
+
+    def test_firecrawl_monitor_env_template_does_not_overwrite_existing_file(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "firecrawl-monitor.local.env"
+            output.write_text("FIRECRAWL_API_KEY=real-existing-secret\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "create_firecrawl_monitor_env_template.py"),
+                    "--output",
+                    str(output),
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+            content = output.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[skipped_existing] firecrawl_monitor_env_template", result.stdout)
+        self.assertEqual(content, "FIRECRAWL_API_KEY=real-existing-secret\n")
+        self.assertNotIn("real-existing-secret", result.stdout)
+
+    def test_firecrawl_monitor_env_template_json_output_is_sanitized(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "firecrawl-monitor.local.env"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "create_firecrawl_monitor_env_template.py"),
+                    "--output",
+                    str(output),
+                    "--json",
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["api_key_placeholder"])
+        self.assertTrue(payload["webhook_secret_placeholder"])
+        self.assertNotIn("replace-with-firecrawl-api-key", result.stdout)
+        self.assertNotIn("replace-with-long-random-webhook-secret", result.stdout)
+
     def test_public_ir_sec_status_lists_needs_body_entries(self):
         from research_os.public_ir_sec import public_ir_sec_status_payload
 
