@@ -22,6 +22,7 @@
 
 - LLM/RAG 저장 상태: `python tools\check_llm_bridge_store.py --require-active-rag`로 LLM 연동 응답의 원 프롬프트, 응답 본문, Markdown/JSON 저장 파일, RAG 색인 연결을 백엔드 없이 확인한다.
 - 저장/RAG 실패 진단: `python tools\check_rag_failure_diagnostics.py --strict`로 활성 리서치 문서의 저장 파일, RAG 색인, 검색 가능 본문 길이, 자동 분류 근거를 한 번에 확인한다.
+- 국민연금 국내주식 14%: 기본 운영 점검은 현재 비중과 리밸런싱 후보를 출력한다. 초과/미달을 운영 게이트 실패로 막아야 할 때는 `python tools\check_operational_readiness_score.py --strict --min-score 95 --enforce-nps-allocation` 또는 `python tools\check_nps_domestic_equity_allocation.py --fail-on-breach`를 사용한다.
 
 - UI 회귀 가드: `python tools\check_console_static_contract.py --strict`는 추천 결과 화면의 `오늘의 추천 결과`, `일자별 추천 목록`, `경과 그래프` 렌더링 계약과 관련 CSS 클래스를 확인한다.
 
