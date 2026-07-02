@@ -139,42 +139,47 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="저장 자료 중복 리뷰 상태를 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="운영 품질 문제가 있으면 실패 코드로 종료")
     parser.add_argument("--max-age-hours", type=float, default=168.0, help="중복 리뷰 최신성 기준")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
     status = summarize_duplicate_review(root)
-    print(
-        "저장 자료 중복 리뷰: "
-        f"상태 {status['status'] or '미확인'} | "
-        f"검사 {status['checked_count']}개 | "
-        f"대표 {status['unique_representative_count']}개 | "
-        f"중복 그룹 {status['duplicate_group_count']}개 | "
-        f"중복 항목 {status['duplicate_entry_count']}개",
-        flush=True,
-    )
-    if status.get("as_of"):
-        age = status.get("age_hours")
-        age_label = f"{age:.1f}시간 전" if isinstance(age, (int, float)) else "경과 미확인"
-        print(f"업데이트: {status['as_of']} ({age_label})", flush=True)
-    policy = status["representative_policy"]
-    print(
-        "정책: "
-        f"Dossier={policy.get('dossier_usage') or '미확인'}, "
-        f"중복={policy.get('duplicate_usage') or '미확인'}, "
-        f"hard_delete_allowed={policy.get('hard_delete_allowed')}",
-        flush=True,
-    )
-    for group in status["groups"][:5]:
-        representative = group.get("representative") if isinstance(group.get("representative"), dict) else {}
+    errors = strict_errors(status, max_age_hours=args.max_age_hours)
+    result = {"status": "failure" if errors else "success", "errors": errors, **status}
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+    else:
         print(
-            f"- {group.get('ticker') or 'UNKNOWN'} | 중복 {group.get('duplicate_count') or len(group.get('duplicates') or [])}개 | "
-            f"대표 {representative.get('title') or representative.get('relative_path') or '미확인'}",
+            "저장 자료 중복 리뷰: "
+            f"상태 {status['status'] or '미확인'} | "
+            f"검사 {status['checked_count']}개 | "
+            f"대표 {status['unique_representative_count']}개 | "
+            f"중복 그룹 {status['duplicate_group_count']}개 | "
+            f"중복 항목 {status['duplicate_entry_count']}개",
             flush=True,
         )
-        for line in duplicate_preview_lines(group):
-            print(line, flush=True)
-    errors = strict_errors(status, max_age_hours=args.max_age_hours)
-    if errors:
+        if status.get("as_of"):
+            age = status.get("age_hours")
+            age_label = f"{age:.1f}시간 전" if isinstance(age, (int, float)) else "경과 미확인"
+            print(f"업데이트: {status['as_of']} ({age_label})", flush=True)
+        policy = status["representative_policy"]
+        print(
+            "정책: "
+            f"Dossier={policy.get('dossier_usage') or '미확인'}, "
+            f"중복={policy.get('duplicate_usage') or '미확인'}, "
+            f"hard_delete_allowed={policy.get('hard_delete_allowed')}",
+            flush=True,
+        )
+        for group in status["groups"][:5]:
+            representative = group.get("representative") if isinstance(group.get("representative"), dict) else {}
+            print(
+                f"- {group.get('ticker') or 'UNKNOWN'} | 중복 {group.get('duplicate_count') or len(group.get('duplicates') or [])}개 | "
+                f"대표 {representative.get('title') or representative.get('relative_path') or '미확인'}",
+                flush=True,
+            )
+            for line in duplicate_preview_lines(group):
+                print(line, flush=True)
+    if errors and not args.json:
         print("점검 오류:", flush=True)
         for error in errors:
             print(f"- {error}", flush=True)

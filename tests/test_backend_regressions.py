@@ -10437,6 +10437,13 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
         self.assertEqual(status["duplicate_missing"], [])
         self.assertEqual(tool.strict_errors(status, max_age_hours=10**9), [])
 
+    def test_storage_duplicate_review_cli_supports_json_output(self):
+        tool_source = (PROJECT_ROOT / "tools" / "check_storage_duplicate_review.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', tool_source)
+        self.assertIn('"errors": errors', tool_source)
+        self.assertIn("json.dumps(result", tool_source)
+
     def test_storage_duplicate_review_formats_duplicate_preview_lines(self):
         tool = load_storage_duplicate_review_tool()
 
