@@ -14369,6 +14369,7 @@ function renderNewsInboxFilterSummary(payload) {
   return `
     <div class="news-filter-summary">
       <b>전체 ${escapeHtml(formatNumber(counts.all || payload?.count || 0))}</b>
+      <span>우선 분류 ${escapeHtml(formatNumber(counts.actionable || payload?.actionable_unpromoted_count || 0))}</span>
       <span>승격 전 ${escapeHtml(formatNumber(counts.unpromoted || 0))}</span>
       <span>본문 보강 ${escapeHtml(formatNumber(counts.needs_body || 0))}</span>
       <span>URL-only ${escapeHtml(formatNumber(counts.url_only || 0))}</span>
@@ -14837,6 +14838,7 @@ function formatKoreanResult(value) {
       ``,
       `- **전체:** ${formatNumber(value.count || 0)}개`,
       `- **현재 필터:** ${value.filter || "all"} / 표시 ${formatNumber(value.filtered_count || items.length)}개`,
+      `- **우선 분류:** ${formatNumber(value.actionable_unpromoted_count || value.filter_counts?.actionable || 0)}개`,
       `- **미승격:** ${formatNumber(value.unpromoted_count || 0)}개`,
       `- **품질 확인 필요:** ${formatNumber(value.quality_issue_count || 0)}개`,
       `- **본문 보강 필요:** ${formatNumber(value.filter_counts?.needs_body || 0)}개`,

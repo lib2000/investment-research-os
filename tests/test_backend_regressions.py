@@ -9386,15 +9386,19 @@ class NewsBuilderModuleTests(unittest.TestCase):
                 "title": "산업부 반도체 보조금 정책 발표",
                 "summary": "세액공제 확대와 수출통제 대응 지원책",
                 "tags": [],
+                "relevance_score": 35,
             },
             {"title": "일반 뉴스", "summary": "시장 소식", "tags": []},
         ]
 
         counts = news_inbox.news_filter_counts(runtime, items)
         filtered = news_inbox.filter_news_inbox_items(runtime, items, "정책")
+        actionable = news_inbox.filter_news_inbox_items(runtime, items, "우선")
 
         self.assertEqual(counts["policy_law"], 1)
+        self.assertEqual(counts["actionable"], 1)
         self.assertEqual(len(filtered), 1)
+        self.assertEqual(len(actionable), 1)
 
     def test_news_builder_module_rejects_empty_input(self):
         from research_os import news_builder
@@ -9773,12 +9777,14 @@ class NewsInboxModuleTests(unittest.TestCase):
         )
 
         result = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="needs_body")
+        actionable = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="actionable")
 
         self.assertEqual(result["count"], 2)
         self.assertEqual(result["actionable_unpromoted_count"], 1)
         self.assertEqual(result["filter_counts"]["needs_body"], 1)
         self.assertEqual(result["quality_issue_count"], 1)
         self.assertEqual([item["id"] for item in result["items"]], ["n1"])
+        self.assertEqual([item["id"] for item in actionable["items"]], ["n1"])
 
 
 class AutomationStatusModuleTests(unittest.TestCase):

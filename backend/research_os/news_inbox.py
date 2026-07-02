@@ -243,6 +243,8 @@ def news_filter_key(runtime: NewsInboxRuntime, item: dict) -> set[str]:
     keys = {"all"}
     if not item.get("promoted"):
         keys.add("unpromoted")
+    if is_actionable_unpromoted_news(item):
+        keys.add("actionable")
     if item.get("source_url") and ("url_only" in tags or not str(item.get("safe_user_note") or "").strip()):
         keys.add("url_only")
     if not (policy_url_only or promoted_storage_handled) and (
@@ -272,6 +274,10 @@ def filter_news_inbox_items(runtime: NewsInboxRuntime, items: list[dict], filter
         "본문": "needs_body",
         "url": "url_only",
         "pending": "unpromoted",
+        "priority": "actionable",
+        "actionable": "actionable",
+        "우선": "actionable",
+        "우선분류": "actionable",
         "시장일지": "market_journal",
         "policy": "policy_law",
         "정책": "policy_law",
@@ -284,7 +290,17 @@ def filter_news_inbox_items(runtime: NewsInboxRuntime, items: list[dict], filter
 
 
 def news_filter_counts(runtime: NewsInboxRuntime, items: list[dict]) -> dict:
-    keys = ["all", "unpromoted", "needs_body", "url_only", "quality_issue", "market_journal", "policy_law", "held"]
+    keys = [
+        "all",
+        "unpromoted",
+        "actionable",
+        "needs_body",
+        "url_only",
+        "quality_issue",
+        "market_journal",
+        "policy_law",
+        "held",
+    ]
     return {
         key: sum(1 for item in items if key in news_filter_key(runtime, item))
         for key in keys
