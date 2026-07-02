@@ -112,6 +112,7 @@ $ocr = Invoke-JsonStatus -Name "ocr status" -Path "/api/v1/ocr/status"
 $storageQuality = Invoke-JsonStatus -Name "storage quality" -Path "/api/v1/storage/quality-dashboard" -Headers $authHeaders
 $dailyRecommendations = Invoke-JsonStatus -Name "daily recommendations" -Path "/api/v1/daily-recommendations/status" -Headers $authHeaders
 $researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/v1/research-automation/status" -Headers $authHeaders
+$publicIrSecStatus = Invoke-JsonStatus -Name "public IR/SEC status" -Path "/api/v1/public-ir-sec/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 
 if ($root -and $root.message) {
@@ -165,6 +166,18 @@ if ($researchAutomation) {
   }
   if ($researchAutomation.status -and $researchAutomation.status -ne "success") {
     Add-StatusFailure "research automation 상태가 success가 아닙니다: $($researchAutomation.status)"
+  }
+}
+if ($publicIrSecStatus) {
+  $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }
+  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 $($publicIrSecStatus.needs_body_copy_count)건"
+  foreach ($entry in $needsBodyEntries | Select-Object -First 3) {
+    $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }
+    $entryPath = if ($entry.relative_path) { $entry.relative_path } elseif ($entry.source_url) { $entry.source_url } else { "경로 미확인" }
+    Write-Host "공개 IR/SEC 보강 대상: $($entry.ticker) | $entryTitle | $entryPath"
+  }
+  if ($publicIrSecStatus.status -and $publicIrSecStatus.status -ne "success") {
+    Add-StatusFailure "public IR/SEC 상태가 success가 아닙니다: $($publicIrSecStatus.status)"
   }
 }
 if ($console) {

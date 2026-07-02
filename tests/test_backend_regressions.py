@@ -322,6 +322,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("news_duplicate_priority_group_count", script_source)
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
         self.assertIn("candidates.reduce", script_source)
+        self.assertIn("/api/v1/public-ir-sec/status", script_source)
+        self.assertIn("needs_body_copy_entries", script_source)
+        self.assertIn("공개 IR/SEC 보강 대상", script_source)
 
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
         verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
