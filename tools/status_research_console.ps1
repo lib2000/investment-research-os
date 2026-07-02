@@ -3,6 +3,7 @@
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
   [int]$MaxMarketJournalSessionAgeDays = 7,
+  [double]$MaxRecommendationPreviewAgeHours = 12.0,
   [switch]$Strict
 )
 
@@ -86,6 +87,20 @@ function Format-LocalDateTime {
     return ([datetimeoffset]::Parse($DateTimeText).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"))
   } catch {
     return $DateTimeText
+  }
+}
+
+function Get-DateTimeAgeHours {
+  param([string]$DateTimeText)
+
+  if ([string]::IsNullOrWhiteSpace($DateTimeText)) {
+    return $null
+  }
+  try {
+    $parsed = [datetimeoffset]::Parse($DateTimeText)
+    return [double](([datetimeoffset]::Now - $parsed).TotalHours)
+  } catch {
+    return $null
   }
 }
 
@@ -246,7 +261,12 @@ if ($dailyRecommendations) {
   }
   if ($dailyCandidatePolicyPreview) {
     if ($dailyCandidatePolicyPreview.generated_at) {
-      Write-Host "추천 재계산 프리뷰 생성: $(Format-LocalDateTime -DateTimeText $dailyCandidatePolicyPreview.generated_at)"
+      $previewAgeHours = Get-DateTimeAgeHours -DateTimeText $dailyCandidatePolicyPreview.generated_at
+      $previewAgeLabel = if ($null -ne $previewAgeHours) { "{0:N1}시간 전" -f $previewAgeHours } else { "경과 미확인" }
+      Write-Host "추천 재계산 프리뷰 생성: $(Format-LocalDateTime -DateTimeText $dailyCandidatePolicyPreview.generated_at) ($previewAgeLabel)"
+      if ($Strict -and ($null -eq $previewAgeHours -or $previewAgeHours -gt $MaxRecommendationPreviewAgeHours)) {
+        Add-StatusFailure "추천 재계산 프리뷰 최신성 확인 필요: $previewAgeLabel"
+      }
     }
     $previewMismatches = if ($dailyCandidatePolicyPreview.stored_preview_mismatches) {
       @($dailyCandidatePolicyPreview.stored_preview_mismatches | ForEach-Object { $_ })
