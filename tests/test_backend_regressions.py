@@ -4051,6 +4051,7 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                 "title": "Oatly Group 6-K SEC filing",
                 "ticker": "OTLY",
                 "source_url": "https://www.sec.gov/a",
+                "published_at": "2026-05-20",
                 "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
             },
             {
@@ -4061,6 +4062,18 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                 "title": "Oatly Group 6-K SEC filing",
                 "ticker": "OTLY",
                 "source_url": "https://www.sec.gov/b",
+                "published_at": "2026-05-20",
+                "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
+            },
+            {
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "date": "2026-07-02",
+                "file_name": "otly-6-k-different-date.md",
+                "title": "Oatly Group 6-K SEC filing",
+                "ticker": "OTLY",
+                "source_url": "https://www.sec.gov/c",
+                "published_at": "2026-04-27",
                 "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
             },
             {
@@ -4079,12 +4092,13 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         ):
             status = public_ir_sec_status_payload(settings)
 
-        self.assertEqual(status["entry_count"], 3)
-        self.assertEqual(status["needs_body_copy_count"], 2)
+        self.assertEqual(status["entry_count"], 4)
+        self.assertEqual(status["needs_body_copy_count"], 3)
         self.assertEqual(status["needs_body_copy_entries"][0]["file_name"], "otly-6-k.md")
         self.assertEqual(status["needs_body_duplicate_title_group_count"], 1)
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["ticker"], "OTLY")
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["count"], 2)
+        self.assertEqual(status["needs_body_duplicate_title_groups"][0]["filing_key"], "2026-05-20")
         self.assertEqual(
             status["needs_body_duplicate_title_groups"][0]["source_urls"],
             ["https://www.sec.gov/a", "https://www.sec.gov/b"],

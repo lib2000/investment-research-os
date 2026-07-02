@@ -320,22 +320,24 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
 
 
 def _needs_body_duplicate_title_groups(entries: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for entry in entries:
         ticker = str(entry.get("ticker") or "").upper()
         title = str(entry.get("title") or entry.get("file_name") or "").strip()
         if not title:
             continue
-        grouped.setdefault((ticker, title), []).append(entry)
+        filing_key = str(entry.get("published_at") or entry.get("source_url") or entry.get("final_url") or "").strip()
+        grouped.setdefault((ticker, title, filing_key), []).append(entry)
 
     groups: list[dict[str, Any]] = []
-    for (ticker, title), group_entries in grouped.items():
+    for (ticker, title, filing_key), group_entries in grouped.items():
         if len(group_entries) < 2:
             continue
         groups.append(
             {
                 "ticker": ticker,
                 "title": title,
+                "filing_key": filing_key,
                 "count": len(group_entries),
                 "source_urls": [
                     str(item.get("source_url") or item.get("final_url") or "")
