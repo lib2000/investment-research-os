@@ -190,6 +190,32 @@ def stored_preview_mismatches(stored: list[dict[str, Any]], preview: list[dict[s
     return mismatches
 
 
+def candidate_policy_result(
+    root: Path,
+    payload: dict[str, Any],
+    *,
+    top_limit: int,
+    expected_held_tickers: list[str] | None = None,
+    require_hold_warning: bool = False,
+) -> dict[str, Any]:
+    failures, details = validate_candidate_policy(
+        payload,
+        top_limit=top_limit,
+        expected_held_tickers=expected_held_tickers,
+        require_hold_warning=require_hold_warning,
+    )
+    stored_top_records = latest_stored_top_records(root, top_limit=top_limit)
+    preview_mismatches = stored_preview_mismatches(stored_top_records, details["top_candidates"])
+    return {
+        "status": "failure" if failures else "success",
+        "scope_note": "runtime_candidate_preview_only_no_store_write",
+        "failures": failures,
+        "stored_top_records": stored_top_records,
+        "stored_preview_mismatches": preview_mismatches,
+        **details,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="오늘 추천 후보 생성 정책 가드")
     parser.add_argument("--top-limit", type=int, default=3, help="review_hold 후보가 들어오면 실패할 상위 N개")
@@ -202,36 +228,27 @@ def main() -> int:
     root = project_root(Path.cwd())
     candidate_limit = max(args.top_limit, args.candidate_limit, 3)
     payload = build_candidate_payload(root, candidate_limit=candidate_limit)
-    failures, details = validate_candidate_policy(
+    result = candidate_policy_result(
+        root,
         payload,
         top_limit=max(1, args.top_limit),
         expected_held_tickers=args.expected_held_ticker,
         require_hold_warning=args.require_hold_warning,
     )
-    stored_top_records = latest_stored_top_records(root, top_limit=max(1, args.top_limit))
-    preview_mismatches = stored_preview_mismatches(stored_top_records, details["top_candidates"])
-    result = {
-        "status": "failure" if failures else "success",
-        "scope_note": "runtime_candidate_preview_only_no_store_write",
-        "failures": failures,
-        "stored_top_records": stored_top_records,
-        "stored_preview_mismatches": preview_mismatches,
-        **details,
-    }
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print("추천 후보 정책 가드:", "실패" if failures else "정상")
+        print("추천 후보 정책 가드:", "실패" if result["failures"] else "정상")
         print("범위: 저장된 최신 추천을 변경하지 않고 현재 런타임 후보 생성 정책만 재계산합니다.")
-        if preview_mismatches:
+        if result["stored_preview_mismatches"]:
             mismatch_label = ", ".join(
                 f"{item['market']} {item['rank']}위 저장 {item['stored_ticker'] or '-'} / 재계산 {item['preview_ticker'] or '-'}"
-                for item in preview_mismatches[:6]
+                for item in result["stored_preview_mismatches"][:6]
             )
             print(f"저장 추천/재계산 차이: {mismatch_label}")
         else:
             print("저장 추천/재계산 차이: 없음")
-        for candidate in details["top_candidates"]:
+        for candidate in result["top_candidates"]:
             marker = " | 보류대상" if candidate["review_hold"] else " | 약세추적" if candidate["soft_tracking_hold"] else ""
             tracking_note = ""
             if candidate.get("tracking_penalty_points") is not None:
@@ -243,12 +260,12 @@ def main() -> int:
                 f"{candidate.get('market')} {candidate.get('rank')}위 {candidate.get('ticker')} {candidate.get('company_name')} "
                 f"| 점수 {candidate.get('score')}{tracking_note}{marker}"
             )
-        for warning in details["warnings"][:3]:
+        for warning in result["warnings"][:3]:
             print(f"경고: {warning}")
-        if failures:
-            for failure in failures:
+        if result["failures"]:
+            for failure in result["failures"]:
                 print(f"실패: {failure}")
-    return 1 if failures else 0
+    return 1 if result["failures"] else 0
 
 
 if __name__ == "__main__":

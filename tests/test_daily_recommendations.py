@@ -408,19 +408,15 @@ class DailyRecommendationsTests(unittest.TestCase):
     def test_candidate_policy_cli_result_documents_runtime_preview_scope(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 
-        failures, details = policy_check.validate_candidate_policy(
+        result = policy_check.candidate_policy_result(
+            Path("."),
             {"candidates": [{"rank": 1, "ticker": "OK", "market": "KR", "score": 91}], "warnings": []},
             top_limit=3,
         )
-        result = {
-            "status": "failure" if failures else "success",
-            "scope_note": "runtime_candidate_preview_only_no_store_write",
-            "failures": failures,
-            **details,
-        }
 
         self.assertEqual(result["scope_note"], "runtime_candidate_preview_only_no_store_write")
         self.assertEqual(result["status"], "success")
+        self.assertIn("stored_preview_mismatches", result)
 
     def test_candidate_policy_compares_stored_and_preview_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
@@ -458,6 +454,17 @@ class DailyRecommendationsTests(unittest.TestCase):
             )
 
             stored = policy_check.latest_stored_top_records(root, top_limit=3)
+            result = policy_check.candidate_policy_result(
+                root,
+                {
+                    "candidates": [
+                        {"market": "KR", "rank": 1, "ticker": "NEW"},
+                        {"market": "US", "rank": 1, "ticker": "SAME"},
+                    ],
+                    "warnings": [],
+                },
+                top_limit=3,
+            )
 
         mismatches = policy_check.stored_preview_mismatches(
             stored,
@@ -472,6 +479,7 @@ class DailyRecommendationsTests(unittest.TestCase):
             mismatches,
             [{"market": "KR", "rank": 1, "stored_ticker": "OLD", "preview_ticker": "NEW"}],
         )
+        self.assertEqual(result["stored_preview_mismatches"], mismatches)
 
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
