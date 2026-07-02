@@ -4426,6 +4426,91 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertIn("[success] firecrawl_monitor_operational_preflight", result.stdout)
         self.assertIn("reject=401 accept=200 saved=1", result.stdout)
 
+    def test_firecrawl_monitor_operational_preflight_rejects_placeholder_secret(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "firecrawl-monitor.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_MONITOR_ENABLED=false",
+                        "FIRECRAWL_MONITOR_DRY_RUN=true",
+                        "FIRECRAWL_MONITOR_WEBHOOK_SECRET=replace-with-long-random-webhook-secret",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\"}]}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_monitor_operational_preflight.py"),
+                    "--env-file",
+                    str(env_file),
+                    "--env-override",
+                    "--require-env-registry",
+                    "--require-webhook-secret",
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured", result.stdout)
+
+    def test_firecrawl_monitor_operational_preflight_writes_sanitized_readiness_report(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "firecrawl-monitor.env"
+            report_file = Path(tmpdir) / "readiness.json"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_MONITOR_ENABLED=true",
+                        "FIRECRAWL_MONITOR_DRY_RUN=false",
+                        "FIRECRAWL_API_KEY=fc-test-create-ready-key",
+                        "FIRECRAWL_MONITOR_WEBHOOK_SECRET=expected-preflight-secret",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\",\"schedule\":\"daily at 8am\"}]}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_monitor_operational_preflight.py"),
+                    "--env-file",
+                    str(env_file),
+                    "--env-override",
+                    "--require-env-registry",
+                    "--require-webhook-secret",
+                    "--require-create-ready",
+                    "--readiness-report",
+                    str(report_file),
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+            report = json.loads(report_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("final_readiness: ready", result.stdout)
+        self.assertEqual(report["status"], "ready")
+        self.assertTrue(report["conditions"]["monitor_enabled_true"])
+        self.assertTrue(report["conditions"]["monitor_dry_run_false"])
+        self.assertEqual(report["monitor_plan"][0]["name"], "SEC monitor")
+        self.assertEqual(report["monitor_plan"][0]["target_count"], 1)
+        self.assertIn("payload_hash_prefix", report["monitor_plan"][0])
+        self.assertNotIn("fc-test-create-ready-key", json.dumps(report))
+        self.assertNotIn("expected-preflight-secret", json.dumps(report))
+        self.assertNotIn("\"payload\":", json.dumps(report))
+
     def test_firecrawl_monitor_env_template_creates_safe_defaults(self):
         import subprocess
 

@@ -36,6 +36,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-webhook-secret", action="store_true", help="Require FIRECRAWL_MONITOR_WEBHOOK_SECRET.")
     parser.add_argument("--require-create-ready", action="store_true", help="Require live monitor create readiness.")
     parser.add_argument("--use-live-vault", action="store_true", help="Write webhook test event to configured research vault.")
+    parser.add_argument(
+        "--readiness-report",
+        type=Path,
+        help="Write a sanitized final create-readiness report with monitor hashes and target counts.",
+    )
     parser.add_argument("--output-json", type=Path, help="Write sanitized result JSON.")
     parser.add_argument("--json", action="store_true", help="Print sanitized result JSON.")
     return parser
@@ -74,16 +79,22 @@ def _load_env_file(path: Path, *, override: bool) -> dict[str, Any]:
 
 
 def _masked_settings(settings: Any) -> dict[str, Any]:
+    api_key = str(getattr(settings, "firecrawl_api_key", "") or "").strip()
+    webhook_secret = str(getattr(settings, "firecrawl_monitor_webhook_secret", "") or "").strip()
     return {
         "firecrawl_monitor_enabled": bool(getattr(settings, "firecrawl_monitor_enabled", False)),
         "firecrawl_monitor_dry_run": bool(getattr(settings, "firecrawl_monitor_dry_run", True)),
-        "firecrawl_api_key_configured": bool(getattr(settings, "firecrawl_api_key", "")),
+        "firecrawl_api_key_configured": bool(api_key) and not _looks_like_placeholder(api_key),
         "firecrawl_monitor_sources_json_configured": bool(getattr(settings, "firecrawl_monitor_sources_json", "")),
-        "firecrawl_monitor_webhook_secret_configured": bool(
-            getattr(settings, "firecrawl_monitor_webhook_secret", "")
-        ),
+        "firecrawl_monitor_webhook_secret_configured": bool(webhook_secret)
+        and not _looks_like_placeholder(webhook_secret),
         "firecrawl_base_url": str(getattr(settings, "firecrawl_base_url", "") or ""),
     }
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    lowered = str(value or "").strip().lower()
+    return not lowered or lowered.startswith("replace-with-") or lowered in {"changeme", "todo", "placeholder"}
 
 
 def _settings_with_isolated_vault(settings: Any, temp_dir: str | None) -> Any:
@@ -152,6 +163,53 @@ def _write_output_json(result: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _monitor_plan(dry_run: dict[str, Any]) -> list[dict[str, Any]]:
+    plan = []
+    for monitor in dry_run.get("monitors") or []:
+        if not isinstance(monitor, dict):
+            continue
+        plan.append(
+            {
+                "name": monitor.get("name"),
+                "target_count": int(monitor.get("target_count") or 0),
+                "target_types": list(monitor.get("target_types") or []),
+                "schedule": monitor.get("schedule"),
+                "webhook_configured": bool(monitor.get("webhook_configured")),
+                "payload_hash_prefix": monitor.get("payload_hash_prefix"),
+                "goal_chars": len(str(monitor.get("goal") or "")),
+            }
+        )
+    return plan
+
+
+def _build_readiness_report(result: dict[str, Any], readiness: dict[str, Any], dry_run: dict[str, Any]) -> dict[str, Any]:
+    settings = result.get("settings") if isinstance(result.get("settings"), dict) else {}
+    conditions = {
+        "env_registry_configured": bool(settings.get("firecrawl_monitor_sources_json_configured")),
+        "webhook_secret_configured": bool(settings.get("firecrawl_monitor_webhook_secret_configured")),
+        "monitor_enabled_true": settings.get("firecrawl_monitor_enabled") is True,
+        "monitor_dry_run_false": settings.get("firecrawl_monitor_dry_run") is False,
+        "firecrawl_api_key_configured": bool(settings.get("firecrawl_api_key_configured")),
+        "collector_create_ready": bool(readiness.get("create_ready")),
+    }
+    return {
+        "status": "ready" if all(conditions.values()) and not result.get("errors") else "blocked",
+        "module": "firecrawl_monitor_create_readiness_report",
+        "collector_design": COLLECTOR_DESIGN,
+        "event_design": EVENT_DESIGN,
+        "conditions": conditions,
+        "errors": list(result.get("errors") or []),
+        "create_readiness_errors": list(readiness.get("create_readiness_errors") or []),
+        "source_registry": dry_run.get("source_registry") or {},
+        "monitor_plan": _monitor_plan(dry_run),
+        "next_action": (
+            "실제 /v2/monitor 생성 전 monitor_plan의 target, schedule, webhook 설정을 최종 확인하세요."
+            if all(conditions.values()) and not result.get("errors")
+            else "blocked 조건과 errors를 해소한 뒤 --require-create-ready를 다시 실행하세요."
+        ),
+    }
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     env_result = None
@@ -174,6 +232,8 @@ def main() -> int:
             errors.append("FIRECRAWL_MONITOR_SOURCES_JSON did not produce monitor sources")
         if args.require_webhook_secret and not masked["firecrawl_monitor_webhook_secret_configured"]:
             errors.append("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured")
+        if args.require_create_ready and not masked["firecrawl_api_key_configured"]:
+            errors.append("FIRECRAWL_API_KEY must be configured with a non-placeholder value")
         if args.require_create_ready and not readiness.get("create_ready"):
             errors.extend(readiness.get("create_readiness_errors") or ["Firecrawl monitor create is not ready"])
         webhook_flow = None
@@ -201,6 +261,11 @@ def main() -> int:
             "env_file_skipped_existing_count": int((env_result or {}).get("skipped_existing_count") or 0),
             "errors": errors,
         }
+        readiness_report = _build_readiness_report(result, readiness, dry_run)
+        result["readiness_report"] = readiness_report
+        if args.readiness_report:
+            readiness_report["path"] = str(args.readiness_report)
+            _write_output_json(readiness_report, args.readiness_report)
         if args.output_json:
             result["output_json"] = str(args.output_json)
             _write_output_json(result, args.output_json)
@@ -212,6 +277,9 @@ def main() -> int:
             print(f"- webhook_secret_configured: {masked['firecrawl_monitor_webhook_secret_configured']}")
             print(f"- create_ready: {result['create_ready']}")
             print(f"- uses_live_vault: {result['uses_live_vault']}")
+            print(f"- final_readiness: {readiness_report['status']}")
+            if args.readiness_report:
+                print(f"- readiness_report: {args.readiness_report}")
             if webhook_flow:
                 print(
                     "- webhook_flow: "

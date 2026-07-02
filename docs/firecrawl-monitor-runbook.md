@@ -28,6 +28,14 @@ python tools\check_firecrawl_monitor_operational_preflight.py --env-file tmp\fir
 
 Only this stage should require `FIRECRAWL_MONITOR_ENABLED=true`, `FIRECRAWL_MONITOR_DRY_RUN=false`, and a real `FIRECRAWL_API_KEY`.
 
+To save the final non-secret creation report:
+
+```powershell
+python tools\check_firecrawl_monitor_operational_preflight.py --env-file tmp\firecrawl-monitor.local.env --env-override --require-env-registry --require-webhook-secret --require-create-ready --readiness-report output\firecrawl_monitor_create_readiness_report.json
+```
+
+The report stores conditions, readiness errors, monitor names, target counts, target types, schedule, webhook flag, and payload hash prefixes. It does not store API keys, webhook secrets, or full payload bodies.
+
 ## 4. Final Guardrails
 
 - Keep the env file out of git.
