@@ -10323,6 +10323,13 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         self.assertIn("타깃 매칭", status["queue"][0]["reason"])
         self.assertEqual(tool.strict_errors(status), [])
 
+    def test_news_inbox_priority_queue_cli_supports_json_output(self):
+        tool_source = (PROJECT_ROOT / "tools" / "check_news_inbox_priority_queue.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', tool_source)
+        self.assertIn('"errors": errors', tool_source)
+        self.assertIn("json.dumps(result", tool_source)
+
     def test_news_inbox_priority_queue_groups_duplicate_priority_urls(self):
         from research_os import news_inbox
 

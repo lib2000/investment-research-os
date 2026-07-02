@@ -159,37 +159,42 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="뉴스 인박스 우선 분류 큐를 백엔드 없이 점검합니다.")
     parser.add_argument("--limit", type=int, default=7, help="표시할 우선 뉴스 수")
     parser.add_argument("--strict", action="store_true", help="운영 품질 문제가 있으면 실패 코드로 종료")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
     status = build_priority_queue_status(root, limit=args.limit)
-    print(
-        "뉴스 인박스 우선 분류: "
-        f"전체 {status['total_count']}개, "
-        f"미승격 {status['filter_counts'].get('unpromoted', 0)}개, "
-        f"우선 {status['priority_count']}개, "
-        f"정책/법령 우선 {status['policy_priority_count']}개, "
-        f"타깃 매칭 {status['target_matched_count']}개, "
-        f"품질 확인 {status['quality_issue_count']}개, "
-        f"우선 중복 후보 {status['duplicate_priority_group_count']}묶음",
-        flush=True,
-    )
-    if status.get("updated_at"):
-        print(f"업데이트: {status['updated_at']}", flush=True)
-    for item in status["queue"]:
-        print(
-            f"- {item['rank']}위 [{item['scope_label']}] {item['title']} "
-            f"| 점수 {item['relevance_score']:g} | {item['reason']} | {item['source_url']}",
-            flush=True,
-        )
-    for group in status["duplicate_priority_groups"]:
-        print(
-            f"중복 후보: {group['count']}개 | {group['canonical_url']} | "
-            f"{' / '.join(group['titles'])}",
-            flush=True,
-        )
     errors = strict_errors(status)
-    if errors:
+    result = {"status": "failure" if errors else "success", "errors": errors, **status}
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+    else:
+        print(
+            "뉴스 인박스 우선 분류: "
+            f"전체 {status['total_count']}개, "
+            f"미승격 {status['filter_counts'].get('unpromoted', 0)}개, "
+            f"우선 {status['priority_count']}개, "
+            f"정책/법령 우선 {status['policy_priority_count']}개, "
+            f"타깃 매칭 {status['target_matched_count']}개, "
+            f"품질 확인 {status['quality_issue_count']}개, "
+            f"우선 중복 후보 {status['duplicate_priority_group_count']}묶음",
+            flush=True,
+        )
+        if status.get("updated_at"):
+            print(f"업데이트: {status['updated_at']}", flush=True)
+        for item in status["queue"]:
+            print(
+                f"- {item['rank']}위 [{item['scope_label']}] {item['title']} "
+                f"| 점수 {item['relevance_score']:g} | {item['reason']} | {item['source_url']}",
+                flush=True,
+            )
+        for group in status["duplicate_priority_groups"]:
+            print(
+                f"중복 후보: {group['count']}개 | {group['canonical_url']} | "
+                f"{' / '.join(group['titles'])}",
+                flush=True,
+            )
+    if errors and not args.json:
         print("점검 오류:", flush=True)
         for error in errors:
             print(f"- {error}", flush=True)
