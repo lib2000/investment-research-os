@@ -6882,6 +6882,7 @@ function renderAutomationDigestCard(dashboard) {
   const dossierCount = Number(digest.dossier_count || 0);
   const newsCount = Number(digest.news_inbox_count || 0);
   const newsUnpromotedCount = Number(digest.news_unpromoted_count || 0);
+  const newsActionableUnpromotedCount = Number(digest.news_actionable_unpromoted_count || 0);
   const newsQualityIssueCount = Number(digest.news_quality_issue_count || 0);
   const kcifRelatedCount = Number(digest.kcif_related_count || 0);
   const regionalRelatedCount = Number(digest.regional_sources_related_count || 0);
@@ -6894,7 +6895,7 @@ function renderAutomationDigestCard(dashboard) {
       "뉴스",
       `${formatNumber(newsCount)}개`,
       newsUnpromotedCount || newsQualityIssueCount
-        ? `미승격 ${formatNumber(newsUnpromotedCount)} · 품질 ${formatNumber(newsQualityIssueCount)}`
+        ? `우선 ${formatNumber(newsActionableUnpromotedCount)} · 전체 ${formatNumber(newsUnpromotedCount)} · 품질 ${formatNumber(newsQualityIssueCount)}`
         : "인박스 정상",
     ],
     [
@@ -14424,6 +14425,7 @@ function renderStorageQualitySignalCard(dashboard) {
   const documentQuality = dashboard?.document_quality_digest || {};
   const duplicateCount = Number(digest.duplicate_suspected_count || 0);
   const newsUnpromoted = Number(digest.news_unpromoted_count || 0);
+  const newsActionableUnpromoted = Number(digest.news_actionable_unpromoted_count || 0);
   const newsQuality = Number(digest.news_quality_issue_count || 0);
   const latest = documentQuality.latest || {};
   const quality = Number(latest.quality);
@@ -14434,7 +14436,7 @@ function renderStorageQualitySignalCard(dashboard) {
     <article class="dashboard-card storage-quality-signal ${tone}">
       <span>저장 데이터 품질</span>
       <strong>${escapeHtml(headline)}</strong>
-      <p>중복 의심 ${escapeHtml(formatNumber(duplicateCount))}개 · 미승격 뉴스 ${escapeHtml(formatNumber(newsUnpromoted))}개 · 뉴스 품질 ${escapeHtml(formatNumber(newsQuality))}개<br />최근 문서 품질 ${escapeHtml(qualityText)}</p>
+      <p>중복 의심 ${escapeHtml(formatNumber(duplicateCount))}개 · 우선 뉴스 ${escapeHtml(formatNumber(newsActionableUnpromoted))}개 / 전체 ${escapeHtml(formatNumber(newsUnpromoted))}개 · 뉴스 품질 ${escapeHtml(formatNumber(newsQuality))}개<br />최근 문서 품질 ${escapeHtml(qualityText)}</p>
       <div class="dashboard-card-actions">
         <button data-workflow-action="news" type="button">뉴스 검토</button>
         <button data-workflow-action="storage-quality" class="secondary" type="button">품질 점검</button>
@@ -15650,7 +15652,7 @@ function formatKoreanResult(value) {
           }개 · ${formatDateTime(refreshQueue.as_of || refreshQueue.updated_at)}`
         : `- 중복 종목 Dossier 갱신: 아직 실행되지 않음`,
       `- RAG 문서: ${digest.rag_document_count || 0}개 / 연결 대상 ${digest.rag_connected_count || 0}개`,
-      `- 뉴스 인박스: ${digest.news_inbox_count || 0}개 / 미승격 ${digest.news_unpromoted_count || 0}개 / 품질 확인 ${digest.news_quality_issue_count || 0}개`,
+      `- 뉴스 인박스: ${digest.news_inbox_count || 0}개 / 우선 분류 ${digest.news_actionable_unpromoted_count || 0}개 / 전체 미승격 ${digest.news_unpromoted_count || 0}개 / 품질 확인 ${digest.news_quality_issue_count || 0}개`,
       `- 매크로/외부 소스: 점검 필요 ${digest.source_schedule_due_count || sourceSchedule.filter((item) => item.due).length}개`,
       `- Dossier: ${digest.dossier_count || 0}개 / 실패 ${digest.failed_count || 0}개`,
       `- Delivers 일일 브리핑: ${digest.daily_brief_date || "미생성"}`,
