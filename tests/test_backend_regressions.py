@@ -417,6 +417,20 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
         self.assertTrue(script_bytes.startswith(b"\xef\xbb\xbf"))
 
+    def test_daily_research_operations_refreshes_recommendation_preview(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipRecommendationPreview", script_source)
+        self.assertIn("추천 저장/재계산 프리뷰 저장", script_source)
+        self.assertIn("tools\\check_daily_recommendation_candidate_policy.py", script_source)
+        self.assertIn("--require-hold-warning", script_source)
+        self.assertIn("--expected-held-ticker", script_source)
+        self.assertIn("112610", script_source)
+        self.assertIn("--output-json", script_source)
+        self.assertIn("tmp\\daily_recommendation_candidate_policy_preview.json", script_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 

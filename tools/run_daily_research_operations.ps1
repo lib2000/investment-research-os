@@ -6,6 +6,7 @@
   [int]$RecommendationRunTimeoutSeconds = 600,
   [switch]$SkipPortfolioRefresh,
   [switch]$SkipRecommendationRun,
+  [switch]$SkipRecommendationPreview,
   [switch]$SkipVerification
 )
 
@@ -59,6 +60,15 @@ if (-not $SkipRecommendationRun.IsPresent) {
       $result.record_count,
       $result.storage_path
     )
+  }
+}
+
+if (-not $SkipRecommendationPreview.IsPresent) {
+  Invoke-DailyResearchStep "추천 저장/재계산 프리뷰 저장" {
+    python tools\check_daily_recommendation_candidate_policy.py `
+      --require-hold-warning `
+      --expected-held-ticker 112610 `
+      --output-json tmp\daily_recommendation_candidate_policy_preview.json
   }
 }
 

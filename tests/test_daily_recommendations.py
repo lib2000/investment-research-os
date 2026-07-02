@@ -426,6 +426,18 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertIn("args.output_json.write_text", tool_source)
         self.assertIn("sort_keys=True", tool_source)
 
+    def test_candidate_policy_cli_skips_rag_backfill_by_default(self):
+        tool_source = Path("tools/check_daily_recommendation_candidate_policy.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--allow-rag-backfill"', tool_source)
+        self.assertIn("skip_rag_backfill=not args.allow_rag_backfill", tool_source)
+        self.assertIn("existing_rag_document_counts_by_ticker", tool_source)
+        self.assertIn("count_research_memory_documents_by_ticker =", tool_source)
+        self.assertIn("offline_target_consensus_scan", tool_source)
+        self.assertIn('kwargs["refresh_missing_prices"] = False', tool_source)
+        self.assertIn("saved_portfolio_price_lookup", tool_source)
+        self.assertIn("research_os_main.latest_provider_price =", tool_source)
+
     def test_candidate_policy_compares_stored_and_preview_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 

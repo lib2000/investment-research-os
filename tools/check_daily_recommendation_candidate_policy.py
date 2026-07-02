@@ -125,13 +125,86 @@ def validate_candidate_policy(
     return failures, details
 
 
-def build_candidate_payload(root: Path, *, candidate_limit: int) -> dict[str, Any]:
+def existing_rag_document_counts_by_ticker(root: Path, tickers: list[str]) -> dict[str, int]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from research_os.rag_memory import _document_quality, connect_rag_db, initialize_rag_db  # noqa: PLC0415
+
+    normalized_tickers = sorted({ticker.strip().upper() for ticker in tickers if ticker.strip()})
+    if not normalized_tickers:
+        return {}
+    vault_dir = root / "research_vault"
+    initialize_rag_db(vault_dir)
+    placeholders = ",".join("?" for _ in normalized_tickers)
+    with connect_rag_db(vault_dir) as connection:
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM research_memory_documents
+            WHERE ticker IN ({placeholders})
+            """,
+            normalized_tickers,
+        ).fetchall()
+    counts = {ticker: 0 for ticker in normalized_tickers}
+    for row in rows:
+        payload = dict(row)
+        if not _document_quality(payload)["is_injectable"]:
+            continue
+        ticker = normalize_ticker(payload.get("ticker"))
+        counts[ticker] = counts.get(ticker, 0) + 1
+    return counts
+
+
+def saved_portfolio_price_lookup(root: Path) -> dict[str, tuple[float, str]]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from research_os.portfolio_store import read_portfolio_store  # noqa: PLC0415
+    from research_os.settings import Settings  # noqa: PLC0415
+
+    prices: dict[str, tuple[float, str]] = {}
+    store = read_portfolio_store(Settings.from_env())
+    for portfolio in (store.get("portfolios") or {}).values():
+        if not isinstance(portfolio, dict):
+            continue
+        for holding in portfolio.get("holdings") or []:
+            if not isinstance(holding, dict):
+                continue
+            ticker = normalize_ticker(holding.get("ticker"))
+            if not ticker:
+                continue
+            try:
+                price = float(holding.get("current_price") or 0)
+            except (TypeError, ValueError):
+                price = 0
+            if price > 0:
+                prices.setdefault(ticker, (price, "saved_portfolio"))
+    return prices
+
+
+def build_candidate_payload(root: Path, *, candidate_limit: int, skip_rag_backfill: bool = True) -> dict[str, Any]:
     backend_dir = root / "backend"
     if str(backend_dir) not in sys.path:
         sys.path.insert(0, str(backend_dir))
     import research_os_main  # noqa: PLC0415
     from research_os.settings import Settings  # noqa: PLC0415
 
+    if skip_rag_backfill:
+        research_os_main.count_research_memory_documents_by_ticker = (
+            lambda _vault_dir, tickers, include_low_quality=False: existing_rag_document_counts_by_ticker(root, tickers)
+        )
+        original_target_consensus_scan = research_os_main.build_target_consensus_scan
+
+        def offline_target_consensus_scan(settings: Any, **kwargs: Any) -> dict[str, Any]:
+            kwargs["refresh_missing_prices"] = False
+            return original_target_consensus_scan(settings, **kwargs)
+
+        research_os_main.build_target_consensus_scan = offline_target_consensus_scan
+        saved_prices = saved_portfolio_price_lookup(root)
+        research_os_main.latest_provider_price = (
+            lambda ticker, _settings, force_refresh=False: saved_prices.get(normalize_ticker(ticker), (None, None))
+        )
     return research_os_main.build_daily_recommendation_candidates(Settings.from_env(), limit=candidate_limit)
 
 
@@ -228,13 +301,14 @@ def main() -> int:
     parser.add_argument("--candidate-limit", type=int, default=10, help="생성할 후보 수")
     parser.add_argument("--expected-held-ticker", action="append", default=[], help="보류 경고에 포함되어야 하는 티커")
     parser.add_argument("--require-hold-warning", action="store_true", help="반복 부진 보류 경고가 없으면 실패")
+    parser.add_argument("--allow-rag-backfill", action="store_true", help="후보 재계산 중 RAG 전체 백필을 허용")
     parser.add_argument("--json", action="store_true", help="JSON으로 결과 출력")
     parser.add_argument("--output-json", type=Path, default=None, help="점검 결과 JSON을 파일로 저장")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
     candidate_limit = max(args.top_limit, args.candidate_limit, 3)
-    payload = build_candidate_payload(root, candidate_limit=candidate_limit)
+    payload = build_candidate_payload(root, candidate_limit=candidate_limit, skip_rag_backfill=not args.allow_rag_backfill)
     result = candidate_policy_result(
         root,
         payload,
