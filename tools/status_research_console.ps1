@@ -2,6 +2,7 @@
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
+  [int]$MaxMarketJournalSessionAgeDays = 7,
   [switch]$Strict
 )
 
@@ -218,6 +219,9 @@ if ($marketJournal) {
     $ageDays = Get-SessionAgeDays -SessionDate $latestSession
     $ageLabel = if ($null -ne $ageDays) { ", 경과 $($ageDays)일" } else { "" }
     Write-Host "시장일지 $($market): $($marketEntries.Count)개, 자동 $($autoEntries.Count)개, 최신 세션 $($latestSession)$ageLabel"
+    if ([string]::IsNullOrWhiteSpace($latestSession) -or $null -eq $ageDays -or $ageDays -gt $MaxMarketJournalSessionAgeDays) {
+      Add-StatusFailure "시장일지 $market 최신 세션 확인 필요: $($latestSession)"
+    }
   }
 }
 if ($telegramUsMarketJournalState) {
