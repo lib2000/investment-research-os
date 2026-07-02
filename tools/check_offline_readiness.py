@@ -61,6 +61,7 @@ CHECKS = [
     ("국민연금 국내주식 14%", ["tools/check_nps_domestic_equity_allocation.py"]),
     ("투자 캘린더/실적 일정", ["tools/check_investment_calendar_store.py", "--strict"]),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
+    ("저장 자료 중복 리뷰", ["tools/check_storage_duplicate_review.py", "--strict"]),
     ("뉴스 인박스 우선 분류", ["tools/check_news_inbox_priority_queue.py", "--strict"]),
     ("최근 1주 자료/추천 근거", ["tools/check_recent_weekly_brief.py", "--strict"]),
     ("통합 투자 인사이트 허브", ["tools/check_investment_insight_hub.py", "--strict"]),

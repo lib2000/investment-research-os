@@ -594,6 +594,20 @@ $contracts = @(
     )
   },
 
+  @{
+    Path = "tools\check_storage_duplicate_review.py"
+    Snippets = @(
+      '저장 자료 중복 리뷰',
+      'storage_duplicate_review.json',
+      'representative_only',
+      'excluded_from_dossier',
+      'hard_delete_allowed',
+      'duplicate_entry_count',
+      'strict_errors',
+      'Dossier 사용 정책'
+    )
+  },
+
 
 
 

@@ -150,6 +150,18 @@ def load_news_inbox_priority_queue_tool():
     return module
 
 
+def load_storage_duplicate_review_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_storage_duplicate_review.py"
+    spec = spec_from_file_location("check_storage_duplicate_review", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_citations_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -347,6 +359,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("뉴스 인박스 우선 분류", checks)
         self.assertEqual(checks["뉴스 인박스 우선 분류"], ["tools/check_news_inbox_priority_queue.py", "--strict"])
+
+    def test_offline_readiness_checks_storage_duplicate_review(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("저장 자료 중복 리뷰", checks)
+        self.assertEqual(checks["저장 자료 중복 리뷰"], ["tools/check_storage_duplicate_review.py", "--strict"])
 
 
 class OperationalReadinessToolTests(unittest.TestCase):
@@ -10089,6 +10109,86 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         self.assertTrue(any("제목" in error for error in errors))
         self.assertTrue(any("URL" in error for error in errors))
         self.assertTrue(any("POLICY" in error for error in errors))
+
+
+class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
+    def test_storage_duplicate_review_summarizes_policy_and_files(self):
+        tool = load_storage_duplicate_review_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            system_dir = root / "research_vault" / "_system"
+            research_dir = root / "research_vault" / "SECTOR"
+            system_dir.mkdir(parents=True)
+            research_dir.mkdir(parents=True)
+            (research_dir / "rep.md").write_text("# 대표", encoding="utf-8")
+            (research_dir / "dup.md").write_text("# 중복", encoding="utf-8")
+            (system_dir / "storage_duplicate_review.json").write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "as_of": "2026-07-02T08:00:00+09:00",
+                        "checked_count": 2,
+                        "unique_representative_count": 1,
+                        "duplicate_group_count": 1,
+                        "duplicate_entry_count": 1,
+                        "representative_policy": {
+                            "dossier_usage": "representative_only",
+                            "duplicate_usage": "excluded_from_dossier",
+                            "hard_delete_allowed": False,
+                        },
+                        "dossier_usage_summary": {"duplicate_excluded_count": 1},
+                        "groups": [
+                            {
+                                "group_id": "g1",
+                                "ticker": "SECTOR",
+                                "duplicate_count": 1,
+                                "representative": {"title": "대표", "relative_path": "research_vault/SECTOR/rep.md"},
+                                "duplicates": [{"title": "중복", "relative_path": "research_vault/SECTOR/dup.md"}],
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.summarize_duplicate_review(root)
+
+        self.assertEqual(status["duplicate_group_count"], 1)
+        self.assertEqual(status["duplicate_entry_count"], 1)
+        self.assertEqual(status["calculated_duplicate_entry_count"], 1)
+        self.assertEqual(status["representative_missing"], [])
+        self.assertEqual(status["duplicate_missing"], [])
+        self.assertEqual(tool.strict_errors(status, max_age_hours=10**9), [])
+
+    def test_storage_duplicate_review_strict_errors_validate_policy(self):
+        tool = load_storage_duplicate_review_tool()
+        status = {
+            "status": "success",
+            "age_hours": 1,
+            "duplicate_group_count": 1,
+            "duplicate_entry_count": 2,
+            "calculated_duplicate_entry_count": 1,
+            "groups": [{}],
+            "representative_policy": {
+                "dossier_usage": "all",
+                "duplicate_usage": "included",
+                "hard_delete_allowed": True,
+            },
+            "dossier_usage_summary": {"duplicate_excluded_count": 0},
+            "representative_missing": ["missing-rep.md"],
+            "duplicate_missing": ["missing-dup.md"],
+        }
+
+        errors = tool.strict_errors(status)
+
+        self.assertTrue(any("대표" in error for error in errors))
+        self.assertTrue(any("excluded_from_dossier" in error for error in errors))
+        self.assertTrue(any("hard delete" in error for error in errors))
+        self.assertTrue(any("중복 항목 수" in error for error in errors))
 
 
 class AutomationStatusModuleTests(unittest.TestCase):
