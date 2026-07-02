@@ -110,6 +110,7 @@ def main() -> int:
 
     errors: list[str] = []
     needs_body = 0
+    needs_body_entries: list[dict] = []
     url_only = 0
     usable_count = 0
     rag_linked_count = 0
@@ -143,6 +144,7 @@ def main() -> int:
             usable_count += 1
         if quality.get("needs_body_copy") and not body_supplemented:
             needs_body += 1
+            needs_body_entries.append(entry)
         if quality.get("url_text_unavailable") or source_status in {"fetch_failed", "invalid", "empty_text"}:
             url_only += 1
             if quality.get("status") != "보강 필요" and not body_supplemented:
@@ -173,6 +175,14 @@ def main() -> int:
     print(f"추천 가산 가능: {usable_count}개 | RAG 색인 연결: {rag_linked_count}/{len(entries)}개")
     if provider_counts:
         print("출처 분포: " + ", ".join(f"{provider}={count}" for provider, count in sorted(provider_counts.items())))
+    if needs_body_entries:
+        print("본문 보강 필요 항목:")
+        for entry in needs_body_entries[:10]:
+            quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+            print(
+                f"- {entry.get('ticker')} {entry.get('date')} {entry.get('title') or entry.get('file_name')} "
+                f"| {quality.get('status') or entry.get('capture_quality_status')} | {entry.get('relative_path')}"
+            )
     for entry in entries[:10]:
         quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
         print(f"- {entry.get('date')} {entry.get('title') or entry.get('file_name')} | {quality.get('status') or entry.get('capture_quality_status')} | {entry.get('source_url')}")

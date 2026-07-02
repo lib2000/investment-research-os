@@ -330,6 +330,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
     entries.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("file_name") or "")), reverse=True)
     recent = entries[: max(1, min(limit, 50))]
     needs_body = [entry for entry in entries if (entry.get("capture_quality") or {}).get("needs_body_copy")]
+    needs_body_preview = needs_body[: max(1, min(limit, 50))]
     next_actions = [
         "공개 IR/SEC URL을 입력해 보유/관심 종목과 연결되는 자료를 수집하세요.",
         "URL-only 자료는 원문 링크 확인 또는 파일/본문 복사로 보강하세요.",
@@ -346,6 +347,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "entry_count": len(entries),
         "recent_count": len(recent),
         "needs_body_copy_count": len(needs_body),
+        "needs_body_copy_entries": needs_body_preview,
         "policy": "공개 IR/SEC 자료만 수집하고 제한 자료는 URL/메타데이터 중심으로 보관합니다.",
         "firecrawl_ir": build_firecrawl_ir_readiness_status(settings),
         "empty_state": empty_state,

@@ -3844,6 +3844,52 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(status["firecrawl_ir"]["dry_run_sample"]["ticker"], "JOBY")
         self.assertNotIn("fc-secret-value", json.dumps(status))
 
+    def test_public_ir_sec_status_lists_needs_body_entries(self):
+        from research_os.public_ir_sec import public_ir_sec_status_payload
+
+        settings = SimpleNamespace(
+            research_vault_dir="unused",
+            firecrawl_ir_enabled=False,
+            firecrawl_ir_dry_run=True,
+            firecrawl_api_key="",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_ir_mcp_version="3.17.0",
+            firecrawl_ir_sources_json="[]",
+            market_signal_graph_enabled=False,
+            market_signal_graph_rpc_url="",
+            market_signal_graph_service_role_key="",
+        )
+        manifest = [
+            {
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "date": "2026-07-02",
+                "file_name": "otly-6-k.md",
+                "title": "Oatly Group 6-K SEC filing",
+                "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
+            },
+            {
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "date": "2026-07-01",
+                "file_name": "joby-ir.md",
+                "title": "Joby investor release",
+                "capture_quality": {"status": "정상", "needs_body_copy": False},
+            },
+        ]
+
+        with (
+            patch("research_os.public_ir_sec.resolve_vault_dir", return_value=PROJECT_ROOT / "research_vault"),
+            patch("research_os.public_ir_sec.read_manifest", return_value=manifest),
+        ):
+            status = public_ir_sec_status_payload(settings)
+
+        self.assertEqual(status["entry_count"], 2)
+        self.assertEqual(status["needs_body_copy_count"], 1)
+        self.assertEqual(status["needs_body_copy_entries"][0]["file_name"], "otly-6-k.md")
+        self.assertEqual(status["recent_entries"][0]["file_name"], "otly-6-k.md")
+
     def test_company_ir_parser_extracts_joby_press_release_links(self):
         from research_os.company_ir_sources import COMPANY_IR_SOURCES, parse_company_ir_press_releases
 
