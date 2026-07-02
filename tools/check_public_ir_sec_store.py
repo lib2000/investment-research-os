@@ -179,7 +179,7 @@ def main() -> int:
         raise SystemExit(1)
 
     print(f"공개 IR/SEC 저장 자료: {len(entries)}개" + (f" / 보관 {archived_count}개" if archived_count else ""))
-    print(f"URL-only/본문 보강: {url_only}개 / needs_body_copy {needs_body}개")
+    print(f"URL-only 원문 제한: {url_only}개 | 본문 보강 플래그: {needs_body}개")
     print(f"추천 가산 가능: {usable_count}개 | RAG 색인 연결: {rag_linked_count}/{len(entries)}개")
     if provider_counts:
         print("출처 분포: " + ", ".join(f"{provider}={count}" for provider, count in sorted(provider_counts.items())))

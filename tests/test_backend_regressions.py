@@ -373,6 +373,15 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
 
 class PublicIrSecStoreCheckToolTests(unittest.TestCase):
+    def test_public_ir_sec_store_check_uses_clear_body_followup_label(self):
+        tool_source = (PROJECT_ROOT / "tools" / "check_public_ir_sec_store.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("URL-only 원문 제한", tool_source)
+        self.assertIn("본문 보강 플래그", tool_source)
+        self.assertNotIn("URL-only/본문 보강", tool_source)
+
     def test_load_manifest_retries_during_transient_empty_write(self):
         tool = load_public_ir_sec_store_check_tool()
 
