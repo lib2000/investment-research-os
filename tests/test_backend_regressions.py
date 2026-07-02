@@ -372,6 +372,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("needs_body_copy_entries", script_source)
         self.assertIn("needs_body_duplicate_title_group_count", script_source)
         self.assertIn("needs_body_duplicate_title_groups", script_source)
+        self.assertIn("$group.file_names", script_source)
+        self.assertIn("files ", script_source)
         self.assertIn("ForEach-Object", script_source)
         self.assertIn("본문 보강 플래그", script_source)
         self.assertIn("공개 IR/SEC 동일 제목", script_source)
