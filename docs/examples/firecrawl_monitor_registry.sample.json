@@ -1,20 +1,23 @@
 {
   "monitors": [
     {
-      "name": "Policy and market event monitor",
+      "name": "KR policy and regulatory monitor",
       "schedule": {
         "text": "daily at 8am",
         "timezone": "Asia/Seoul"
       },
-      "goal": "Notify when a policy, regulation, court, filing, or market event page changes in a way that may affect portfolio risk or investment decisions.",
+      "goal": "Alert when Korean financial, industrial, trade, competition, or disclosure policy pages add or change items that may affect portfolio risk, sector exposure, market liquidity, AI infrastructure, semiconductors, batteries, energy, biotechnology, platform regulation, or National Pension Service rebalancing.",
       "judgeEnabled": true,
-      "retentionDays": 30,
+      "retentionDays": 45,
       "targets": [
         {
           "type": "scrape",
           "urls": [
-            "https://www.sec.gov/newsroom/press-releases",
-            "https://www.fsc.go.kr/no010101"
+            "http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111",
+            "https://www.korea.kr/briefing/pressReleaseList.do",
+            "https://www.ftc.go.kr/www/sub.do?key=12",
+            "https://www.motie.go.kr/kor/article/ATCL3f49a5a8c",
+            "https://dart.fss.or.kr/info/searchBodo.do"
           ],
           "scrapeOptions": {
             "formats": [
@@ -28,14 +31,110 @@
             "removeBase64Images": true,
             "blockAds": true
           }
+        }
+      ]
+    },
+    {
+      "name": "US SEC and regulatory monitor",
+      "schedule": {
+        "text": "daily at 7am",
+        "timezone": "Asia/Seoul"
+      },
+      "goal": "Alert when US SEC or market-regulatory pages add or change items relevant to listed portfolio companies, AI data infrastructure, biotech disclosure risk, EV charging, plant-based food, China education ADRs, or market structure.",
+      "judgeEnabled": true,
+      "retentionDays": 45,
+      "targets": [
+        {
+          "type": "scrape",
+          "urls": [
+            "https://www.sec.gov/newsroom/press-releases",
+            "https://www.sec.gov/rules-regulations",
+            "https://data.sec.gov/submissions/CIK0001672688.json",
+            "https://data.sec.gov/submissions/CIK0001843586.json",
+            "https://data.sec.gov/submissions/CIK0001601830.json",
+            "https://data.sec.gov/submissions/CIK0000814676.json"
+          ],
+          "scrapeOptions": {
+            "formats": [
+              "markdown",
+              {
+                "type": "changeTracking",
+                "modes": ["git-diff"]
+              }
+            ],
+            "onlyMainContent": false,
+            "removeBase64Images": true,
+            "blockAds": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portfolio company IR monitor",
+      "schedule": {
+        "text": "daily at 8:30am",
+        "timezone": "Asia/Seoul"
+      },
+      "goal": "Alert when a portfolio company investor relations page publishes a new press release, earnings release, shareholder letter, presentation, filing pointer, financing update, product milestone, guidance change, or risk disclosure.",
+      "judgeEnabled": true,
+      "retentionDays": 60,
+      "targets": [
+        {
+          "type": "scrape",
+          "urls": [
+            "https://ir.jobyaviation.com/news-events/press-releases",
+            "https://investors.planet.com/news/default.aspx",
+            "https://investors.chargepoint.com/news/default.aspx",
+            "https://investors.absci.com/news-and-events/news-releases/",
+            "https://ir.recursion.com/news-events/press-releases",
+            "https://investors.oatly.com/news-events/press-releases"
+          ],
+          "scrapeOptions": {
+            "formats": [
+              "markdown",
+              {
+                "type": "changeTracking",
+                "modes": ["git-diff"]
+              }
+            ],
+            "onlyMainContent": true,
+            "removeBase64Images": true,
+            "blockAds": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "Breaking investment theme monitor",
+      "schedule": {
+        "text": "every 2 hours",
+        "timezone": "Asia/Seoul"
+      },
+      "goal": "Alert when a new web result appears that is materially relevant to AI semiconductors, HBM, power equipment, battery supply chains, biotechnology AI drug discovery, National Pension Service domestic equity rebalancing, US market structure, or a current portfolio company.",
+      "judgeEnabled": true,
+      "retentionDays": 30,
+      "targets": [
+        {
+          "type": "search",
+          "query": "AI semiconductor HBM export controls supply chain Korea policy investment",
+          "limit": 10
         },
         {
           "type": "search",
-          "query": "AI semiconductor regulation OR battery supply chain policy OR portfolio company breaking news",
+          "query": "battery materials policy IRA tax credit EV battery supply chain Korea US",
+          "limit": 10
+        },
+        {
+          "type": "search",
+          "query": "National Pension Service rebalancing domestic equities portfolio disclosure Korea",
+          "limit": 10
+        },
+        {
+          "type": "search",
+          "query": "Absci Oatly Joby Planet Labs ChargePoint Recursion breaking news earnings filing",
           "limit": 10
         }
       ]
     }
   ]
 }
-

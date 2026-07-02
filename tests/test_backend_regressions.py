@@ -1253,6 +1253,40 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("markdown", formats)
         self.assertTrue(any(isinstance(item, dict) and item.get("type") == "changeTracking" for item in formats))
 
+    def test_firecrawl_monitor_registry_sample_covers_investment_sources(self):
+        from research_os.firecrawl_monitor_collector import normalize_firecrawl_monitor_sources
+
+        sample_path = PROJECT_ROOT / "docs" / "examples" / "firecrawl_monitor_registry.sample.json"
+        monitors = normalize_firecrawl_monitor_sources(json.loads(sample_path.read_text(encoding="utf-8")))
+        monitor_names = {item["name"] for item in monitors}
+        target_types = {
+            target["type"]
+            for monitor in monitors
+            for target in monitor.get("targets", [])
+        }
+        all_urls = {
+            url
+            for monitor in monitors
+            for target in monitor.get("targets", [])
+            for url in target.get("urls", [])
+        }
+        search_queries = [
+            target.get("query", "")
+            for monitor in monitors
+            for target in monitor.get("targets", [])
+            if target.get("type") == "search"
+        ]
+
+        self.assertGreaterEqual(len(monitors), 4)
+        self.assertIn("KR policy and regulatory monitor", monitor_names)
+        self.assertIn("US SEC and regulatory monitor", monitor_names)
+        self.assertIn("Portfolio company IR monitor", monitor_names)
+        self.assertIn("Breaking investment theme monitor", monitor_names)
+        self.assertEqual(target_types, {"scrape", "search"})
+        self.assertIn("https://www.sec.gov/newsroom/press-releases", all_urls)
+        self.assertIn("https://ir.jobyaviation.com/news-events/press-releases", all_urls)
+        self.assertTrue(any("National Pension Service" in query for query in search_queries))
+
     def test_firecrawl_monitor_dry_run_uses_env_registry_without_exposing_key(self):
         from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_dry_run_result
 
