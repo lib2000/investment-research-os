@@ -42,6 +42,18 @@ $contracts = @(
     )
   },
   @{
+    Path = "scripts\enter-investment-research-os.ps1"
+    Snippets = @(
+      'assert_project_root.ps1',
+      '[switch]$RestartBackend',
+      '[switch]$OpenConsole',
+      'restart-research-backend.ps1 -Port 8001',
+      'status_research_console.ps1 -Strict',
+      '-RestartBackend -OpenConsole',
+      'http://127.0.0.1:8001/console/index.html'
+    )
+  },
+  @{
     Path = "tools\start_backend.ps1"
     Snippets = @(
       'assert_project_root.ps1',
