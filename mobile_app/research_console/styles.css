@@ -785,7 +785,7 @@ label {
 }
 
 .daily-recommendation-signal-grid.compact {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 4px;
 }
 
@@ -798,6 +798,8 @@ label {
   border: 1px solid #dbe4ef;
   border-radius: 8px;
   background: #f8fafc;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .daily-recommendation-signal-grid.compact span {
@@ -4076,6 +4078,8 @@ label {
   border: 1px solid #e2e8f0;
   border-radius: 7px;
   line-height: 1.35;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .daily-recommendation-detail {
@@ -5280,7 +5284,7 @@ pre {
   }
 
   .daily-recommendation-signal-grid.compact {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   }
 
   .daily-recommendation-top-head button {
