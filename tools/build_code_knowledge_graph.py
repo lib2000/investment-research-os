@@ -81,6 +81,7 @@ FLOW_DEFINITIONS = {
             "backend/research_os/kcif_reports.py",
             "backend/research_os/regional_sources.py",
             "backend/research_os/news_inbox.py",
+            "tools/check_macro_source_signal_linkage.py",
             "tools/check_news_inbox_priority_queue.py",
         ],
     },

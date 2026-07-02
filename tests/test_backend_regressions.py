@@ -2437,6 +2437,7 @@ class BackendModuleBoundaryTests(unittest.TestCase):
 
         self.assertIn("뉴스 인박스", source_flow["keywords"])
         self.assertIn("backend/research_os/news_inbox.py", source_flow["expected_files"])
+        self.assertIn("tools/check_macro_source_signal_linkage.py", source_flow["expected_files"])
         self.assertIn("tools/check_news_inbox_priority_queue.py", source_flow["expected_files"])
 
     def test_code_knowledge_graph_tracks_storage_duplicate_review_guard(self):

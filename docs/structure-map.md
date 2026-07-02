@@ -85,7 +85,7 @@
 | `backend\research_os\file_extraction_profile.py` | 첨부 본문 추출 결과의 품질/분석 준비도 profile helper | `FileExtractionProfileModuleTests` |
 | `backend\research_os\file_extraction.py` | PDF/이미지/문서 텍스트 추출과 OCR 품질 메타데이터 | `check_storage_quality_store.py` |
 | `backend\research_os\kcif_report_parsing.py` | KCIF 목록 HTML에서 보고서 메타데이터만 추출하는 parser | `KcifReportsWatchTests` |
-| `backend\research_os\kcif_reports.py` | KCIF 보고서 수집/상세 신호 분석과 시장일지 연결 | `check_research_source_store.py` |
+| `backend\research_os\kcif_reports.py` | KCIF 보고서 수집/상세 신호 분석과 시장일지 연결 | `check_research_source_store.py`, `check_macro_source_signal_linkage.py` |
 | `backend\research_os\kiwoom_auth.py` | 키움 인증/토큰 상태 확인 | `smoke_kiwoom_history_live.ps1` |
 | `backend\research_os\kis_data_provider.py` | KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper | `check_backend_runtime_env.py` |
 | `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
@@ -127,7 +127,7 @@
 | `backend\research_os\recent_activity_navigation.py` | 최근 1주 자료 추천 근거 링크, 저장 데이터 이동 힌트, 중복 제거 helper | `RecentActivityNavigationModuleTests` |
 | `backend\research_os\recent_activity_public_ir.py` | 최근 1주 공개 IR/SEC 자료 compact와 추천 반영 품질 guard helper | `RecentActivityPublicIrModuleTests`, `check_public_ir_sec_store.py` |
 | `backend\research_os\recent_activity_groups.py` | 최근 1주 자료 category group, 출처 family, 타깃 digest 계산 helper | `RecentActivityGroupsModuleTests` |
-| `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py` |
+| `backend\research_os\regional_sources.py` | EMERiCs/CSF/KIEP 지역·중국·대외 자료 수집 | `check_research_source_store.py`, `check_macro_source_signal_linkage.py` |
 | `backend\research_os\research_memory.py` | 저장 데이터 마크다운/JSON 기록과 manifest 관리 | `check_storage_quality_store.py` |
 | `backend\research_os\research_memory_files.py` | 저장 리포트 목록/카드 조립, manifest/sidecar 경로 해석, 마크다운 tail section 갱신 helper | `ResearchMemoryFilesModuleTests` |
 | `backend\research_os\research_workflow_files.py` | 보고 자동화 첨부 처리, RAG 연결, 모델 업데이트/LP 보고 응답 조립 helper | `ResearchWorkflowFilesModuleTests` |
