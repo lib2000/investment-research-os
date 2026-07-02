@@ -116,6 +116,7 @@ def build_dashboard_next_actions(
     duplicate_count: int,
     failed_count: int,
     news_unpromoted_count: int,
+    news_actionable_unpromoted_count: int | None,
     news_quality_issue_count: int,
     kcif_due: bool,
     kcif_related_count: int,
@@ -135,7 +136,13 @@ def build_dashboard_next_actions(
     if failed_count:
         next_actions.append(f"자동화 실패 {failed_count}건의 API/소스 상태를 점검하세요.")
     if news_unpromoted_count:
-        next_actions.append(f"뉴스 인박스 미승격 자료 {news_unpromoted_count}개를 논거/시장일지 반영 여부로 분류하세요.")
+        if news_actionable_unpromoted_count and news_actionable_unpromoted_count < news_unpromoted_count:
+            next_actions.append(
+                f"뉴스 인박스 우선 분류 {news_actionable_unpromoted_count}개를 먼저 확인하세요"
+                f"(전체 미승격 {news_unpromoted_count}개)."
+            )
+        else:
+            next_actions.append(f"뉴스 인박스 미승격 자료 {news_unpromoted_count}개를 논거/시장일지 반영 여부로 분류하세요.")
     if news_quality_issue_count:
         next_actions.append(f"뉴스 본문 추출 품질 경고 {news_quality_issue_count}개를 원문 링크나 본문 붙여넣기로 보강하세요.")
     if kcif_due:

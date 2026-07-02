@@ -9754,6 +9754,7 @@ class NewsInboxModuleTests(unittest.TestCase):
                     "source_url": "https://example.com/a",
                     "tags": ["url_only"],
                     "capture_quality": {"status": "보강 필요"},
+                    "target_matches": [{"label": "AI"}],
                 },
                 {
                     "id": "n2",
@@ -9774,6 +9775,7 @@ class NewsInboxModuleTests(unittest.TestCase):
         result = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="needs_body")
 
         self.assertEqual(result["count"], 2)
+        self.assertEqual(result["actionable_unpromoted_count"], 1)
         self.assertEqual(result["filter_counts"]["needs_body"], 1)
         self.assertEqual(result["quality_issue_count"], 1)
         self.assertEqual([item["id"] for item in result["items"]], ["n1"])
@@ -9809,6 +9811,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
             duplicate_count=2,
             failed_count=0,
             news_unpromoted_count=0,
+            news_actionable_unpromoted_count=0,
             news_quality_issue_count=0,
             kcif_due=False,
             kcif_related_count=3,
@@ -9823,6 +9826,28 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertIn("중복 의심 자료 2개", actions[0])
         self.assertTrue(any("KCIF 관련 매크로 보고서 3개" in item for item in actions))
         self.assertTrue(any("2026-06-18 한국/미국 추천 후보" in item for item in actions))
+
+    def test_automation_digest_next_actions_prioritize_actionable_news(self):
+        from research_os.automation_digest_helpers import build_dashboard_next_actions
+
+        actions = build_dashboard_next_actions(
+            target_count=1,
+            daily_brief_date="2026-06-18",
+            duplicate_count=0,
+            failed_count=0,
+            news_unpromoted_count=115,
+            news_actionable_unpromoted_count=7,
+            news_quality_issue_count=0,
+            kcif_due=False,
+            kcif_related_count=0,
+            regional_sources_due=False,
+            regional_sources_related_count=0,
+            dart_daily={"due": False, "failure_count": 0},
+            daily_recommendations_due=False,
+            daily_recommendations={"latest_recommendation_date": "2026-06-18"},
+        )
+
+        self.assertTrue(any("우선 분류 7개" in item and "전체 미승격 115개" in item for item in actions))
 
     def test_automation_schedule_status_builds_source_rows(self):
         from research_os import automation_schedule_status
