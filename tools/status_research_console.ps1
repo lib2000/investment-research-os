@@ -172,7 +172,27 @@ if ($researchAutomation) {
         @()
       }
       $reduceCandidateCount = $reduceCandidates.Count
-      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 후보 $($reduceCandidateCount)개"
+      $reductionNeeded = if ($npsPlan.reduction_needed_value) {
+        "{0:N0}" -f [double]$npsPlan.reduction_needed_value
+      } else {
+        "0"
+      }
+      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 필요 $($reductionNeeded)원, 축소 후보 $($reduceCandidateCount)개"
+      foreach ($candidate in ($reduceCandidates | Select-Object -First 3)) {
+        $candidateValue = if ($candidate.market_value) {
+          "{0:N0}" -f [double]$candidate.market_value
+        } else {
+          "0"
+        }
+        $candidateName = if ($candidate.holding_name) {
+          $candidate.holding_name
+        } elseif ($candidate.name) {
+          $candidate.name
+        } else {
+          "-"
+        }
+        Write-Host "국민연금 축소 후보: $($candidate.ticker) | $($candidateName) | $($candidateValue)원"
+      }
     }
   }
   if ($researchAutomation.status -and $researchAutomation.status -ne "success") {
