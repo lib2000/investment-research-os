@@ -1647,6 +1647,18 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertTrue(all("--require-rpc-ready" in error for error in missing))
         self.assertTrue(any("FIRECRAWL_API_KEY" in error for error in missing))
 
+    def test_firecrawl_ir_check_tool_lists_rpc_production_checklist_without_secret_values(self):
+        tool = load_firecrawl_ir_check_tool()
+
+        checklist = tool._rpc_production_checklist()
+        joined = "\n".join(checklist)
+
+        self.assertIn("FIRECRAWL_API_KEY configured in backend secret env", joined)
+        self.assertIn("FIRECRAWL_IR_DRY_RUN=false", joined)
+        self.assertIn("--require-rpc-ready", joined)
+        self.assertNotIn("FIRECRAWL_API_KEY=", joined)
+        self.assertNotIn("SERVICE_ROLE_KEY=", joined)
+
     def test_firecrawl_ir_check_tool_enforces_pinned_mcp_version(self):
         from types import SimpleNamespace
 
@@ -1720,6 +1732,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertTrue(saved["rpc_readiness_errors"])
         self.assertTrue(saved["rpc"]["readiness_errors"])
         self.assertIn("FIRECRAWL_API_KEY", " ".join(saved["rpc_preflight_readiness_errors"]))
+        self.assertIn("rpc_production_checklist", saved)
+        self.assertIn("--require-rpc-ready", " ".join(saved["rpc_production_checklist"]))
 
     def test_firecrawl_ir_check_tool_writes_output_json(self):
         tool = load_firecrawl_ir_check_tool()
@@ -1811,6 +1825,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertIn("- firecrawl_ir_mcp_version: 3.17.0", completed.stdout)
         self.assertIn("- rpc_submit_ready: False", completed.stdout)
         self.assertIn("- rpc_readiness_errors: 5", completed.stdout)
+        self.assertIn("- rpc_production_checklist:", completed.stdout)
+        self.assertIn("FIRECRAWL_IR_DRY_RUN=false", completed.stdout)
         self.assertIn("FIRECRAWL_IR_DRY_RUN must be false for RPC readiness", completed.stdout)
 
     def test_firecrawl_ir_check_tool_hosted_scrape_requires_api_key_without_printing_secret(self):

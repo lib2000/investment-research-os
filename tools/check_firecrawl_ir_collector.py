@@ -178,6 +178,18 @@ def _rpc_preflight_readiness_errors(settings) -> list[str]:
     return errors
 
 
+def _rpc_production_checklist() -> list[str]:
+    return [
+        "FIRECRAWL_API_KEY configured in backend secret env",
+        "FIRECRAWL_IR_ENABLED=true",
+        "FIRECRAWL_IR_DRY_RUN=false",
+        "MARKET_SIGNAL_GRAPH_ENABLED=true",
+        "MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL configured",
+        "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY configured",
+        "final preflight: python tools\\check_firecrawl_ir_collector.py --require-rpc-ready",
+    ]
+
+
 def _mcp_version_errors(settings) -> list[str]:
     configured = str(getattr(settings, "firecrawl_ir_mcp_version", "") or "").strip()
     if configured == EXPECTED_FIRECRAWL_MCP_VERSION:
@@ -329,6 +341,7 @@ def main() -> int:
         "rpc_submit_ready": not (mcp_version_errors or rpc_readiness_errors),
         "rpc_readiness_errors": rpc_readiness_errors,
         "rpc_preflight_readiness_errors": rpc_ready_errors,
+        "rpc_production_checklist": _rpc_production_checklist(),
         "require_env_registry": args.require_env_registry,
         "require_rpc_ready": args.require_rpc_ready,
         "env_file_loaded": bool(env_file_result),
@@ -410,6 +423,10 @@ def main() -> int:
             print(f"- rpc_preflight_readiness_errors: {len(rpc_ready_errors)}")
             for error in rpc_ready_errors:
                 print(f"  - {error}")
+        if rpc_readiness_errors or rpc_ready_errors or args.require_rpc_ready:
+            print("- rpc_production_checklist:")
+            for item in result["rpc_production_checklist"]:
+                print(f"  - {item}")
         print(f"- require_env_registry: {args.require_env_registry}")
         print(f"- require_rpc_ready: {args.require_rpc_ready}")
         print(
