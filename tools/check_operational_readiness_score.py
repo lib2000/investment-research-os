@@ -399,6 +399,33 @@ def nps_allocation_signal(root: Path, system_dir: Path, *, enforce: bool) -> dic
     )
 
 
+def investment_insight_hub_signal(root: Path) -> dict[str, Any]:
+    tools_dir = root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from check_investment_insight_hub import build_dashboard, strict_errors
+
+    payload = build_dashboard(root, portfolio_name="__all__", days=7, limit=12)
+    readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
+    coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
+    errors = strict_errors(payload, min_insights=4, min_coverage_score=100.0)
+    score = 100.0 if not errors else max(0.0, float(readiness.get("coverage_score") or 0.0) - len(errors) * 10.0)
+    return signal(
+        "investment_insight_hub",
+        "시장·공시·법령·뉴스·심리 통합",
+        score,
+        (
+            f"시장 데이터 {int(coverage.get('market_data_items') or 0)}, "
+            f"시장일지·심리 {int(coverage.get('market_journal_items') or 0)}, "
+            f"공시 {int(coverage.get('official_filing_items') or 0)}, "
+            f"뉴스 {int(coverage.get('news_items') or 0)}, "
+            f"정책·법령 {int(coverage.get('policy_law_items') or 0)}, "
+            f"인사이트 {int(readiness.get('insight_count') or 0)}"
+        ),
+        "python tools\\check_investment_insight_hub.py --strict",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="운영 완성도 95% 기준을 백엔드 없이 점검합니다.")
     parser.add_argument("--min-score", type=float, default=95.0)
@@ -425,6 +452,7 @@ def main() -> int:
         investment_calendar_signal(vault_dir),
         portfolio_signal(system_dir),
         nps_allocation_signal(root, system_dir, enforce=args.enforce_nps_allocation),
+        investment_insight_hub_signal(root),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]

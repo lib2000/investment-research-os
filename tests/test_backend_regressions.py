@@ -101,6 +101,18 @@ def load_policy_signal_check_tool():
     return module
 
 
+def load_investment_insight_hub_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_investment_insight_hub.py"
+    spec = spec_from_file_location("check_investment_insight_hub", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_citations_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -270,6 +282,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
             ["tools/check_daily_recommendation_policy_signals.py", "--strict"],
         )
 
+    def test_offline_readiness_checks_investment_insight_hub(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("통합 투자 인사이트 허브", checks)
+        self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
+
 
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_policy_signal_quality_is_part_of_operational_readiness(self):
@@ -306,6 +326,35 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertIn("검토 1개", result["message"])
 
+    def test_investment_insight_hub_is_part_of_operational_readiness(self):
+        tool = load_operational_readiness_tool()
+        fake_payload = {
+            "coverage": {
+                "market_data_items": 3,
+                "market_journal_items": 1,
+                "official_filing_items": 2,
+                "news_items": 4,
+                "policy_law_items": 1,
+            },
+            "readiness": {
+                "coverage_score": 100.0,
+                "insight_count": 5,
+                "source_families": ["market_data_sentiment", "official_filings", "policy_law_news"],
+            },
+        }
+        fake_module = SimpleNamespace(
+            build_dashboard=lambda *_args, **_kwargs: fake_payload,
+            strict_errors=lambda *_args, **_kwargs: [],
+        )
+
+        with TemporaryDirectory() as tmp, patch.dict(sys.modules, {"check_investment_insight_hub": fake_module}):
+            result = tool.investment_insight_hub_signal(Path(tmp))
+
+        self.assertEqual(result["id"], "investment_insight_hub")
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("시장일지·심리 1", result["message"])
+        self.assertIn("정책·법령 1", result["message"])
+
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
         with TemporaryDirectory() as tmp:
@@ -337,6 +386,34 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(enforced["status"], "warning")
         self.assertIn("비중 이탈", enforced["message"])
         self.assertLess(enforced["score"], 95.0)
+
+
+class InvestmentInsightHubCheckToolTests(unittest.TestCase):
+    def test_strict_errors_require_market_filings_news_policy_and_sentiment(self):
+        tool = load_investment_insight_hub_check_tool()
+        payload = {
+            "coverage": {
+                "market_data_items": 1,
+                "market_journal_items": 0,
+                "official_filing_items": 0,
+                "news_items": 1,
+                "policy_law_items": 0,
+            },
+            "readiness": {
+                "insight_count": 1,
+                "coverage_score": 40.0,
+                "source_families": ["news_flow"],
+            },
+            "aggregate_sentiment_label": "",
+        }
+
+        errors = tool.strict_errors(payload, min_insights=4, min_coverage_score=95.0)
+
+        self.assertIn("시장일지/투자심리 커버리지가 없습니다.", errors)
+        self.assertIn("공시 커버리지가 없습니다.", errors)
+        self.assertIn("정책·법령·규제 커버리지가 없습니다.", errors)
+        self.assertIn("market_data_sentiment 인사이트 패밀리가 없습니다.", errors)
+        self.assertIn("종합 투자심리 라벨이 없습니다.", errors)
 
 
 class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
