@@ -331,6 +331,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("국민연금 축소 후보", script_source)
         self.assertIn("/api/v1/public-ir-sec/status", script_source)
         self.assertIn("needs_body_copy_entries", script_source)
+        self.assertIn("본문 보강 플래그", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
 
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):

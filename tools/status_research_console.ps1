@@ -206,7 +206,7 @@ if ($researchAutomation) {
 }
 if ($publicIrSecStatus) {
   $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }
-  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 $($publicIrSecStatus.needs_body_copy_count)건"
+  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건"
   foreach ($entry in $needsBodyEntries | Select-Object -First 3) {
     $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }
     $entryPath = if ($entry.relative_path) { $entry.relative_path } elseif ($entry.source_url) { $entry.source_url } else { "경로 미확인" }
