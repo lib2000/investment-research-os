@@ -608,6 +608,20 @@ $contracts = @(
     )
   },
 
+  @{
+    Path = "tools\check_macro_source_signal_linkage.py"
+    Snippets = @(
+      '매크로/지역 소스 연결 신호',
+      'kcif_reports_watch.json',
+      'regional_business_sources_watch.json',
+      'recommended_action',
+      'matched_themes',
+      'target_matches',
+      'KCIF 상세',
+      'strict_errors'
+    )
+  },
+
 
 
 

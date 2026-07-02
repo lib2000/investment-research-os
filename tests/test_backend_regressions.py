@@ -162,6 +162,18 @@ def load_storage_duplicate_review_tool():
     return module
 
 
+def load_macro_source_signal_linkage_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_macro_source_signal_linkage.py"
+    spec = spec_from_file_location("check_macro_source_signal_linkage", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_citations_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -367,6 +379,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("저장 자료 중복 리뷰", checks)
         self.assertEqual(checks["저장 자료 중복 리뷰"], ["tools/check_storage_duplicate_review.py", "--strict"])
+
+    def test_offline_readiness_checks_macro_source_signal_linkage(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("매크로/지역 소스 연결 신호", checks)
+        self.assertEqual(checks["매크로/지역 소스 연결 신호"], ["tools/check_macro_source_signal_linkage.py", "--strict"])
 
 
 class OperationalReadinessToolTests(unittest.TestCase):
@@ -10198,6 +10218,81 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
         self.assertTrue(any("excluded_from_dossier" in error for error in errors))
         self.assertTrue(any("hard delete" in error for error in errors))
         self.assertTrue(any("중복 항목 수" in error for error in errors))
+
+
+class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
+    def test_macro_source_signal_linkage_summarizes_kcif_and_regional_sources(self):
+        tool = load_macro_source_signal_linkage_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            system_dir = root / "research_vault" / "_system"
+            system_dir.mkdir(parents=True)
+            (system_dir / "kcif_reports_watch.json").write_text(
+                json.dumps(
+                    {
+                        "reports": [
+                            {
+                                "title": "미국 고용지표",
+                                "matched_themes": ["금리/채권"],
+                                "recommended_action": "시장일지에 반영하세요.",
+                                "detail_analysis": {
+                                    "raw_text_stored": False,
+                                    "source_summary_available": True,
+                                    "derived_points": ["금리 신호"],
+                                },
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "regional_business_sources_watch.json").write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "title": "중국 반도체",
+                                "source_provider": "KIEP",
+                                "matched_themes": ["AI/반도체"],
+                                "target_matches": [{"ticker": "005930"}],
+                                "recommended_action": "보유종목 리스크 메모에 반영하세요.",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.source_linkage_status(root)
+
+        self.assertEqual(status["kcif_count"], 1)
+        self.assertEqual(status["regional_count"], 1)
+        self.assertEqual(status["linked_count"], 2)
+        self.assertEqual(status["action_count"], 2)
+        self.assertEqual(status["kcif_detail_ready_count"], 1)
+        self.assertEqual(tool.strict_errors(status), [])
+
+    def test_macro_source_signal_linkage_strict_errors_validate_empty_links(self):
+        tool = load_macro_source_signal_linkage_tool()
+        status = {
+            "kcif_count": 1,
+            "regional_count": 1,
+            "total_count": 2,
+            "linked_count": 1,
+            "action_count": 0,
+            "kcif_detail_ready_count": 0,
+        }
+
+        errors = tool.strict_errors(status)
+
+        self.assertTrue(any("연결률" in error for error in errors))
+        self.assertTrue(any("recommended_action" in error for error in errors))
+        self.assertTrue(any("KCIF" in error for error in errors))
 
 
 class AutomationStatusModuleTests(unittest.TestCase):
