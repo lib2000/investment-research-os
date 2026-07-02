@@ -298,7 +298,9 @@ if ($researchAutomation) {
       } else {
         "0"
       }
-      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 필요 $($reductionNeeded)원, 축소 후보 $($reduceCandidateCount)개(합계 $($reduceCandidateTotalText)원)"
+      $currentWeight = "{0:P2}" -f [double]$npsPlan.current_domestic_equity_weight
+      $targetWeight = "{0:P2}" -f [double]$npsPlan.target_domestic_equity_weight
+      Write-Host "국민연금 14% 계획: $($npsPlan.status), 현재 $($currentWeight)/목표 $($targetWeight), 축소 필요 $($reductionNeeded)원, 축소 후보 $($reduceCandidateCount)개(합계 $($reduceCandidateTotalText)원)"
       foreach ($candidate in ($reduceCandidates | Select-Object -First 3)) {
         $candidateValue = if ($candidate.market_value) {
           "{0:N0}" -f [double]$candidate.market_value

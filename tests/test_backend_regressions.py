@@ -340,6 +340,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("MaxLength 120", script_source)
         self.assertIn("우선 뉴스 중복 후보", script_source)
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
+        self.assertIn("current_domestic_equity_weight", script_source)
+        self.assertIn("target_domestic_equity_weight", script_source)
         self.assertIn("reduction_needed_value", script_source)
         self.assertIn("candidates.reduce", script_source)
         self.assertIn("reduceCandidateTotal", script_source)
