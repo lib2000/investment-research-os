@@ -16948,12 +16948,20 @@ function formatKoreanResult(value) {
   if (value.module === "public_ir_sec_status") {
     const entries = Array.isArray(value.recent_entries) ? value.recent_entries : [];
     const needsBodyEntries = Array.isArray(value.needs_body_copy_entries) ? value.needs_body_copy_entries : [];
+    const duplicateTitleGroups = Array.isArray(value.needs_body_duplicate_title_groups)
+      ? value.needs_body_duplicate_title_groups
+      : [];
     const firecrawl = value.firecrawl_ir || {};
     const firecrawlHosted = firecrawl.hosted_api || {};
     const firecrawlSample = firecrawl.dry_run_sample || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
           `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
+        )
+      : [];
+    const duplicateTitleLines = duplicateTitleGroups.length
+      ? duplicateTitleGroups.slice(0, 5).map((group, index) =>
+          `${index + 1}. ${group.ticker || "티커 미확인"} · ${formatNumber(group.count || 0)}건 · ${group.title || "제목 없음"}`
         )
       : [];
     const entryLines = entries.length
@@ -16963,11 +16971,15 @@ function formatKoreanResult(value) {
       `### 공개 IR/SEC 저장 상태`,
       `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
       `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
+      `동일 제목 보강 그룹: ${formatNumber(value.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0)}건`,
       `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,
       `정책: ${value.policy || "공개 자료만 수집합니다."}`,
       needsBodyLines.length ? `` : "",
       needsBodyLines.length ? `본문 보강 대상` : "",
       ...needsBodyLines,
+      duplicateTitleLines.length ? `` : "",
+      duplicateTitleLines.length ? `동일 제목 보강 그룹` : "",
+      ...duplicateTitleLines,
       ``,
       `Firecrawl IR 보조 수집`,
       `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,

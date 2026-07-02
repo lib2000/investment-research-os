@@ -282,6 +282,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("publicIrSecStatusApiFallback", smoke_source)
         self.assertIn("clickAndWaitForStart", smoke_source)
         self.assertIn("needs_body_copy_entries", smoke_source)
+        self.assertIn("needs_body_duplicate_title_groups", smoke_source)
+        self.assertIn("동일 제목 보강 그룹", smoke_source)
 
     def test_console_public_ir_sec_status_lists_body_followups(self):
         console_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
@@ -289,7 +291,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         )
 
         self.assertIn("needs_body_copy_entries", console_source)
+        self.assertIn("needs_body_duplicate_title_groups", console_source)
         self.assertIn("본문 보강 대상", console_source)
+        self.assertIn("동일 제목 보강 그룹", console_source)
 
     def test_windows_smoke_wrapper_exposes_public_ir_sec_utf8_mode(self):
         smoke_path = PROJECT_ROOT / "tools" / "smoke_research_console_windows.ps1"
