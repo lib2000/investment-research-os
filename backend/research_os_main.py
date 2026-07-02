@@ -14739,6 +14739,7 @@ def target_consensus_universe(
                         or official_symbol
                     ),
                     "currency": currency,
+                    "asset_type": profile.get("asset_type") or verification.asset_type or "equity",
                     "sources": [],
                     "portfolio_names": [],
                     "interest": False,
@@ -14778,6 +14779,7 @@ def target_consensus_universe(
                         or official_symbol
                     ),
                     "currency": currency,
+                    "asset_type": profile.get("asset_type") or verification.asset_type or "equity",
                     "sources": [],
                     "portfolio_names": [],
                     "interest": True,
@@ -14865,6 +14867,7 @@ def build_target_consensus_scan(
     warnings: list[str] = []
     for item in universe:
         ticker = normalize_ticker(item.get("ticker"))
+        asset_type = str(item.get("asset_type") or "equity").strip().lower()
         currency = (item.get("currency") or "KRW").upper()
         current_price = parse_float_or_none(item.get("current_price"))
         price_source = item.get("price_source")
@@ -14885,13 +14888,14 @@ def build_target_consensus_scan(
         target_signal = target_price_memory.build_target_upside_signal(target_price, current_price)
         if current_price is None:
             warnings.append(f"{item.get('company_name') or ticker}: 현재가를 찾지 못했습니다.")
-        if consensus is None:
+        if consensus is None and asset_type not in {"etf", "infrastructure_fund", "cash"}:
             warnings.append(f"{item.get('company_name') or ticker}: 저장 데이터에서 증권사 목표주가를 찾지 못했습니다.")
         rows.append(
             {
                 "ticker": ticker,
                 "company_name": item.get("company_name") or ticker,
                 "currency": currency,
+                "asset_type": item.get("asset_type") or "equity",
                 "current_price": round(current_price, 4) if current_price is not None else None,
                 "price_source": price_source,
                 "consensus_target_price": target_price,

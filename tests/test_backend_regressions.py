@@ -4205,6 +4205,32 @@ class TargetConsensusScanTests(unittest.TestCase):
         self.assertEqual(result["calculated_count"], 1)
         self.assertEqual(result["rows"][0]["current_price"], 50)
 
+    def test_target_consensus_scan_does_not_warn_missing_broker_target_for_etf(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        universe = [
+            {
+                "ticker": "360750",
+                "company_name": "TIGER 미국S&P500 ETF",
+                "currency": "KRW",
+                "asset_type": "etf",
+                "current_price": 43500,
+                "sources": ["portfolio"],
+            }
+        ]
+
+        with (
+            patch.object(main, "target_consensus_universe", return_value=universe),
+            patch.object(main, "build_target_price_consensus_from_memory", return_value=None),
+            patch.object(main, "resolve_vault_dir", return_value=PROJECT_ROOT / "research_vault"),
+        ):
+            result = main.build_target_consensus_scan(settings)
+
+        self.assertEqual(result["rows"][0]["asset_type"], "etf")
+        self.assertNotIn("증권사 목표주가", " ".join(result["warnings"]))
+
 
 class NewsInboxPolicyTests(unittest.TestCase):
     def test_news_inbox_url_only_does_not_store_full_article_body(self):
