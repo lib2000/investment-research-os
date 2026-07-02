@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidateSet("Both", "Menus", "Clicks")]
   [string]$Mode = "Both",
   [string]$BaseUrl = "http://127.0.0.1:8001",
