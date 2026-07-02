@@ -51,7 +51,10 @@ from research_os.nps_allocation_monitor import (
     select_saved_portfolios_for_nps_allocation,
 )
 from research_os.nps_portfolio_changes import (
+    apply_nps_rebalancing_pressure_to_recommendation,
     build_nps_portfolio_change_snapshot,
+    build_nps_rebalancing_pressure_index,
+    nps_rebalancing_pressure_for_candidate,
     read_nps_portfolio_change_snapshot,
     save_nps_portfolio_change_snapshot,
 )
@@ -11716,6 +11719,7 @@ def _nps_rebalance_evidence_context(
 ) -> dict[str, dict]:
     tickers = sorted({normalize_ticker(holding.ticker) for holding in holdings if holding.ticker})
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    nps_pressure_index = build_nps_rebalancing_pressure_index(read_nps_portfolio_change_snapshot(settings))
     try:
         rag_counts = count_research_memory_documents_by_ticker(vault_dir, tickers)
     except Exception:
@@ -11752,6 +11756,13 @@ def _nps_rebalance_evidence_context(
             "price_source": holding.price_source,
             "price_checked_at": holding.price_checked_at,
         }
+        nps_rebalancing_pressure = nps_rebalancing_pressure_for_candidate(
+            nps_pressure_index,
+            ticker,
+            currency=holding.currency,
+        )
+        if nps_rebalancing_pressure:
+            payload["nps_rebalancing_pressure"] = nps_rebalancing_pressure
         if fullmatch(r"\d{6}", ticker):
             try:
                 signal = fetch_nps_institutional_signal(ticker, holding.name, settings)
@@ -15079,6 +15090,7 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         policy_signal_index = _build_policy_signal_index(policy_watch, read_news_inbox(settings))
     except Exception:
         policy_signal_index = {}
+    nps_pressure_index = build_nps_rebalancing_pressure_index(read_nps_portfolio_change_snapshot(settings))
     consensus_scan = build_target_consensus_scan(
         settings,
         portfolio_name=None,
@@ -15160,6 +15172,14 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
         _apply_daily_recommendation_overseas_tracking(candidate)
         _apply_daily_recommendation_tracking_feedback(candidate, tracking_feedback.get(ticker))
         _apply_daily_recommendation_policy_signals(candidate, policy_signal_index)
+        apply_nps_rebalancing_pressure_to_recommendation(
+            candidate,
+            nps_rebalancing_pressure_for_candidate(
+                nps_pressure_index,
+                ticker,
+                currency=candidate.get("currency"),
+            ),
+        )
         _apply_investment_direction_profile(candidate)
 
         rag_evidence_documents = _build_daily_recommendation_evidence_documents(

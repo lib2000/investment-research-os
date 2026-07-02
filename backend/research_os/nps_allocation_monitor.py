@@ -303,6 +303,12 @@ def _evidence_decision_adjustment(evidence: dict) -> tuple[bool, list[str]]:
             reasons.append("국민연금 보유/대량보유 신호 확인")
         else:
             reasons.append(f"국민연금 지분율 {float(ratio):.2f}%")
+    rebalancing = evidence.get("nps_rebalancing_pressure") if isinstance(evidence.get("nps_rebalancing_pressure"), dict) else {}
+    if rebalancing:
+        if rebalancing.get("level") == "matched_holding_watch":
+            reasons.append("국민연금 리밸런싱 매칭 보유 공시")
+        elif rebalancing.get("level"):
+            reasons.append("국민연금 리밸런싱 시장 압력")
     return bool(reasons), reasons
 
 

@@ -6908,6 +6908,49 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertTrue(breakdown["news"]["score_applied"])
         self.assertIn("AI 반도체", breakdown["sentiment"]["summary"])
 
+    def test_nps_rebalancing_pressure_penalizes_domestic_recommendation_candidate(self):
+        from research_os.nps_portfolio_changes import (
+            apply_nps_rebalancing_pressure_to_recommendation,
+            build_nps_rebalancing_pressure_index,
+            nps_rebalancing_pressure_for_candidate,
+        )
+
+        snapshot = {
+            "status": "warning",
+            "as_of": "2026-07-01",
+            "latest_event_date": "2022-07-01",
+            "summary": "국민연금 리밸런싱 압력",
+            "public_rebalancing_context": {
+                "primary_article_url": "https://kr.investing.com/news/stock-market-news/article-2000291",
+                "data_policy": {
+                    "order_flow_access": "not_available",
+                    "realtime_rebalancing_detection": "not_supported",
+                },
+                "decision_rule": "공개자료 기반 압력 신호로만 사용",
+            },
+            "portfolio_matches": [
+                {
+                    "ticker": "003230",
+                    "holding_name": "삼양식품",
+                    "issuer": "삼양식품(주)",
+                    "base_date": "2022-06-21",
+                    "holding_ratio": 6.27,
+                }
+            ],
+        }
+        index = build_nps_rebalancing_pressure_index(snapshot)
+        candidate = {"ticker": "003230", "company_name": "삼양식품", "currency": "KRW", "score": 100}
+
+        apply_nps_rebalancing_pressure_to_recommendation(
+            candidate,
+            nps_rebalancing_pressure_for_candidate(index, "003230", currency="KRW"),
+        )
+
+        self.assertEqual(candidate["score"], 96)
+        self.assertEqual(candidate["nps_rebalancing_pressure"]["level"], "matched_holding_watch")
+        self.assertTrue(any("국민연금 리밸런싱" in item for item in candidate["score_penalties"]))
+        self.assertTrue(any("공개자료 기반" in item for item in [candidate["nps_rebalancing_pressure"]["decision_rule"]]))
+
 
 class DailyRecommendationStoreModuleTests(unittest.TestCase):
     def test_daily_recommendation_store_builds_records_and_skips_existing_date(self):
@@ -6929,6 +6972,11 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
                         "reasons": ["목표가 상승여력"],
                         "evidence_sources": ["리포트 근거"],
                         "score_components": [{"label": "목표가", "points": 35}],
+                        "nps_rebalancing_pressure": {
+                            "level": "market_watch",
+                            "penalty_points": 2,
+                            "decision_rule": "공개자료 기반 시장 압력",
+                        },
                     }
                 ],
                 recommendation_date=date(2026, 6, 18),
@@ -6946,6 +6994,7 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(first["records"][0]["market"], "KR")
         self.assertEqual(first["records"][0]["tracking_milestones"][0]["target_date"], "2026-06-25")
         self.assertEqual(first["records"][0]["signal_breakdown"][0]["key"], "market")
+        self.assertEqual(first["records"][0]["nps_rebalancing_pressure"]["level"], "market_watch")
         self.assertEqual(second["status"], "skipped_existing")
         self.assertEqual(second["records"][0]["ticker"], "003230")
 
@@ -15035,6 +15084,12 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
                     },
                     "research_document_count": 6,
                     "nps_signal": {"domestic_match_found": False, "large_holding_event_count": 0},
+                },
+                "003230": {
+                    "nps_rebalancing_pressure": {
+                        "level": "matched_holding_watch",
+                        "reason": "국민연금 리밸런싱 매칭 보유 공시",
+                    }
                 }
             },
         )
@@ -15045,6 +15100,7 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
         self.assertEqual(plan["reduction_needed_value"], 660.0)
         self.assertEqual(len(plan["scenarios"]), 3)
         self.assertEqual(plan["candidates"]["review"][0]["ticker"], "395160")
+        self.assertTrue(any(item["ticker"] == "003230" for item in plan["candidates"]["review"]))
         self.assertEqual(plan["candidates"]["review"][0]["evidence"]["research_document_count"], 6)
         self.assertTrue(plan["candidates"]["review"][0]["evidence"]["latest_recommendation"])
         self.assertEqual(plan["scenarios"][0]["title"], "ETF/테마 우선 축소")

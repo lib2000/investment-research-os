@@ -373,6 +373,9 @@ def build_recommendation_record(
         "evidence_sources": normalized["evidence_sources"],
         "evidence_documents": normalized.get("evidence_documents") or [],
         "evidence_quality_summary": normalized.get("evidence_quality_summary") or {},
+        "nps_rebalancing_pressure": normalized.get("nps_rebalancing_pressure")
+        if isinstance(normalized.get("nps_rebalancing_pressure"), dict)
+        else None,
         "risk_notes": [
             str(item).strip()
             for item in normalized.get("risk_notes", [])

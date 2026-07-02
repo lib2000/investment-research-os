@@ -293,3 +293,108 @@ def build_nps_portfolio_change_snapshot(
 def save_nps_portfolio_change_snapshot(snapshot: dict, settings: Settings) -> dict:
     write_json_store(nps_portfolio_change_snapshot_path(settings), snapshot)
     return {"status": "saved", "path": str(nps_portfolio_change_snapshot_path(settings)), "snapshot": snapshot}
+
+
+def build_nps_rebalancing_pressure_index(snapshot: dict | None) -> dict:
+    if not isinstance(snapshot, dict) or not snapshot:
+        return {
+            "status": "missing",
+            "by_ticker": {},
+            "global_kr_pressure": None,
+            "decision_rule": "국민연금 리밸런싱 스냅샷이 없어 추천/포트폴리오 판단에는 반영하지 않습니다.",
+        }
+    context = snapshot.get("public_rebalancing_context") if isinstance(snapshot.get("public_rebalancing_context"), dict) else {}
+    data_policy = context.get("data_policy") if isinstance(context.get("data_policy"), dict) else {}
+    decision_rule = context.get("decision_rule") or (
+        "국민연금 관련 신호는 공개자료 기반 압력/위험도 플래그로만 사용합니다."
+    )
+    global_kr_pressure = {
+        "level": "market_watch",
+        "penalty_points": 2,
+        "reason": "국민연금 국내주식 리밸런싱 재개 보도와 주문 비공개 원칙으로 한국 종목은 수급 변동성 확인이 필요합니다.",
+        "order_flow_access": data_policy.get("order_flow_access") or "not_available",
+        "realtime_rebalancing_detection": data_policy.get("realtime_rebalancing_detection") or "not_supported",
+        "source_url": context.get("primary_article_url") or NPS_REBALANCING_ARTICLE_URL,
+    }
+    by_ticker: dict[str, dict] = {}
+    for match in snapshot.get("portfolio_matches") or []:
+        if not isinstance(match, dict):
+            continue
+        ticker = str(match.get("ticker") or "").strip().upper()
+        if not ticker:
+            continue
+        by_ticker[ticker] = {
+            "ticker": ticker,
+            "level": "matched_holding_watch",
+            "penalty_points": 4,
+            "issuer": match.get("issuer"),
+            "base_date": match.get("base_date"),
+            "holding_ratio": match.get("holding_ratio"),
+            "reason": (
+                f"{match.get('issuer') or match.get('holding_name') or ticker} 국민연금 대량보유 공개자료가 매칭되어 "
+                "추가매수 전 지분율 기준일과 최근 공시 확인이 필요합니다."
+            ),
+            "data_policy": data_policy,
+            "decision_rule": decision_rule,
+        }
+    return {
+        "status": snapshot.get("status") or "unknown",
+        "as_of": snapshot.get("as_of"),
+        "latest_event_date": snapshot.get("latest_event_date"),
+        "summary": snapshot.get("summary"),
+        "by_ticker": by_ticker,
+        "global_kr_pressure": global_kr_pressure,
+        "decision_rule": decision_rule,
+    }
+
+
+def nps_rebalancing_pressure_for_candidate(
+    pressure_index: dict | None,
+    ticker: str,
+    *,
+    currency: str | None = None,
+) -> dict | None:
+    if not isinstance(pressure_index, dict) or pressure_index.get("status") == "missing":
+        return None
+    normalized = str(ticker or "").strip().upper()
+    by_ticker = pressure_index.get("by_ticker") if isinstance(pressure_index.get("by_ticker"), dict) else {}
+    if normalized in by_ticker:
+        return by_ticker[normalized]
+    is_kr_equity_like = normalized.isdigit() and len(normalized) == 6 and str(currency or "KRW").upper() == "KRW"
+    global_pressure = pressure_index.get("global_kr_pressure")
+    if is_kr_equity_like and isinstance(global_pressure, dict):
+        return {
+            **global_pressure,
+            "ticker": normalized,
+            "decision_rule": pressure_index.get("decision_rule"),
+        }
+    return None
+
+
+def apply_nps_rebalancing_pressure_to_recommendation(candidate: dict, pressure: dict | None) -> dict:
+    if not isinstance(pressure, dict) or not pressure:
+        return candidate
+    points = max(0, int(pressure.get("penalty_points") or 0))
+    label = (
+        "국민연금 리밸런싱 매칭 보유 공시"
+        if pressure.get("level") == "matched_holding_watch"
+        else "국민연금 리밸런싱 시장 압력"
+    )
+    if points:
+        candidate["score"] = int(candidate.get("score") or 0) - points
+        candidate.setdefault("score_penalties", []).append(f"{label} (-{points})")
+    reason = str(pressure.get("reason") or "").strip()
+    if reason:
+        candidate.setdefault("risk_notes", []).append(reason)
+    candidate.setdefault("evidence_sources", []).append(
+        "국민연금 리밸런싱 공개자료 기반 압력 신호"
+    )
+    candidate["nps_rebalancing_pressure"] = {
+        "level": pressure.get("level"),
+        "penalty_points": points,
+        "reason": reason,
+        "base_date": pressure.get("base_date"),
+        "holding_ratio": pressure.get("holding_ratio"),
+        "decision_rule": pressure.get("decision_rule"),
+    }
+    return candidate
