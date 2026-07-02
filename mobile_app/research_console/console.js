@@ -6395,7 +6395,8 @@ function renderCustomsTradeDashboardCard(reference) {
         <strong>최근 자료 없음</strong>
         <p>1일·11일·21일 발표 자료를 시장 데이터 탭에서 수동 조회하거나 자동화 실행 시 저장할 수 있습니다.</p>
         <div class="dashboard-card-actions">
-          <button data-workflow-action="marketData" type="button">시장 데이터</button>
+          <button data-workflow-action="marketData" type="button">수출입 보기</button>
+          <button data-workflow-action="memory" class="secondary" type="button">저장 데이터</button>
         </div>
       </article>
     `;
