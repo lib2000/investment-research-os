@@ -56,6 +56,7 @@ FLOW_DEFINITIONS = {
             "backend/research_os/investment_direction_profile.py",
             "tools/check_daily_recommendations_store.py",
             "tools/check_daily_recommendation_candidate_policy.py",
+            "tools/check_daily_recommendation_render_layout.py",
         ],
     },
     "research_storage_rag": {
