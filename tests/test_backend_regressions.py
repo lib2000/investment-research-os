@@ -324,6 +324,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("자동화 조치", script_source)
         self.assertIn("news_duplicate_priority_group_count", script_source)
         self.assertIn("news_duplicate_priority_groups", script_source)
+        self.assertIn("Limit-StatusText", script_source)
+        self.assertIn("MaxLength 120", script_source)
         self.assertIn("우선 뉴스 중복 후보", script_source)
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
         self.assertIn("reduction_needed_value", script_source)

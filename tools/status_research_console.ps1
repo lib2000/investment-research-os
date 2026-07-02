@@ -26,6 +26,22 @@ function Add-StatusFailure {
   $script:StatusFailures += $Message
 }
 
+function Limit-StatusText {
+  param(
+    [string]$Text,
+    [int]$MaxLength = 120
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Text)) {
+    return ""
+  }
+  $normalized = ($Text -replace "\s+", " ").Trim()
+  if ($normalized.Length -le $MaxLength) {
+    return $normalized
+  }
+  return "$($normalized.Substring(0, $MaxLength))..."
+}
+
 function Get-Utf8ResponseContent {
   param($Response)
 
@@ -165,6 +181,7 @@ if ($researchAutomation) {
           $groupTitle = [string]$firstTitle
         }
       }
+      $groupTitle = Limit-StatusText -Text $groupTitle -MaxLength 120
       Write-Host "우선 뉴스 중복 후보: $($group.count)개 | $($group.canonical_url) | $groupTitle"
     }
     $npsPlan = $dashboardDigest.nps_domestic_equity_rebalance_plan
