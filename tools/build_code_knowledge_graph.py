@@ -71,8 +71,13 @@ FLOW_DEFINITIONS = {
     },
     "source_automation": {
         "label": "외부 리포트/소스 자동화",
-        "keywords": ["kcif", "regional_sources", "naver", "source", "리서치 소스"],
-        "expected_files": ["backend/research_os/kcif_reports.py", "backend/research_os/regional_sources.py"],
+        "keywords": ["kcif", "regional_sources", "naver", "source", "news_inbox", "리서치 소스", "뉴스 인박스"],
+        "expected_files": [
+            "backend/research_os/kcif_reports.py",
+            "backend/research_os/regional_sources.py",
+            "backend/research_os/news_inbox.py",
+            "tools/check_news_inbox_priority_queue.py",
+        ],
     },
     "classification_quality": {
         "label": "자동 분류 태그/RAG 품질",

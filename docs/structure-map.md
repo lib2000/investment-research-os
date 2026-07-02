@@ -93,6 +93,7 @@
 | `backend\research_os\market_journal_analysis.py` | 시장일지 텍스트 정리, 감정/리스크/태그/행동 가이드 helper | `MarketJournalAnalysisModuleTests` |
 | `backend\research_os\market_journal_patterns.py` | 시장일지 누적 패턴/반복 테마 요약 helper | `NewsMarketJournalModuleTests` |
 | `backend\research_os\news_market_focus.py` | 시장일지의 포트폴리오/관심목록 영향 문구 생성 helper | `NewsMarketJournalModuleTests` |
+| `backend\research_os\news_inbox.py` | 뉴스 인박스 필터, 정책·법령 분류, 우선 분류 판정, 저작권 안전 뷰 | `NewsInboxModuleTests`, `check_news_inbox_priority_queue.py` |
 | `backend\research_os\news_market_journal.py` | 뉴스 인박스 시장일지 승격, 관심목록 영향, 저장 orchestration | `NewsMarketJournalModuleTests` |
 | `backend\research_os\market_journal_rendering.py` | 시장일지 저장 Markdown 렌더링 helper | `MarketJournalRenderingModuleTests` |
 | `backend\research_os\naver_market_close_automation.py` | 네이버 국내 마감 시황 자동 반영, 중복 방지, 작업 상태 조립 | `NaverResearchIngestTests` |

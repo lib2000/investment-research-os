@@ -41,6 +41,19 @@ def load_code_knowledge_graph_check_tool():
     return module
 
 
+def load_code_knowledge_graph_builder_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "build_code_knowledge_graph.py"
+    spec = spec_from_file_location("build_code_knowledge_graph", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_code_diff_impact_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -326,6 +339,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
+
+    def test_offline_readiness_checks_news_inbox_priority_queue(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("뉴스 인박스 우선 분류", checks)
+        self.assertEqual(checks["뉴스 인박스 우선 분류"], ["tools/check_news_inbox_priority_queue.py", "--strict"])
 
 
 class OperationalReadinessToolTests(unittest.TestCase):
@@ -2368,6 +2389,15 @@ class BackendModuleBoundaryTests(unittest.TestCase):
                 graph = tool.load_or_refresh(Path(tmp), graph_path, refresh=True)
 
         self.assertTrue(graph["existing"])
+
+    def test_code_knowledge_graph_tracks_news_inbox_priority_queue(self):
+        tool = load_code_knowledge_graph_builder_tool()
+
+        source_flow = tool.FLOW_DEFINITIONS["source_automation"]
+
+        self.assertIn("뉴스 인박스", source_flow["keywords"])
+        self.assertIn("backend/research_os/news_inbox.py", source_flow["expected_files"])
+        self.assertIn("tools/check_news_inbox_priority_queue.py", source_flow["expected_files"])
 
     def test_system_health_payload_builder_is_in_backend_module(self):
         from research_os.settings import Settings
