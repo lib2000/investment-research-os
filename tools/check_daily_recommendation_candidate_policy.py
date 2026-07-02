@@ -134,6 +134,62 @@ def build_candidate_payload(root: Path, *, candidate_limit: int) -> dict[str, An
     return research_os_main.build_daily_recommendation_candidates(Settings.from_env(), limit=candidate_limit)
 
 
+def latest_stored_top_records(root: Path, *, top_limit: int) -> list[dict[str, Any]]:
+    store_path = root / "research_vault" / "_system" / "daily_recommendations.json"
+    if not store_path.exists():
+        return []
+    try:
+        payload = json.loads(store_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    latest_date = str(payload.get("latest_recommendation_date") or "").strip()
+    records = [item for item in payload.get("records", []) if isinstance(item, dict)]
+    if latest_date:
+        records = [item for item in records if str(item.get("recommendation_date") or "") == latest_date]
+    result: list[dict[str, Any]] = []
+    for market in ("KR", "US"):
+        market_records = [
+            item for item in records
+            if normalize_ticker(item.get("market")) == market and int(item.get("rank") or 0) <= top_limit
+        ]
+        result.extend(sorted(market_records, key=lambda item: int(item.get("rank") or 0))[:top_limit])
+    return [
+        {
+            "market": normalize_ticker(item.get("market")),
+            "rank": item.get("rank"),
+            "ticker": item.get("ticker"),
+            "company_name": item.get("company_name"),
+            "score": item.get("score"),
+        }
+        for item in result
+    ]
+
+
+def stored_preview_mismatches(stored: list[dict[str, Any]], preview: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    mismatches: list[dict[str, Any]] = []
+    stored_by_slot = {
+        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): normalize_ticker(item.get("ticker"))
+        for item in stored
+    }
+    preview_by_slot = {
+        (normalize_ticker(item.get("market")), int(item.get("rank") or 0)): normalize_ticker(item.get("ticker"))
+        for item in preview
+    }
+    for slot in sorted(set(stored_by_slot) | set(preview_by_slot)):
+        stored_ticker = stored_by_slot.get(slot, "")
+        preview_ticker = preview_by_slot.get(slot, "")
+        if stored_ticker != preview_ticker:
+            mismatches.append(
+                {
+                    "market": slot[0],
+                    "rank": slot[1],
+                    "stored_ticker": stored_ticker,
+                    "preview_ticker": preview_ticker,
+                }
+            )
+    return mismatches
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="오늘 추천 후보 생성 정책 가드")
     parser.add_argument("--top-limit", type=int, default=3, help="review_hold 후보가 들어오면 실패할 상위 N개")
@@ -152,10 +208,14 @@ def main() -> int:
         expected_held_tickers=args.expected_held_ticker,
         require_hold_warning=args.require_hold_warning,
     )
+    stored_top_records = latest_stored_top_records(root, top_limit=max(1, args.top_limit))
+    preview_mismatches = stored_preview_mismatches(stored_top_records, details["top_candidates"])
     result = {
         "status": "failure" if failures else "success",
         "scope_note": "runtime_candidate_preview_only_no_store_write",
         "failures": failures,
+        "stored_top_records": stored_top_records,
+        "stored_preview_mismatches": preview_mismatches,
         **details,
     }
     if args.json:
@@ -163,6 +223,14 @@ def main() -> int:
     else:
         print("추천 후보 정책 가드:", "실패" if failures else "정상")
         print("범위: 저장된 최신 추천을 변경하지 않고 현재 런타임 후보 생성 정책만 재계산합니다.")
+        if preview_mismatches:
+            mismatch_label = ", ".join(
+                f"{item['market']} {item['rank']}위 저장 {item['stored_ticker'] or '-'} / 재계산 {item['preview_ticker'] or '-'}"
+                for item in preview_mismatches[:6]
+            )
+            print(f"저장 추천/재계산 차이: {mismatch_label}")
+        else:
+            print("저장 추천/재계산 차이: 없음")
         for candidate in details["top_candidates"]:
             marker = " | 보류대상" if candidate["review_hold"] else " | 약세추적" if candidate["soft_tracking_hold"] else ""
             tracking_note = ""

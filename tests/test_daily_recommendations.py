@@ -1,5 +1,6 @@
 import unittest
 import sys
+import json
 from datetime import date, datetime
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -420,6 +421,57 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertEqual(result["scope_note"], "runtime_candidate_preview_only_no_store_write")
         self.assertEqual(result["status"], "success")
+
+    def test_candidate_policy_compares_stored_and_preview_top_slots(self):
+        from tools import check_daily_recommendation_candidate_policy as policy_check
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            system_dir = root / "research_vault" / "_system"
+            system_dir.mkdir(parents=True)
+            (system_dir / "daily_recommendations.json").write_text(
+                json.dumps(
+                    {
+                        "latest_recommendation_date": "2026-07-02",
+                        "records": [
+                            {
+                                "recommendation_date": "2026-07-02",
+                                "market": "KR",
+                                "rank": 1,
+                                "ticker": "OLD",
+                                "company_name": "Stored",
+                                "score": 90,
+                            },
+                            {
+                                "recommendation_date": "2026-07-02",
+                                "market": "US",
+                                "rank": 1,
+                                "ticker": "SAME",
+                                "company_name": "Same",
+                                "score": 80,
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            stored = policy_check.latest_stored_top_records(root, top_limit=3)
+
+        mismatches = policy_check.stored_preview_mismatches(
+            stored,
+            [
+                {"market": "KR", "rank": 1, "ticker": "NEW"},
+                {"market": "US", "rank": 1, "ticker": "SAME"},
+            ],
+        )
+
+        self.assertEqual(stored[0]["ticker"], "OLD")
+        self.assertEqual(
+            mismatches,
+            [{"market": "KR", "rank": 1, "stored_ticker": "OLD", "preview_ticker": "NEW"}],
+        )
 
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
