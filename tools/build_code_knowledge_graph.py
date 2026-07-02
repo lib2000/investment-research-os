@@ -83,6 +83,17 @@ FLOW_DEFINITIONS = {
         "keywords": ["investment_calendar", "investment-calendar", "투자 캘린더", "실적발표"],
         "expected_files": ["backend/research_os/investment_calendar.py", "mobile_app/research_console/console.js"],
     },
+    "investment_insight_hub": {
+        "label": "시장·공시·법령·뉴스·심리 통합",
+        "keywords": ["investment_insight_hub", "integrated_investment_insights", "통합 투자 인사이트", "정책·법령", "투자심리"],
+        "expected_files": [
+            "backend/research_os/investment_insight_hub.py",
+            "tools/check_investment_insight_hub.py",
+            "tools/check_operational_readiness_score.py",
+            "mobile_app/research_console/console.js",
+            "docs/operations-readiness.md",
+        ],
+    },
     "console_click_regression": {
         "label": "콘솔 클릭/쓰기 회귀",
         "keywords": ["smoke_research_console", "data-workflow-action", "actionFeedback", "클래식 콘솔"],
