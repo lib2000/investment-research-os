@@ -197,6 +197,7 @@ class Settings(BaseModel):
     firecrawl_monitor_enabled: bool = False
     firecrawl_monitor_dry_run: bool = True
     firecrawl_monitor_sources_json: str = ""
+    firecrawl_monitor_webhook_secret: str = Field(default="")
     market_signal_graph_enabled: bool = False
     market_signal_graph_rpc_url: str = ""
     market_signal_graph_service_role_key: str = Field(default="")
@@ -503,6 +504,7 @@ class Settings(BaseModel):
             firecrawl_monitor_enabled=_read_bool("FIRECRAWL_MONITOR_ENABLED", False),
             firecrawl_monitor_dry_run=_read_bool("FIRECRAWL_MONITOR_DRY_RUN", True),
             firecrawl_monitor_sources_json=os.getenv("FIRECRAWL_MONITOR_SOURCES_JSON", ""),
+            firecrawl_monitor_webhook_secret=os.getenv("FIRECRAWL_MONITOR_WEBHOOK_SECRET", ""),
             market_signal_graph_enabled=_read_bool("MARKET_SIGNAL_GRAPH_ENABLED", False),
             market_signal_graph_rpc_url=_resolve_market_signal_graph_rpc_url(
                 os.getenv("MARKET_SIGNAL_GRAPH_RPC_URL", ""),

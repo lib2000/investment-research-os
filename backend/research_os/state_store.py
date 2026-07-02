@@ -76,6 +76,10 @@ def firecrawl_monitor_events_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "firecrawl_monitor_events.json"
 
 
+def firecrawl_monitor_webhook_status_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "firecrawl_monitor_webhook_status.json"
+
+
 def research_automation_status_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "research_automation_status.json"
 

@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
-from fastapi import Body, Depends, FastAPI, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -194,6 +194,7 @@ from research_os.public_ir_sec import (
 from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_dry_run_result
 from research_os.firecrawl_monitor_events import (
+    handle_firecrawl_monitor_webhook,
     ingest_firecrawl_monitor_payload,
     summarize_firecrawl_monitor_event_store,
 )
@@ -12693,6 +12694,26 @@ def ingest_public_ir_sec_firecrawl_monitor_event(
         return ingest_firecrawl_monitor_payload(payload, settings, save_result=save_result)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/public-ir-sec/firecrawl-monitor/webhook")
+def receive_public_ir_sec_firecrawl_monitor_webhook(
+    payload: dict[str, Any] = Body(...),
+    x_firecrawl_webhook_secret: str | None = Header(default=None, alias="X-Firecrawl-Webhook-Secret"),
+    x_webhook_secret: str | None = Header(default=None, alias="X-Webhook-Secret"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    result = handle_firecrawl_monitor_webhook(
+        payload,
+        settings,
+        provided_secrets=[x_firecrawl_webhook_secret, x_webhook_secret, authorization],
+    )
+    if result.get("status") != "accepted":
+        reason = str(result.get("reason") or "webhook_rejected")
+        status_code = 503 if reason == "webhook_secret_not_configured" else 401
+        raise HTTPException(status_code=status_code, detail=reason)
+    return result
 
 
 @app.get(

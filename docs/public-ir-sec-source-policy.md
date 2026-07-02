@@ -6,6 +6,8 @@ Firecrawl Monitor 변화 감지는 공개 URL/공개 검색 결과만 대상으�
 
 Monitor 이벤트 저장소는 변경 판단에 필요한 짧은 메타데이터만 남긴다. `monitor.page` 이벤트는 URL, 상태, goal judgment, 의미 있는 변화 요약, 짧은 diff, 라우팅 후보를 저장하고, 긴 원문/비밀키/API 응답 전체는 보관하지 않는다.
 
+Webhook 수신 endpoint는 사용자용 bearer token을 쓰지 않고 별도 `FIRECRAWL_MONITOR_WEBHOOK_SECRET`만 허용한다. secret이 없거나 틀린 요청은 이벤트 저장소에 반영하지 않으며, 원문 payload 대신 상태/사유/짧은 hash만 감사 상태 파일에 남긴다.
+
 ## 허용 범위
 
 - `sec.gov`의 공개 공시/문서 페이지

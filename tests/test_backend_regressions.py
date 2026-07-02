@@ -4278,6 +4278,84 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(response.json()["saved_count"], 1)
         ingest.assert_called_once()
 
+    def test_firecrawl_monitor_webhook_rejects_when_secret_missing(self):
+        import research_os_main as main
+        from fastapi.testclient import TestClient
+
+        with TemporaryDirectory() as tmpdir:
+            settings = SimpleNamespace(research_vault_dir=tmpdir, firecrawl_monitor_webhook_secret="")
+            main.app.dependency_overrides[main.get_settings] = lambda: settings
+            try:
+                response = TestClient(main.app).post(
+                    "/api/v1/public-ir-sec/firecrawl-monitor/webhook",
+                    json={"type": "monitor.page", "data": []},
+                    headers={"X-Firecrawl-Webhook-Secret": "provided"},
+                )
+            finally:
+                main.app.dependency_overrides.pop(main.get_settings, None)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "webhook_secret_not_configured")
+
+    def test_firecrawl_monitor_webhook_rejects_mismatched_secret_without_saving_payload(self):
+        import research_os_main as main
+        from fastapi.testclient import TestClient
+        from research_os.firecrawl_monitor_events import summarize_firecrawl_monitor_event_store
+
+        with TemporaryDirectory() as tmpdir:
+            settings = SimpleNamespace(research_vault_dir=tmpdir, firecrawl_monitor_webhook_secret="expected-secret")
+            main.app.dependency_overrides[main.get_settings] = lambda: settings
+            try:
+                response = TestClient(main.app).post(
+                    "/api/v1/public-ir-sec/firecrawl-monitor/webhook",
+                    json={
+                        "type": "monitor.page",
+                        "data": [{"monitorId": "mon", "checkId": "check", "url": "https://www.sec.gov/", "status": "changed"}],
+                    },
+                    headers={"X-Firecrawl-Webhook-Secret": "wrong-secret"},
+                )
+            finally:
+                main.app.dependency_overrides.pop(main.get_settings, None)
+
+            summary = summarize_firecrawl_monitor_event_store(settings)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "webhook_secret_mismatch")
+        self.assertEqual(summary["event_count"], 0)
+
+    def test_firecrawl_monitor_webhook_accepts_secret_and_saves_events(self):
+        import research_os_main as main
+        from fastapi.testclient import TestClient
+
+        with TemporaryDirectory() as tmpdir:
+            settings = SimpleNamespace(research_vault_dir=tmpdir, firecrawl_monitor_webhook_secret="expected-secret")
+            main.app.dependency_overrides[main.get_settings] = lambda: settings
+            try:
+                response = TestClient(main.app).post(
+                    "/api/v1/public-ir-sec/firecrawl-monitor/webhook",
+                    json={
+                        "type": "monitor.page",
+                        "data": [
+                            {
+                                "monitorId": "mon",
+                                "checkId": "check",
+                                "url": "https://www.sec.gov/newsroom/press-releases",
+                                "status": "changed",
+                                "judgment": {"meaningful": True, "reason": "SEC disclosure update"},
+                            }
+                        ],
+                    },
+                    headers={"Authorization": "Bearer expected-secret"},
+                )
+            finally:
+                main.app.dependency_overrides.pop(main.get_settings, None)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "accepted")
+        self.assertEqual(body["saved_count"], 1)
+        self.assertEqual(body["webhook_status"]["last_webhook_status"], "accepted")
+
     def test_public_ir_sec_status_lists_needs_body_entries(self):
         from research_os.public_ir_sec import public_ir_sec_status_payload
 

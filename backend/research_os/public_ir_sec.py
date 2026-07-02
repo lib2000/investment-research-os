@@ -15,7 +15,10 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field, HttpUrl
 
 from research_os.firecrawl_ir_collector import build_firecrawl_ir_readiness_status
-from research_os.firecrawl_monitor_events import summarize_firecrawl_monitor_event_store
+from research_os.firecrawl_monitor_events import (
+    build_firecrawl_monitor_webhook_status,
+    summarize_firecrawl_monitor_event_store,
+)
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
 from research_os.rag_memory import upsert_research_memory_document
 from research_os.research_memory import read_manifest, resolve_vault_dir, save_research_markdown
@@ -440,6 +443,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "firecrawl_ir": build_firecrawl_ir_readiness_status(settings),
         "firecrawl_monitor": build_firecrawl_monitor_readiness_status(settings),
         "firecrawl_monitor_events": summarize_firecrawl_monitor_event_store(settings, limit=limit),
+        "firecrawl_monitor_webhook": build_firecrawl_monitor_webhook_status(settings),
         "empty_state": empty_state,
         "next_actions": next_actions,
         "recent_entries": recent,

@@ -16983,6 +16983,7 @@ function formatKoreanResult(value) {
     const firecrawl = value.firecrawl_ir || {};
     const firecrawlMonitor = value.firecrawl_monitor || {};
     const firecrawlMonitorEvents = value.firecrawl_monitor_events || {};
+    const firecrawlMonitorWebhook = value.firecrawl_monitor_webhook || {};
     const firecrawlHosted = firecrawl.hosted_api || {};
     const firecrawlSample = firecrawl.dry_run_sample || {};
     const monitorHosted = firecrawlMonitor.hosted_api || {};
@@ -17033,6 +17034,8 @@ function formatKoreanResult(value) {
       `샘플: ${monitorSample.name || "Investment web monitor"} · 대상 ${formatNumber(monitorSample.target_count || 0)}개 · ${(monitorSample.target_types || []).join(", ") || "유형 미확인"}`,
       `Create ready: ${firecrawlMonitor.create_ready ? "true" : "false"} · webhook=${monitorSample.webhook_configured ? "true" : "false"} · payload=${monitorSample.payload_hash_prefix || "미확인"}`,
       `이벤트 저장: 전체 ${formatNumber(firecrawlMonitorEvents.event_count || 0)}건 · 의미있는 변화 ${formatNumber(firecrawlMonitorEvents.meaningful_count || 0)}건 · 오류 ${formatNumber(firecrawlMonitorEvents.error_count || 0)}건`,
+      `Webhook: ready=${firecrawlMonitorWebhook.webhook_ready ? "true" : "false"} · 최근 상태 ${firecrawlMonitorWebhook.last_webhook_status || "없음"} · 저장 ${formatNumber(firecrawlMonitorWebhook.last_saved_count || 0)}건`,
+      firecrawlMonitorWebhook.last_webhook_error ? `Webhook 오류: ${compactOutputText(firecrawlMonitorWebhook.last_webhook_error, 120)}` : "",
       `라우팅 후보: 정책 ${formatNumber(monitorRouteCounts.policy_news_inbox_candidate || 0)} · 공개 IR/SEC ${formatNumber(monitorRouteCounts.public_ir_sec_candidate || 0)} · 시장일지 ${formatNumber(monitorRouteCounts.market_journal_candidate || 0)}`,
       firecrawlMonitorEvents.latest_received_at ? `최근 이벤트: ${formatDateTime(firecrawlMonitorEvents.latest_received_at)}` : "",
       firecrawlMonitor.next_action ? `Monitor 다음 조치: ${firecrawlMonitor.next_action}` : "",

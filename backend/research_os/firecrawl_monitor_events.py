@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 from typing import Any
 from urllib.parse import urlparse
 
 from research_os.state_store import (
     current_storage_timestamp,
     firecrawl_monitor_events_path,
+    firecrawl_monitor_webhook_status_path,
     read_json_store,
     write_json_store,
 )
@@ -18,6 +20,10 @@ MAX_STORED_EVENTS = 500
 MAX_RECENT_EVENTS = 50
 MONITOR_PAGE_EVENT = "monitor.page"
 MONITOR_CHECK_COMPLETED_EVENT = "monitor.check.completed"
+
+
+def _settings_str(settings: Any, name: str, default: str = "") -> str:
+    return str(getattr(settings, name, default) or "").strip()
 
 
 def _compact_text(value: Any, limit: int = 500) -> str:
@@ -336,7 +342,9 @@ def upsert_firecrawl_monitor_events(settings: Any, events: list[dict[str, Any]])
 def summarize_firecrawl_monitor_event_store(settings: Any, limit: int = 20) -> dict[str, Any]:
     store = read_firecrawl_monitor_event_store(settings)
     events = [item for item in store.get("events", []) if isinstance(item, dict)]
-    summary = store.get("summary") if isinstance(store.get("summary"), dict) else _store_summary(events)
+    summary = store.get("summary") if isinstance(store.get("summary"), dict) else {}
+    if "event_count" not in summary:
+        summary = _store_summary(events)
     safe_limit = max(1, min(limit, MAX_RECENT_EVENTS))
     recent_events = []
     for event in events[:safe_limit]:
@@ -378,4 +386,119 @@ def ingest_firecrawl_monitor_payload(
         "saved": bool(save_result),
         "saved_count": int(store.get("saved_count") or 0) if store else 0,
         "store_summary": summarize_firecrawl_monitor_event_store(settings) if save_result else None,
+    }
+
+
+def read_firecrawl_monitor_webhook_status(settings: Any) -> dict[str, Any]:
+    return read_json_store(
+        firecrawl_monitor_webhook_status_path(settings),
+        {
+            "module": "firecrawl_monitor_webhook_status",
+            "updated_at": None,
+            "webhook_ready": False,
+            "last_webhook_received_at": None,
+            "last_webhook_error": None,
+            "last_webhook_status": None,
+            "accepted_count": 0,
+            "rejected_count": 0,
+        },
+    )
+
+
+def record_firecrawl_monitor_webhook_status(
+    settings: Any,
+    *,
+    status: str,
+    reason: str | None = None,
+    payload: dict[str, Any] | None = None,
+    saved_count: int = 0,
+) -> dict[str, Any]:
+    current = read_firecrawl_monitor_webhook_status(settings)
+    payload_hash = None
+    if isinstance(payload, dict):
+        seed = repr(
+            {
+                "type": payload.get("type") or payload.get("event"),
+                "data_type": type(payload.get("data")).__name__,
+                "keys": sorted(str(key) for key in payload.keys())[:20],
+            }
+        )
+        payload_hash = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
+    accepted = status == "accepted"
+    next_status = {
+        **current,
+        "module": "firecrawl_monitor_webhook_status",
+        "updated_at": current_storage_timestamp(),
+        "webhook_ready": bool(_settings_str(settings, "firecrawl_monitor_webhook_secret")),
+        "last_webhook_received_at": current_storage_timestamp(),
+        "last_webhook_error": None if accepted else (reason or status),
+        "last_webhook_status": status,
+        "last_payload_type": _compact_text(payload.get("type") or payload.get("event"), 80) if isinstance(payload, dict) else "",
+        "last_payload_hash": payload_hash,
+        "last_saved_count": int(saved_count or 0),
+        "accepted_count": int(current.get("accepted_count") or 0) + (1 if accepted else 0),
+        "rejected_count": int(current.get("rejected_count") or 0) + (0 if accepted else 1),
+    }
+    write_json_store(firecrawl_monitor_webhook_status_path(settings), next_status)
+    return next_status
+
+
+def build_firecrawl_monitor_webhook_status(settings: Any) -> dict[str, Any]:
+    status = read_firecrawl_monitor_webhook_status(settings)
+    return {
+        **status,
+        "webhook_ready": bool(_settings_str(settings, "firecrawl_monitor_webhook_secret")),
+        "secret_configured": bool(_settings_str(settings, "firecrawl_monitor_webhook_secret")),
+        "storage_path": str(firecrawl_monitor_webhook_status_path(settings)),
+    }
+
+
+def verify_firecrawl_monitor_webhook_secret(settings: Any, provided_secrets: list[str | None]) -> tuple[bool, str]:
+    expected = _settings_str(settings, "firecrawl_monitor_webhook_secret")
+    if not expected:
+        return False, "webhook_secret_not_configured"
+    for provided in provided_secrets:
+        cleaned = str(provided or "").strip()
+        if cleaned.lower().startswith("bearer "):
+            cleaned = cleaned[7:].strip()
+        if cleaned and hmac.compare_digest(cleaned, expected):
+            return True, "verified"
+    return False, "webhook_secret_mismatch"
+
+
+def handle_firecrawl_monitor_webhook(
+    payload: dict[str, Any],
+    settings: Any,
+    *,
+    provided_secrets: list[str | None],
+) -> dict[str, Any]:
+    verified, reason = verify_firecrawl_monitor_webhook_secret(settings, provided_secrets)
+    if not verified:
+        status = record_firecrawl_monitor_webhook_status(
+            settings,
+            status="rejected",
+            reason=reason,
+            payload=payload if isinstance(payload, dict) else None,
+        )
+        return {
+            "status": "rejected",
+            "module": "firecrawl_monitor_webhook",
+            "reason": reason,
+            "saved_count": 0,
+            "webhook_status": status,
+        }
+    result = ingest_firecrawl_monitor_payload(payload, settings, save_result=True)
+    status = record_firecrawl_monitor_webhook_status(
+        settings,
+        status="accepted",
+        payload=payload,
+        saved_count=int(result.get("saved_count") or 0),
+    )
+    return {
+        "status": "accepted",
+        "module": "firecrawl_monitor_webhook",
+        "saved_count": int(result.get("saved_count") or 0),
+        "event_count": int(result.get("event_count") or 0),
+        "webhook_status": status,
+        "store_summary": result.get("store_summary"),
     }
