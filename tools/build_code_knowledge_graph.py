@@ -61,8 +61,13 @@ FLOW_DEFINITIONS = {
     },
     "research_storage_rag": {
         "label": "저장 데이터/RAG",
-        "keywords": ["rag_memory", "research_memory", "RAG", "research-memory", "저장 데이터"],
-        "expected_files": ["backend/research_os/rag_memory.py", "backend/research_os/research_memory.py"],
+        "keywords": ["rag_memory", "research_memory", "storage_duplicate_review", "RAG", "research-memory", "저장 데이터", "중복 리뷰"],
+        "expected_files": [
+            "backend/research_os/rag_memory.py",
+            "backend/research_os/research_memory.py",
+            "backend/research_os/dossier_queue.py",
+            "tools/check_storage_duplicate_review.py",
+        ],
     },
     "portfolio_realtime": {
         "label": "포트폴리오 실시간/수량 보호",

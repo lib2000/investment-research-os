@@ -2419,6 +2419,15 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertIn("backend/research_os/news_inbox.py", source_flow["expected_files"])
         self.assertIn("tools/check_news_inbox_priority_queue.py", source_flow["expected_files"])
 
+    def test_code_knowledge_graph_tracks_storage_duplicate_review_guard(self):
+        tool = load_code_knowledge_graph_builder_tool()
+
+        storage_flow = tool.FLOW_DEFINITIONS["research_storage_rag"]
+
+        self.assertIn("중복 리뷰", storage_flow["keywords"])
+        self.assertIn("backend/research_os/dossier_queue.py", storage_flow["expected_files"])
+        self.assertIn("tools/check_storage_duplicate_review.py", storage_flow["expected_files"])
+
     def test_system_health_payload_builder_is_in_backend_module(self):
         from research_os.settings import Settings
         from research_os.system_health import build_system_health_payload
