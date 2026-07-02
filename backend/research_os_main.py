@@ -9787,6 +9787,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         build_kcif_reports_watch_payload=build_kcif_reports_watch_payload,
         build_news_inbox_payload=build_news_inbox_payload,
         build_nps_domestic_equity_allocation_status=build_nps_domestic_equity_allocation_status,
+        build_nps_domestic_equity_rebalance_plan=build_nps_domestic_equity_rebalance_plan,
         build_policy_sources_watch_payload=build_policy_sources_watch_payload,
         build_regional_business_sources_watch_payload=build_regional_business_sources_watch_payload,
         build_storage_quality_dashboard=build_storage_quality_dashboard,

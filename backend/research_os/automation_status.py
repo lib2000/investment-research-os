@@ -273,6 +273,18 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         daily_recommendations_due=daily_recommendations_due,
         daily_recommendations=daily_recommendations,
     )
+    nps_rebalance_plan: dict = {}
+    if nps_allocation.get("status") in {"above_target", "below_target"} and hasattr(
+        runtime,
+        "build_nps_domestic_equity_rebalance_plan",
+    ):
+        try:
+            nps_rebalance_plan = runtime.build_nps_domestic_equity_rebalance_plan(nps_allocation)
+        except Exception as exc:
+            nps_rebalance_plan = {
+                "status": "warning",
+                "summary": f"국민연금 리밸런싱 후보 생성 실패: {exc}",
+            }
     if nps_allocation.get("status") in {"above_target", "below_target", "needs_data"}:
         next_actions.insert(
             0,
@@ -328,6 +340,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
             "state": daily_recommendation_state,
         },
         "nps_domestic_equity_allocation": nps_allocation,
+        "nps_domestic_equity_rebalance_plan": nps_rebalance_plan,
         "last_run_at": status.get("updated_at"),
         "priority_targets": project_priority_targets(priority_targets),
         "next_actions": next_actions[:5],
