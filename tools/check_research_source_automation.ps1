@@ -70,6 +70,8 @@ $status = Invoke-JsonGet -Uri "$BaseUrl/api/v1/research-automation/status" -Head
 $requiredSources = @(
   [pscustomobject]@{ Key = "kcif_reports_watch"; Label = "KCIF macro reports"; RequireRelated = $true },
   [pscustomobject]@{ Key = "regional_business_sources_watch"; Label = "EMERiCs/CSF/KIEP regional macro sources"; RequireRelated = $true },
+  [pscustomobject]@{ Key = "policy_sources_watch"; Label = "Official policy/law/regulation sources"; RequireRelated = $true },
+  [pscustomobject]@{ Key = "company_ir_sources_watch"; Label = "Company IR public sources"; RequireRelated = $true },
   [pscustomobject]@{ Key = "naver_research"; Label = "Naver finance research"; RequireRelated = $true },
   [pscustomobject]@{ Key = "shinhan_research"; Label = "Shinhan research"; RequireRelated = $true },
   [pscustomobject]@{ Key = "dart_filing_watch"; Label = "DART holdings and interest filings"; RequireRelated = $false }

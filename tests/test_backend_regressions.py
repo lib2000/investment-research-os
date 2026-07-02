@@ -207,6 +207,16 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn('PYTHONIOENCODING = "utf-8"', smoke_source)
         self.assertIn('PYTHONUTF8 = "1"', smoke_source)
 
+    def test_research_source_automation_wrapper_checks_policy_and_ir_sources(self):
+        script_source = (PROJECT_ROOT / "tools" / "check_research_source_automation.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("policy_sources_watch", script_source)
+        self.assertIn("company_ir_sources_watch", script_source)
+        self.assertIn("Official policy/law/regulation sources", script_source)
+        self.assertIn("Company IR public sources", script_source)
+
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
         verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
 
