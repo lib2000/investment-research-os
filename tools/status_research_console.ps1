@@ -154,7 +154,8 @@ if ($researchAutomation) {
   }
   if ($dashboardDigest) {
     $priorityNewsCount = if ($dashboardDigest.news_priority_preview) { @($dashboardDigest.news_priority_preview).Count } else { 0 }
-    Write-Host "우선 뉴스: $($priorityNewsCount)개, 중복 후보 $($dashboardDigest.news_duplicate_priority_group_count)묶음/$($dashboardDigest.news_duplicate_priority_entry_count)개"
+    $totalPriorityNewsCount = if ($dashboardDigest.news_priority_count) { $dashboardDigest.news_priority_count } else { $priorityNewsCount }
+    Write-Host "우선 뉴스: 표시 $($priorityNewsCount)개/전체 $($totalPriorityNewsCount)개, 중복 후보 $($dashboardDigest.news_duplicate_priority_group_count)묶음/$($dashboardDigest.news_duplicate_priority_entry_count)개"
     $duplicatePriorityGroups = if ($dashboardDigest.news_duplicate_priority_groups) { @($dashboardDigest.news_duplicate_priority_groups) } else { @() }
     foreach ($group in $duplicatePriorityGroups | Select-Object -First 3) {
       $groupTitle = "제목 미확인"
