@@ -194,12 +194,19 @@ if ($researchAutomation) {
         @()
       }
       $reduceCandidateCount = $reduceCandidates.Count
+      $reduceCandidateTotal = 0.0
+      foreach ($candidate in $reduceCandidates) {
+        if ($candidate.market_value) {
+          $reduceCandidateTotal += [double]$candidate.market_value
+        }
+      }
+      $reduceCandidateTotalText = "{0:N0}" -f $reduceCandidateTotal
       $reductionNeeded = if ($npsPlan.reduction_needed_value) {
         "{0:N0}" -f [double]$npsPlan.reduction_needed_value
       } else {
         "0"
       }
-      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 필요 $($reductionNeeded)원, 축소 후보 $($reduceCandidateCount)개"
+      Write-Host "국민연금 14% 계획: $($npsPlan.status), 축소 필요 $($reductionNeeded)원, 축소 후보 $($reduceCandidateCount)개(합계 $($reduceCandidateTotalText)원)"
       foreach ($candidate in ($reduceCandidates | Select-Object -First 3)) {
         $candidateValue = if ($candidate.market_value) {
           "{0:N0}" -f [double]$candidate.market_value

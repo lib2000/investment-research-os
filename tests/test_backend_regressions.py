@@ -330,6 +330,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
         self.assertIn("reduction_needed_value", script_source)
         self.assertIn("candidates.reduce", script_source)
+        self.assertIn("reduceCandidateTotal", script_source)
+        self.assertIn("합계", script_source)
         self.assertIn("국민연금 축소 후보", script_source)
         self.assertIn("/api/v1/public-ir-sec/status", script_source)
         self.assertIn("needs_body_copy_entries", script_source)
