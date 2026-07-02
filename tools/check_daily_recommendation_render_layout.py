@@ -97,16 +97,22 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   await sleep(500);
 
                   const cardsRoot = document.querySelector("#dailyRecommendationCards");
+                  cardsRoot.scrollIntoView({block: "start", inline: "nearest"});
+                  await sleep(300);
                   const marketSections = [...cardsRoot.querySelectorAll(".daily-recommendation-market-section")].filter(visible);
                   const recommendationCards = [...cardsRoot.querySelectorAll(".daily-recommendation-market-grid > .daily-recommendation-card")].filter(visible);
                   const marketLabels = marketSections.map((section) => section.querySelector(".daily-recommendation-market-head span")?.textContent?.trim() || "");
                   const title = cardsRoot.querySelector(".daily-recommendation-board-summary strong")?.textContent?.trim() || "";
+                  const cardsTop = Math.round(cardsRoot.getBoundingClientRect().top);
                   return {
                     status: "success",
                     title,
                     marketSectionCount: marketSections.length,
                     recommendationCardCount: recommendationCards.length,
                     marketLabels,
+                    scrolledToDailyRecommendationCards: cardsTop >= 0 && cardsTop < Math.round(window.innerHeight * 0.35),
+                    dailyRecommendationCardsTop: cardsTop,
+                    scrollY: Math.round(window.scrollY),
                     clippedTextElements: clippedTextElements().slice(0, 20),
                     bodyWidth: document.body.scrollWidth,
                     viewportWidth: window.innerWidth,
@@ -149,6 +155,8 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("시장 섹션 라벨에 한국/미국이 모두 보이지 않습니다.")
     if result.get("pageHasHorizontalOverflow"):
         errors.append("페이지 전체에 가로 스크롤 오버플로가 있습니다.")
+    if not result.get("scrolledToDailyRecommendationCards"):
+        errors.append("추천 결과 스크린샷 대상이 카드 영역으로 스크롤되지 않았습니다.")
     clipped = result.get("clippedTextElements") if isinstance(result.get("clippedTextElements"), list) else []
     if clipped:
         errors.append(f"추천 결과 텍스트 클리핑 {len(clipped)}개")
