@@ -15114,6 +15114,17 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
             self.assertEqual(snapshot["portfolio_matches"][0]["ticker"], "278280")
             self.assertTrue(any("NPS_ODCLOUD_API_KEY" in item for item in snapshot["warnings"]))
             self.assertTrue(any("2022-07-01" in item for item in snapshot["warnings"]))
+            self.assertEqual(
+                snapshot["public_rebalancing_context"]["data_policy"]["order_flow_access"],
+                "not_available",
+            )
+            self.assertEqual(
+                snapshot["public_rebalancing_context"]["data_policy"]["realtime_rebalancing_detection"],
+                "not_supported",
+            )
+            self.assertTrue(
+                any("기사·공시·공공데이터" in item for item in snapshot["next_actions"])
+            )
 
             saved = save_nps_portfolio_change_snapshot(snapshot, settings)
             self.assertTrue(Path(saved["path"]).exists())

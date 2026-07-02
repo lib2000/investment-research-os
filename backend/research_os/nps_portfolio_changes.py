@@ -17,6 +17,60 @@ from research_os.state_store import current_storage_timestamp, read_json_store, 
 
 
 NPS_PORTFOLIO_CHANGE_SNAPSHOT_FILE = "nps_portfolio_change_snapshot.json"
+NPS_REBALANCING_ARTICLE_URL = "https://kr.investing.com/news/stock-market-news/article-2000291"
+
+
+def _public_rebalancing_context(as_of_date: date, *, refresh_attempted: bool) -> dict:
+    return {
+        "status": "public_sources_only",
+        "as_of": as_of_date.isoformat(),
+        "primary_article_url": NPS_REBALANCING_ARTICLE_URL,
+        "article_observations": [
+            {
+                "label": "reported_rebalance_restart",
+                "value": "2026-07-01 국내주식 리밸런싱 재개 보도",
+                "source_url": NPS_REBALANCING_ARTICLE_URL,
+            },
+            {
+                "label": "reported_target_band",
+                "value": "기사 기준 2026년 국내주식 목표비중 20.8%, SAA ±6%p, TAA ±2%p로 총 상단 28.8% 언급",
+                "source_url": NPS_REBALANCING_ARTICLE_URL,
+            },
+            {
+                "label": "reported_sell_estimate_range",
+                "value": "시장 추정 매도 필요 규모는 약 37.3조~74.4조원 범위로 보도되어 단일 확정치로 쓰지 않음",
+                "source_url": NPS_REBALANCING_ARTICLE_URL,
+            },
+            {
+                "label": "reported_execution_style",
+                "value": "단기 매도 폭탄보다 장기간 분산 매도 및 종목 교체 가능성이 기사에서 제시됨",
+                "source_url": NPS_REBALANCING_ARTICLE_URL,
+            },
+        ],
+        "operational_constraints": [
+            "국민연금 리밸런싱의 세부 집행 시점, 주문 규모, 종목별 주문은 시장 충격 최소화를 위해 비공개로 취급합니다.",
+            "증권사나 트레이딩 시스템 API로 국민연금의 직접 주문 데이터를 조회할 수 없다고 가정합니다.",
+            "시스템은 5% 이상 지분율 공시, 공공데이터포털 대량보유/보유자료, 시장 수급/뉴스를 결합해 사후 또는 간접 신호만 산출합니다.",
+            "공개자료 기반 추정은 추천 점수의 보조 리스크 신호로만 반영하고 확정 매매 주문으로 해석하지 않습니다.",
+        ],
+        "data_policy": {
+            "order_flow_access": "not_available",
+            "broker_api_linkage": "not_supported",
+            "realtime_rebalancing_detection": "not_supported",
+            "supported_evidence": [
+                "public_article",
+                "odcloud_nps_large_holding",
+                "odcloud_nps_domestic_stock",
+                "dart_large_holding_disclosure",
+                "market_supply_demand_news",
+            ],
+            "refresh_attempted": refresh_attempted,
+        },
+        "decision_rule": (
+            "국민연금 관련 신호는 공개자료 기반 압력/위험도 플래그로만 사용하고, "
+            "실시간 리밸런싱 주문 탐지나 특정 종목 매도 확정으로 승격하지 않습니다."
+        ),
+    }
 
 
 def nps_portfolio_change_snapshot_path(settings: Settings) -> Path:
@@ -216,6 +270,7 @@ def build_nps_portfolio_change_snapshot(
         "portfolio_name": portfolio_label,
         "refresh_attempted": refresh_attempted,
         "refresh_status": "attempted" if refresh_attempted else "skipped_no_api_key",
+        "public_rebalancing_context": _public_rebalancing_context(as_of_date, refresh_attempted=refresh_attempted),
         "cache_updated_at": cache_updated_at,
         "source_urls": source_urls,
         "domestic_stock_row_count": len(domestic_rows),
@@ -227,6 +282,7 @@ def build_nps_portfolio_change_snapshot(
         "warnings": warnings,
         "next_actions": [
             first_next_action,
+            "국민연금 리밸런싱은 주문 시점/규모가 비공개이므로 시스템은 기사·공시·공공데이터 기반 압력 신호만 사용합니다.",
             "포트폴리오 매칭 종목은 추가매수 전 국민연금 지분율 기준일과 최근 DART 대량보유 공시를 함께 확인하세요.",
             "캐시 최신 기준일이 요청 기준일보다 오래되면 투자 판단에는 보수적으로 참고 신호만 반영하세요.",
         ],

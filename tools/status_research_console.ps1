@@ -388,6 +388,9 @@ if ($researchAutomation) {
     if ($npsChangeSnapshot) {
       $matchedCount = if ($npsChangeSnapshot.portfolio_matches) { @($npsChangeSnapshot.portfolio_matches).Count } else { 0 }
       Write-Host "국민연금 변동 스냅샷: $($npsChangeSnapshot.status), 기준 $($npsChangeSnapshot.as_of), 최신 이벤트 $($npsChangeSnapshot.latest_event_date), 포트폴리오 매칭 $($matchedCount)건"
+      if ($npsChangeSnapshot.public_rebalancing_context -and $npsChangeSnapshot.public_rebalancing_context.data_policy) {
+        Write-Host "국민연금 리밸런싱 데이터 정책: 주문흐름 $($npsChangeSnapshot.public_rebalancing_context.data_policy.order_flow_access), 실시간탐지 $($npsChangeSnapshot.public_rebalancing_context.data_policy.realtime_rebalancing_detection)"
+      }
       foreach ($warning in (@($npsChangeSnapshot.warnings) | Select-Object -First 2)) {
         Write-Host "국민연금 변동 경고: $warning"
       }
