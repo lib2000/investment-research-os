@@ -125,6 +125,18 @@ def load_daily_recommendation_render_layout_tool():
     return module
 
 
+def load_news_inbox_priority_queue_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_news_inbox_priority_queue.py"
+    spec = spec_from_file_location("check_news_inbox_priority_queue", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_citations_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -9948,6 +9960,76 @@ class NewsInboxModuleTests(unittest.TestCase):
         self.assertEqual(result["quality_issue_count"], 1)
         self.assertEqual([item["id"] for item in result["items"]], ["n1"])
         self.assertEqual([item["id"] for item in actionable["items"]], ["n1"])
+
+
+class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
+    def test_news_inbox_priority_queue_summarizes_actionable_items(self):
+        tool = load_news_inbox_priority_queue_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            store_dir = root / "research_vault" / "_system"
+            store_dir.mkdir(parents=True)
+            (store_dir / "news_inbox.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-02T08:00:00+09:00",
+                        "items": [
+                            {
+                                "id": "p1",
+                                "title": "AI 규제 가이드라인 발표",
+                                "source_url": "https://example.com/policy",
+                                "scope": "POLICY",
+                                "relevance_score": 37,
+                                "target_matches": [{"label": "피지컬 AI"}],
+                            },
+                            {
+                                "id": "n1",
+                                "title": "일반 뉴스",
+                                "source_url": "https://example.com/news",
+                                "relevance_score": 3,
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.build_priority_queue_status(root, limit=7)
+
+        self.assertEqual(status["total_count"], 2)
+        self.assertEqual(status["priority_count"], 1)
+        self.assertEqual(status["policy_priority_count"], 1)
+        self.assertEqual(status["target_matched_count"], 1)
+        self.assertEqual(status["queue"][0]["id"], "p1")
+        self.assertIn("타깃 매칭", status["queue"][0]["reason"])
+        self.assertEqual(tool.strict_errors(status), [])
+
+    def test_news_inbox_priority_queue_strict_errors_validate_shapes(self):
+        tool = load_news_inbox_priority_queue_tool()
+        status = {
+            "total_count": 1,
+            "filter_counts": {"actionable": 1},
+            "priority_count": 1,
+            "queue": [
+                {
+                    "rank": 1,
+                    "title": "",
+                    "source_url": "not-a-url",
+                    "scope": "INBOX",
+                    "is_policy_law": True,
+                }
+            ],
+        }
+
+        errors = tool.strict_errors(status)
+
+        self.assertTrue(any("제목" in error for error in errors))
+        self.assertTrue(any("URL" in error for error in errors))
+        self.assertTrue(any("POLICY" in error for error in errors))
 
 
 class AutomationStatusModuleTests(unittest.TestCase):

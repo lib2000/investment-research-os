@@ -45,6 +45,7 @@
 - OpenClaw 다음 우선순위: `portfolio_change_detection_v1`은 전일 대비 stance/confidence/health score 변화를 추적하고, `telegram_brief_sender_v1`은 08:00 실행 후 Portfolio Health, Top Movers, Watch Items를 텔레그램으로 보낸다. `check_telegram_brief_sender.py`는 실제 전송 없이 `--chat-id`, `MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID`, `TELEGRAM_CHAT_ID` 순으로 chat id 설정 여부만 확인한다. 이후 `earnings_transcript_collector_v1`, SEC/DART 통합 점수화를 붙여 IR+Earnings+SEC+DART 통합 Portfolio Score로 확장한다.
 - Market Signal Graph pipeline contract: `market_signal_graph_pipeline_contract_v1`은 Firecrawl IR payload, Firecrawl earnings payload, earnings transcript payload, DeepSeek IR analysis payload, portfolio brief payload, IR/Earnings/SEC/DART 통합 점수, portfolio health 변화 감지, Telegram brief dry-run을 하나의 offline contract로 묶는다. 외부 RPC, Firecrawl, DeepSeek, Telegram 전송은 호출하지 않고 shape/count/status drift만 검증한다. source payload 중복은 `(source_platform, external_id)`를 우선 보고, fallback으로 `(source_platform, canonical_hash)`를 검사한다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 네이버 리서치, 신한 리서치, 마감 시황 시장일지, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다. 이 점검은 마감 시황 자동 수집 시도 상태, 리서치 자동화 Dossier 갱신 상태, 시장일지 `KR`/`US` 각각의 저장 항목·자동 출처 항목·최신 세션일 경과도 함께 확인하며, 네이버 리서치 저장경로 누락은 기본 허용 0건으로 본다.
+- 뉴스 인박스 우선 분류는 `python tools\check_news_inbox_priority_queue.py --strict`로 확인한다. 이 점검은 `research_vault\_system\news_inbox.json`에서 미승격 우선 뉴스, 정책·법령·규제 우선 뉴스, 타깃 매칭 뉴스, 품질 확인 건수를 출력하고, 상위 우선 뉴스의 제목·URL·scope가 운영 화면에 표시 가능한 상태인지 확인한다. 우선 뉴스가 남아 있다는 이유만으로 실패하지 않고, 운영자가 바로 확인할 수 없는 깨진 항목만 실패로 처리한다.
 - 네이버 리서치 캐시에 메타데이터와 PDF 링크는 있으나 저장경로만 비어 있으면 삭제하지 않고 `repair_naver_research_cache(..., save_result=True)` 경로로 Markdown/JSON 저장을 보강한다. 복구 후 `python tools\check_research_source_store.py --strict`에서 `저장경로 누락 0개`, `파일 누락 0개`가 나와야 한다.
 - 중복 Dossier 큐 갱신은 `dossier_refresh_queue_status.json`뿐 아니라 `research_automation_status.json`의 상위 `updated_at`과 `last_deduped_dossier_refresh.updated_at`도 함께 갱신해야 한다. 소스 자동화 점검은 저장 성공, 실패 0건, RAG 연결, 뉴스 미승격 0건까지 같이 확인한다.
 - 네이버/신한 리서치 캐시는 제목·발행일·링크·요약·저장 경로가 모두 있어야 정상이며, 저장 경로의 Markdown/JSON 파일이 실제로 존재해야 한다. 네이버 캐시는 `시황정보` 항목이 있어야 시장일지 자동 활용 흐름을 통과한다.
@@ -95,6 +96,7 @@ python tools\check_market_signal_graph_pipeline_contract.py
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\check_investment_insight_hub.py --strict
+python tools\check_news_inbox_priority_queue.py --strict
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict
 python tools\check_operational_readiness_score.py --strict --min-score 95

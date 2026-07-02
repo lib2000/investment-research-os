@@ -580,6 +580,20 @@ $contracts = @(
     )
   },
 
+  @{
+    Path = "tools\check_news_inbox_priority_queue.py"
+    Snippets = @(
+      '뉴스 인박스 우선 분류 큐',
+      'news_inbox.json',
+      'priority_count',
+      'policy_priority_count',
+      'target_matched_count',
+      'priority_reason',
+      'strict_errors',
+      '뉴스 인박스 우선 분류'
+    )
+  },
+
 
 
 
