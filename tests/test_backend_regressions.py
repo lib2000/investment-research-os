@@ -341,6 +341,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("daily_recommendation_candidate_policy_preview.json", script_source)
         self.assertIn("stored_preview_mismatches", script_source)
         self.assertIn("generated_at", script_source)
+        self.assertIn("Format-LocalDateTime", script_source)
+        self.assertIn("ToLocalTime()", script_source)
         self.assertIn("추천 재계산 프리뷰 생성", script_source)
         self.assertIn("추천 저장/재계산 차이", script_source)
         self.assertIn("news_duplicate_priority_group_count", script_source)

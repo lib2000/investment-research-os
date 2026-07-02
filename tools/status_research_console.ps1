@@ -76,6 +76,19 @@ function Get-SessionAgeDays {
   }
 }
 
+function Format-LocalDateTime {
+  param([string]$DateTimeText)
+
+  if ([string]::IsNullOrWhiteSpace($DateTimeText)) {
+    return ""
+  }
+  try {
+    return ([datetimeoffset]::Parse($DateTimeText).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"))
+  } catch {
+    return $DateTimeText
+  }
+}
+
 function Get-Utf8ResponseContent {
   param($Response)
 
@@ -233,7 +246,7 @@ if ($dailyRecommendations) {
   }
   if ($dailyCandidatePolicyPreview) {
     if ($dailyCandidatePolicyPreview.generated_at) {
-      Write-Host "추천 재계산 프리뷰 생성: $($dailyCandidatePolicyPreview.generated_at)"
+      Write-Host "추천 재계산 프리뷰 생성: $(Format-LocalDateTime -DateTimeText $dailyCandidatePolicyPreview.generated_at)"
     }
     $previewMismatches = if ($dailyCandidatePolicyPreview.stored_preview_mismatches) {
       @($dailyCandidatePolicyPreview.stored_preview_mismatches | ForEach-Object { $_ })
