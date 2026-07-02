@@ -23,10 +23,30 @@ function Invoke-JsonGet {
     [int]$TimeoutSec = 20
   )
   try {
-    if ($Headers.Count -gt 0) {
-      return Invoke-RestMethod -Uri $Uri -Method Get -Headers $Headers -TimeoutSec $TimeoutSec
+    $requestArgs = @{
+      Uri = $Uri
+      Method = "Get"
+      TimeoutSec = $TimeoutSec
+      UseBasicParsing = $true
     }
-    return Invoke-RestMethod -Uri $Uri -Method Get -TimeoutSec $TimeoutSec
+    if ($Headers.Count -gt 0) {
+      $requestArgs.Headers = $Headers
+    }
+    $response = Invoke-WebRequest @requestArgs
+    if ($response.RawContentStream) {
+      $response.RawContentStream.Position = 0
+      $reader = [System.IO.StreamReader]::new(
+        $response.RawContentStream,
+        [System.Text.Encoding]::UTF8,
+        $true
+      )
+      try {
+        return ($reader.ReadToEnd() | ConvertFrom-Json)
+      } finally {
+        $reader.Dispose()
+      }
+    }
+    return ($response.Content | ConvertFrom-Json)
   } catch {
     throw "API request failed: $Uri - $($_.Exception.Message)"
   }
