@@ -320,6 +320,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("dashboard_digest", script_source)
         self.assertIn("news_priority_preview", script_source)
         self.assertIn("news_duplicate_priority_group_count", script_source)
+        self.assertIn("news_duplicate_priority_groups", script_source)
+        self.assertIn("우선 뉴스 중복 후보", script_source)
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
         self.assertIn("candidates.reduce", script_source)
         self.assertIn("/api/v1/public-ir-sec/status", script_source)
