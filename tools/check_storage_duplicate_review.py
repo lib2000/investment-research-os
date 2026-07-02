@@ -119,6 +119,22 @@ def strict_errors(status: dict[str, Any], *, max_age_hours: float = 168.0) -> li
     return errors
 
 
+def duplicate_preview_lines(group: dict[str, Any], *, limit: int = 3) -> list[str]:
+    duplicates = [item for item in (group.get("duplicates") or []) if isinstance(item, dict)]
+    lines: list[str] = []
+    for duplicate in duplicates[: max(0, limit)]:
+        title = duplicate.get("title") or duplicate.get("relative_path") or duplicate.get("file_name") or "중복 후보 미확인"
+        reason = duplicate.get("duplicate_reason") or "중복 사유 미확인"
+        similarity = duplicate.get("similarity")
+        similarity_text = ""
+        if isinstance(similarity, (int, float)):
+            similarity_text = f" | 유사도 {similarity:.2f}"
+        source = duplicate.get("source_url") or duplicate.get("relative_path") or ""
+        source_text = f" | {source}" if source else ""
+        lines.append(f"  - 후보 {title} | {reason}{similarity_text}{source_text}")
+    return lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="저장 자료 중복 리뷰 상태를 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="운영 품질 문제가 있으면 실패 코드로 종료")
@@ -155,6 +171,8 @@ def main() -> int:
             f"대표 {representative.get('title') or representative.get('relative_path') or '미확인'}",
             flush=True,
         )
+        for line in duplicate_preview_lines(group):
+            print(line, flush=True)
     errors = strict_errors(status, max_age_hours=args.max_age_hours)
     if errors:
         print("점검 오류:", flush=True)

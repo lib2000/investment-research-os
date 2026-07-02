@@ -10331,6 +10331,28 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
         self.assertEqual(status["duplicate_missing"], [])
         self.assertEqual(tool.strict_errors(status, max_age_hours=10**9), [])
 
+    def test_storage_duplicate_review_formats_duplicate_preview_lines(self):
+        tool = load_storage_duplicate_review_tool()
+
+        lines = tool.duplicate_preview_lines(
+            {
+                "duplicates": [
+                    {
+                        "title": "중복 리포트",
+                        "duplicate_reason": "title_body_similarity",
+                        "similarity": 0.875,
+                        "source_url": "https://example.com/report",
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn("중복 리포트", lines[0])
+        self.assertIn("title_body_similarity", lines[0])
+        self.assertIn("유사도 0.88", lines[0])
+        self.assertIn("https://example.com/report", lines[0])
+
     def test_storage_duplicate_review_strict_errors_validate_policy(self):
         tool = load_storage_duplicate_review_tool()
         status = {
