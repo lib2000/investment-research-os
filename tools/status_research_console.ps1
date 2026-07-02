@@ -384,6 +384,14 @@ if ($researchAutomation) {
         Write-Host "국민연금 축소 후보: $($candidate.ticker) | $($candidateName) | $($candidateValue)원"
       }
     }
+    $npsChangeSnapshot = $dashboardDigest.nps_portfolio_change_snapshot
+    if ($npsChangeSnapshot) {
+      $matchedCount = if ($npsChangeSnapshot.portfolio_matches) { @($npsChangeSnapshot.portfolio_matches).Count } else { 0 }
+      Write-Host "국민연금 변동 스냅샷: $($npsChangeSnapshot.status), 기준 $($npsChangeSnapshot.as_of), 최신 이벤트 $($npsChangeSnapshot.latest_event_date), 포트폴리오 매칭 $($matchedCount)건"
+      foreach ($warning in (@($npsChangeSnapshot.warnings) | Select-Object -First 2)) {
+        Write-Host "국민연금 변동 경고: $warning"
+      }
+    }
   }
   if ($researchAutomation.status -and $researchAutomation.status -ne "success") {
     Add-StatusFailure "research automation 상태가 success가 아닙니다: $($researchAutomation.status)"

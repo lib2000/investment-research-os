@@ -213,6 +213,13 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
             "summary": "국민연금 국내주식 14% 비중 확인 실패",
             "recommended_action": runtime.provider_error_message(exc, settings),
         }
+    try:
+        nps_change_snapshot = runtime.read_nps_portfolio_change_snapshot(settings)
+    except Exception as exc:
+        nps_change_snapshot = {
+            "status": "warning",
+            "summary": f"국민연금 포트폴리오 변동 스냅샷 확인 실패: {exc}",
+        }
     kcif_watch = runtime.read_kcif_reports_watch(settings)
     kcif_related_count = 0
     kcif_due = True
@@ -298,6 +305,11 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
             0,
             nps_allocation.get("recommended_action") or "국민연금 국내주식 14% 기준 대비 포트폴리오 비중을 확인하세요.",
         )
+    if nps_change_snapshot.get("status") in {"warning", "needs_data"}:
+        next_actions.insert(
+            0,
+            nps_change_snapshot.get("summary") or "국민연금 포트폴리오 변동 스냅샷을 최신 기준일로 다시 생성하세요.",
+        )
 
     return {
         "status": "success",
@@ -355,6 +367,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         },
         "nps_domestic_equity_allocation": nps_allocation,
         "nps_domestic_equity_rebalance_plan": nps_rebalance_plan,
+        "nps_portfolio_change_snapshot": nps_change_snapshot,
         "last_run_at": status.get("updated_at"),
         "priority_targets": project_priority_targets(priority_targets),
         "next_actions": next_actions[:5],

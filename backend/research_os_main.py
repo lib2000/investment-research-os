@@ -50,6 +50,11 @@ from research_os.nps_allocation_monitor import (
     build_nps_domestic_equity_rebalance_plan,
     select_saved_portfolios_for_nps_allocation,
 )
+from research_os.nps_portfolio_changes import (
+    build_nps_portfolio_change_snapshot,
+    read_nps_portfolio_change_snapshot,
+    save_nps_portfolio_change_snapshot,
+)
 from research_os.opendart_data_provider import OpenDartClient
 from research_os.dossier_text import (
     DOSSIER_ALLOWED_REPORT_TYPES,
@@ -9806,6 +9811,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         read_latest_daily_brief=read_latest_daily_brief,
         read_manifest=read_manifest,
         read_naver_research_cache=read_naver_research_cache,
+        read_nps_portfolio_change_snapshot=read_nps_portfolio_change_snapshot,
         read_news_inbox=read_news_inbox,
         read_policy_sources_watch=read_policy_sources_watch,
         read_regional_business_sources_watch=read_regional_business_sources_watch,
@@ -11668,6 +11674,30 @@ def read_nps_domestic_equity_allocation(
         warn_tolerance=warn_tolerance,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
     )
+
+
+@app.get(
+    "/api/v1/nps/portfolio-changes",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_nps_portfolio_changes(
+    as_of: str = Query(..., description="기준일 YYYY-MM-DD"),
+    portfolio_name: str = "__all__",
+    save: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    국민연금 ODCLOUD 보유/대량보유 캐시를 기준일 스냅샷으로 정리하고,
+    저장 포트폴리오 보유명과 매칭해 수급 점검 후보를 반환합니다.
+    """
+    snapshot = build_nps_portfolio_change_snapshot(
+        settings,
+        as_of=as_of,
+        portfolio_name=portfolio_name,
+    )
+    if save:
+        save_nps_portfolio_change_snapshot(snapshot, settings)
+    return snapshot
 
 
 def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_name: str = "__all__") -> dict:

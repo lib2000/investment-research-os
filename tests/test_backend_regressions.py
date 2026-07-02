@@ -15050,6 +15050,74 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
         self.assertEqual(plan["scenarios"][0]["title"], "ETF/테마 우선 축소")
         self.assertGreater(plan["scenarios"][0]["suggested_reduction_value"], 0)
 
+    def test_nps_portfolio_change_snapshot_uses_cached_large_holding_rows(self):
+        from tempfile import TemporaryDirectory
+
+        from research_os.nps_portfolio_changes import (
+            build_nps_portfolio_change_snapshot,
+            save_nps_portfolio_change_snapshot,
+        )
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            system_dir = vault / "_system"
+            system_dir.mkdir()
+            (system_dir / "nps_odcloud_rows_cache.json").write_text(
+                json.dumps(
+                    {
+                        "domestic": {
+                            "ts": 1782991543.0,
+                            "used_url": "https://api.odcloud.kr/api/3070507/v1/test",
+                            "rows": [{"연도": "2022", "투자규모(단위:조원)": "168"}],
+                        },
+                        "large": {
+                            "ts": 1782991544.0,
+                            "used_url": "https://api.odcloud.kr/api/15106890/v1/test",
+                            "rows": [
+                                {
+                                    "발행기관명": "(주)천보",
+                                    "번호": 41,
+                                    "보고서 작성기준일": "2022-07-01",
+                                    "지분율(퍼센트)": "4.05",
+                                }
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "user_portfolios.json").write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "TEST": {
+                                "portfolio_name": "테스트",
+                                "holdings": [
+                                    {"ticker": "278280", "name": "천보", "market_value": 1000000, "currency": "KRW"}
+                                ],
+                                "portfolio_value": 1000000,
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(research_vault_dir=str(vault), nps_odcloud_api_key="")
+
+            snapshot = build_nps_portfolio_change_snapshot(settings, as_of="2026-07-01")
+            self.assertEqual(snapshot["module"], "nps_portfolio_change_snapshot")
+            self.assertEqual(snapshot["status"], "warning")
+            self.assertEqual(snapshot["latest_event_date"], "2022-07-01")
+            self.assertEqual(snapshot["portfolio_matches"][0]["ticker"], "278280")
+            self.assertTrue(any("NPS_ODCLOUD_API_KEY" in item for item in snapshot["warnings"]))
+            self.assertTrue(any("2022-07-01" in item for item in snapshot["warnings"]))
+
+            saved = save_nps_portfolio_change_snapshot(snapshot, settings)
+            self.assertTrue(Path(saved["path"]).exists())
+
 
 class InvestmentInsightHubTests(unittest.TestCase):
     def test_build_investment_insight_hub_integrates_policy_filings_news_and_sentiment(self):
