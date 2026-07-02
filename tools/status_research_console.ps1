@@ -42,6 +42,39 @@ function Limit-StatusText {
   return "$($normalized.Substring(0, $MaxLength))..."
 }
 
+function Read-OptionalJsonFile {
+  param(
+    [string]$Name,
+    [string]$Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    Write-Host "선택 건너뜀 $Name - $Path"
+    return $null
+  }
+  try {
+    return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json)
+  } catch {
+    Write-Host "주의 $Name JSON 파싱 실패: $($_.Exception.Message)"
+    Add-StatusFailure "$Name JSON 파싱 실패: $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Get-SessionAgeDays {
+  param([string]$SessionDate)
+
+  if ([string]::IsNullOrWhiteSpace($SessionDate)) {
+    return $null
+  }
+  try {
+    $parsed = [datetime]::Parse($SessionDate).Date
+    return [int](([datetime]::Today - $parsed).TotalDays)
+  } catch {
+    return $null
+  }
+}
+
 function Get-Utf8ResponseContent {
   param($Response)
 
@@ -130,6 +163,8 @@ $dailyRecommendations = Invoke-JsonStatus -Name "daily recommendations" -Path "/
 $researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/v1/research-automation/status" -Headers $authHeaders
 $publicIrSecStatus = Invoke-JsonStatus -Name "public IR/SEC status" -Path "/api/v1/public-ir-sec/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
+$marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")
+$telegramUsMarketJournalState = Read-OptionalJsonFile -Name "telegram US market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_market_close_journal_state.json")
 
 if ($root -and $root.message) {
   Write-Host "백엔드 메시지: $($root.message)"
@@ -155,6 +190,25 @@ if ($dailyRecommendations) {
   Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
   Write-Host "일일 추천 저장 건수: $($dailyRecommendations.record_count)"
   Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
+}
+if ($marketJournal) {
+  $marketJournalEntries = if ($marketJournal.entries) { @($marketJournal.entries | ForEach-Object { $_ }) } else { @() }
+  foreach ($market in @("KR", "US")) {
+    $marketEntries = @($marketJournalEntries | Where-Object { ([string]$_.market).ToUpperInvariant() -eq $market })
+    $autoEntries = @($marketEntries | Where-Object { ([string]$_.source_origin).ToLowerInvariant() -ne "manual" })
+    $latestSession = ($marketEntries | Sort-Object -Property session_date -Descending | Select-Object -First 1).session_date
+    $ageDays = Get-SessionAgeDays -SessionDate $latestSession
+    $ageLabel = if ($null -ne $ageDays) { ", 경과 $($ageDays)일" } else { "" }
+    Write-Host "시장일지 $($market): $($marketEntries.Count)개, 자동 $($autoEntries.Count)개, 최신 세션 $($latestSession)$ageLabel"
+  }
+}
+if ($telegramUsMarketJournalState) {
+  $savedPath = if ($telegramUsMarketJournalState.storage -and $telegramUsMarketJournalState.storage.relative_path) {
+    $telegramUsMarketJournalState.storage.relative_path
+  } else {
+    "저장 경로 미확인"
+  }
+  Write-Host "미국 시장일지 자동 시도: $($telegramUsMarketJournalState.status), 시도일 $($telegramUsMarketJournalState.last_attempt_date), 세션 $($telegramUsMarketJournalState.session_date), 포함 섹션 $($telegramUsMarketJournalState.included_post_count)개, 저장 $savedPath"
 }
 if ($researchAutomation) {
   $dashboardDigest = $researchAutomation.dashboard_digest
