@@ -6961,18 +6961,30 @@ function renderAutomationDigestCard(dashboard) {
 function renderNewsDigestPriorityRows(digest) {
   const items = Array.isArray(digest?.news_priority_preview) ? digest.news_priority_preview.slice(0, 3) : [];
   const duplicateCount = Number(digest?.news_duplicate_priority_group_count || 0);
+  const duplicateGroups = Array.isArray(digest?.news_duplicate_priority_groups) ? digest.news_duplicate_priority_groups : [];
+  const firstDuplicate = duplicateGroups[0] || null;
   if (!items.length && !duplicateCount) {
     return "";
   }
   const duplicateText = duplicateCount
     ? `중복 후보 ${formatNumber(duplicateCount)}묶음 · ${formatNumber(digest.news_duplicate_priority_entry_count || 0)}개`
     : "중복 후보 없음";
+  const duplicateIds = firstDuplicate && Array.isArray(firstDuplicate.ids)
+    ? firstDuplicate.ids.filter(Boolean).slice(0, 3).join(", ")
+    : "";
+  const duplicateTitle = firstDuplicate && Array.isArray(firstDuplicate.titles)
+    ? firstDuplicate.titles.filter(Boolean)[0]
+    : "";
+  const duplicateDetail = duplicateIds
+    ? `중복 ID ${duplicateIds}${duplicateTitle ? ` · ${compactOutputText(duplicateTitle, 58)}` : ""}`
+    : "";
   return `
     <div class="automation-news-priority">
       <div class="automation-news-head">
         <span>우선 뉴스</span>
         <b>${escapeHtml(duplicateText)}</b>
       </div>
+      ${duplicateDetail ? `<p class="automation-news-duplicate">${escapeHtml(duplicateDetail)}</p>` : ""}
       <div class="automation-news-list">
         ${items.length
           ? items

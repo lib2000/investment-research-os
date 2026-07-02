@@ -376,6 +376,12 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("본문 보강 플래그", script_source)
         self.assertIn("공개 IR/SEC 동일 제목", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
+        console_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(encoding="utf-8")
+        style_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("automation-news-duplicate", console_source)
+        self.assertIn("중복 ID", console_source)
+        self.assertIn("news_duplicate_priority_groups", console_source)
+        self.assertIn(".automation-news-duplicate", style_source)
 
     def test_enter_research_os_script_prints_recovery_commands(self):
         script_source = (PROJECT_ROOT / "scripts" / "enter-investment-research-os.ps1").read_text(
