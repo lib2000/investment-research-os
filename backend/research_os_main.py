@@ -13924,6 +13924,7 @@ def _target_price_memory_runtime() -> SimpleNamespace:
     return SimpleNamespace(
         filter_target_price_outliers=filter_target_price_outliers,
         infer_report_date_from_file=infer_report_date_from_file,
+        infer_report_type_from_file=infer_report_type_from_file,
         is_plausible_target_price=is_plausible_target_price,
         is_probable_year_or_metadata_number=is_probable_year_or_metadata_number,
         list_research_memory_files=list_research_memory_files,

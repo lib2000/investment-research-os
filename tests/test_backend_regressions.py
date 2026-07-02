@@ -4032,6 +4032,14 @@ class TargetPriceMemoryHelperTests(unittest.TestCase):
             "KRW",
             ticker_context="005930",
         )
+        ocr_observations = target_price_memory.extract_target_price_observations_from_text(
+            runtime,
+            "TPS) 목표주가\n업 © —123 (003230) PS) 옥표주가 1,250,008\n"
+            "투자의견 및 목표주가 변경내역 2025.10.30 매수 2.000.000원",
+            memory_file,
+            "KRW",
+            ticker_context="003230",
+        )
 
         self.assertEqual(explicit["target_price"], 120000)
         self.assertEqual(explicit["target_price_currency"], "KRW")
@@ -4039,6 +4047,80 @@ class TargetPriceMemoryHelperTests(unittest.TestCase):
         self.assertEqual(observations[0]["target_price"], 150000)
         self.assertEqual(observations[0]["source_type"], "증권사 컨센서스 목표주가")
         self.assertEqual(observations[0]["source_date"], "2026-06-13")
+        self.assertIn(1250008, [item["target_price"] for item in ocr_observations])
+        self.assertEqual(
+            target_price_memory.target_price_numeric_value(runtime, "1.850.000", "원"),
+            1850000,
+        )
+
+    def test_target_price_memory_filters_allowed_reports_before_limit(self):
+        from research_os import target_price_memory
+        from research_os.portfolio_performance import (
+            filter_target_price_outliers,
+            is_plausible_target_price,
+            is_probable_year_or_metadata_number,
+            target_price_context_source_type,
+            target_price_currency,
+            target_price_result,
+        )
+
+        def parse_float(value):
+            try:
+                return float(str(value).replace(",", ""))
+            except (TypeError, ValueError):
+                return None
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "003230"
+            ticker_dir.mkdir(parents=True)
+            dart_path = ticker_dir / "003230-dart-filing-watch-2026-06-18.md"
+            report_path = ticker_dir / "003230-thesis-impact-review-2026-05-24.md"
+            dart_path.write_text("# 공시\n\n목표주가 없음", encoding="utf-8")
+            report_path.write_text("PS) 옥표주가 1,250,008", encoding="utf-8")
+            memory_files = [
+                SimpleNamespace(
+                    absolute_path=str(dart_path),
+                    file_name=dart_path.name,
+                    modified_at="2026-06-18T09:00:00+09:00",
+                    report_type="saved-report",
+                ),
+                SimpleNamespace(
+                    absolute_path=str(report_path),
+                    file_name=report_path.name,
+                    modified_at="2026-05-24T09:00:00+09:00",
+                    report_type="saved-report",
+                ),
+            ]
+
+            runtime = SimpleNamespace(
+                filter_target_price_outliers=filter_target_price_outliers,
+                infer_report_date_from_file=lambda file_name: "2026-05-24" if "05-24" in file_name else "2026-06-18",
+                infer_report_type_from_file=lambda file_name: "thesis-impact-review"
+                if "thesis-impact-review" in file_name
+                else "dart-filing-watch",
+                is_plausible_target_price=is_plausible_target_price,
+                is_probable_year_or_metadata_number=is_probable_year_or_metadata_number,
+                list_research_memory_files=lambda *_args, **_kwargs: memory_files,
+                normalize_ticker=lambda value: str(value or "").upper(),
+                parse_float_or_none=parse_float,
+                target_price_context_source_type=target_price_context_source_type,
+                target_price_currency=target_price_currency,
+                target_price_result=target_price_result,
+            )
+
+            consensus = target_price_memory.build_target_price_consensus_from_memory(
+                runtime,
+                "003230",
+                vault_dir,
+                "KRW",
+                limit_files=1,
+            )
+
+        self.assertEqual(consensus["target_price"], 1250008)
+        self.assertEqual(consensus["latest_source_file"], report_path.name)
 
 
 class TargetConsensusScanTests(unittest.TestCase):
@@ -7586,6 +7668,48 @@ class ResearchMemoryFilesModuleTests(unittest.TestCase):
         self.assertTrue(archived.archived)
         self.assertTrue(archived.is_deleted)
         self.assertEqual(archived.archive_reason, "duplicate")
+
+    def test_research_memory_files_module_infers_specific_type_from_saved_report_manifest(self):
+        from research_os import dashboard_helpers, research_memory_files
+
+        quality_metadata = {
+            "tags": [],
+            "source_url_processing": {},
+            "capture_quality": {"status": "complete"},
+            "data_quality_status": "ready",
+            "needs_body_copy": False,
+            "url_text_unavailable": False,
+        }
+        runtime = SimpleNamespace(
+            infer_report_type_from_file=dashboard_helpers.infer_report_type_from_file,
+            is_archived_research_entry=lambda entry, payload=None: False,
+            is_verified_manifest_entry=lambda entry, ticker: True,
+            normalize_ticker=lambda value: str(value or "").upper(),
+            read_manifest=lambda _vault_dir: manifest_entries,
+            research_memory_entry_quality_metadata=lambda *_args: quality_metadata,
+            special_research_keys=set(),
+        )
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            ticker_dir = vault_dir / "003230"
+            ticker_dir.mkdir(parents=True)
+            report_path = ticker_dir / "003230-thesis-impact-review-2026-05-24.md"
+            report_path.write_text("# 삼양식품", encoding="utf-8")
+            manifest_entries = [
+                {
+                    "ticker": "003230",
+                    "file_name": report_path.name,
+                    "type": "saved-report",
+                    "ticker_verification": {"official_symbol": "003230", "verified": True},
+                }
+            ]
+
+            files = research_memory_files.list_research_memory_files(runtime, "003230", vault_dir)
+
+        self.assertEqual(files[0].report_type, "thesis-impact-review")
 
 class ResearchMemoryQualityRebuildModuleTests(unittest.TestCase):
     def test_quality_rebuild_module_updates_manifest_sidecar_markdown_and_rag(self):

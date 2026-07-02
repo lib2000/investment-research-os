@@ -7,8 +7,17 @@ from pathlib import Path
 from re import IGNORECASE, findall, finditer
 
 
+def normalize_target_price_number(raw_value: object) -> str:
+    text = str(raw_value or "").strip().replace(",", "")
+    if text.count(".") > 1:
+        dot_parts = text.split(".")
+        if dot_parts[0].isdigit() and all(part.isdigit() and len(part) == 3 for part in dot_parts[1:]):
+            return "".join(dot_parts)
+    return text
+
+
 def target_price_numeric_value(runtime, raw_value: object, unit: str | None) -> float | None:
-    value = runtime.parse_float_or_none(raw_value)
+    value = runtime.parse_float_or_none(normalize_target_price_number(raw_value))
     if value is None:
         return None
     unit_text = str(unit or "").upper()
@@ -54,9 +63,11 @@ def parse_explicit_analyst_target_from_text(
     memory_file,
     holding_currency: str,
 ) -> dict | None:
+    target_label = r"목표\s*주가|목표\s*가격|목표가|옥표\s*주가|target\s*price|TP"
+    target_number = r"([0-9][0-9,.]*(?:\.\d+)?)"
     patterns = [
-        r"(목표\s*주가|목표\s*가격|목표가|target\s*price|TP)\s*(?:를|은|는|로|까지)?\s*[:：]?\s*(\$|₩)?\s*([0-9][0-9,]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?",
-        r"(이에\s*목표\s*주가)\s*(\$|₩)?\s*([0-9][0-9,]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?",
+        rf"({target_label})\s*(?:를|은|는|로|까지)?\s*[:：]?\s*(\$|₩)?\s*{target_number}\s*(만원|원|달러|USD|KRW)?",
+        rf"(이에\s*목표\s*주가)\s*(\$|₩)?\s*{target_number}\s*(만원|원|달러|USD|KRW)?",
     ]
     for pattern in patterns:
         for match in finditer(pattern, text, flags=0):
@@ -86,7 +97,7 @@ def parse_tactical_trade_target_from_text(
     memory_file,
     holding_currency: str,
 ) -> dict | None:
-    pattern = r"(?:1차|2차|3차)\s*목표가?\s*[:：]?\s*(\$|₩)?\s*([0-9][0-9,]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?"
+    pattern = r"(?:1차|2차|3차)\s*목표가?\s*[:：]?\s*(\$|₩)?\s*([0-9][0-9,.]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?"
     for symbol, raw_value, unit in findall(pattern, text, flags=0):
         value = target_price_numeric_value(runtime, raw_value, unit)
         if value is None:
@@ -111,9 +122,11 @@ def extract_target_price_observations_from_text(
     holding_currency: str,
     ticker_context: str | None = None,
 ) -> list[dict]:
+    target_label = r"컨센서스|평균\s*목표\s*주가|증권사\s*평균|목표\s*주가|목표\s*가격|목표가|옥표\s*주가|target\s*price|TP"
+    target_number = r"([0-9][0-9,.]*(?:\.\d+)?)"
     patterns = [
-        r"(컨센서스|평균\s*목표\s*주가|증권사\s*평균|목표\s*주가|목표\s*가격|목표가|target\s*price|TP)[^。\n\r]{0,45}?(\$|₩)?\s*([0-9][0-9,]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?",
-        r"(\$|₩)?\s*([0-9][0-9,]*(?:\.\d+)?)\s*(만원|원|달러|USD|KRW)?\s*(?:으로|까지|로)?\s*(목표\s*주가|목표가|target\s*price)",
+        rf"({target_label})[^。\n\r]{{0,45}}?(\$|₩)?\s*{target_number}\s*(만원|원|달러|USD|KRW)?",
+        rf"(\$|₩)?\s*{target_number}\s*(만원|원|달러|USD|KRW)?\s*(?:으로|까지|로)?\s*(목표\s*주가|목표가|옥표\s*주가|target\s*price)",
     ]
     observations: list[dict] = []
     seen: set[tuple[str, float, str]] = set()
@@ -174,13 +187,20 @@ def build_target_price_consensus_from_memory(
     normalized_ticker = runtime.normalize_ticker(ticker)
     observations: list[dict] = []
     allowed_report_types = {"research-capture", "thesis-impact-review", "dossier-synthesis"}
+    scanned_allowed_files = 0
     for memory_file in runtime.list_research_memory_files(
         normalized_ticker,
         vault_dir,
         manifest_entries=manifest_entries,
-    )[:limit_files]:
-        if memory_file.report_type not in allowed_report_types:
+    ):
+        report_type = memory_file.report_type
+        if report_type == "saved-report" and hasattr(runtime, "infer_report_type_from_file"):
+            report_type = runtime.infer_report_type_from_file(memory_file.file_name)
+        if report_type not in allowed_report_types:
             continue
+        scanned_allowed_files += 1
+        if scanned_allowed_files > limit_files:
+            break
         try:
             text = Path(memory_file.absolute_path).read_text(encoding="utf-8", errors="ignore")
         except OSError:

@@ -86,6 +86,17 @@ def build_research_memory_file(
         json_payload,
         captured_item,
     )
+    inferred_report_type = runtime.infer_report_type_from_file(file_path.name)
+    manifest_report_type = manifest_entry.get("type") if manifest_entry else None
+    report_type = (
+        inferred_report_type
+        if manifest_report_type in {None, "", "saved-report"} and inferred_report_type != "saved-report"
+        else manifest_report_type
+        if manifest_report_type
+        else "research-capture"
+        if json_payload.get("module") == "research_quick_capture"
+        else inferred_report_type
+    )
     return ResearchMemoryFile(
         file_name=file_path.name,
         relative_path=file_path.relative_to(vault_dir.parent).as_posix(),
@@ -95,13 +106,7 @@ def build_research_memory_file(
         if json_path.exists()
         else None,
         modified_at=datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-        report_type=(
-            manifest_entry.get("type")
-            if manifest_entry
-            else "research-capture"
-            if json_payload.get("module") == "research_quick_capture"
-            else runtime.infer_report_type_from_file(file_path.name)
-        ),
+        report_type=report_type,
         summary=(
             manifest_entry.get("summary")
             if manifest_entry

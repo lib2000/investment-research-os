@@ -259,6 +259,7 @@ def infer_report_type_from_file(file_name: str) -> str:
         "earnings-reaction",
         "research-capture",
         "thesis-impact-review",
+        "dossier-synthesis",
         "research-checklist",
         "portfolio-risk-scan",
         "reinforcement-portfolio-optimizer",
