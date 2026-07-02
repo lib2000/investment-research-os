@@ -4356,6 +4356,76 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(body["saved_count"], 1)
         self.assertEqual(body["webhook_status"]["last_webhook_status"], "accepted")
 
+    def test_firecrawl_monitor_operational_preflight_requires_secret(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "firecrawl-monitor.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_MONITOR_ENABLED=false",
+                        "FIRECRAWL_MONITOR_DRY_RUN=true",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\"}]}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_monitor_operational_preflight.py"),
+                    "--env-file",
+                    str(env_file),
+                    "--env-override",
+                    "--require-env-registry",
+                    "--require-webhook-secret",
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured", result.stdout)
+
+    def test_firecrawl_monitor_operational_preflight_accepts_valid_env(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "firecrawl-monitor.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_MONITOR_ENABLED=false",
+                        "FIRECRAWL_MONITOR_DRY_RUN=true",
+                        "FIRECRAWL_MONITOR_WEBHOOK_SECRET=expected-preflight-secret",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\"}]}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_monitor_operational_preflight.py"),
+                    "--env-file",
+                    str(env_file),
+                    "--env-override",
+                    "--require-env-registry",
+                    "--require-webhook-secret",
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[success] firecrawl_monitor_operational_preflight", result.stdout)
+        self.assertIn("reject=401 accept=200 saved=1", result.stdout)
+
     def test_public_ir_sec_status_lists_needs_body_entries(self):
         from research_os.public_ir_sec import public_ir_sec_status_payload
 
