@@ -6908,6 +6908,7 @@ function renderAutomationDigestCard(dashboard) {
   const targetRows = renderAutomationDigestTargetRows(digest.priority_targets || []);
   const nextActions = Array.isArray(digest.next_actions) ? digest.next_actions.filter(Boolean).slice(0, 3) : [];
   const npsRebalanceRows = renderNpsDigestRebalanceRows(digest.nps_domestic_equity_rebalance_plan);
+  const newsPriorityRows = renderNewsDigestPriorityRows(digest);
   const action = nextActions[0] || "오늘 업데이트를 실행해 자동 수집, 중복 제거, RAG 색인, Dossier 합성을 연결하세요.";
   const runLabel = digest.daily_brief_date ? "업데이트 갱신" : "오늘 업데이트";
   return `
@@ -6947,12 +6948,44 @@ function renderAutomationDigestCard(dashboard) {
           : `<span>${escapeHtml(compactOutputText(action, 120))}</span>`}
       </div>
       ${npsRebalanceRows}
+      ${newsPriorityRows}
       ${targetRows}
       <div class="dashboard-card-actions">
         <button data-workflow-action="today-research-update" type="button">${escapeHtml(runLabel)}</button>
         <button data-workflow-action="interest-automation" class="secondary" type="button">수집 보드</button>
       </div>
     </article>
+  `;
+}
+
+function renderNewsDigestPriorityRows(digest) {
+  const items = Array.isArray(digest?.news_priority_preview) ? digest.news_priority_preview.slice(0, 3) : [];
+  const duplicateCount = Number(digest?.news_duplicate_priority_group_count || 0);
+  if (!items.length && !duplicateCount) {
+    return "";
+  }
+  const duplicateText = duplicateCount
+    ? `중복 후보 ${formatNumber(duplicateCount)}묶음 · ${formatNumber(digest.news_duplicate_priority_entry_count || 0)}개`
+    : "중복 후보 없음";
+  return `
+    <div class="automation-news-priority">
+      <div class="automation-news-head">
+        <span>우선 뉴스</span>
+        <b>${escapeHtml(duplicateText)}</b>
+      </div>
+      <div class="automation-news-list">
+        ${items.length
+          ? items
+              .map((item, index) => {
+                const label = item.scope_label || item.scope || "뉴스";
+                const title = item.title || item.summary || "제목 미확인";
+                const score = item.relevance_score !== undefined ? ` · ${formatNumber(item.relevance_score)}점` : "";
+                return `<span><b>${escapeHtml(index + 1)}. ${escapeHtml(label)}${escapeHtml(score)}</b>${escapeHtml(compactOutputText(title, 76))}</span>`;
+              })
+              .join("")
+          : `<span><b>대기</b>우선 뉴스 프리뷰가 없습니다.</span>`}
+      </div>
+    </div>
   `;
 }
 
@@ -15658,6 +15691,13 @@ function formatKoreanResult(value) {
       const amount = formatMoney(item.market_value || item.current_value || 0, "KRW", "0원");
       return `${item.ticker || "-"} ${item.holding_name || "종목 미확인"} · ${item.bucket || "후보"} · ${amount}`;
     });
+    const newsPriorityLines = (Array.isArray(digest.news_priority_preview) ? digest.news_priority_preview : [])
+      .slice(0, 5)
+      .map((item, index) => {
+        const label = item.scope_label || item.scope || "뉴스";
+        const score = item.relevance_score !== undefined ? ` · ${formatNumber(item.relevance_score)}점` : "";
+        return `${index + 1}. ${label}${score} · ${compactOutputText(item.title || item.summary || "제목 미확인", 140)}`;
+      });
     const sourceSchedule = Array.isArray(value.source_schedule)
       ? value.source_schedule
       : Array.isArray(digest.source_schedule)
@@ -15720,6 +15760,10 @@ function formatKoreanResult(value) {
         ? `- 국민연금 14% 리밸런싱: ${npsPlan.summary}`
         : `- 국민연금 14% 리밸런싱: 현재 추가 후보 없음`,
       ...formatBulletList(npsCandidateLines, (item) => item, "국민연금 리밸런싱 후보가 없습니다."),
+      `- 뉴스 우선 분류: ${formatNumber(digest.news_actionable_unpromoted_count || 0)}개 · 중복 후보 ${formatNumber(
+        digest.news_duplicate_priority_group_count || 0
+      )}묶음`,
+      ...formatBulletList(newsPriorityLines, (item) => item, "우선 뉴스 프리뷰가 없습니다."),
       ``,
       `외부 소스 자동 점검`,
       ...formatBulletList(sourceScheduleLines, (item) => item, "외부 소스 자동 점검 상태가 없습니다."),

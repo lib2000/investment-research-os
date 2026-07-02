@@ -1741,6 +1741,61 @@ label {
   font-weight: 750;
 }
 
+.automation-news-priority {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.automation-news-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.automation-news-head span,
+.automation-news-head b {
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.automation-news-head b {
+  flex: 0 0 auto;
+}
+
+.automation-news-list {
+  display: grid;
+  gap: 6px;
+}
+
+.automation-news-list span {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 7px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.automation-news-list b {
+  display: block;
+  overflow: hidden;
+  color: #1d4ed8;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .automation-target-list {
   display: grid;
   gap: 8px;

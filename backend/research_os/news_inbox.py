@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from re import sub
 from typing import Protocol
+from urllib.parse import parse_qsl
+from urllib.parse import urlencode
+from urllib.parse import urlsplit
+from urllib.parse import urlunsplit
 
 
 class NewsInboxRuntime(Protocol):
@@ -322,6 +326,67 @@ def is_actionable_unpromoted_news(item: dict) -> bool:
     return bool(item.get("market_journal_candidate"))
 
 
+def _news_relevance_score(item: dict) -> float:
+    try:
+        return float(item.get("relevance_score") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def news_priority_sort_key(item: dict) -> tuple[float, float, str]:
+    target_bonus = 1.0 if isinstance(item.get("target_matches"), list) and item.get("target_matches") else 0.0
+    policy_bonus = 0.5 if item.get("is_policy_law") or item.get("scope") == "POLICY" else 0.0
+    return (target_bonus + policy_bonus, _news_relevance_score(item), str(item.get("created_at") or ""))
+
+
+def canonical_news_url(value: object) -> str:
+    source_url = str(value or "").strip()
+    if not source_url:
+        return ""
+    try:
+        parsed = urlsplit(source_url)
+    except ValueError:
+        return source_url
+    if not parsed.scheme or not parsed.netloc:
+        return source_url
+    query = dict(parse_qsl(parsed.query, keep_blank_values=False))
+    stable_params = [
+        (key, query[key])
+        for key in ["newsId", "nid", "articleId", "id"]
+        if query.get(key)
+    ]
+    normalized_query = urlencode(stable_params)
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, normalized_query, ""))
+
+
+def duplicate_priority_news_groups(priority_items: list[dict]) -> list[dict]:
+    groups: dict[str, list[dict]] = {}
+    for item in priority_items:
+        key = canonical_news_url(item.get("source_url"))
+        if not key:
+            continue
+        groups.setdefault(key, []).append(item)
+    duplicates: list[dict] = []
+    for key, rows in groups.items():
+        if len(rows) <= 1:
+            continue
+        titles: list[str] = []
+        for row in rows:
+            title = str(row.get("title") or "").strip()
+            if title and title not in titles:
+                titles.append(title)
+        duplicates.append(
+            {
+                "canonical_url": key,
+                "count": len(rows),
+                "titles": titles[:3],
+                "ids": [row.get("id") for row in rows if row.get("id")],
+            }
+        )
+    return sorted(duplicates, key=lambda group: (-int(group["count"]), str(group["canonical_url"])))
+
+
 def build_news_inbox_payload(runtime: NewsInboxRuntime, settings, limit: int = 30, filter_key: str = "all") -> dict:
     runtime_reader = getattr(runtime, "read_news_inbox", None)
     if callable(runtime_reader):
@@ -339,8 +404,15 @@ def build_news_inbox_payload(runtime: NewsInboxRuntime, settings, limit: int = 3
         reverse=True,
     )
     counts = news_filter_counts(runtime, items)
+    priority_items = sorted(
+        filter_news_inbox_items(runtime, items, "actionable"),
+        key=news_priority_sort_key,
+        reverse=True,
+    )
+    duplicate_groups = duplicate_priority_news_groups(priority_items)
     filtered_items = filter_news_inbox_items(runtime, items, filter_key)
     safe_filtered_items = [news_item_safe_view(item) for item in filtered_items]
+    safe_priority_items = [news_item_safe_view(item) for item in priority_items]
     return {
         "status": "success",
         "module": "news_inbox_list",
@@ -355,6 +427,10 @@ def build_news_inbox_payload(runtime: NewsInboxRuntime, settings, limit: int = 3
             and not bool(item.get("promoted") and item.get("promoted_storage"))
             and (item.get("capture_quality") or {}).get("status") not in {None, "정상"}
         ),
+        "priority_news_preview": safe_priority_items[: max(1, min(int(limit or 30), 30))],
+        "duplicate_priority_group_count": len(duplicate_groups),
+        "duplicate_priority_entry_count": sum(int(group["count"]) for group in duplicate_groups),
+        "duplicate_priority_groups": duplicate_groups,
         "filter": filter_key or "all",
         "filter_counts": counts,
         "filtered_count": len(filtered_items),

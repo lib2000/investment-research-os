@@ -10034,6 +10034,14 @@ class NewsInboxModuleTests(unittest.TestCase):
                     "promoted_storage": {"relative_path": "research_vault/MARKET/a.md"},
                     "capture_quality": {"status": "보강 필요"},
                 },
+                {
+                    "id": "n3",
+                    "created_at": "2026-06-14T08:00:00+09:00",
+                    "title": "URL only duplicate",
+                    "source_url": "https://example.com/a?page=2",
+                    "target_matches": [{"label": "AI"}],
+                    "relevance_score": 40,
+                },
             ],
         }
         runtime = SimpleNamespace(
@@ -10045,12 +10053,15 @@ class NewsInboxModuleTests(unittest.TestCase):
         result = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="needs_body")
         actionable = news_inbox.build_news_inbox_payload(runtime, SimpleNamespace(), limit=10, filter_key="actionable")
 
-        self.assertEqual(result["count"], 2)
-        self.assertEqual(result["actionable_unpromoted_count"], 1)
+        self.assertEqual(result["count"], 3)
+        self.assertEqual(result["actionable_unpromoted_count"], 2)
         self.assertEqual(result["filter_counts"]["needs_body"], 1)
         self.assertEqual(result["quality_issue_count"], 1)
         self.assertEqual([item["id"] for item in result["items"]], ["n1"])
-        self.assertEqual([item["id"] for item in actionable["items"]], ["n1"])
+        self.assertEqual([item["id"] for item in actionable["items"]], ["n3", "n1"])
+        self.assertEqual([item["id"] for item in actionable["priority_news_preview"]], ["n3", "n1"])
+        self.assertEqual(actionable["duplicate_priority_group_count"], 1)
+        self.assertEqual(actionable["duplicate_priority_groups"][0]["canonical_url"], "https://example.com/a")
 
 
 class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
@@ -10362,6 +10373,8 @@ class AutomationStatusModuleTests(unittest.TestCase):
                 "unpromoted_count": 115,
                 "actionable_unpromoted_count": 7,
                 "quality_issue_count": 0,
+                "priority_news_preview": [{"id": "n1", "title": "AI 정책"}],
+                "duplicate_priority_groups": [{"canonical_url": "https://example.com/a", "count": 2}],
             },
             build_external_source_schedule_status=lambda _settings: [],
             summarize_daily_recommendation_store=lambda _settings, limit=10: {"latest_recommendation_date": "2026-06-18"},
@@ -10381,6 +10394,9 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertEqual(digest["news_inbox_count"], 122)
         self.assertEqual(digest["news_unpromoted_count"], 115)
         self.assertEqual(digest["news_actionable_unpromoted_count"], 7)
+        self.assertEqual(digest["news_priority_preview"][0]["title"], "AI 정책")
+        self.assertEqual(digest["news_duplicate_priority_group_count"], 1)
+        self.assertEqual(digest["news_duplicate_priority_entry_count"], 2)
 
     def test_automation_digest_next_action_uses_dossier_duplicate_review_count(self):
         from research_os import automation_status
