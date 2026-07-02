@@ -9,6 +9,7 @@ from re import sub
 from typing import Any, Iterable
 
 from research_os.models import PortfolioHolding, SavedPortfolio
+from research_os.nps_data_provider import NpsOdcloudClient
 from research_os.portfolio_store import read_portfolio_store
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
@@ -164,10 +165,23 @@ def build_nps_portfolio_change_snapshot(
     portfolio_name: str = "__all__",
 ) -> dict:
     as_of_date = as_of if isinstance(as_of, date) else datetime.strptime(str(as_of), "%Y-%m-%d").date()
+    refresh_attempted = False
+    refresh_warnings: list[str] = []
+    if settings.nps_odcloud_api_key:
+        refresh_attempted = True
+        try:
+            client = NpsOdcloudClient(settings)
+            _, domestic_errors, _ = client.fetch_domestic_stock_rows()
+            _, large_errors, _ = client.fetch_large_holding_rows()
+            refresh_warnings.extend(domestic_errors or [])
+            refresh_warnings.extend(large_errors or [])
+        except Exception as exc:
+            refresh_warnings.append(f"국민연금 ODCLOUD 최신 호출 실패: {exc}")
     domestic_rows, large_rows, source_urls, cache_updated_at = _read_cache_records(settings)
     warnings: list[str] = []
     if not settings.nps_odcloud_api_key:
         warnings.append("NPS_ODCLOUD_API_KEY가 없어 외부 최신 호출 대신 기존 ODCLOUD 캐시를 분석했습니다.")
+    warnings.extend(refresh_warnings[:4])
     dated_events = [
         _event_payload(row)
         for row in large_rows
@@ -189,12 +203,19 @@ def build_nps_portfolio_change_snapshot(
         f"{as_of_date.isoformat()} 기준 국민연금 대량보유 캐시 {len(dated_events)}건 분석, "
         f"최신 기준일 {latest_event_date or '없음'}, 포트폴리오 매칭 {len(matches)}건"
     )
+    first_next_action = (
+        "공공데이터포털 API 호출은 성공했지만 원천 최신 기준일이 오래되었습니다. 국민연금/공시 포털의 최신 대량보유 공개 여부를 별도 확인하세요."
+        if refresh_attempted
+        else "NPS_ODCLOUD_API_KEY를 설정한 뒤 같은 기준일로 재수집해 캐시 최신성을 확인하세요."
+    )
     return {
         "status": status,
         "module": "nps_portfolio_change_snapshot",
         "as_of": as_of_date.isoformat(),
         "generated_at": current_storage_timestamp(),
         "portfolio_name": portfolio_label,
+        "refresh_attempted": refresh_attempted,
+        "refresh_status": "attempted" if refresh_attempted else "skipped_no_api_key",
         "cache_updated_at": cache_updated_at,
         "source_urls": source_urls,
         "domestic_stock_row_count": len(domestic_rows),
@@ -205,7 +226,7 @@ def build_nps_portfolio_change_snapshot(
         "portfolio_matches": matches[:20],
         "warnings": warnings,
         "next_actions": [
-            "NPS_ODCLOUD_API_KEY를 설정한 뒤 같은 기준일로 재수집해 캐시 최신성을 확인하세요.",
+            first_next_action,
             "포트폴리오 매칭 종목은 추가매수 전 국민연금 지분율 기준일과 최근 DART 대량보유 공시를 함께 확인하세요.",
             "캐시 최신 기준일이 요청 기준일보다 오래되면 투자 판단에는 보수적으로 참고 신호만 반영하세요.",
         ],

@@ -7,6 +7,11 @@ import json
 import sys
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional local dependency guard
+    load_dotenv = None
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
@@ -28,6 +33,8 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="전체 JSON 출력")
     args = parser.parse_args()
 
+    if load_dotenv:
+        load_dotenv(PROJECT_ROOT / "backend" / ".env", override=False)
     settings = Settings.from_env()
     snapshot = build_nps_portfolio_change_snapshot(
         settings,
