@@ -142,12 +142,16 @@ if ($dailyRecommendations) {
 }
 if ($researchAutomation) {
   $dashboardDigest = $researchAutomation.dashboard_digest
-  $nextActionCount = if ($researchAutomation.next_actions) { @($researchAutomation.next_actions).Count } else { 0 }
+  $nextActions = if ($researchAutomation.next_actions) { @($researchAutomation.next_actions) } else { @() }
   if ($dashboardDigest -and $dashboardDigest.next_actions) {
-    $nextActionCount = @($dashboardDigest.next_actions).Count
+    $nextActions = @($dashboardDigest.next_actions)
   }
+  $nextActionCount = $nextActions.Count
   Write-Host "자동화 상태: $($researchAutomation.status)"
   Write-Host "자동화 다음 조치: $nextActionCount"
+  foreach ($nextAction in ($nextActions | Select-Object -First 5)) {
+    Write-Host "자동화 조치: $nextAction"
+  }
   if ($dashboardDigest) {
     $priorityNewsCount = if ($dashboardDigest.news_priority_preview) { @($dashboardDigest.news_priority_preview).Count } else { 0 }
     Write-Host "우선 뉴스: $($priorityNewsCount)개, 중복 후보 $($dashboardDigest.news_duplicate_priority_group_count)묶음/$($dashboardDigest.news_duplicate_priority_entry_count)개"
