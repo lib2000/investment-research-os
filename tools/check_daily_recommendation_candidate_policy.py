@@ -131,7 +131,7 @@ def build_candidate_payload(root: Path, *, candidate_limit: int) -> dict[str, An
     import research_os_main  # noqa: PLC0415
     from research_os.settings import Settings  # noqa: PLC0415
 
-    return research_os_main.build_daily_recommendation_candidates(Settings(), limit=candidate_limit)
+    return research_os_main.build_daily_recommendation_candidates(Settings.from_env(), limit=candidate_limit)
 
 
 def main() -> int:
