@@ -424,7 +424,8 @@ if ($publicIrSecStatus) {
   foreach ($entry in $needsBodyEntries | Select-Object -First 3) {
     $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }
     $entryPath = if ($entry.relative_path) { $entry.relative_path } elseif ($entry.source_url) { $entry.source_url } else { "경로 미확인" }
-    Write-Host "공개 IR/SEC 보강 대상: $($entry.ticker) | $entryTitle | $entryPath"
+    $followupLabel = if ($entry.body_followup -and $entry.body_followup.label) { " | $($entry.body_followup.label)" } else { "" }
+    Write-Host "공개 IR/SEC 보강 대상: $($entry.ticker) | $entryTitle | $entryPath$followupLabel"
   }
   if ($publicIrSecStatus.status -and $publicIrSecStatus.status -ne "success") {
     Add-StatusFailure "public IR/SEC 상태가 success가 아닙니다: $($publicIrSecStatus.status)"

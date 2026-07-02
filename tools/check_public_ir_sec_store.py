@@ -102,6 +102,29 @@ def is_recommendation_usable(entry: dict, quality: dict) -> bool:
     )
 
 
+def body_followup_label(entry: dict, quality: dict) -> str:
+    followup = entry.get("body_followup") if isinstance(entry.get("body_followup"), dict) else {}
+    if followup.get("label"):
+        return str(followup.get("label"))
+    source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
+    text = " ".join(
+        str(value or "")
+        for value in [
+            entry.get("title"),
+            entry.get("filing_form"),
+            source.get("original_text"),
+            source.get("text"),
+        ]
+    ).upper()
+    if "6-K" in text and ("EXHIBIT" in text or "99.1" in text):
+        return "6-K 첨부 Exhibit 추적"
+    if quality.get("url_text_unavailable"):
+        return "URL 원문 제한"
+    if int(quality.get("body_chars") or entry.get("body_chars") or 0) < 500:
+        return "본문 짧음"
+    return "보강 확인"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="공개 IR/SEC 저장 품질을 백엔드 없이 점검합니다.")
     parser.add_argument("--require-any", action="store_true", help="최소 1건 이상 저장되어 있어야 함")
@@ -187,9 +210,10 @@ def main() -> int:
         print("본문 보강 필요 항목:")
         for entry in needs_body_entries[:10]:
             quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+            followup = body_followup_label(entry, quality)
             print(
                 f"- {entry.get('ticker')} {entry.get('date')} {entry.get('title') or entry.get('file_name')} "
-                f"| {quality.get('status') or entry.get('capture_quality_status')} | {entry.get('relative_path')}"
+                f"| {quality.get('status') or entry.get('capture_quality_status')} | {followup} | {entry.get('relative_path')}"
             )
     for entry in entries[:10]:
         quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}

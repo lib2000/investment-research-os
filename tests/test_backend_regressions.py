@@ -374,6 +374,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("needs_body_duplicate_title_groups", script_source)
         self.assertIn("$group.file_names", script_source)
         self.assertIn("files ", script_source)
+        self.assertIn("body_followup", script_source)
+        self.assertIn("공개 IR/SEC 보강 대상", script_source)
         self.assertIn("ForEach-Object", script_source)
         self.assertIn("본문 보강 플래그", script_source)
         self.assertIn("공개 IR/SEC 동일 제목", script_source)
@@ -4052,6 +4054,10 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                 "ticker": "OTLY",
                 "source_url": "https://www.sec.gov/a",
                 "published_at": "2026-05-20",
+                "filing_form": "6-K",
+                "source_url_processing": {
+                    "original_text": "EXHIBIT INDEX 99.1 Press release of Oatly Group AB",
+                },
                 "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
             },
             {
@@ -4095,6 +4101,8 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(status["entry_count"], 4)
         self.assertEqual(status["needs_body_copy_count"], 3)
         self.assertEqual(status["needs_body_copy_entries"][0]["file_name"], "otly-6-k.md")
+        self.assertEqual(status["needs_body_copy_entries"][0]["body_followup"]["reason"], "sec_exhibit_followup")
+        self.assertEqual(status["needs_body_copy_entries"][0]["body_followup"]["label"], "6-K 첨부 Exhibit 추적")
         self.assertEqual(status["needs_body_duplicate_title_group_count"], 1)
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["ticker"], "OTLY")
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["count"], 2)

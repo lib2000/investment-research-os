@@ -355,6 +355,50 @@ def _needs_body_duplicate_title_groups(entries: list[dict[str, Any]], limit: int
     return groups[: max(1, min(limit, 50))]
 
 
+def _body_followup_reason(entry: dict[str, Any]) -> dict[str, Any]:
+    quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+    source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
+    text = " ".join(
+        str(value or "")
+        for value in [
+            entry.get("title"),
+            entry.get("filing_form"),
+            source.get("original_text"),
+            source.get("text"),
+        ]
+    )
+    normalized = text.upper()
+    if "6-K" in normalized and ("EXHIBIT" in normalized or "99.1" in normalized):
+        return {
+            "reason": "sec_exhibit_followup",
+            "label": "6-K 첨부 Exhibit 추적",
+            "recommended_action": "6-K 본문은 wrapper가 짧습니다. 참조된 Exhibit 99.1/연간보고서/보도자료 원문을 별도 수집해 보강하세요.",
+        }
+    if quality.get("url_text_unavailable"):
+        return {
+            "reason": "url_text_unavailable",
+            "label": "URL 원문 제한",
+            "recommended_action": "원문 링크 확인 또는 파일/본문 복사로 보강하세요.",
+        }
+    if int(quality.get("body_chars") or entry.get("body_chars") or 0) < 500:
+        return {
+            "reason": "short_body",
+            "label": "본문 짧음",
+            "recommended_action": "본문이 짧습니다. 원문 PDF/본문 복사로 보강하면 분석 품질이 올라갑니다.",
+        }
+    return {
+        "reason": "needs_review",
+        "label": "보강 확인",
+        "recommended_action": str(quality.get("recommended_action") or "원문 확인 후 보강 여부를 판단하세요."),
+    }
+
+
+def _needs_body_entry_preview(entry: dict[str, Any]) -> dict[str, Any]:
+    preview = dict(entry)
+    preview["body_followup"] = _body_followup_reason(entry)
+    return preview
+
+
 def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, Any]:
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     entries = [
@@ -366,7 +410,10 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
     entries.sort(key=lambda item: (str(item.get("date") or ""), str(item.get("file_name") or "")), reverse=True)
     recent = entries[: max(1, min(limit, 50))]
     needs_body = [entry for entry in entries if (entry.get("capture_quality") or {}).get("needs_body_copy")]
-    needs_body_preview = needs_body[: max(1, min(limit, 50))]
+    needs_body_preview = [
+        _needs_body_entry_preview(entry)
+        for entry in needs_body[: max(1, min(limit, 50))]
+    ]
     needs_body_duplicate_title_groups = _needs_body_duplicate_title_groups(needs_body, limit=limit)
     next_actions = [
         "공개 IR/SEC URL을 입력해 보유/관심 종목과 연결되는 자료를 수집하세요.",
