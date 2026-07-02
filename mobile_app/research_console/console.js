@@ -6907,6 +6907,7 @@ function renderAutomationDigestCard(dashboard) {
   ];
   const targetRows = renderAutomationDigestTargetRows(digest.priority_targets || []);
   const nextActions = Array.isArray(digest.next_actions) ? digest.next_actions.filter(Boolean).slice(0, 3) : [];
+  const npsRebalanceRows = renderNpsDigestRebalanceRows(digest.nps_domestic_equity_rebalance_plan);
   const action = nextActions[0] || "오늘 업데이트를 실행해 자동 수집, 중복 제거, RAG 색인, Dossier 합성을 연결하세요.";
   const runLabel = digest.daily_brief_date ? "업데이트 갱신" : "오늘 업데이트";
   return `
@@ -6945,12 +6946,55 @@ function renderAutomationDigestCard(dashboard) {
               .join("")
           : `<span>${escapeHtml(compactOutputText(action, 120))}</span>`}
       </div>
+      ${npsRebalanceRows}
       ${targetRows}
       <div class="dashboard-card-actions">
         <button data-workflow-action="today-research-update" type="button">${escapeHtml(runLabel)}</button>
         <button data-workflow-action="interest-automation" class="secondary" type="button">수집 보드</button>
       </div>
     </article>
+  `;
+}
+
+function renderNpsDigestRebalanceRows(plan) {
+  if (!plan || !["needs_reduction", "needs_increase"].includes(plan.status)) {
+    return "";
+  }
+  const candidates = plan.candidates || {};
+  const reduceRows = Array.isArray(candidates.reduce) ? candidates.reduce : [];
+  const reviewRows = Array.isArray(candidates.review) ? candidates.review : [];
+  const rows = [...reduceRows.slice(0, 3), ...reviewRows.slice(0, 1)];
+  if (!rows.length) {
+    return "";
+  }
+  const reductionText = plan.reduction_needed_value
+    ? formatMoney(plan.reduction_needed_value, "KRW", "0원")
+    : plan.increase_needed_value
+      ? formatMoney(plan.increase_needed_value, "KRW", "0원")
+      : "금액 미확인";
+  const scenario = Array.isArray(plan.scenarios) && plan.scenarios.length ? plan.scenarios[0] : null;
+  const scenarioText = scenario
+    ? `${scenario.title || "시나리오"} ${formatMoney(scenario.suggested_reduction_value || 0, "KRW", "0원")}`
+    : "시나리오 없음";
+  return `
+    <div class="automation-nps-rebalance">
+      <div class="automation-nps-head">
+        <span>국민연금 14% 후보</span>
+        <b>${escapeHtml(reductionText)}</b>
+      </div>
+      <small>${escapeHtml(compactOutputText(plan.summary || scenarioText, 120))}</small>
+      <div class="automation-nps-candidates">
+        ${rows
+          .map((item) => {
+            const label = item.holding_name || item.ticker || "종목 미확인";
+            const amount = formatMoney(item.market_value || item.current_value || 0, "KRW", "0원");
+            const bucket = item.bucket || (reduceRows.includes(item) ? "축소 후보" : "추가 검토");
+            return `<span><b>${escapeHtml(item.ticker || "-")}</b>${escapeHtml(compactOutputText(label, 28))}<em>${escapeHtml(bucket)} · ${escapeHtml(amount)}</em></span>`;
+          })
+          .join("")}
+      </div>
+      <small>${escapeHtml(scenarioText)}</small>
+    </div>
   `;
 }
 
@@ -15605,6 +15649,15 @@ function formatKoreanResult(value) {
     const refreshQueue = value.dossier_refresh_queue || digest.last_deduped_dossier_refresh || {};
     const dailyRecommendations = digest.daily_recommendations || {};
     const dailyState = dailyRecommendations.state || {};
+    const npsPlan = digest.nps_domestic_equity_rebalance_plan || {};
+    const npsCandidates = npsPlan.candidates || {};
+    const npsCandidateLines = [
+      ...(Array.isArray(npsCandidates.reduce) ? npsCandidates.reduce.slice(0, 3) : []),
+      ...(Array.isArray(npsCandidates.review) ? npsCandidates.review.slice(0, 1) : []),
+    ].map((item) => {
+      const amount = formatMoney(item.market_value || item.current_value || 0, "KRW", "0원");
+      return `${item.ticker || "-"} ${item.holding_name || "종목 미확인"} · ${item.bucket || "후보"} · ${amount}`;
+    });
     const sourceSchedule = Array.isArray(value.source_schedule)
       ? value.source_schedule
       : Array.isArray(digest.source_schedule)
@@ -15663,6 +15716,10 @@ function formatKoreanResult(value) {
       )}개 저장 · ${dailyRecommendations.due ? "오늘 실행 필요" : "오늘 상태 확인"}${
         dailyState.last_tracking_at ? ` · 추적 ${formatDateTime(dailyState.last_tracking_at)}` : ""
       }`,
+      npsPlan.summary
+        ? `- 국민연금 14% 리밸런싱: ${npsPlan.summary}`
+        : `- 국민연금 14% 리밸런싱: 현재 추가 후보 없음`,
+      ...formatBulletList(npsCandidateLines, (item) => item, "국민연금 리밸런싱 후보가 없습니다."),
       ``,
       `외부 소스 자동 점검`,
       ...formatBulletList(sourceScheduleLines, (item) => item, "외부 소스 자동 점검 상태가 없습니다."),
