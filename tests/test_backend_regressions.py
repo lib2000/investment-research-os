@@ -1344,18 +1344,19 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
         tool = load_firecrawl_ir_check_tool()
 
-        missing = tool._rpc_submit_readiness_errors(
+        missing = tool._rpc_preflight_readiness_errors(
             SimpleNamespace(
+                firecrawl_api_key="",
                 firecrawl_ir_enabled=False,
                 firecrawl_ir_dry_run=True,
                 market_signal_graph_enabled=False,
                 market_signal_graph_rpc_url="",
                 market_signal_graph_service_role_key="",
-            ),
-            purpose="--require-rpc-ready",
+            )
         )
 
         self.assertTrue(all("--require-rpc-ready" in error for error in missing))
+        self.assertTrue(any("FIRECRAWL_API_KEY" in error for error in missing))
 
     def test_firecrawl_ir_check_tool_enforces_pinned_mcp_version(self):
         from types import SimpleNamespace
@@ -1393,6 +1394,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
                 {
                     "FIRECRAWL_IR_ENABLED": "false",
                     "FIRECRAWL_IR_DRY_RUN": "true",
+                    "FIRECRAWL_API_KEY": "",
                     "FIRECRAWL_IR_MCP_VERSION": "3.17.0",
                     "MARKET_SIGNAL_GRAPH_ENABLED": "false",
                     "MARKET_SIGNAL_GRAPH_RPC_URL": "",
@@ -1428,6 +1430,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertFalse(saved["rpc_submit_ready"])
         self.assertTrue(saved["rpc_readiness_errors"])
         self.assertTrue(saved["rpc"]["readiness_errors"])
+        self.assertIn("FIRECRAWL_API_KEY", " ".join(saved["rpc_preflight_readiness_errors"]))
 
     def test_firecrawl_ir_check_tool_writes_output_json(self):
         tool = load_firecrawl_ir_check_tool()

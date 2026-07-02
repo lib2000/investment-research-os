@@ -170,6 +170,14 @@ def _rpc_submit_readiness_errors(settings, *, purpose: str = "--submit") -> list
     return errors
 
 
+def _rpc_preflight_readiness_errors(settings) -> list[str]:
+    errors: list[str] = []
+    if not getattr(settings, "firecrawl_api_key", ""):
+        errors.append("FIRECRAWL_API_KEY must be configured for --require-rpc-ready")
+    errors.extend(_rpc_submit_readiness_errors(settings, purpose="--require-rpc-ready"))
+    return errors
+
+
 def _mcp_version_errors(settings) -> list[str]:
     configured = str(getattr(settings, "firecrawl_ir_mcp_version", "") or "").strip()
     if configured == EXPECTED_FIRECRAWL_MCP_VERSION:
@@ -296,7 +304,7 @@ def main() -> int:
         hosted_scrape_errors.append("FIRECRAWL_API_KEY must be configured for --hosted-scrape-dry-run")
     submit_readiness_errors = _rpc_submit_readiness_errors(settings) if args.submit else []
     rpc_ready_errors = (
-        _rpc_submit_readiness_errors(settings, purpose="--require-rpc-ready")
+        _rpc_preflight_readiness_errors(settings)
         if args.require_rpc_ready and not args.submit
         else []
     )
@@ -320,6 +328,7 @@ def main() -> int:
         "firecrawl_base_url": str(getattr(settings, "firecrawl_base_url", "") or ""),
         "rpc_submit_ready": not (mcp_version_errors or rpc_readiness_errors),
         "rpc_readiness_errors": rpc_readiness_errors,
+        "rpc_preflight_readiness_errors": rpc_ready_errors,
         "require_env_registry": args.require_env_registry,
         "require_rpc_ready": args.require_rpc_ready,
         "env_file_loaded": bool(env_file_result),
@@ -396,6 +405,10 @@ def main() -> int:
         if rpc_readiness_errors:
             print(f"- rpc_readiness_errors: {len(rpc_readiness_errors)}")
             for error in rpc_readiness_errors:
+                print(f"  - {error}")
+        if rpc_ready_errors:
+            print(f"- rpc_preflight_readiness_errors: {len(rpc_ready_errors)}")
+            for error in rpc_ready_errors:
                 print(f"  - {error}")
         print(f"- require_env_registry: {args.require_env_registry}")
         print(f"- require_rpc_ready: {args.require_rpc_ready}")
