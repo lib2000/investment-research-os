@@ -78,6 +78,18 @@ def load_firecrawl_ir_check_tool():
     return module
 
 
+def load_public_ir_sec_store_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_public_ir_sec_store.py"
+    spec = spec_from_file_location("check_public_ir_sec_store", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_offline_readiness_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -348,6 +360,25 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertNotIn("interestCleanupError", result)
         self.assertNotIn("newsCleanupError", result)
         self.assertNotIn("researchArchiveError", result)
+
+
+class PublicIrSecStoreCheckToolTests(unittest.TestCase):
+    def test_load_manifest_retries_during_transient_empty_write(self):
+        tool = load_public_ir_sec_store_check_tool()
+
+        with TemporaryDirectory() as tmp:
+            vault_dir = Path(tmp)
+            manifest_path = vault_dir / "manifest.json"
+            manifest_path.write_text("[]", encoding="utf-8")
+            reads = iter(["", '[{"scope": "public_ir_sec", "title": "Oatly 6-K"}]'])
+
+            with patch.object(Path, "read_text", side_effect=lambda *_, **__: next(reads)), patch.object(
+                tool.time, "sleep", return_value=None
+            ) as sleep:
+                entries = tool.load_manifest(vault_dir, retries=2, retry_delay_seconds=0)
+
+        self.assertEqual(entries[0]["title"], "Oatly 6-K")
+        sleep.assert_called_once()
 
 
 class OfflineReadinessToolTests(unittest.TestCase):

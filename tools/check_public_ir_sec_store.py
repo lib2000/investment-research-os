@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -16,11 +17,18 @@ def project_root(start: Path) -> Path:
     raise SystemExit("InvestmentJournalApp 프로젝트 루트를 찾지 못했습니다.")
 
 
-def load_manifest(vault_dir: Path) -> list[dict]:
+def load_manifest(vault_dir: Path, retries: int = 3, retry_delay_seconds: float = 0.2) -> list[dict]:
     path = vault_dir / "manifest.json"
     if not path.exists():
         raise SystemExit(f"manifest 파일을 찾지 못했습니다: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    for attempt in range(max(1, retries)):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            break
+        except json.JSONDecodeError as exc:
+            if attempt + 1 >= max(1, retries):
+                raise SystemExit(f"manifest JSON 파싱 실패: {exc}") from exc
+            time.sleep(max(0.0, retry_delay_seconds))
     if not isinstance(payload, list):
         raise SystemExit("manifest 최상위 구조가 배열이 아닙니다.")
     return [entry for entry in payload if isinstance(entry, dict)]
