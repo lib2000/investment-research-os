@@ -237,6 +237,13 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("$clickSmokeArgs += \"--only-public-ir-sec\"", verify_source)
         self.assertIn("$clickSmokeArgs += @(\"--progress-heartbeat-seconds\", \"$ClickSmokeProgressHeartbeatSeconds\")", verify_source)
 
+    def test_verify_wrapper_exposes_investment_insight_hub_check(self):
+        verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("[switch]$CheckInvestmentInsightHub", verify_source)
+        self.assertIn("tools\\check_investment_insight_hub.py", verify_source)
+        self.assertIn("통합 투자 인사이트 허브 오프라인 확인", verify_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 

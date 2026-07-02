@@ -11,6 +11,7 @@
   [switch]$CheckSourceAutomationStore,
   [switch]$CheckDailyRecommendations,
   [switch]$CheckDailyRecommendationStore,
+  [switch]$CheckInvestmentInsightHub,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckPortfolioStore,
   [switch]$CheckNpsDomesticEquityAllocation,
@@ -183,6 +184,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     tools\smoke_research_console_clicks.py `
     tools\check_daily_recommendations_store.py `
     tools\check_daily_recommendation_candidate_policy.py `
+    tools\check_investment_insight_hub.py `
     tools\check_research_source_store.py `
     tools\check_investment_calendar_store.py `
     tools\check_portfolio_store.py `
@@ -394,6 +396,12 @@ if ($CheckDailyRecommendationStore) {
   }
   Invoke-VerifyStep "일일 추천 후보 정책 오프라인 확인" {
     python tools\check_daily_recommendation_candidate_policy.py --require-hold-warning --expected-held-ticker 112610
+  }
+}
+
+if ($CheckInvestmentInsightHub) {
+  Invoke-VerifyStep "통합 투자 인사이트 허브 오프라인 확인" {
+    python tools\check_investment_insight_hub.py --strict
   }
 }
 
