@@ -335,7 +335,11 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("국민연금 축소 후보", script_source)
         self.assertIn("/api/v1/public-ir-sec/status", script_source)
         self.assertIn("needs_body_copy_entries", script_source)
+        self.assertIn("needs_body_duplicate_title_group_count", script_source)
+        self.assertIn("needs_body_duplicate_title_groups", script_source)
+        self.assertIn("ForEach-Object", script_source)
         self.assertIn("본문 보강 플래그", script_source)
+        self.assertIn("공개 IR/SEC 동일 제목", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
 
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
@@ -3947,6 +3951,18 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                 "date": "2026-07-02",
                 "file_name": "otly-6-k.md",
                 "title": "Oatly Group 6-K SEC filing",
+                "ticker": "OTLY",
+                "source_url": "https://www.sec.gov/a",
+                "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
+            },
+            {
+                "scope": "public_ir_sec",
+                "type": "public-ir-sec",
+                "date": "2026-07-02",
+                "file_name": "otly-6-k-002.md",
+                "title": "Oatly Group 6-K SEC filing",
+                "ticker": "OTLY",
+                "source_url": "https://www.sec.gov/b",
                 "capture_quality": {"status": "보강 필요", "needs_body_copy": True},
             },
             {
@@ -3965,9 +3981,16 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         ):
             status = public_ir_sec_status_payload(settings)
 
-        self.assertEqual(status["entry_count"], 2)
-        self.assertEqual(status["needs_body_copy_count"], 1)
+        self.assertEqual(status["entry_count"], 3)
+        self.assertEqual(status["needs_body_copy_count"], 2)
         self.assertEqual(status["needs_body_copy_entries"][0]["file_name"], "otly-6-k.md")
+        self.assertEqual(status["needs_body_duplicate_title_group_count"], 1)
+        self.assertEqual(status["needs_body_duplicate_title_groups"][0]["ticker"], "OTLY")
+        self.assertEqual(status["needs_body_duplicate_title_groups"][0]["count"], 2)
+        self.assertEqual(
+            status["needs_body_duplicate_title_groups"][0]["source_urls"],
+            ["https://www.sec.gov/a", "https://www.sec.gov/b"],
+        )
         self.assertEqual(status["recent_entries"][0]["file_name"], "otly-6-k.md")
 
     def test_company_ir_parser_extracts_joby_press_release_links(self):

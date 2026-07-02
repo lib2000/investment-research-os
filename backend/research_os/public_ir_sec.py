@@ -319,6 +319,40 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
     return payload
 
 
+def _needs_body_duplicate_title_groups(entries: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for entry in entries:
+        ticker = str(entry.get("ticker") or "").upper()
+        title = str(entry.get("title") or entry.get("file_name") or "").strip()
+        if not title:
+            continue
+        grouped.setdefault((ticker, title), []).append(entry)
+
+    groups: list[dict[str, Any]] = []
+    for (ticker, title), group_entries in grouped.items():
+        if len(group_entries) < 2:
+            continue
+        groups.append(
+            {
+                "ticker": ticker,
+                "title": title,
+                "count": len(group_entries),
+                "source_urls": [
+                    str(item.get("source_url") or item.get("final_url") or "")
+                    for item in group_entries[: max(1, min(limit, 50))]
+                    if item.get("source_url") or item.get("final_url")
+                ],
+                "file_names": [
+                    str(item.get("file_name") or "")
+                    for item in group_entries[: max(1, min(limit, 50))]
+                    if item.get("file_name")
+                ],
+            }
+        )
+    groups.sort(key=lambda item: (-int(item["count"]), str(item["ticker"]), str(item["title"])))
+    return groups[: max(1, min(limit, 50))]
+
+
 def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, Any]:
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     entries = [
@@ -331,6 +365,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
     recent = entries[: max(1, min(limit, 50))]
     needs_body = [entry for entry in entries if (entry.get("capture_quality") or {}).get("needs_body_copy")]
     needs_body_preview = needs_body[: max(1, min(limit, 50))]
+    needs_body_duplicate_title_groups = _needs_body_duplicate_title_groups(needs_body, limit=limit)
     next_actions = [
         "공개 IR/SEC URL을 입력해 보유/관심 종목과 연결되는 자료를 수집하세요.",
         "URL-only 자료는 원문 링크 확인 또는 파일/본문 복사로 보강하세요.",
@@ -348,6 +383,8 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "recent_count": len(recent),
         "needs_body_copy_count": len(needs_body),
         "needs_body_copy_entries": needs_body_preview,
+        "needs_body_duplicate_title_group_count": len(needs_body_duplicate_title_groups),
+        "needs_body_duplicate_title_groups": needs_body_duplicate_title_groups,
         "policy": "공개 IR/SEC 자료만 수집하고 제한 자료는 URL/메타데이터 중심으로 보관합니다.",
         "firecrawl_ir": build_firecrawl_ir_readiness_status(settings),
         "empty_state": empty_state,

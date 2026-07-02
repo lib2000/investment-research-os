@@ -230,7 +230,21 @@ if ($researchAutomation) {
 }
 if ($publicIrSecStatus) {
   $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }
-  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건"
+  $needsBodyDuplicateTitleGroups = if ($publicIrSecStatus.needs_body_duplicate_title_groups) {
+    @($publicIrSecStatus.needs_body_duplicate_title_groups | ForEach-Object { $_ })
+  } else {
+    @()
+  }
+  $needsBodyDuplicateTitleGroupCount = if ($publicIrSecStatus.needs_body_duplicate_title_group_count) {
+    $publicIrSecStatus.needs_body_duplicate_title_group_count
+  } else {
+    0
+  }
+  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건, 동일 제목 그룹 $($needsBodyDuplicateTitleGroupCount)개"
+  foreach ($group in $needsBodyDuplicateTitleGroups | Select-Object -First 3) {
+    $groupTitle = Limit-StatusText -Text $group.title -MaxLength 80
+    Write-Host "공개 IR/SEC 동일 제목: $($group.ticker) | $($group.count)건 | $groupTitle"
+  }
   foreach ($entry in $needsBodyEntries | Select-Object -First 3) {
     $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }
     $entryPath = if ($entry.relative_path) { $entry.relative_path } elseif ($entry.source_url) { $entry.source_url } else { "경로 미확인" }
