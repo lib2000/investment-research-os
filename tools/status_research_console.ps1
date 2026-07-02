@@ -167,6 +167,12 @@ $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html"
 $marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")
 $telegramUsMarketJournalState = Read-OptionalJsonFile -Name "telegram US market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_market_close_journal_state.json")
 $storageDuplicateReview = Read-OptionalJsonFile -Name "storage duplicate review" -Path (Join-Path $ProjectRootPath "research_vault\_system\storage_duplicate_review.json")
+$dailyCandidatePolicyPreviewPath = Join-Path $ProjectRootPath "tmp\daily_recommendation_candidate_policy_preview.json"
+$dailyCandidatePolicyPreview = if (Test-Path -LiteralPath $dailyCandidatePolicyPreviewPath) {
+  Read-OptionalJsonFile -Name "daily recommendation candidate policy preview" -Path $dailyCandidatePolicyPreviewPath
+} else {
+  $null
+}
 
 if ($root -and $root.message) {
   Write-Host "백엔드 메시지: $($root.message)"
@@ -223,6 +229,27 @@ if ($dailyRecommendations) {
         $topLabels += "$($record.rank)위 $companyName($($record.ticker), $($record.score)점)"
       }
       Write-Host "오늘 추천 $($marketLabel) 1~3위: $($topLabels -join ' / ')"
+    }
+  }
+  if ($dailyCandidatePolicyPreview) {
+    $previewMismatches = if ($dailyCandidatePolicyPreview.stored_preview_mismatches) {
+      @($dailyCandidatePolicyPreview.stored_preview_mismatches | ForEach-Object { $_ })
+    } else {
+      @()
+    }
+    if ($previewMismatches.Count -gt 0) {
+      $previewMismatchLabels = @()
+      foreach ($item in ($previewMismatches | Select-Object -First 6)) {
+        $storedTicker = if ($item.stored_ticker) { $item.stored_ticker } else { "-" }
+        $previewTicker = if ($item.preview_ticker) { $item.preview_ticker } else { "-" }
+        $previewMismatchLabels += "$($item.market) $($item.rank)위 저장 $storedTicker / 재계산 $previewTicker"
+      }
+      Write-Host "추천 저장/재계산 차이: $($previewMismatchLabels -join ', ')"
+    } else {
+      Write-Host "추천 저장/재계산 차이: 없음"
+    }
+    if ($dailyCandidatePolicyPreview.status -and $dailyCandidatePolicyPreview.status -ne "success") {
+      Add-StatusFailure "추천 후보 정책 프리뷰 상태가 success가 아닙니다: $($dailyCandidatePolicyPreview.status)"
     }
   }
 }
