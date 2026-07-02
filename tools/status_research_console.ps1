@@ -166,6 +166,7 @@ $publicIrSecStatus = Invoke-JsonStatus -Name "public IR/SEC status" -Path "/api/
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 $marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")
 $telegramUsMarketJournalState = Read-OptionalJsonFile -Name "telegram US market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_market_close_journal_state.json")
+$storageDuplicateReview = Read-OptionalJsonFile -Name "storage duplicate review" -Path (Join-Path $ProjectRootPath "research_vault\_system\storage_duplicate_review.json")
 
 if ($root -and $root.message) {
   Write-Host "백엔드 메시지: $($root.message)"
@@ -186,6 +187,21 @@ if ($storageQuality) {
   Write-Host "저장 데이터 본문 누락: $($storageQuality.body_missing_count)"
   Write-Host "저장 데이터 OCR 필요: $($storageQuality.ocr_needed_count)"
   Write-Host "보관 처리 건수: $($storageQuality.archived_count)"
+}
+if ($storageDuplicateReview) {
+  Write-Host "저장 중복 리뷰: $($storageDuplicateReview.status), 그룹 $($storageDuplicateReview.duplicate_group_count)개, 중복 항목 $($storageDuplicateReview.duplicate_entry_count)개"
+  $duplicateGroups = if ($storageDuplicateReview.groups) { @($storageDuplicateReview.groups | ForEach-Object { $_ }) } else { @() }
+  foreach ($group in $duplicateGroups | Select-Object -First 1) {
+    $representative = $group.representative
+    $firstDuplicate = @($group.duplicates | ForEach-Object { $_ } | Select-Object -First 1)
+    if ($representative -and $firstDuplicate) {
+      $similarity = if ($firstDuplicate.similarity) { "{0:P0}" -f [double]$firstDuplicate.similarity } else { "유사도 미확인" }
+      Write-Host "저장 중복 대표 후보: $($group.ticker) | 대표 $($representative.file_name) | 후보 $($firstDuplicate.file_name) | $similarity"
+    }
+  }
+  if ($storageDuplicateReview.status -and $storageDuplicateReview.status -ne "success") {
+    Add-StatusFailure "저장 중복 리뷰 상태가 success가 아닙니다: $($storageDuplicateReview.status)"
+  }
 }
 if ($dailyRecommendations) {
   Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
