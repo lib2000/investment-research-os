@@ -357,6 +357,15 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("공개 IR/SEC 동일 제목", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
 
+    def test_enter_research_os_script_prints_recovery_commands(self):
+        script_source = (PROJECT_ROOT / "scripts" / "enter-investment-research-os.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("restart-research-backend.ps1 -Port 8001", script_source)
+        self.assertIn("status_research_console.ps1 -Strict", script_source)
+        self.assertIn("http://127.0.0.1:8001/console/index.html", script_source)
+
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
         verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
 
