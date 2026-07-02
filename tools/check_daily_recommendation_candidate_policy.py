@@ -154,6 +154,7 @@ def main() -> int:
     )
     result = {
         "status": "failure" if failures else "success",
+        "scope_note": "runtime_candidate_preview_only_no_store_write",
         "failures": failures,
         **details,
     }
@@ -161,6 +162,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print("추천 후보 정책 가드:", "실패" if failures else "정상")
+        print("범위: 저장된 최신 추천을 변경하지 않고 현재 런타임 후보 생성 정책만 재계산합니다.")
         for candidate in details["top_candidates"]:
             marker = " | 보류대상" if candidate["review_hold"] else " | 약세추적" if candidate["soft_tracking_hold"] else ""
             tracking_note = ""

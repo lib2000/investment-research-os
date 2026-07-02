@@ -404,6 +404,23 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertTrue(details["top_candidates"][0]["soft_tracking_hold"])
 
+    def test_candidate_policy_cli_result_documents_runtime_preview_scope(self):
+        from tools import check_daily_recommendation_candidate_policy as policy_check
+
+        failures, details = policy_check.validate_candidate_policy(
+            {"candidates": [{"rank": 1, "ticker": "OK", "market": "KR", "score": 91}], "warnings": []},
+            top_limit=3,
+        )
+        result = {
+            "status": "failure" if failures else "success",
+            "scope_note": "runtime_candidate_preview_only_no_store_write",
+            "failures": failures,
+            **details,
+        }
+
+        self.assertEqual(result["scope_note"], "runtime_candidate_preview_only_no_store_write")
+        self.assertEqual(result["status"], "success")
+
     def test_saved_portfolio_price_lookup_uses_latest_checked_price(self):
         lookup = saved_portfolio_price_lookup(
             {
