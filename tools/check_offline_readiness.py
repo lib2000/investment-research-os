@@ -58,7 +58,7 @@ CHECKS = [
             "168",
         ],
     ),
-    ("국민연금 국내주식 14%", ["tools/check_nps_domestic_equity_allocation.py"]),
+    ("국민연금 국내주식 14%", ["tools/check_nps_domestic_equity_allocation.py", "--rebalance-plan"]),
     ("투자 캘린더/실적 일정", ["tools/check_investment_calendar_store.py", "--strict"]),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
     ("매크로/지역 소스 연결 신호", ["tools/check_macro_source_signal_linkage.py", "--strict"]),

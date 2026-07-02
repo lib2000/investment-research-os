@@ -364,6 +364,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
 
+    def test_offline_readiness_prints_nps_rebalance_plan(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("국민연금 국내주식 14%", checks)
+        self.assertEqual(
+            checks["국민연금 국내주식 14%"],
+            ["tools/check_nps_domestic_equity_allocation.py", "--rebalance-plan"],
+        )
+
     def test_offline_readiness_checks_news_inbox_priority_queue(self):
         tool = load_offline_readiness_tool()
 
