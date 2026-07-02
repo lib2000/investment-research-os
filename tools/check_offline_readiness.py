@@ -68,6 +68,7 @@ CHECKS = [
     ("통합 투자 인사이트 허브", ["tools/check_investment_insight_hub.py", "--strict"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
+    ("Firecrawl Monitor 변화 감지 payload", ["tools/check_firecrawl_monitor_collector.py"]),
     (
         "Firecrawl IR registry 샘플 payload",
         [

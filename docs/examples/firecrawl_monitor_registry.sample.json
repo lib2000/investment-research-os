@@ -1,0 +1,41 @@
+{
+  "monitors": [
+    {
+      "name": "Policy and market event monitor",
+      "schedule": {
+        "text": "daily at 8am",
+        "timezone": "Asia/Seoul"
+      },
+      "goal": "Notify when a policy, regulation, court, filing, or market event page changes in a way that may affect portfolio risk or investment decisions.",
+      "judgeEnabled": true,
+      "retentionDays": 30,
+      "targets": [
+        {
+          "type": "scrape",
+          "urls": [
+            "https://www.sec.gov/newsroom/press-releases",
+            "https://www.fsc.go.kr/no010101"
+          ],
+          "scrapeOptions": {
+            "formats": [
+              "markdown",
+              {
+                "type": "changeTracking",
+                "modes": ["git-diff"]
+              }
+            ],
+            "onlyMainContent": true,
+            "removeBase64Images": true,
+            "blockAds": true
+          }
+        },
+        {
+          "type": "search",
+          "query": "AI semiconductor regulation OR battery supply chain policy OR portfolio company breaking news",
+          "limit": 10
+        }
+      ]
+    }
+  ]
+}
+

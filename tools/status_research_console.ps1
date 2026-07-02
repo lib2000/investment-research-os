@@ -414,6 +414,15 @@ if ($publicIrSecStatus) {
       Add-StatusFailure "Firecrawl IR MCP 버전 확인 필요: $($firecrawlMcp.configured_version)"
     }
   }
+  $firecrawlMonitor = $publicIrSecStatus.firecrawl_monitor
+  if ($firecrawlMonitor) {
+    $firecrawlMonitorHostedApi = $firecrawlMonitor.hosted_api
+    $firecrawlMonitorSample = $firecrawlMonitor.sample_monitor
+    Write-Host "Firecrawl Monitor: $($firecrawlMonitor.status), enabled $($firecrawlMonitor.enabled), dry_run $($firecrawlMonitor.dry_run), api_key $($firecrawlMonitorHostedApi.api_key_configured), create_ready $($firecrawlMonitor.create_ready), sample_targets $($firecrawlMonitorSample.target_count)"
+    if ($firecrawlMonitor.next_action) {
+      Write-Host "Firecrawl Monitor 다음 조치: $($firecrawlMonitor.next_action)"
+    }
+  }
   $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }
   $needsBodyDuplicateTitleGroups = if ($publicIrSecStatus.needs_body_duplicate_title_groups) {
     @($publicIrSecStatus.needs_body_duplicate_title_groups | ForEach-Object { $_ })

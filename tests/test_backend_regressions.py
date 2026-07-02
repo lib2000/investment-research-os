@@ -1205,6 +1205,113 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["dry_run_sample"]["ticker"], "PL")
         self.assertNotIn("fc-secret-value", json.dumps(status))
 
+    def test_firecrawl_monitor_readiness_reports_safe_disabled_defaults(self):
+        from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
+
+        settings = SimpleNamespace(
+            firecrawl_monitor_enabled=False,
+            firecrawl_monitor_dry_run=True,
+            firecrawl_api_key="",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_monitor_sources_json="",
+        )
+
+        status = build_firecrawl_monitor_readiness_status(settings)
+
+        self.assertEqual(status["status"], "disabled")
+        self.assertFalse(status["hosted_api"]["api_key_configured"])
+        self.assertEqual(status["source_registry"]["input_source"], "sample")
+        self.assertEqual(status["sample_monitor"]["target_count"], 1)
+        self.assertIn("scrape", status["sample_monitor"]["target_types"])
+        self.assertFalse(status["create_ready"])
+        self.assertNotIn("fc-secret", json.dumps(status))
+
+    def test_firecrawl_monitor_sources_normalize_scrape_and_search_targets(self):
+        from research_os.firecrawl_monitor_collector import normalize_firecrawl_monitor_sources
+
+        monitors = normalize_firecrawl_monitor_sources(
+            {
+                "monitors": [
+                    {
+                        "name": "Policy monitor",
+                        "schedule": "every 30 minutes",
+                        "goal": "Alert on relevant policy changes",
+                        "targets": [
+                            {"type": "scrape", "urls": ["https://www.sec.gov/newsroom/press-releases"]},
+                            {"type": "search", "query": "AI semiconductor export controls", "limit": 5},
+                        ],
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(monitors[0]["schedule"]["text"], "every 30 minutes")
+        self.assertEqual(monitors[0]["targets"][0]["type"], "scrape")
+        self.assertEqual(monitors[0]["targets"][1]["type"], "search")
+        formats = monitors[0]["targets"][0]["scrapeOptions"]["formats"]
+        self.assertIn("markdown", formats)
+        self.assertTrue(any(isinstance(item, dict) and item.get("type") == "changeTracking" for item in formats))
+
+    def test_firecrawl_monitor_dry_run_uses_env_registry_without_exposing_key(self):
+        from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_dry_run_result
+
+        settings = SimpleNamespace(
+            firecrawl_monitor_enabled=True,
+            firecrawl_monitor_dry_run=True,
+            firecrawl_api_key="fc-secret-value",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_monitor_sources_json=json.dumps(
+                {
+                    "monitors": [
+                        {
+                            "name": "IR monitor",
+                            "url": "https://investor.apple.com/",
+                            "goal": "Alert on new earnings or filing updates",
+                        }
+                    ]
+                }
+            ),
+        )
+
+        result = build_firecrawl_monitor_dry_run_result(settings)
+
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["source_registry"]["input_source"], "env_registry")
+        self.assertEqual(result["monitors"][0]["target_types"], ["scrape"])
+        self.assertNotIn("fc-secret-value", json.dumps(result))
+
+    def test_public_ir_sec_status_includes_firecrawl_monitor_readiness(self):
+        from research_os.public_ir_sec import public_ir_sec_status_payload
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            settings = Settings(research_vault_dir=str(Path(temp_dir) / "research_vault"))
+            status = public_ir_sec_status_payload(settings)
+
+        self.assertIn("firecrawl_monitor", status)
+        self.assertEqual(status["firecrawl_monitor"]["module"], "firecrawl_monitor_readiness")
+
+    def test_firecrawl_monitor_dry_run_endpoint_returns_payload(self):
+        import research_os_main as main
+        from fastapi.testclient import TestClient
+
+        fake_result = {
+            "status": "dry_run",
+            "module": "firecrawl_monitor_dry_run",
+            "design": "firecrawl_monitor_collector_v1",
+            "monitors": [],
+        }
+        with patch.object(main, "build_firecrawl_monitor_dry_run_result", return_value=fake_result):
+            response = TestClient(main.app).post(
+                "/api/v1/public-ir-sec/firecrawl-monitor/dry-run",
+                headers={"Authorization": "Bearer dev-local-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["module"], "firecrawl_monitor_dry_run")
+
     def test_firecrawl_ir_hosted_scrape_dry_run_normalizes_response_without_exposing_key(self):
         from research_os import firecrawl_ir_collector
 

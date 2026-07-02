@@ -136,6 +136,7 @@ python tools\check_console_asset_and_js.py
 ```
 
 이 묶음 점검에는 `docs\examples\firecrawl_ir_registry.sample.json` 기반 Firecrawl IR registry 샘플 payload 검증도 포함되어, AAPL/JOBY 같은 공개 IR URL 샘플이 Market Signal Graph 입력 payload로 계속 정규화되는지 백엔드 없이 확인합니다.
+Firecrawl Monitor 변화 감지는 `python tools\check_firecrawl_monitor_collector.py --input-json docs\examples\firecrawl_monitor_registry.sample.json`로 페이지/검색 target, schedule, goal, changeTracking payload를 먼저 확인합니다. 실제 `/v2/monitor` 생성 전에는 ignored secret env 파일을 만든 뒤 `--require-env-registry --require-create-ready`를 통과시켜야 합니다.
 실전 RPC 전환 전에는 ignored secret env 파일을 만든 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 `--require-rpc-ready`를 먼저 통과시키고, 실제 적재가 필요한 경우에만 `-Mode Submit`을 추가합니다.
 
 개별 점검은 아래 명령을 사용합니다.

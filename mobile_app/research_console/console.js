@@ -58,6 +58,7 @@
   fetchPublicIrSecStatus,
   collectPublicIrSec,
   runPublicIrSecFirecrawlDryRun,
+  runPublicIrSecFirecrawlMonitorDryRun,
   fetchInvestmentCalendar,
   runDailyRecommendations,
   trackDailyRecommendations,
@@ -101,7 +102,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=73932106778d";
+} from "./api.js?v=6d4ac74040f4";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -265,6 +266,7 @@ const elements = {
   publicIrSecCollectButton: document.querySelector("#publicIrSecCollectButton"),
   publicIrSecStatusButton: document.querySelector("#publicIrSecStatusButton"),
   publicIrSecFirecrawlDryRunButton: document.querySelector("#publicIrSecFirecrawlDryRunButton"),
+  publicIrSecFirecrawlMonitorDryRunButton: document.querySelector("#publicIrSecFirecrawlMonitorDryRunButton"),
   tickerCacheList: document.querySelector("#tickerCacheList"),
   dashboardTickerSelect: document.querySelector("#dashboardTickerSelect"),
   dashboardTickerOptions: document.querySelector("#dashboardTickerOptions"),
@@ -13535,6 +13537,21 @@ elements.publicIrSecFirecrawlDryRunButton?.addEventListener("click", async () =>
   }
 });
 
+elements.publicIrSecFirecrawlMonitorDryRunButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("Firecrawl Monitor dry-run 실행 중", [
+    "monitor registry JSON 확인",
+    "페이지/사이트/검색 대상 payload 정규화",
+    "실제 생성 없이 schedule, goal, webhook 준비 상태 확인",
+  ]);
+  try {
+    const result = await runPublicIrSecFirecrawlMonitorDryRun(token());
+    setOutput(result || "Firecrawl Monitor dry-run 결과를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
 elements.researchAutomationButton.addEventListener("click", async () => {
   syncApiBaseUrl();
   startOutputLoading("전체 리서치 자동화 실행 중", [
@@ -16964,8 +16981,11 @@ function formatKoreanResult(value) {
       ? value.needs_body_duplicate_title_groups
       : [];
     const firecrawl = value.firecrawl_ir || {};
+    const firecrawlMonitor = value.firecrawl_monitor || {};
     const firecrawlHosted = firecrawl.hosted_api || {};
     const firecrawlSample = firecrawl.dry_run_sample || {};
+    const monitorHosted = firecrawlMonitor.hosted_api || {};
+    const monitorSample = firecrawlMonitor.sample_monitor || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
           `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
@@ -16998,6 +17018,13 @@ function formatKoreanResult(value) {
       `Hosted API: ${firecrawlHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${firecrawlHosted.base_url || "https://api.firecrawl.dev/v2"}`,
       `Dry-run 샘플: ${firecrawlSample.ticker || "AAPL"} ${firecrawlSample.company || "Apple"} · ${firecrawlSample.status || "미확인"} · ${firecrawlSample.external_id_prefix || "id 미확인"}`,
       firecrawl.next_action ? `Firecrawl 다음 조치: ${firecrawl.next_action}` : "",
+      ``,
+      `Firecrawl Monitor 변화 감지`,
+      `상태: ${firecrawlMonitor.status || "미확인"} · enabled=${firecrawlMonitor.enabled === true ? "true" : "false"} · dry-run=${firecrawlMonitor.dry_run === false ? "false" : "true"}`,
+      `Hosted API: ${monitorHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${monitorHosted.base_url || "https://api.firecrawl.dev/v2"}`,
+      `샘플: ${monitorSample.name || "Investment web monitor"} · 대상 ${formatNumber(monitorSample.target_count || 0)}개 · ${(monitorSample.target_types || []).join(", ") || "유형 미확인"}`,
+      `Create ready: ${firecrawlMonitor.create_ready ? "true" : "false"} · webhook=${monitorSample.webhook_configured ? "true" : "false"} · payload=${monitorSample.payload_hash_prefix || "미확인"}`,
+      firecrawlMonitor.next_action ? `Monitor 다음 조치: ${firecrawlMonitor.next_action}` : "",
       value.empty_state?.message ? `상태: ${value.empty_state.message}` : "",
       ``,
       `최근 자료`,
@@ -17023,6 +17050,25 @@ function formatKoreanResult(value) {
       `제목: ${hosted.title || payload.title || "미확인"}`,
       `본문 길이: ${formatNumber(hosted.content_chars || metadata.content_chars || 0)}자`,
       `external_id: ${hosted.external_id_prefix || String(payload.external_id || "").slice(0, 12) || "미확인"}`,
+      value.next_action ? `다음 조치: ${value.next_action}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
+  if (value.module === "firecrawl_monitor_dry_run") {
+    const registry = value.source_registry || {};
+    const monitors = Array.isArray(value.monitors) ? value.monitors : [];
+    const lines = monitors.slice(0, 8).map((item, index) =>
+      `${index + 1}. ${item.name || "이름 없음"} · ${(item.target_types || []).join(", ") || "유형 미확인"} · 대상 ${formatNumber(item.target_count || 0)}개 · webhook=${item.webhook_configured ? "true" : "false"} · ${item.payload_hash_prefix || "hash 없음"}`
+    );
+    return [
+      `### Firecrawl Monitor Dry-run`,
+      `상태: ${value.status || "미확인"}`,
+      `Registry: ${registry.input_source || "sample"} · ${formatNumber(registry.item_count || 0)}건`,
+      `Create ready: ${value.create_ready ? "true" : "false"}`,
+      ...(value.create_readiness_errors || []).map((item) => `준비 필요: ${item}`),
+      ``,
+      `모니터 후보`,
+      ...(lines.length ? lines : ["모니터 후보 없음"]),
       value.next_action ? `다음 조치: ${value.next_action}` : "",
     ].filter(Boolean).join("\n");
   }
