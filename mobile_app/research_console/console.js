@@ -16982,10 +16982,12 @@ function formatKoreanResult(value) {
       : [];
     const firecrawl = value.firecrawl_ir || {};
     const firecrawlMonitor = value.firecrawl_monitor || {};
+    const firecrawlMonitorEvents = value.firecrawl_monitor_events || {};
     const firecrawlHosted = firecrawl.hosted_api || {};
     const firecrawlSample = firecrawl.dry_run_sample || {};
     const monitorHosted = firecrawlMonitor.hosted_api || {};
     const monitorSample = firecrawlMonitor.sample_monitor || {};
+    const monitorRouteCounts = firecrawlMonitorEvents.by_route || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
           `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
@@ -16999,6 +17001,12 @@ function formatKoreanResult(value) {
     const entryLines = entries.length
       ? entries.slice(0, 12).map((item, index) => `${index + 1}. ${item.title || item.file_name || "제목 없음"} · ${item.date || "날짜 없음"} · ${item.source_provider || "출처 미확인"} · ${item.capture_quality_status || item.capture_quality?.status || "품질 미확인"}`)
       : [value.empty_state?.title || "아직 수집된 공개 IR/SEC 자료가 없습니다."];
+    const monitorEventLines = Array.isArray(firecrawlMonitorEvents.recent_events)
+      ? firecrawlMonitorEvents.recent_events.slice(0, 4).map((item, index) => {
+          const route = item.route_hint || {};
+          return `${index + 1}. ${item.status || "상태 미확인"} · ${route.scope || route.target || "라우팅 미확인"} · ${compactOutputText(item.title || item.url || item.summary || "제목 없음", 100)}`;
+        })
+      : [];
     return [
       `### 공개 IR/SEC 저장 상태`,
       `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
@@ -17024,7 +17032,11 @@ function formatKoreanResult(value) {
       `Hosted API: ${monitorHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${monitorHosted.base_url || "https://api.firecrawl.dev/v2"}`,
       `샘플: ${monitorSample.name || "Investment web monitor"} · 대상 ${formatNumber(monitorSample.target_count || 0)}개 · ${(monitorSample.target_types || []).join(", ") || "유형 미확인"}`,
       `Create ready: ${firecrawlMonitor.create_ready ? "true" : "false"} · webhook=${monitorSample.webhook_configured ? "true" : "false"} · payload=${monitorSample.payload_hash_prefix || "미확인"}`,
+      `이벤트 저장: 전체 ${formatNumber(firecrawlMonitorEvents.event_count || 0)}건 · 의미있는 변화 ${formatNumber(firecrawlMonitorEvents.meaningful_count || 0)}건 · 오류 ${formatNumber(firecrawlMonitorEvents.error_count || 0)}건`,
+      `라우팅 후보: 정책 ${formatNumber(monitorRouteCounts.policy_news_inbox_candidate || 0)} · 공개 IR/SEC ${formatNumber(monitorRouteCounts.public_ir_sec_candidate || 0)} · 시장일지 ${formatNumber(monitorRouteCounts.market_journal_candidate || 0)}`,
+      firecrawlMonitorEvents.latest_received_at ? `최근 이벤트: ${formatDateTime(firecrawlMonitorEvents.latest_received_at)}` : "",
       firecrawlMonitor.next_action ? `Monitor 다음 조치: ${firecrawlMonitor.next_action}` : "",
+      ...monitorEventLines,
       value.empty_state?.message ? `상태: ${value.empty_state.message}` : "",
       ``,
       `최근 자료`,

@@ -4,6 +4,8 @@
 
 Firecrawl Monitor 변화 감지는 공개 URL/공개 검색 결과만 대상으로 삼는다. 기본값은 비활성/dry-run이며, monitor 생성 전 registry, schedule, goal, webhook 대상, 예상 payload를 먼저 검토한다. webhook을 켤 때도 비밀 토큰은 backend secret env에만 두고 콘솔/로그에는 configured 여부만 노출한다.
 
+Monitor 이벤트 저장소는 변경 판단에 필요한 짧은 메타데이터만 남긴다. `monitor.page` 이벤트는 URL, 상태, goal judgment, 의미 있는 변화 요약, 짧은 diff, 라우팅 후보를 저장하고, 긴 원문/비밀키/API 응답 전체는 보관하지 않는다.
+
 ## 허용 범위
 
 - `sec.gov`의 공개 공시/문서 페이지

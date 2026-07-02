@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from re import DOTALL, IGNORECASE, escape, findall, finditer, fullmatch, search, split, sub
+from typing import Any
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -192,6 +193,10 @@ from research_os.public_ir_sec import (
 )
 from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_dry_run_result
+from research_os.firecrawl_monitor_events import (
+    ingest_firecrawl_monitor_payload,
+    summarize_firecrawl_monitor_event_store,
+)
 from research_os.recent_activity import (
     build_recent_weekly_research_brief as _build_recent_weekly_research_brief,
     recent_activity_target_terms as _recent_activity_target_terms,
@@ -12662,6 +12667,32 @@ def run_public_ir_sec_firecrawl_monitor_dry_run(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_firecrawl_monitor_dry_run_result(settings)
+
+
+@app.get(
+    "/api/v1/public-ir-sec/firecrawl-monitor/events/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_public_ir_sec_firecrawl_monitor_event_status(
+    limit: int = Query(20, ge=1, le=50),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return summarize_firecrawl_monitor_event_store(settings, limit=limit)
+
+
+@app.post(
+    "/api/v1/public-ir-sec/firecrawl-monitor/events/ingest",
+    dependencies=[Depends(verify_user_token)],
+)
+def ingest_public_ir_sec_firecrawl_monitor_event(
+    payload: dict[str, Any] = Body(...),
+    save_result: bool = Query(True),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        return ingest_firecrawl_monitor_payload(payload, settings, save_result=save_result)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get(

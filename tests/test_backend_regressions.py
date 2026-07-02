@@ -4167,7 +4167,116 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(status["firecrawl_ir"]["status"], "ready")
         self.assertTrue(status["firecrawl_ir"]["hosted_api"]["api_key_configured"])
         self.assertEqual(status["firecrawl_ir"]["dry_run_sample"]["ticker"], "JOBY")
+        self.assertEqual(status["firecrawl_monitor_events"]["module"], "firecrawl_monitor_events_v1")
         self.assertNotIn("fc-secret-value", json.dumps(status))
+
+    def test_firecrawl_monitor_page_event_normalizes_route_hint(self):
+        from research_os.firecrawl_monitor_events import normalize_firecrawl_monitor_payload
+
+        payload = {
+            "type": "monitor.page",
+            "data": [
+                {
+                    "monitorId": "mon-sec",
+                    "checkId": "check-1",
+                    "url": "https://www.sec.gov/newsroom/press-releases",
+                    "status": "changed",
+                    "metadata": {"title": "SEC Press Releases"},
+                    "judgment": {
+                        "meaningful": True,
+                        "confidence": "high",
+                        "reason": "SEC disclosure guidance changed",
+                        "meaningfulChanges": [
+                            {"type": "changed", "after": "AI disclosure guidance updated"}
+                        ],
+                    },
+                    "diff": {"text": "- old disclosure\n+ new AI disclosure"},
+                    "previousScrapeId": "scrape-old",
+                    "currentScrapeId": "scrape-new",
+                }
+            ],
+        }
+
+        result = normalize_firecrawl_monitor_payload(payload)
+
+        self.assertEqual(result["event_count"], 1)
+        event = result["events"][0]
+        self.assertEqual(event["event_type"], "monitor.page")
+        self.assertEqual(event["status"], "changed")
+        self.assertTrue(event["is_meaningful"])
+        self.assertEqual(event["route_hint"]["target"], "public_ir_sec_candidate")
+        self.assertIn("AI disclosure", event["meaningful_changes"][0]["summary"])
+        self.assertIn("new AI disclosure", event["diff_text"])
+
+    def test_firecrawl_monitor_check_completed_event_counts_changes(self):
+        from research_os.firecrawl_monitor_events import normalize_firecrawl_monitor_payload
+
+        payload = {
+            "type": "monitor.check.completed",
+            "data": {
+                "monitorId": "mon-policy",
+                "checkId": "check-2",
+                "summary": {"pages": 8, "new": 1, "changed": 2, "removed": 0, "errors": 1},
+            },
+        }
+
+        result = normalize_firecrawl_monitor_payload(payload)
+
+        self.assertEqual(result["event_count"], 1)
+        event = result["events"][0]
+        self.assertEqual(event["event_type"], "monitor.check.completed")
+        self.assertTrue(event["is_meaningful"])
+        self.assertEqual(event["counts"]["pages"], 8)
+        self.assertEqual(event["counts"]["changed"], 2)
+
+    def test_firecrawl_monitor_event_store_upserts_and_summarizes(self):
+        from research_os.firecrawl_monitor_events import ingest_firecrawl_monitor_payload
+        from research_os.state_store import firecrawl_monitor_events_path
+
+        with TemporaryDirectory() as tmpdir:
+            settings = SimpleNamespace(research_vault_dir=tmpdir)
+            payload = {
+                "type": "monitor.page",
+                "data": [
+                    {
+                        "monitorId": "mon-policy",
+                        "checkId": "check-3",
+                        "url": "https://www.fsc.go.kr/no010101",
+                        "status": "changed",
+                        "metadata": {"title": "금융위 보도자료"},
+                        "judgment": {"meaningful": True, "reason": "공매도 제도 변경"},
+                    }
+                ],
+            }
+
+            first = ingest_firecrawl_monitor_payload(payload, settings)
+            second = ingest_firecrawl_monitor_payload(payload, settings)
+
+            self.assertEqual(first["saved_count"], 1)
+            self.assertEqual(second["saved_count"], 0)
+            self.assertTrue(firecrawl_monitor_events_path(settings).exists())
+            summary = second["store_summary"]
+            self.assertEqual(summary["event_count"], 1)
+            self.assertEqual(summary["meaningful_count"], 1)
+            self.assertEqual(summary["by_route"]["policy_news_inbox_candidate"], 1)
+
+    def test_firecrawl_monitor_events_endpoint_routes_payload(self):
+        with patch(
+            "research_os_main.ingest_firecrawl_monitor_payload",
+            return_value={"status": "success", "module": "firecrawl_monitor_events_v1", "saved_count": 1},
+        ) as ingest:
+            import research_os_main as main
+            from fastapi.testclient import TestClient
+
+            response = TestClient(main.app).post(
+                "/api/v1/public-ir-sec/firecrawl-monitor/events/ingest",
+                json={"type": "monitor.page", "data": []},
+                headers={"Authorization": "Bearer dev-local-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["saved_count"], 1)
+        ingest.assert_called_once()
 
     def test_public_ir_sec_status_lists_needs_body_entries(self):
         from research_os.public_ir_sec import public_ir_sec_status_payload
