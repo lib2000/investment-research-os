@@ -418,6 +418,13 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertIn("stored_preview_mismatches", result)
 
+    def test_candidate_policy_cli_supports_output_json(self):
+        tool_source = Path("tools/check_daily_recommendation_candidate_policy.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--output-json"', tool_source)
+        self.assertIn("args.output_json.write_text", tool_source)
+        self.assertIn("sort_keys=True", tool_source)
+
     def test_candidate_policy_compares_stored_and_preview_top_slots(self):
         from tools import check_daily_recommendation_candidate_policy as policy_check
 

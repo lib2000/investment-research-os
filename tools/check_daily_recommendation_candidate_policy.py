@@ -223,6 +223,7 @@ def main() -> int:
     parser.add_argument("--expected-held-ticker", action="append", default=[], help="보류 경고에 포함되어야 하는 티커")
     parser.add_argument("--require-hold-warning", action="store_true", help="반복 부진 보류 경고가 없으면 실패")
     parser.add_argument("--json", action="store_true", help="JSON으로 결과 출력")
+    parser.add_argument("--output-json", type=Path, default=None, help="점검 결과 JSON을 파일로 저장")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -235,6 +236,12 @@ def main() -> int:
         expected_held_tickers=args.expected_held_ticker,
         require_hold_warning=args.require_hold_warning,
     )
+    if args.output_json:
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
