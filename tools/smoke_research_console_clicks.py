@@ -544,16 +544,22 @@ def run_click_smoke(
                         const payload = await response.json();
                         const firecrawl = payload.firecrawl_ir || {};
                         const hosted = firecrawl.hosted_api || {};
+                        const needsBodyEntries = Array.isArray(payload.needs_body_copy_entries) ? payload.needs_body_copy_entries : [];
+                        const needsBodyLines = needsBodyEntries.slice(0, 5).map((item, index) =>
+                          `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
+                        );
                         return [
                           "공개 IR/SEC 저장 상태",
                           `전체 저장: ${payload.entry_count || 0}건`,
                           `본문 보강 필요: ${payload.needs_body_copy_count || 0}건`,
                           `저장 키: ${payload.storage_key || "PUBLIC_IR_SEC"}`,
                           `정책: ${payload.policy || "공개 IR/SEC 자료만 수집합니다."}`,
+                          needsBodyLines.length ? "본문 보강 대상" : "",
+                          ...needsBodyLines,
                           "Firecrawl IR 보조 수집",
                           `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,
                           `Hosted API: ${hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${hosted.base_url || "https://api.firecrawl.dev/v2"}`,
-                        ].join("\\n");
+                        ].filter(Boolean).join("\\n");
                       };
                       const clickAndWaitForStart = async (selector, startedPattern, label) => {
                         const button = await waitFor(() => document.querySelector(selector), 15000, `${label} button`);
@@ -663,7 +669,9 @@ def run_click_smoke(
                             publicIrSecStatusText.includes("정책:") ||
                             publicIrSecStatusText.includes("전체 저장:") ||
                             publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
-                            publicIrSecStatusText.includes("본문 보강 필요:")),
+                            publicIrSecStatusText.includes("본문 보강 필요:")) &&
+                          (!/본문 보강 필요:\\s*[1-9]/.test(publicIrSecStatusText) ||
+                            publicIrSecStatusText.includes("본문 보강 대상")),
                         publicIrSecEmptyInputShowsFeedback:
                           publicIrSecEmptyInputText.includes("입력 필요") &&
                           publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -676,7 +684,7 @@ def run_click_smoke(
                             publicIrSecFirecrawlDryRunText.includes("hosted_scrape") ||
                             publicIrSecFirecrawlDryRunText.includes("success")
                           ),
-                        publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 12).join("\\n"),
+                        publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
                         publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
                         publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 18).join("\\n"),
                         runtimeErrors,
@@ -1491,16 +1499,22 @@ def run_click_smoke(
                     const payload = await response.json();
                     const firecrawl = payload.firecrawl_ir || {{}};
                     const hosted = firecrawl.hosted_api || {{}};
+                    const needsBodyEntries = Array.isArray(payload.needs_body_copy_entries) ? payload.needs_body_copy_entries : [];
+                    const needsBodyLines = needsBodyEntries.slice(0, 5).map((item, index) =>
+                      `${{index + 1}}. ${{item.ticker || item.storage_key || "티커 미확인"}} · ${{item.title || item.file_name || "제목 없음"}} · ${{item.relative_path || item.source_url || "경로 미확인"}}`
+                    );
                     return [
                       "공개 IR/SEC 저장 상태",
                       `전체 저장: ${{payload.entry_count || 0}}건`,
                       `본문 보강 필요: ${{payload.needs_body_copy_count || 0}}건`,
                       `저장 키: ${{payload.storage_key || "PUBLIC_IR_SEC"}}`,
                       `정책: ${{payload.policy || "공개 IR/SEC 자료만 수집합니다."}}`,
+                      needsBodyLines.length ? "본문 보강 대상" : "",
+                      ...needsBodyLines,
                       "Firecrawl IR 보조 수집",
                       `상태: ${{firecrawl.status || "미확인"}} · enabled=${{firecrawl.enabled === true ? "true" : "false"}} · dry-run=${{firecrawl.dry_run === false ? "false" : "true"}}`,
                       `Hosted API: ${{hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"}} · ${{hosted.base_url || "https://api.firecrawl.dev/v2"}}`,
-                    ].join("\\n");
+                    ].filter(Boolean).join("\\n");
                   }};
                   document.querySelector("#publicIrSecStatusButton")?.click();
                   let publicIrSecStatusText = "";
@@ -1593,7 +1607,9 @@ def run_click_smoke(
                           publicIrSecStatusText.includes("정책:") ||
                           publicIrSecStatusText.includes("전체 저장:") ||
                           publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
-                          publicIrSecStatusText.includes("본문 보강 필요:")),
+                          publicIrSecStatusText.includes("본문 보강 필요:")) &&
+                        (!/본문 보강 필요:\\s*[1-9]/.test(publicIrSecStatusText) ||
+                          publicIrSecStatusText.includes("본문 보강 대상")),
                       publicIrSecEmptyInputShowsFeedback:
                         publicIrSecEmptyInputText.includes("입력 필요") &&
                         publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -1604,7 +1620,7 @@ def run_click_smoke(
                           publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
                           publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
                         ),
-                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
                       publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
                       publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                     }});
@@ -1707,7 +1723,9 @@ def run_click_smoke(
                           publicIrSecStatusText.includes("정책:") ||
                           publicIrSecStatusText.includes("전체 저장:") ||
                           publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
-                          publicIrSecStatusText.includes("본문 보강 필요:")),
+                          publicIrSecStatusText.includes("본문 보강 필요:")) &&
+                        (!/본문 보강 필요:\\s*[1-9]/.test(publicIrSecStatusText) ||
+                          publicIrSecStatusText.includes("본문 보강 대상")),
                       publicIrSecEmptyInputShowsFeedback:
                         publicIrSecEmptyInputText.includes("입력 필요") &&
                         publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -1746,7 +1764,7 @@ def run_click_smoke(
                       naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
                       memoryFilterResults,
                       memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
-                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                      publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
                       publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
                       publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                       codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
@@ -2085,7 +2103,9 @@ def run_click_smoke(
                         publicIrSecStatusText.includes("정책:") ||
                         publicIrSecStatusText.includes("전체 저장:") ||
                         publicIrSecStatusText.includes("Firecrawl IR 보조 수집") ||
-                        publicIrSecStatusText.includes("본문 보강 필요:")),
+                        publicIrSecStatusText.includes("본문 보강 필요:")) &&
+                      (!/본문 보강 필요:\\s*[1-9]/.test(publicIrSecStatusText) ||
+                        publicIrSecStatusText.includes("본문 보강 대상")),
                     publicIrSecEmptyInputShowsFeedback:
                       publicIrSecEmptyInputText.includes("입력 필요") &&
                       publicIrSecEmptyInputText.includes("공개 IR/SEC URL"),
@@ -2181,7 +2201,7 @@ def run_click_smoke(
                     dailyRecommendationsStatusPreview: dailyRecommendationsStatusText.split("\\n").slice(0, 14).join("\\n"),
                     dailyRecommendationRepairQueuePreview: dailyRecommendationRepairQueueText.split("\\n").slice(0, 14).join("\\n"),
                     memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
-                    publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 10).join("\\n"),
+                    publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
                     publicIrSecEmptyInputPreview: publicIrSecEmptyInputText.split("\\n").slice(0, 8).join("\\n"),
                     publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                     codeKnowledgeGraphPreview: codeKnowledgeGraphText.split("\\n").slice(0, 12).join("\\n"),
