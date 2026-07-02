@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 SYSTEM_DIR = Path("research_vault/_system")
@@ -87,60 +86,6 @@ def priority_reason(item: dict[str, Any]) -> str:
     return ", ".join(reasons) or "우선 분류 기준 충족"
 
 
-def priority_sort_key(item: dict[str, Any]) -> tuple[float, float, str]:
-    target_bonus = 1.0 if isinstance(item.get("target_matches"), list) and item.get("target_matches") else 0.0
-    policy_bonus = 0.5 if item.get("is_policy_law") or item.get("scope") == "POLICY" else 0.0
-    return (target_bonus + policy_bonus, _number(item.get("relevance_score")), str(item.get("created_at") or ""))
-
-
-def canonical_news_url(value: Any) -> str:
-    source_url = str(value or "").strip()
-    if not source_url:
-        return ""
-    try:
-        parsed = urlsplit(source_url)
-    except ValueError:
-        return source_url
-    if not parsed.scheme or not parsed.netloc:
-        return source_url
-    query = dict(parse_qsl(parsed.query, keep_blank_values=False))
-    stable_params = [
-        (key, query[key])
-        for key in ["newsId", "nid", "articleId", "id"]
-        if query.get(key)
-    ]
-    normalized_query = urlencode(stable_params)
-    path = parsed.path.rstrip("/") or "/"
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, normalized_query, ""))
-
-
-def duplicate_priority_groups(priority_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for item in priority_items:
-        key = canonical_news_url(item.get("source_url"))
-        if not key:
-            continue
-        groups.setdefault(key, []).append(item)
-    duplicates = []
-    for key, rows in groups.items():
-        if len(rows) <= 1:
-            continue
-        titles = []
-        for row in rows:
-            title = str(row.get("title") or "").strip()
-            if title and title not in titles:
-                titles.append(title)
-        duplicates.append(
-            {
-                "canonical_url": key,
-                "count": len(rows),
-                "titles": titles[:3],
-                "ids": [row.get("id") for row in rows if row.get("id")],
-            }
-        )
-    return sorted(duplicates, key=lambda group: (-int(group["count"]), str(group["canonical_url"])))
-
-
 def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
     payload = load_news_inbox_payload(root / SYSTEM_DIR / "news_inbox.json")
     news_inbox = _news_inbox_module(root)
@@ -151,7 +96,7 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
     ]
     counts = news_inbox.news_filter_counts(_runtime(), items)
     priority_items = news_inbox.filter_news_inbox_items(_runtime(), items, "actionable")
-    priority_items = sorted(priority_items, key=priority_sort_key, reverse=True)
+    priority_items = sorted(priority_items, key=news_inbox.news_priority_sort_key, reverse=True)
     policy_priority_count = sum(
         1 for item in priority_items if item.get("is_policy_law") or item.get("scope") == "POLICY"
     )
@@ -159,7 +104,7 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
         1 for item in priority_items if isinstance(item.get("target_matches"), list) and item.get("target_matches")
     )
     quality_issue_count = counts.get("quality_issue", 0)
-    duplicate_groups = duplicate_priority_groups(priority_items)
+    duplicate_groups = news_inbox.duplicate_priority_news_groups(priority_items)
     queue = [
         {
             "rank": index,

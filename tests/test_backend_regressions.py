@@ -10111,7 +10111,8 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         self.assertEqual(tool.strict_errors(status), [])
 
     def test_news_inbox_priority_queue_groups_duplicate_priority_urls(self):
-        tool = load_news_inbox_priority_queue_tool()
+        from research_os import news_inbox
+
         items = [
             {
                 "id": "n1",
@@ -10130,7 +10131,7 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
             },
         ]
 
-        groups = tool.duplicate_priority_groups(items)
+        groups = news_inbox.duplicate_priority_news_groups(items)
 
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]["count"], 2)
