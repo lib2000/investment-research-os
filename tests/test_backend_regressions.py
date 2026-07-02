@@ -322,6 +322,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("news_priority_count", script_source)
         self.assertIn("우선 뉴스: 표시", script_source)
         self.assertIn("자동화 조치", script_source)
+        self.assertIn("latest_records", script_source)
+        self.assertIn("오늘 추천 $($marketLabel) 1~3위", script_source)
         self.assertIn("market_close_journal.json", script_source)
         self.assertIn("telegram_market_close_journal_state.json", script_source)
         self.assertIn('foreach ($market in @("KR", "US"))', script_source)

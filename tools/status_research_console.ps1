@@ -190,6 +190,24 @@ if ($dailyRecommendations) {
   Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
   Write-Host "일일 추천 저장 건수: $($dailyRecommendations.record_count)"
   Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
+  $latestRecommendationRecords = if ($dailyRecommendations.latest_records) { @($dailyRecommendations.latest_records | ForEach-Object { $_ }) } else { @() }
+  foreach ($market in @("KR", "US")) {
+    $marketLabel = if ($market -eq "KR") { "한국" } else { "미국" }
+    $topRecords = @(
+      $latestRecommendationRecords |
+        Where-Object { ([string]$_.market).ToUpperInvariant() -eq $market -and [int]$_.rank -le 3 } |
+        Sort-Object -Property rank |
+        Select-Object -First 3
+    )
+    if ($topRecords.Count -gt 0) {
+      $topLabels = @()
+      foreach ($record in $topRecords) {
+        $companyName = if ($record.company_name) { $record.company_name } else { $record.ticker }
+        $topLabels += "$($record.rank)위 $companyName($($record.ticker), $($record.score)점)"
+      }
+      Write-Host "오늘 추천 $($marketLabel) 1~3위: $($topLabels -join ' / ')"
+    }
+  }
 }
 if ($marketJournal) {
   $marketJournalEntries = if ($marketJournal.entries) { @($marketJournal.entries | ForEach-Object { $_ }) } else { @() }
