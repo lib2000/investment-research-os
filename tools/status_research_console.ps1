@@ -339,7 +339,9 @@ if ($researchAutomation) {
         }
       }
       $groupTitle = Limit-StatusText -Text $groupTitle -MaxLength 120
-      Write-Host "우선 뉴스 중복 후보: $($group.count)개 | $($group.canonical_url) | $groupTitle"
+      $groupIds = @($group.ids) | Where-Object { $_ } | ForEach-Object { "$_" }
+      $groupIdLabel = if ($groupIds.Count -gt 0) { " | ids " + (($groupIds | Select-Object -First 5) -join ", ") } else { "" }
+      Write-Host "우선 뉴스 중복 후보: $($group.count)개 | $($group.canonical_url) | $groupTitle$groupIdLabel"
     }
     $npsPlan = $dashboardDigest.nps_domestic_equity_rebalance_plan
     if ($npsPlan) {

@@ -355,6 +355,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Limit-StatusText", script_source)
         self.assertIn("MaxLength 120", script_source)
         self.assertIn("우선 뉴스 중복 후보", script_source)
+        self.assertIn("$group.ids", script_source)
+        self.assertIn("ids ", script_source)
         self.assertIn("nps_domestic_equity_rebalance_plan", script_source)
         self.assertIn("current_domestic_equity_weight", script_source)
         self.assertIn("target_domestic_equity_weight", script_source)
@@ -10403,6 +10405,14 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
             groups[0]["canonical_url"],
             "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176",
         )
+        self.assertEqual([entry["id"] for entry in groups[0]["entries"]], ["n1", "n2"])
+        self.assertEqual(groups[0]["entries"][0]["relevance_score"], 0.0)
+
+    def test_news_inbox_priority_queue_cli_prints_duplicate_ids(self):
+        tool_source = (PROJECT_ROOT / "tools" / "check_news_inbox_priority_queue.py").read_text(encoding="utf-8")
+
+        self.assertIn('id_note = f" | ids {ids}"', tool_source)
+        self.assertIn("group.get(\"ids\", [])", tool_source)
 
     def test_news_inbox_priority_queue_strict_errors_validate_shapes(self):
         tool = load_news_inbox_priority_queue_tool()

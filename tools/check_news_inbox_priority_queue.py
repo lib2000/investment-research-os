@@ -189,9 +189,11 @@ def main() -> int:
                 flush=True,
             )
         for group in status["duplicate_priority_groups"]:
+            ids = ", ".join(str(item).strip() for item in group.get("ids", []) if str(item or "").strip())
+            id_note = f" | ids {ids}" if ids else ""
             print(
                 f"중복 후보: {group['count']}개 | {group['canonical_url']} | "
-                f"{' / '.join(group['titles'])}",
+                f"{' / '.join(group['titles'])}{id_note}",
                 flush=True,
             )
     if errors and not args.json:

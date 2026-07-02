@@ -382,6 +382,17 @@ def duplicate_priority_news_groups(priority_items: list[dict]) -> list[dict]:
                 "count": len(rows),
                 "titles": titles[:3],
                 "ids": [row.get("id") for row in rows if row.get("id")],
+                "entries": [
+                    {
+                        "id": row.get("id"),
+                        "title": str(row.get("title") or "").strip(),
+                        "source_url": str(row.get("source_url") or "").strip(),
+                        "scope": str(row.get("scope") or "INBOX").strip(),
+                        "relevance_score": _news_relevance_score(row),
+                        "created_at": row.get("created_at"),
+                    }
+                    for row in rows
+                ],
             }
         )
     return sorted(duplicates, key=lambda group: (-int(group["count"]), str(group["canonical_url"])))
