@@ -113,6 +113,18 @@ def load_investment_insight_hub_check_tool():
     return module
 
 
+def load_daily_recommendation_render_layout_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_daily_recommendation_render_layout.py"
+    spec = spec_from_file_location("check_daily_recommendation_render_layout", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_citations_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -427,6 +439,26 @@ class InvestmentInsightHubCheckToolTests(unittest.TestCase):
         self.assertIn("정책·법령·규제 커버리지가 없습니다.", errors)
         self.assertIn("market_data_sentiment 인사이트 패밀리가 없습니다.", errors)
         self.assertIn("종합 투자심리 라벨이 없습니다.", errors)
+
+
+class DailyRecommendationRenderLayoutCheckToolTests(unittest.TestCase):
+    def test_strict_errors_require_two_markets_six_cards_and_no_clipping(self):
+        tool = load_daily_recommendation_render_layout_tool()
+        result = {
+            "marketSectionCount": 1,
+            "recommendationCardCount": 5,
+            "marketLabels": ["한국 추천 1~3위"],
+            "pageHasHorizontalOverflow": True,
+            "clippedTextElements": [{"text": "long clipped text"}],
+        }
+
+        errors = tool.strict_errors(result)
+
+        self.assertIn("한국/미국 시장 섹션이 모두 렌더링되지 않았습니다.", errors)
+        self.assertIn("한국/미국 추천 카드 6개가 모두 렌더링되지 않았습니다.", errors)
+        self.assertIn("시장 섹션 라벨에 한국/미국이 모두 보이지 않습니다.", errors)
+        self.assertIn("페이지 전체에 가로 스크롤 오버플로가 있습니다.", errors)
+        self.assertIn("추천 결과 텍스트 클리핑 1개", errors)
 
 
 class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):

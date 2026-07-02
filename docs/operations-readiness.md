@@ -119,6 +119,7 @@ python tools\smoke_research_console_external_sources.py
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality --expected-latest-count 6 --max-latest-age-days 1
 python tools\check_daily_recommendation_citations.py --strict
 python tools\check_daily_recommendation_policy_signals.py --strict
+python tools\check_daily_recommendation_render_layout.py --strict --output-screenshot output\daily-recommendation-layout.png
 python tools\check_nps_domestic_equity_allocation.py --rebalance-plan
 ```
 

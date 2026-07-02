@@ -566,6 +566,20 @@ $contracts = @(
     )
   },
 
+  @{
+    Path = "tools\check_daily_recommendation_render_layout.py"
+    Snippets = @(
+      '오늘 추천 결과 카드 렌더링 레이아웃',
+      'dailyRecommendationCards',
+      'marketSectionCount',
+      'recommendationCardCount',
+      'clippedTextElements',
+      'pageHasHorizontalOverflow',
+      '--output-screenshot',
+      '추천 결과 렌더링 점검 정상'
+    )
+  },
+
 
 
 
