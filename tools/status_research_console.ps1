@@ -305,6 +305,19 @@ if ($researchAutomation) {
   }
 }
 if ($publicIrSecStatus) {
+  $firecrawlIr = $publicIrSecStatus.firecrawl_ir
+  if ($firecrawlIr) {
+    $firecrawlMcp = $firecrawlIr.mcp
+    $firecrawlHostedApi = $firecrawlIr.hosted_api
+    $firecrawlRpc = $firecrawlIr.rpc
+    Write-Host "Firecrawl IR: $($firecrawlIr.status), enabled $($firecrawlIr.enabled), dry_run $($firecrawlIr.dry_run), api_key $($firecrawlHostedApi.api_key_configured), rpc_submit_ready $($firecrawlRpc.submit_ready), mcp $($firecrawlMcp.configured_version)/$($firecrawlMcp.expected_version)"
+    if ($firecrawlIr.next_action) {
+      Write-Host "Firecrawl IR 다음 조치: $($firecrawlIr.next_action)"
+    }
+    if ($firecrawlMcp -and $firecrawlMcp.version_ok -eq $false) {
+      Add-StatusFailure "Firecrawl IR MCP 버전 확인 필요: $($firecrawlMcp.configured_version)"
+    }
+  }
   $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }
   $needsBodyDuplicateTitleGroups = if ($publicIrSecStatus.needs_body_duplicate_title_groups) {
     @($publicIrSecStatus.needs_body_duplicate_title_groups | ForEach-Object { $_ })
