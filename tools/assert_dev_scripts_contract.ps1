@@ -296,6 +296,7 @@ $contracts = @(
       '--only-public-ir-sec',
       'check_daily_recommendations_store.py',
       'check_investment_insight_hub.py',
+      'backend\research_os\investment_insight_hub.py',
       'Resolve-VerifyPython',
       'Resolve-LiveSmokePython',
       'pythonLiveSmoke',

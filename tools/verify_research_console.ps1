@@ -171,6 +171,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os_main.py `
     backend\research_os\customs_trade.py `
     backend\research_os\daily_recommendations.py `
+    backend\research_os\investment_insight_hub.py `
     backend\research_os\investment_calendar.py `
     backend\research_os\kcif_reports.py `
     backend\research_os\market_journal.py `

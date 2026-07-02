@@ -242,6 +242,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
         self.assertIn("[switch]$CheckInvestmentInsightHub", verify_source)
         self.assertIn("tools\\check_investment_insight_hub.py", verify_source)
+        self.assertIn("backend\\research_os\\investment_insight_hub.py", verify_source)
         self.assertIn("통합 투자 인사이트 허브 오프라인 확인", verify_source)
 
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
