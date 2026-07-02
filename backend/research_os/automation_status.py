@@ -229,6 +229,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
     news_items = news_payload.get("items") if isinstance(news_payload, dict) else []
     if not isinstance(news_items, list):
         news_items = []
+    news_inbox_count = int(news_payload.get("count") or len(news_items)) if isinstance(news_payload, dict) else len(news_items)
     news_unpromoted_count = int(news_payload.get("unpromoted_count") or 0) if isinstance(news_payload, dict) else 0
     news_actionable_unpromoted_count = (
         int(news_payload.get("actionable_unpromoted_count") or 0) if isinstance(news_payload, dict) else 0
@@ -299,7 +300,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         "dossier_count": dossier_count,
         "failed_count": failed_count,
         "daily_brief_date": daily_brief_date,
-        "news_inbox_count": len(news_items),
+        "news_inbox_count": news_inbox_count,
         "news_unpromoted_count": news_unpromoted_count,
         "news_actionable_unpromoted_count": news_actionable_unpromoted_count,
         "news_quality_issue_count": news_quality_issue_count,
