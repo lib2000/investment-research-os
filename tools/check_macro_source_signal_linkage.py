@@ -54,6 +54,13 @@ def source_linkage_status(root: Path) -> dict[str, Any]:
         for item in all_items
         if _has_list(item, "matched_themes") or _has_list(item, "target_matches") or item.get("portfolio_related")
     ]
+    target_linked_items = [item for item in all_items if _has_list(item, "target_matches")]
+    theme_only_items = [
+        item
+        for item in all_items
+        if _has_list(item, "matched_themes") and not _has_list(item, "target_matches")
+    ]
+    unlinked_items = [item for item in all_items if item not in linked_items]
     action_items = [item for item in all_items if str(item.get("recommended_action") or "").strip()]
     detail_ready = [
         item
@@ -74,6 +81,9 @@ def source_linkage_status(root: Path) -> dict[str, Any]:
         "regional_count": len(regional_items),
         "total_count": len(all_items),
         "linked_count": len(linked_items),
+        "target_linked_count": len(target_linked_items),
+        "theme_only_count": len(theme_only_items),
+        "unlinked_count": len(unlinked_items),
         "action_count": len(action_items),
         "kcif_detail_ready_count": len(detail_ready),
         "family_counts": dict(sorted(family_counts.items())),
@@ -91,6 +101,24 @@ def source_linkage_status(root: Path) -> dict[str, Any]:
                     len(row.get("target_matches") or []) if isinstance(row.get("target_matches"), list) else 0,
                     float(row.get("relevance_score") or 0),
                 ),
+                reverse=True,
+            )[:5]
+        ],
+        "sample_target_links": [
+            {
+                "source": item.get("source_family"),
+                "title": item.get("title"),
+                "themes": item.get("matched_themes") or [],
+                "target_count": len(item.get("target_matches") or []) if isinstance(item.get("target_matches"), list) else 0,
+                "target_labels": [
+                    match.get("label") or match.get("ticker") or match.get("source")
+                    for match in (item.get("target_matches") or [])
+                    if isinstance(match, dict)
+                ][:5],
+            }
+            for item in sorted(
+                target_linked_items,
+                key=lambda row: len(row.get("target_matches") or []) if isinstance(row.get("target_matches"), list) else 0,
                 reverse=True,
             )[:5]
         ],
@@ -139,6 +167,7 @@ def main() -> int:
         f"KCIF {status['kcif_count']}개 | "
         f"지역/매크로 {status['regional_count']}개 | "
         f"연결 {status['linked_count']}/{status['total_count']}개 | "
+        f"타깃 {status['target_linked_count']}개/테마 {status['theme_only_count']}개/미연결 {status['unlinked_count']}개 | "
         f"권장 조치 {status['action_count']}개 | "
         f"KCIF 상세 {status['kcif_detail_ready_count']}개",
         flush=True,
@@ -150,6 +179,14 @@ def main() -> int:
         print(
             f"- [{item['source']}] {item['title']} | 테마 {themes} | "
             f"타깃 {item['target_count']}개 | {item['recommended_action']}",
+            flush=True,
+        )
+    for item in status["sample_target_links"]:
+        themes = ", ".join(str(theme) for theme in item["themes"][:4]) or "테마 없음"
+        targets = ", ".join(str(label) for label in item["target_labels"] if label) or "타깃명 없음"
+        print(
+            f"타깃 직접 연결: [{item['source']}] {item['title']} | 테마 {themes} | "
+            f"타깃 {item['target_count']}개: {targets}",
             flush=True,
         )
     errors = strict_errors(

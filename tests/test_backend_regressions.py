@@ -10435,8 +10435,12 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
         self.assertEqual(status["kcif_count"], 1)
         self.assertEqual(status["regional_count"], 1)
         self.assertEqual(status["linked_count"], 2)
+        self.assertEqual(status["target_linked_count"], 1)
+        self.assertEqual(status["theme_only_count"], 1)
+        self.assertEqual(status["unlinked_count"], 0)
         self.assertEqual(status["action_count"], 2)
         self.assertEqual(status["kcif_detail_ready_count"], 1)
+        self.assertEqual(status["sample_target_links"][0]["target_labels"], ["005930"])
         self.assertEqual(tool.strict_errors(status), [])
 
     def test_macro_source_signal_linkage_strict_errors_validate_empty_links(self):
