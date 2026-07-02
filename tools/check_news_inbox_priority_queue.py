@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 SYSTEM_DIR = Path("research_vault/_system")
@@ -92,6 +93,54 @@ def priority_sort_key(item: dict[str, Any]) -> tuple[float, float, str]:
     return (target_bonus + policy_bonus, _number(item.get("relevance_score")), str(item.get("created_at") or ""))
 
 
+def canonical_news_url(value: Any) -> str:
+    source_url = str(value or "").strip()
+    if not source_url:
+        return ""
+    try:
+        parsed = urlsplit(source_url)
+    except ValueError:
+        return source_url
+    if not parsed.scheme or not parsed.netloc:
+        return source_url
+    query = dict(parse_qsl(parsed.query, keep_blank_values=False))
+    stable_params = [
+        (key, query[key])
+        for key in ["newsId", "nid", "articleId", "id"]
+        if query.get(key)
+    ]
+    normalized_query = urlencode(stable_params)
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, normalized_query, ""))
+
+
+def duplicate_priority_groups(priority_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item in priority_items:
+        key = canonical_news_url(item.get("source_url"))
+        if not key:
+            continue
+        groups.setdefault(key, []).append(item)
+    duplicates = []
+    for key, rows in groups.items():
+        if len(rows) <= 1:
+            continue
+        titles = []
+        for row in rows:
+            title = str(row.get("title") or "").strip()
+            if title and title not in titles:
+                titles.append(title)
+        duplicates.append(
+            {
+                "canonical_url": key,
+                "count": len(rows),
+                "titles": titles[:3],
+                "ids": [row.get("id") for row in rows if row.get("id")],
+            }
+        )
+    return sorted(duplicates, key=lambda group: (-int(group["count"]), str(group["canonical_url"])))
+
+
 def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
     payload = load_news_inbox_payload(root / SYSTEM_DIR / "news_inbox.json")
     news_inbox = _news_inbox_module(root)
@@ -110,6 +159,7 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
         1 for item in priority_items if isinstance(item.get("target_matches"), list) and item.get("target_matches")
     )
     quality_issue_count = counts.get("quality_issue", 0)
+    duplicate_groups = duplicate_priority_groups(priority_items)
     queue = [
         {
             "rank": index,
@@ -134,6 +184,9 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
         "policy_priority_count": policy_priority_count,
         "target_matched_count": target_matched_count,
         "quality_issue_count": quality_issue_count,
+        "duplicate_priority_group_count": len(duplicate_groups),
+        "duplicate_priority_entry_count": sum(int(group["count"]) for group in duplicate_groups),
+        "duplicate_priority_groups": duplicate_groups,
         "queue": queue,
     }
 
@@ -172,7 +225,8 @@ def main() -> int:
         f"우선 {status['priority_count']}개, "
         f"정책/법령 우선 {status['policy_priority_count']}개, "
         f"타깃 매칭 {status['target_matched_count']}개, "
-        f"품질 확인 {status['quality_issue_count']}개",
+        f"품질 확인 {status['quality_issue_count']}개, "
+        f"우선 중복 후보 {status['duplicate_priority_group_count']}묶음",
         flush=True,
     )
     if status.get("updated_at"):
@@ -181,6 +235,12 @@ def main() -> int:
         print(
             f"- {item['rank']}위 [{item['scope_label']}] {item['title']} "
             f"| 점수 {item['relevance_score']:g} | {item['reason']} | {item['source_url']}",
+            flush=True,
+        )
+    for group in status["duplicate_priority_groups"]:
+        print(
+            f"중복 후보: {group['count']}개 | {group['canonical_url']} | "
+            f"{' / '.join(group['titles'])}",
             flush=True,
         )
     errors = strict_errors(status)

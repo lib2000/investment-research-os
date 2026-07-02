@@ -10038,6 +10038,35 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         self.assertIn("타깃 매칭", status["queue"][0]["reason"])
         self.assertEqual(tool.strict_errors(status), [])
 
+    def test_news_inbox_priority_queue_groups_duplicate_priority_urls(self):
+        tool = load_news_inbox_priority_queue_tool()
+        items = [
+            {
+                "id": "n1",
+                "title": "AI 관계장관 간담회",
+                "source_url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176&pageIndex=1&startDate=2025-07-02",
+            },
+            {
+                "id": "n2",
+                "title": "AI 관계장관 간담회",
+                "source_url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176&pageIndex=1&startDate=2025-07-01",
+            },
+            {
+                "id": "n3",
+                "title": "다른 정책 뉴스",
+                "source_url": "https://example.com/policy?id=42&utm_source=test",
+            },
+        ]
+
+        groups = tool.duplicate_priority_groups(items)
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["count"], 2)
+        self.assertEqual(
+            groups[0]["canonical_url"],
+            "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176",
+        )
+
     def test_news_inbox_priority_queue_strict_errors_validate_shapes(self):
         tool = load_news_inbox_priority_queue_tool()
         status = {
