@@ -320,8 +320,10 @@ class OperationalReadinessToolTests(unittest.TestCase):
             enforced = tool.nps_allocation_signal(root, system_dir, enforce=True)
 
         self.assertEqual(advisory["status"], "ok")
+        self.assertIn("비중 이탈 감시 중", advisory["message"])
         self.assertIn("상태 above_target", advisory["message"])
         self.assertEqual(enforced["status"], "warning")
+        self.assertIn("비중 이탈", enforced["message"])
         self.assertLess(enforced["score"], 95.0)
 
 

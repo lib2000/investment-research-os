@@ -379,12 +379,19 @@ def nps_allocation_signal(root: Path, system_dir: Path, *, enforce: bool) -> dic
     )
     breached = monitor.get("status") in {"above_target", "below_target", "needs_data"}
     score = 75.0 if enforce and breached else 100.0
+    guard_label = (
+        "비중 이탈 감시 중"
+        if breached and not enforce
+        else "비중 이탈"
+        if breached
+        else "허용 범위"
+    )
     return signal(
         "nps_domestic_equity_allocation",
         "국민연금 국내주식 14%",
         score,
         (
-            f"{monitor.get('portfolio_name')} 현재 {float(monitor.get('current_domestic_equity_weight') or 0) * 100:.2f}% "
+            f"{guard_label}: {monitor.get('portfolio_name')} 현재 {float(monitor.get('current_domestic_equity_weight') or 0) * 100:.2f}% "
             f"/ 목표 {float(monitor.get('target_domestic_equity_weight') or 0) * 100:.1f}% "
             f"/ 상태 {monitor.get('status')}"
         ),
