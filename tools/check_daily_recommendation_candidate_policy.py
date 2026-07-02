@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -209,6 +210,7 @@ def candidate_policy_result(
     return {
         "status": "failure" if failures else "success",
         "scope_note": "runtime_candidate_preview_only_no_store_write",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "failures": failures,
         "stored_top_records": stored_top_records,
         "stored_preview_mismatches": preview_mismatches,

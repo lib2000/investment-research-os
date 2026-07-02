@@ -232,6 +232,9 @@ if ($dailyRecommendations) {
     }
   }
   if ($dailyCandidatePolicyPreview) {
+    if ($dailyCandidatePolicyPreview.generated_at) {
+      Write-Host "추천 재계산 프리뷰 생성: $($dailyCandidatePolicyPreview.generated_at)"
+    }
     $previewMismatches = if ($dailyCandidatePolicyPreview.stored_preview_mismatches) {
       @($dailyCandidatePolicyPreview.stored_preview_mismatches | ForEach-Object { $_ })
     } else {

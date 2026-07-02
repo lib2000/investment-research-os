@@ -416,6 +416,7 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertEqual(result["scope_note"], "runtime_candidate_preview_only_no_store_write")
         self.assertEqual(result["status"], "success")
+        self.assertIn("generated_at", result)
         self.assertIn("stored_preview_mismatches", result)
 
     def test_candidate_policy_cli_supports_output_json(self):
