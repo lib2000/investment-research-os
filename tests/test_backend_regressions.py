@@ -9893,6 +9893,58 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertEqual(digest["news_unpromoted_count"], 115)
         self.assertEqual(digest["news_actionable_unpromoted_count"], 7)
 
+    def test_automation_digest_next_action_uses_dossier_duplicate_review_count(self):
+        from research_os import automation_status
+
+        settings = SimpleNamespace(
+            research_vault_dir="vault",
+            daily_recommendations_enabled=True,
+            daily_recommendations_time="08:00",
+        )
+        stores = {
+            "interest_targets": {
+                "payload": {
+                    "target_count": 1,
+                    "duplicate_suspected_count": 1338,
+                    "ticker_targets": [],
+                    "sector_targets": [],
+                }
+            },
+            "automation": {"dossier_count": 0, "failed_count": 0, "daily_brief_date": "2026-06-18"},
+            "duplicate": {"duplicate_entry_count": 19, "duplicate_group_count": 1},
+            "refresh_queue": {},
+            "daily_state": {},
+        }
+        runtime = SimpleNamespace(
+            resolve_vault_dir=lambda _path: Path("vault"),
+            interest_collection_targets_path=lambda _settings: "interest_targets",
+            research_automation_status_path=lambda _settings: "automation",
+            storage_duplicate_review_path=lambda _settings: "duplicate",
+            dossier_refresh_queue_status_path=lambda _settings: "refresh_queue",
+            daily_recommendation_state_path=lambda _settings: "daily_state",
+            read_json_store=lambda path, default=None: stores.get(path, default or {}),
+            read_latest_daily_brief=lambda _settings: {"payload": {"date": "2026-06-18"}},
+            rag_memory_status=lambda _vault_dir: {"document_count": 9, "snapshot_count": 2},
+            build_news_inbox_payload=lambda _settings, limit=10: {"items": [], "count": 0, "unpromoted_count": 0},
+            build_external_source_schedule_status=lambda _settings: [],
+            summarize_daily_recommendation_store=lambda _settings, limit=10: {"latest_recommendation_date": "2026-06-18"},
+            should_run_daily_recommendations=lambda _settings: False,
+            build_nps_domestic_equity_allocation_status=lambda _settings: {"status": "within_target"},
+            read_kcif_reports_watch=lambda _settings: {},
+            should_refresh_kcif_cache=lambda _watch: False,
+            read_regional_business_sources_watch=lambda _settings: {},
+            should_refresh_regional_business_cache=lambda _watch: False,
+            read_dart_filing_cache=lambda _settings: {},
+            dart_daily_check_status=lambda _cache, _settings: {"due": False, "failure_count": 0},
+            current_storage_timestamp=lambda: "2026-06-18T09:00:00+09:00",
+        )
+
+        digest = automation_status.build_research_automation_dashboard_digest(runtime, settings)
+
+        self.assertEqual(digest["duplicate_suspected_count"], 1338)
+        self.assertTrue(any("중복 의심 자료 19개" in item for item in digest["next_actions"]))
+        self.assertFalse(any("중복 의심 자료 1338개" in item for item in digest["next_actions"]))
+
     def test_automation_digest_helpers_rank_targets_and_next_actions(self):
         from research_os.automation_digest_helpers import build_dashboard_next_actions
         from research_os.automation_digest_helpers import select_priority_targets

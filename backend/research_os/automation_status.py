@@ -190,6 +190,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         int(board.get("duplicate_suspected_count") or 0),
         int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0,
     )
+    duplicate_review_count = int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0
     failed_count = int(status.get("failed_count") or 0)
     target_count = int(board.get("target_count") or 0)
     dossier_count = int(status.get("dossier_count") or 0)
@@ -259,7 +260,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
     next_actions = build_dashboard_next_actions(
         target_count=target_count,
         daily_brief_date=daily_brief_date,
-        duplicate_count=duplicate_count,
+        duplicate_count=duplicate_review_count,
         failed_count=failed_count,
         news_unpromoted_count=news_unpromoted_count,
         news_actionable_unpromoted_count=news_actionable_unpromoted_count,
