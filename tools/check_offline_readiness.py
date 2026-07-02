@@ -119,6 +119,8 @@ CHECKS = [
             "--require-hold-warning",
             "--expected-held-ticker",
             "112610",
+            "--output-json",
+            "tmp/daily_recommendation_candidate_policy_preview.json",
         ],
     ),
 ]

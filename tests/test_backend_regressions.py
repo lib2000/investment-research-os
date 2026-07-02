@@ -513,6 +513,24 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn("저장 자료 중복 리뷰", checks)
         self.assertEqual(checks["저장 자료 중복 리뷰"], ["tools/check_storage_duplicate_review.py", "--strict"])
 
+    def test_offline_readiness_saves_daily_candidate_policy_preview(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("매일 추천 후보 정책", checks)
+        self.assertEqual(
+            checks["매일 추천 후보 정책"],
+            [
+                "tools/check_daily_recommendation_candidate_policy.py",
+                "--require-hold-warning",
+                "--expected-held-ticker",
+                "112610",
+                "--output-json",
+                "tmp/daily_recommendation_candidate_policy_preview.json",
+            ],
+        )
+
     def test_offline_readiness_checks_macro_source_signal_linkage(self):
         tool = load_offline_readiness_tool()
 
