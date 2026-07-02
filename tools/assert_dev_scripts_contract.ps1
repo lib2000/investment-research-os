@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp"
 )
 
