@@ -184,6 +184,8 @@ def _monitor_plan(dry_run: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _build_readiness_report(result: dict[str, Any], readiness: dict[str, Any], dry_run: dict[str, Any]) -> dict[str, Any]:
     settings = result.get("settings") if isinstance(result.get("settings"), dict) else {}
+    monitor_plan = _monitor_plan(dry_run)
+    monitor_webhook_count = sum(1 for item in monitor_plan if item.get("webhook_configured"))
     conditions = {
         "env_registry_configured": bool(settings.get("firecrawl_monitor_sources_json_configured")),
         "webhook_secret_configured": bool(settings.get("firecrawl_monitor_webhook_secret_configured")),
@@ -200,8 +202,10 @@ def _build_readiness_report(result: dict[str, Any], readiness: dict[str, Any], d
         "conditions": conditions,
         "errors": list(result.get("errors") or []),
         "create_readiness_errors": list(readiness.get("create_readiness_errors") or []),
+        "monitor_webhook_configured": monitor_webhook_count > 0,
+        "monitor_webhook_count": monitor_webhook_count,
         "source_registry": dry_run.get("source_registry") or {},
-        "monitor_plan": _monitor_plan(dry_run),
+        "monitor_plan": monitor_plan,
         "next_action": (
             "실제 /v2/monitor 생성 전 monitor_plan의 target, schedule, webhook 설정을 최종 확인하세요."
             if all(conditions.values()) and not result.get("errors")
@@ -254,6 +258,8 @@ def main() -> int:
             "source_registry": dry_run.get("source_registry") or {},
             "create_ready": bool(readiness.get("create_ready")),
             "create_readiness_errors": readiness.get("create_readiness_errors") or [],
+            "monitor_webhook_configured": bool((readiness.get("operational_preflight") or {}).get("monitor_webhook_configured")),
+            "monitor_webhook_count": int((readiness.get("operational_preflight") or {}).get("monitor_webhook_count") or 0),
             "webhook_flow": webhook_flow,
             "uses_live_vault": bool(args.use_live_vault),
             "env_file_loaded": bool(env_result),
@@ -275,6 +281,10 @@ def main() -> int:
             print(f"[{result['status']}] firecrawl_monitor_operational_preflight")
             print(f"- registry_count: {registry_count}")
             print(f"- webhook_secret_configured: {masked['firecrawl_monitor_webhook_secret_configured']}")
+            print(
+                "- monitor_webhook_configured: "
+                f"{result['monitor_webhook_configured']} ({result['monitor_webhook_count']})"
+            )
             print(f"- create_ready: {result['create_ready']}")
             print(f"- uses_live_vault: {result['uses_live_vault']}")
             print(f"- final_readiness: {readiness_report['status']}")

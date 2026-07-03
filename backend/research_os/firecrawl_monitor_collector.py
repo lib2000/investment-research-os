@@ -235,7 +235,10 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
     sources, parse_error = _firecrawl_monitor_sources(settings)
     create_errors = _monitor_create_readiness_errors(settings)
     sample = sources[0] if sources else None
+    monitor_webhook_count = sum(1 for item in sources if isinstance(item, dict) and item.get("webhook"))
     warnings = [parse_error] if parse_error else []
+    if sources and monitor_webhook_count == 0:
+        warnings.append("No Firecrawl monitor webhook target is configured in the normalized registry")
     operational_errors: list[str] = []
     if not registry_configured:
         operational_errors.append("FIRECRAWL_MONITOR_SOURCES_JSON must be configured for operational preflight")
@@ -303,6 +306,9 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
             "ready": not operational_errors,
             "registry_configured": registry_configured,
             "webhook_secret_configured": webhook_secret_configured,
+            "monitor_webhook_configured": monitor_webhook_count > 0,
+            "monitor_webhook_count": monitor_webhook_count,
+            "monitor_count": len(sources),
             "requires_create_ready": False,
             "errors": operational_errors,
             "command": preflight_commands["operational_preflight"],

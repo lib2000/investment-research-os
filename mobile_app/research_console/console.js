@@ -17368,7 +17368,7 @@ function formatKoreanResult(value) {
       `Hosted API: ${monitorHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${monitorHosted.base_url || "https://api.firecrawl.dev/v2"}`,
       `샘플: ${monitorSample.name || "Investment web monitor"} · 대상 ${formatNumber(monitorSample.target_count || 0)}개 · ${(monitorSample.target_types || []).join(", ") || "유형 미확인"}`,
       `Create ready: ${firecrawlMonitor.create_ready ? "true" : "false"} · webhook=${monitorSample.webhook_configured ? "true" : "false"} · payload=${monitorSample.payload_hash_prefix || "미확인"}`,
-      `운영 프리플라이트: ready=${monitorPreflight.ready ? "true" : "false"} · registry=${monitorPreflight.registry_configured ? "true" : "false"} · webhook_secret=${monitorPreflight.webhook_secret_configured ? "true" : "false"}`,
+      `운영 프리플라이트: ready=${monitorPreflight.ready ? "true" : "false"} · registry=${monitorPreflight.registry_configured ? "true" : "false"} · webhook_secret=${monitorPreflight.webhook_secret_configured ? "true" : "false"} · monitor_webhook=${monitorPreflight.monitor_webhook_configured ? "true" : "false"} (${formatNumber(monitorPreflight.monitor_webhook_count || 0)}/${formatNumber(monitorPreflight.monitor_count || 0)})`,
       ...(Array.isArray(monitorPreflight.errors) && monitorPreflight.errors.length
         ? monitorPreflight.errors.slice(0, 3).map((item) => `운영 프리플라이트 차단: ${compactOutputText(item, 140)}`)
         : []),

@@ -185,7 +185,9 @@ def main() -> int:
                 "- operational_preflight: "
                 f"ready={bool(preflight.get('ready'))} "
                 f"registry={bool(preflight.get('registry_configured'))} "
-                f"webhook_secret={bool(preflight.get('webhook_secret_configured'))}"
+                f"webhook_secret={bool(preflight.get('webhook_secret_configured'))} "
+                f"monitor_webhook={bool(preflight.get('monitor_webhook_configured'))} "
+                f"({int(preflight.get('monitor_webhook_count') or 0)}/{int(preflight.get('monitor_count') or 0)})"
             )
             for error in preflight.get("errors") or []:
                 print(f"  - {error}")

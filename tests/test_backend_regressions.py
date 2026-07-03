@@ -395,11 +395,13 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Firecrawl Monitor 운영 프리플라이트", script_source)
         self.assertIn("operational_preflight", script_source)
         self.assertIn("webhook_secret_configured", script_source)
+        self.assertIn("monitor_webhook_configured", script_source)
         monitor_tool_source = (PROJECT_ROOT / "tools" / "check_firecrawl_monitor_collector.py").read_text(
             encoding="utf-8"
         )
         self.assertIn("operational_preflight", monitor_tool_source)
         self.assertIn("webhook_secret", monitor_tool_source)
+        self.assertIn("monitor_webhook", monitor_tool_source)
         self.assertIn("needs_body_copy_entries", script_source)
         self.assertIn("needs_body_duplicate_title_group_count", script_source)
         self.assertIn("needs_body_duplicate_title_groups", script_source)
@@ -427,6 +429,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("news_duplicate_priority_groups", console_source)
         self.assertIn("운영 프리플라이트", console_source)
         self.assertIn("monitorPreflight.webhook_secret_configured", console_source)
+        self.assertIn("monitorPreflight.monitor_webhook_configured", console_source)
         self.assertIn(".automation-news-duplicate", style_source)
 
     def test_enter_research_os_script_prints_recovery_commands(self):
@@ -1273,6 +1276,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertFalse(status["operational_preflight"]["ready"])
         self.assertFalse(status["operational_preflight"]["registry_configured"])
         self.assertFalse(status["operational_preflight"]["webhook_secret_configured"])
+        self.assertFalse(status["operational_preflight"]["monitor_webhook_configured"])
+        self.assertEqual(status["operational_preflight"]["monitor_webhook_count"], 0)
         self.assertIn("FIRECRAWL_MONITOR_SOURCES_JSON", json.dumps(status["operational_preflight"]))
         self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET", json.dumps(status["operational_preflight"]))
         self.assertFalse(status["create_ready"])
@@ -1311,6 +1316,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertTrue(status["operational_preflight"]["ready"])
         self.assertTrue(status["operational_preflight"]["registry_configured"])
         self.assertTrue(status["operational_preflight"]["webhook_secret_configured"])
+        self.assertTrue(status["operational_preflight"]["monitor_webhook_configured"])
+        self.assertEqual(status["operational_preflight"]["monitor_webhook_count"], 1)
         self.assertEqual(status["operational_preflight"]["errors"], [])
         self.assertIn("--require-webhook-secret", status["operational_preflight"]["command"])
         self.assertNotIn("fc-secret-value", json.dumps(status))
@@ -4582,6 +4589,7 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("[success] firecrawl_monitor_operational_preflight", result.stdout)
+        self.assertIn("monitor_webhook_configured: False (0)", result.stdout)
         self.assertIn("reject=401 accept=200 saved=1", result.stdout)
 
     def test_firecrawl_monitor_operational_preflight_rejects_placeholder_secret(self):
@@ -4664,6 +4672,8 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertTrue(report["conditions"]["monitor_dry_run_false"])
         self.assertEqual(report["monitor_plan"][0]["name"], "SEC monitor")
         self.assertEqual(report["monitor_plan"][0]["target_count"], 1)
+        self.assertFalse(report["monitor_webhook_configured"])
+        self.assertEqual(report["monitor_webhook_count"], 0)
         self.assertIn("payload_hash_prefix", report["monitor_plan"][0])
         self.assertNotIn("fc-test-create-ready-key", json.dumps(report))
         self.assertNotIn("expected-preflight-secret", json.dumps(report))
