@@ -597,6 +597,14 @@ class PublicIrSecStoreCheckToolTests(unittest.TestCase):
 
 
 class OfflineReadinessToolTests(unittest.TestCase):
+    def test_offline_readiness_supports_json_summary(self):
+        source = (PROJECT_ROOT / "tools" / "check_offline_readiness.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"expected_check_count"', source)
+        self.assertIn('"failed_labels"', source)
+        self.assertIn('"output_tail"', source)
+
     def test_offline_readiness_checks_firecrawl_registry_sample(self):
         tool = load_offline_readiness_tool()
 

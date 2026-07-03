@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -137,7 +139,47 @@ def project_root(start: Path) -> Path:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Investment Research OS 오프라인 운영 점검을 실행합니다.")
+    parser.add_argument("--json", action="store_true", help="전체 점검 결과 요약을 JSON으로 출력합니다.")
+    parser.add_argument("--tail-lines", type=int, default=12, help="JSON 출력에 포함할 각 점검 출력 마지막 줄 수")
+    args = parser.parse_args()
+
     root = project_root(Path.cwd())
+    if args.json:
+        results = []
+        for label, check_args in CHECKS:
+            completed = subprocess.run(
+                [sys.executable, *check_args],
+                cwd=root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+            results.append(
+                {
+                    "label": label,
+                    "args": check_args,
+                    "returncode": completed.returncode,
+                    "status": "ok" if completed.returncode == 0 else "error",
+                    "output_tail": output.splitlines()[-max(0, args.tail_lines) :],
+                }
+            )
+            if completed.returncode != 0:
+                break
+        failed = [item for item in results if item["returncode"] != 0]
+        payload = {
+            "status": "error" if failed else "ok",
+            "project_root": str(root),
+            "check_count": len(results),
+            "expected_check_count": len(CHECKS),
+            "failed_count": len(failed),
+            "failed_labels": [item["label"] for item in failed],
+            "results": results,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return failed[0]["returncode"] if failed else 0
+
     print(f"프로젝트 루트: {root}", flush=True)
     for label, args in CHECKS:
         print(f"\n==> {label}", flush=True)
