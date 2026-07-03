@@ -84,6 +84,41 @@ def read_daily_recommendation_store(settings: Settings) -> dict:
     )
 
 
+def daily_recommendation_candidate_policy_preview_path(settings: Settings) -> Path:
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    project_root = vault_dir.parent if vault_dir.name == "research_vault" else Path.cwd()
+    return project_root / "tmp" / "daily_recommendation_candidate_policy_preview.json"
+
+
+def summarize_daily_recommendation_candidate_policy_preview(settings: Settings) -> dict[str, Any]:
+    payload = read_json_payload(daily_recommendation_candidate_policy_preview_path(settings), {})
+    if not payload:
+        return {
+            "status": "missing",
+            "stored_preview_mismatch_count": 0,
+            "stored_preview_mismatches": [],
+            "message": "추천 재계산 프리뷰 파일이 아직 생성되지 않았습니다.",
+        }
+    mismatches = [
+        item
+        for item in payload.get("stored_preview_mismatches", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "status": payload.get("status") or "unknown",
+        "generated_at": payload.get("generated_at"),
+        "scope_note": payload.get("scope_note"),
+        "stored_preview_mismatch_count": len(mismatches),
+        "stored_preview_mismatches": mismatches[:12],
+        "stored_top_records": payload.get("stored_top_records", [])[:12],
+        "message": (
+            "저장된 추천 순위와 현재 재계산 프리뷰가 다릅니다."
+            if mismatches
+            else "저장된 추천 순위와 현재 재계산 프리뷰가 일치합니다."
+        ),
+    }
+
+
 def write_daily_recommendation_store(settings: Settings, payload: dict) -> None:
     payload["module"] = "daily_stock_recommendations"
     write_json_payload(daily_recommendation_store_path(settings), payload)
@@ -652,5 +687,6 @@ def summarize_daily_recommendation_store(settings: Settings, *, limit: int = 30)
         "due_or_pending_milestones": due_milestones[:30],
         "performance_summary": daily_recommendation_tracking.summarize_tracking_performance(records),
         "latest_policy_alignment": latest_daily_recommendation_policy_alignment(records, latest_records),
+        "candidate_policy_preview": summarize_daily_recommendation_candidate_policy_preview(settings),
         "storage_path": str(daily_recommendation_store_path(settings)),
     }

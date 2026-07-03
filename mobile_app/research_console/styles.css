@@ -694,6 +694,36 @@ label {
   overflow-wrap: anywhere;
 }
 
+.daily-recommendation-preview-drift {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 251, 235, 0.92);
+}
+
+.daily-recommendation-preview-drift strong {
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.daily-recommendation-preview-drift span,
+.daily-recommendation-preview-drift small {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.daily-recommendation-preview-drift small {
+  color: #64748b;
+  font-weight: 750;
+}
+
 .daily-recommendation-signal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4133,9 +4163,9 @@ label {
   border-radius: 7px;
   font-size: 12px;
   font-weight: 850;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .daily-recommendation-badges {
@@ -4164,9 +4194,12 @@ label {
 
 .daily-recommendation-card span,
 .daily-recommendation-card small {
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
   font-weight: 750;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .daily-recommendation-card strong {
@@ -4308,11 +4341,10 @@ label {
 
 .daily-recommendation-detail summary span {
   min-width: 0;
-  overflow: hidden;
   color: #475569;
   text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .daily-recommendation-detail[open] {

@@ -7737,6 +7737,45 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(alignment["review_hold_records"][0]["ticker"], "WEAK")
         self.assertEqual(alignment["review_hold_records"][0]["penalty_points"], 12)
 
+    def test_daily_recommendation_store_includes_candidate_policy_preview(self):
+        from tempfile import TemporaryDirectory
+
+        from research_os import daily_recommendation_store
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "tmp").mkdir(parents=True)
+            preview_path = root / "tmp" / "daily_recommendation_candidate_policy_preview.json"
+            preview_path.write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "generated_at": "2026-07-03T17:23:08+00:00",
+                        "scope_note": "runtime_candidate_preview_only_no_store_write",
+                        "stored_preview_mismatches": [
+                            {
+                                "market": "US",
+                                "rank": 1,
+                                "stored_ticker": "ABSI",
+                                "stored_score": 168,
+                                "preview_ticker": "OTLY",
+                                "preview_score": 172,
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(research_vault_dir=str(root / "research_vault"))
+            summary = daily_recommendation_store.summarize_daily_recommendation_store(settings)
+
+        preview = summary["candidate_policy_preview"]
+        self.assertEqual(preview["status"], "success")
+        self.assertEqual(preview["stored_preview_mismatch_count"], 1)
+        self.assertEqual(preview["stored_preview_mismatches"][0]["preview_ticker"], "OTLY")
+
 
 class DailyRecommendationQualityModuleTests(unittest.TestCase):
     def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):

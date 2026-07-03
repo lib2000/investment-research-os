@@ -9147,10 +9147,24 @@ function dailyRecommendationMarketGroups(records = []) {
   }));
 }
 
+function dailyRecommendationPreviewMismatchText(item = {}) {
+  const market = dailyRecommendationMarketLabel(String(item.market || "").toUpperCase());
+  const rank = item.rank || "-";
+  const stored = item.stored_ticker || "-";
+  const storedScore = item.stored_score ?? "-";
+  const preview = item.preview_ticker || "-";
+  const previewScore = item.preview_score ?? "-";
+  return `${market} ${rank}위 저장 ${stored}(${storedScore}) → 재계산 ${preview}(${previewScore})`;
+}
+
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
   const schedule = payload?.daily_time || "08:00";
   const records = dailyRecommendationTopRecords(payload || {});
   const policyAlignment = payload?.latest_policy_alignment || {};
+  const candidatePreview = payload?.candidate_policy_preview || {};
+  const previewMismatches = Array.isArray(candidatePreview.stored_preview_mismatches)
+    ? candidatePreview.stored_preview_mismatches
+    : [];
   const policyDriftRecords = Array.isArray(policyAlignment.review_hold_records)
     ? policyAlignment.review_hold_records
     : [];
@@ -9169,7 +9183,10 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
   const driftText = policyDriftTickers.length
     ? ` · 정책 이탈 ${policyDriftTickers.join(", ")} 재정렬 필요`
     : "";
-  const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length ? "warning" : "ok";
+  const mismatchText = previewMismatches.length
+    ? ` · 저장/재계산 차이 ${previewMismatches.length}개`
+    : "";
+  const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length || previewMismatches.length ? "warning" : "ok";
   const marketGroups = dailyRecommendationMarketGroups(records);
   const marketRecordsByRank = new Map();
   marketGroups.forEach((group) => {
@@ -9255,6 +9272,20 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
         <small>서버가 ${escapeHtml(schedule)} 이후 자동 실행하면 이 영역에 바로 표시됩니다.</small>
       </div>
     `;
+  const mismatchAlert = previewMismatches.length
+    ? `
+      <div class="daily-recommendation-preview-drift" role="note" aria-label="추천 저장과 재계산 프리뷰 차이">
+        <strong>재계산 프리뷰와 순위 차이 ${escapeHtml(formatNumber(previewMismatches.length))}개</strong>
+        <span>${escapeHtml(
+          previewMismatches
+            .slice(0, 4)
+            .map(dailyRecommendationPreviewMismatchText)
+            .join(" · ")
+        )}${previewMismatches.length > 4 ? " · 외 추가 차이 있음" : ""}</span>
+        <small>${escapeHtml(candidatePreview.generated_at ? `프리뷰 ${formatDateTime(candidatePreview.generated_at)}` : "프리뷰 생성 시각 미확인")} · 오늘 추천은 저장값 기준, 다음 실행 전 재검토 대상</small>
+      </div>
+    `
+    : "";
   return `
     <section class="daily-recommendation-top-panel ${escapeHtml(tone)}" aria-label="오늘 한국/미국 추천 1~3위">
       <div class="daily-recommendation-top-head">
@@ -9265,7 +9296,8 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
         <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
       </div>
       ${rows}
-      <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}${escapeHtml(driftText)}</p>
+      ${mismatchAlert}
+      <p>${escapeHtml(dueText)}${state.last_run_at ? ` · 마지막 실행 ${escapeHtml(formatDateTime(state.last_run_at))}` : ""}${escapeHtml(driftText)}${escapeHtml(mismatchText)}</p>
     </section>
   `;
 }
