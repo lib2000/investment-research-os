@@ -5674,10 +5674,20 @@ async function runConsoleSystemCheck() {
   ]);
 
   const checks = [];
+  const checkTimeoutMs = isClickSmokeMode() ? 25000 : 60000;
+  const withSystemCheckTimeout = (label, promise) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error(`${label} 응답 제한 시간 ${Math.round(checkTimeoutMs / 1000)}초 초과`));
+        }, checkTimeoutMs);
+      }),
+    ]);
   const runCheck = async (label, callback) => {
     const started = performance.now();
     try {
-      const value = await callback();
+      const value = await withSystemCheckTimeout(label, Promise.resolve().then(callback));
       const derivedStatus =
         !value ||
         value?.ready === false ||
