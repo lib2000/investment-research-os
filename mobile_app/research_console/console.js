@@ -17227,7 +17227,7 @@ function formatKoreanResult(value) {
     const monitorRouteCounts = firecrawlMonitorEvents.by_route || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
-          `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
+          `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.body_followup?.label || "본문 보강"} · ${item.relative_path || item.source_url || "경로 미확인"}`
         )
       : [];
     const duplicateTitleLines = duplicateTitleGroups.length
@@ -17253,6 +17253,7 @@ function formatKoreanResult(value) {
       `### 공개 IR/SEC 저장 상태`,
       `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
       `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
+      `SEC Exhibit 후속: ${formatNumber(value.sec_exhibit_followup_count || 0)}건`,
       `동일 공시 보강 그룹: ${formatNumber(value.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0)}건`,
       `반복 제목 보강 그룹: ${formatNumber(value.needs_body_repeated_title_group_count || repeatedTitleGroups.length || 0)}건`,
       `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,

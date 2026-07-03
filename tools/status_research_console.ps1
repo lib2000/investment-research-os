@@ -484,7 +484,12 @@ if ($publicIrSecStatus) {
   } else {
     0
   }
-  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건, 동일 공시 그룹 $($needsBodyDuplicateTitleGroupCount)개, 반복 제목 그룹 $($needsBodyRepeatedTitleGroupCount)개"
+  $secExhibitFollowupCount = if ($publicIrSecStatus.sec_exhibit_followup_count) {
+    $publicIrSecStatus.sec_exhibit_followup_count
+  } else {
+    0
+  }
+  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건, SEC Exhibit 후속 $($secExhibitFollowupCount)건, 동일 공시 그룹 $($needsBodyDuplicateTitleGroupCount)개, 반복 제목 그룹 $($needsBodyRepeatedTitleGroupCount)개"
   foreach ($group in $needsBodyDuplicateTitleGroups | Select-Object -First 3) {
     $groupTitle = Limit-StatusText -Text $group.title -MaxLength 80
     $groupFiles = @($group.file_names) | Where-Object { $_ } | ForEach-Object { Limit-StatusText -Text $_ -MaxLength 80 }

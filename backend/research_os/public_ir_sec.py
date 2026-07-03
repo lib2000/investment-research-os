@@ -454,6 +454,10 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         _needs_body_entry_preview(entry)
         for entry in needs_body[: max(1, min(limit, 50))]
     ]
+    sec_exhibit_followup_entries = [
+        entry for entry in needs_body_preview
+        if (entry.get("body_followup") or {}).get("reason") == "sec_exhibit_followup"
+    ]
     needs_body_duplicate_title_groups = _needs_body_duplicate_title_groups(needs_body, limit=limit)
     needs_body_repeated_title_groups = _needs_body_repeated_title_groups(needs_body, limit=limit)
     next_actions = [
@@ -473,6 +477,8 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "recent_count": len(recent),
         "needs_body_copy_count": len(needs_body),
         "needs_body_copy_entries": needs_body_preview,
+        "sec_exhibit_followup_count": len(sec_exhibit_followup_entries),
+        "sec_exhibit_followup_entries": sec_exhibit_followup_entries[: max(1, min(limit, 50))],
         "needs_body_duplicate_title_group_count": len(needs_body_duplicate_title_groups),
         "needs_body_duplicate_title_groups": needs_body_duplicate_title_groups,
         "needs_body_repeated_title_group_count": len(needs_body_repeated_title_groups),
