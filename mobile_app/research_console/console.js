@@ -7029,9 +7029,21 @@ function renderAutomationDigestCard(dashboard) {
       <div class="automation-action-strip">
         ${nextActions.length
           ? nextActions
-              .map((item, index) => `<span>${escapeHtml(index + 1)}. ${escapeHtml(compactOutputText(item, 86))}</span>`)
+              .map(
+                (item, index) => `
+                  <div class="automation-action-item">
+                    <b>${escapeHtml(index + 1)}</b>
+                    <span>${escapeHtml(compactOutputText(item, index === 0 ? 150 : 110))}</span>
+                  </div>
+                `
+              )
               .join("")
-          : `<span>${escapeHtml(compactOutputText(action, 120))}</span>`}
+          : `
+            <div class="automation-action-item">
+              <b>1</b>
+              <span>${escapeHtml(compactOutputText(action, 140))}</span>
+            </div>
+          `}
       </div>
       ${npsRebalanceRows}
       ${newsPriorityRows}
@@ -7433,6 +7445,33 @@ function renderDashboardCleanActionButtons(dashboard) {
   `;
 }
 
+function renderDashboardAutomationActions(digest) {
+  const nextActions = Array.isArray(digest?.next_actions) ? digest.next_actions.filter(Boolean).slice(0, 5) : [];
+  if (!nextActions.length) {
+    return "";
+  }
+  return `
+    <section class="dashboard-clean-automation" aria-label="자동화 다음 조치">
+      <div class="dashboard-clean-panel-head">
+        <span>자동화 다음 조치</span>
+        <button data-workflow-action="interest-automation" type="button">수집 보드</button>
+      </div>
+      <div class="automation-action-strip">
+        ${nextActions
+          .map(
+            (item, index) => `
+              <div class="automation-action-item">
+                <b>${escapeHtml(index + 1)}</b>
+                <span>${escapeHtml(compactOutputText(item, index === 0 ? 150 : 132))}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderDashboardCards(dashboard) {
   if (!dashboard) {
     setDashboardCards(`
@@ -7505,6 +7544,8 @@ function renderDashboardCards(dashboard) {
           <p>경고 ${escapeHtml(formatNumber(warningCount))}건 · 액션 ${escapeHtml(formatNumber(actionCount))}개</p>
         </div>
       </section>
+
+      ${renderDashboardAutomationActions(automationDigest)}
 
       <section class="dashboard-clean-columns">
         <article class="dashboard-clean-panel">

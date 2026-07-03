@@ -496,6 +496,19 @@ label {
   gap: 14px;
 }
 
+.dashboard-clean-automation {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.dashboard-clean-automation .automation-action-strip {
+  margin-bottom: 0;
+}
+
 .dashboard-clean-hero {
   display: grid;
   grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.45fr) auto;
@@ -1680,16 +1693,37 @@ label {
   margin: 0 0 12px;
 }
 
-.automation-action-strip span {
-  display: block;
+.automation-action-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid rgba(251, 191, 36, 0.44);
   border-radius: 8px;
   background: #fffbeb;
   color: #713f12;
+}
+
+.automation-action-item b {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.automation-action-item span {
+  min-width: 0;
+  color: #713f12;
   font-size: 13px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
 }
 
 .automation-nps-rebalance {
