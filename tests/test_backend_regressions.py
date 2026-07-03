@@ -720,6 +720,17 @@ class GitSyncStatusToolTests(unittest.TestCase):
         self.assertIn('"is_synced"', source)
 
 
+class PublicRepoSafetyCheckToolTests(unittest.TestCase):
+    def test_public_repo_safety_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_public_repo_safety.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"candidate_file_count"', source)
+        self.assertIn('"path_issue_count"', source)
+        self.assertIn('"content_issue_count"', source)
+        self.assertIn('"content_issues"', source)
+
+
 class PortfolioStoreCheckToolTests(unittest.TestCase):
     def test_portfolio_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_portfolio_store.py").read_text(encoding="utf-8")

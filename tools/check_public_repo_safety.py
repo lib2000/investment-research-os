@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -67,6 +69,10 @@ def should_scan_content(path: Path) -> bool:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="공개 Git 추적 후보에 민감정보가 포함됐는지 점검합니다.")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
+    args = parser.parse_args()
+
     root = project_root(Path.cwd())
     files = public_candidate_files(root)
     path_issues = [path for path in files if is_forbidden_path(path)]
@@ -85,6 +91,20 @@ def main() -> int:
                 content_issues.append(relative)
                 break
 
+    ok = not path_issues and not content_issues
+    result = {
+        "status": "ok" if ok else "error",
+        "project_root": str(root),
+        "candidate_file_count": len(files),
+        "path_issue_count": len(path_issues),
+        "content_issue_count": len(content_issues),
+        "path_issues": path_issues,
+        "content_issues": content_issues,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if ok else 1
+
     print(f"프로젝트 루트: {root}")
     print(f"공개 후보 파일: {len(files)}개")
     print(f"민감 경로 추적 의심: {len(path_issues)}개")
@@ -99,7 +119,7 @@ def main() -> int:
         for path in content_issues:
             print(f"- {path}")
 
-    if path_issues or content_issues:
+    if not ok:
         print("공개 저장소 안전 점검 실패")
         return 1
     print("공개 저장소 안전 점검 통과")
