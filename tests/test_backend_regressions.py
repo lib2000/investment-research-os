@@ -16277,7 +16277,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
                         raise_for_status=lambda: None,
                         json=lambda: {
                             "nofi": [
-                                {"gcod": "001", "name": "AI 반도체"},
+                                {"gcod": "001", "name": "매수종목"},
                                 {"gcod": "002", "name": "방산"},
                             ]
                         },
@@ -16332,6 +16332,25 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertEqual(preview["candidates"][1]["company_name"], "SK하이닉스")
         self.assertEqual(preview["candidates"][2]["action"], "add_candidate")
         self.assertEqual(preview["candidates"][2]["company_name"], "한화오션")
+        self.assertTrue(all(item["buy_group"] for item in preview["candidates"] if item["action"] == "add_candidate"))
+
+        non_buy_preview = build_kiwoom_interest_sync_preview(
+            {
+                "details": [
+                    {
+                        "group_id": "002",
+                        "group_name": "매도종목",
+                        "items": [{"ticker": "005930", "company_name": "삼성전자"}],
+                    }
+                ]
+            },
+            {"tickers": []},
+        )
+        self.assertEqual(non_buy_preview["add_candidate_count"], 0)
+        self.assertEqual(non_buy_preview["needs_review_count"], 1)
+        self.assertFalse(non_buy_preview["candidates"][0]["buy_group"])
+        self.assertEqual(non_buy_preview["candidates"][0]["action"], "needs_review")
+        self.assertIn("매수 관심그룹이 아니라", non_buy_preview["candidates"][0]["reason"])
 
     def test_kiwoom_interest_sync_candidates_dry_run_and_save(self):
         import research_os_main as main
@@ -16341,10 +16360,10 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         settings = Settings()
         request = KiwoomInterestSyncRequest(
             candidates=[
-                KiwoomInterestSyncCandidate(ticker="A000660", company_name="SK하이닉스", group_name="AI 반도체"),
+                KiwoomInterestSyncCandidate(ticker="A000660", company_name="SK하이닉스", group_name="매수종목"),
                 KiwoomInterestSyncCandidate(ticker="0117V0", company_name="비표준", group_name="매수종목"),
                 KiwoomInterestSyncCandidate(ticker="A042660", company_name="한화오션", group_name="방산"),
-                KiwoomInterestSyncCandidate(ticker="042660", company_name="한화오션", group_name="방산"),
+                KiwoomInterestSyncCandidate(ticker="042660", company_name="한화오션", group_name="매수종목"),
                 KiwoomInterestSyncCandidate(ticker="", company_name="티커 없음", group_name="기타"),
             ],
             dry_run=True,
@@ -16384,6 +16403,7 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         self.assertEqual(dry_run["prepared_count"], 2)
         self.assertEqual(dry_run["skipped_count"], 3)
         self.assertEqual([item["ticker"] for item in dry_run["prepared_tickers"]], ["0117V0", "042660"])
+        self.assertTrue(any("매수 관심그룹이 아니라" in item["reason"] for item in dry_run["skipped"]))
 
         request.dry_run = False
         with (

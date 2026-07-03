@@ -87,9 +87,16 @@ def run_check(url: str) -> dict:
                   const enabledRows = rows.filter((row) => !row.querySelector("input")?.disabled);
                   const disabledReviewRows = reviewRows.filter((row) => row.querySelector("input")?.disabled);
                   const checkedBeforeSync = [...document.querySelectorAll('input[name="kiwoomInterestCandidate"]:checked')].length;
+                  const reviewCountText = panelText.match(/확인 필요\\s*(\\d+)개/);
+                  const expectedReviewCount = reviewCountText ? Number(reviewCountText[1]) : null;
                   if (!rows.length) throw new Error("No Kiwoom candidate rows rendered.");
                   if (!panelText.includes("확인 필요")) throw new Error("Review-needed count is not visible.");
-                  if (!reviewRows.length) throw new Error("Review-needed rows are not rendered.");
+                  if (expectedReviewCount > 0 && !reviewRows.length) {
+                    throw new Error(`Review-needed rows are not rendered for ${expectedReviewCount} review candidates.`);
+                  }
+                  if (expectedReviewCount === 0 && reviewRows.length) {
+                    throw new Error(`Review-needed rows are rendered even though the count is 0: ${reviewRows.length}.`);
+                  }
                   if (disabledReviewRows.length !== reviewRows.length) {
                     throw new Error("Some review-needed rows are selectable.");
                   }

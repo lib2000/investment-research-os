@@ -78,6 +78,13 @@ def is_standard_domestic_stock_ticker(value: Any) -> bool:
     return bool(re.fullmatch(r"[0-9A-Z]{6}", ticker)) and any(ch.isdigit() for ch in ticker)
 
 
+def is_kiwoom_buy_interest_group(value: Any) -> bool:
+    group_name = str(value or "").strip()
+    if not group_name:
+        return False
+    return "매수" in group_name and "매도" not in group_name
+
+
 def _resolved_company_name(
     ticker: str,
     fallback: str,
@@ -286,15 +293,19 @@ def build_kiwoom_interest_sync_preview(
             seen_candidate_keys.add(candidate_key)
             already_tracked = bool(ticker and ticker in existing_tickers)
             standard_domestic_stock = is_standard_domestic_stock_ticker(ticker)
+            buy_group = is_kiwoom_buy_interest_group(group_name)
             if already_tracked:
                 action = "already_tracked"
                 reason = "이미 로컬 관심종목에 등록되어 있습니다."
             elif not standard_domestic_stock:
                 action = "needs_review"
                 reason = "키움 국내 6자리 종목/상품 코드 형식이 아니라 자동 저장 전 확인이 필요합니다."
+            elif not buy_group:
+                action = "needs_review"
+                reason = "매수 관심그룹이 아니라 자동 저장 대상에서 제외했습니다."
             else:
                 action = "add_candidate"
-                reason = "키움 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
+                reason = "키움 매수 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
             candidates.append(
                 {
                     "ticker": ticker,
@@ -306,6 +317,7 @@ def build_kiwoom_interest_sync_preview(
                         if standard_domestic_stock
                         else "needs_review"
                     ),
+                    "buy_group": buy_group,
                     "sync_eligible": action == "add_candidate",
                     "action": action,
                     "reason": reason,

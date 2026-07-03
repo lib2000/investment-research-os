@@ -137,6 +137,7 @@ from research_os.kiwoom_interest import (
     append_kiwoom_interest_sync_history,
     build_kiwoom_interest_groups_status,
     build_kiwoom_interest_sync_preview,
+    is_kiwoom_buy_interest_group,
     is_standard_domestic_stock_ticker,
     kiwoom_interest_sync_history_path,
     read_kiwoom_interest_sync_history,
@@ -12441,6 +12442,16 @@ def sync_kiwoom_interest_candidates(
                     "ticker": ticker,
                     "company_name": candidate.company_name,
                     "reason": "키움 국내 6자리 종목/상품 코드 형식이 아니라 자동 저장 전 확인이 필요합니다.",
+                }
+            )
+            continue
+        if not is_kiwoom_buy_interest_group(candidate.group_name):
+            skipped.append(
+                {
+                    "ticker": ticker,
+                    "company_name": candidate.company_name,
+                    "group_name": candidate.group_name,
+                    "reason": "매수 관심그룹이 아니라 자동 저장 대상에서 제외했습니다.",
                 }
             )
             continue
