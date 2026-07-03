@@ -773,6 +773,17 @@ class InvestmentCalendarStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"earnings_events"', source)
 
 
+class ClassificationQualityCheckToolTests(unittest.TestCase):
+    def test_classification_quality_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_classification_quality.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('parser.add_argument("--limit"', source)
+        self.assertIn('"classified_count"', source)
+        self.assertIn('"rag_document_count"', source)
+        self.assertIn('"top_tags"', source)
+
+
 class StorageQualityStoreCheckToolTests(unittest.TestCase):
     def test_storage_quality_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_storage_quality_store.py").read_text(encoding="utf-8")

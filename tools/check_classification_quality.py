@@ -79,7 +79,7 @@ def document_id(entry: dict) -> str:
     return str(entry.get("relative_path") or entry.get("file_name") or "")
 
 
-def evaluate(vault_dir: Path, *, strict: bool = False) -> int:
+def evaluate(vault_dir: Path, *, strict: bool = False, limit: int = 5, json_output: bool = False) -> int:
     manifest = load_manifest(vault_dir)
     active = [entry for entry in manifest if not is_archived(entry)]
     classified = [entry for entry in active if is_classified_entry(entry)]
@@ -122,9 +122,6 @@ def evaluate(vault_dir: Path, *, strict: bool = False) -> int:
         if entry.get("type") == "research-capture" and document_id(entry) not in rag_ids:
             missing_rag.append(entry)
 
-    print(f"manifest: {len(manifest)}개 | active: {len(active)}개 | classified: {len(classified)}개")
-    print(f"RAG 문서: {len(rag_ids)}개")
-    print(f"태그 상위: {', '.join(f'{tag}={count}' for tag, count in tag_counter.most_common(12))}")
     checks = [
         ("태그 누락", missing_tags),
         ("source_type 필드 누락", missing_source_type_field),
@@ -136,15 +133,50 @@ def evaluate(vault_dir: Path, *, strict: bool = False) -> int:
         ("RAG 문서 누락", missing_rag),
     ]
     failed = False
+    check_summaries = []
+    for label, items in checks:
+        if items:
+            failed = True
+        check_summaries.append(
+            {
+                "label": label,
+                "count": len(items),
+                "items": [
+                    {
+                        "ticker": entry.get("ticker") or "UNKNOWN",
+                        "file_name": entry.get("file_name"),
+                        "title": entry.get("title"),
+                        "date": entry.get("date"),
+                        "tags": entry.get("tags") or [],
+                    }
+                    for entry in items[: max(0, limit)]
+                ],
+            }
+        )
+    result = {
+        "status": "warning" if failed else "ok",
+        "vault_dir": str(vault_dir),
+        "manifest_count": len(manifest),
+        "active_count": len(active),
+        "classified_count": len(classified),
+        "rag_document_count": len(rag_ids),
+        "top_tags": dict(tag_counter.most_common(12)),
+        "checks": check_summaries,
+    }
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if strict and failed else 0
+
+    print(f"manifest: {len(manifest)}개 | active: {len(active)}개 | classified: {len(classified)}개")
+    print(f"RAG 문서: {len(rag_ids)}개")
+    print(f"태그 상위: {', '.join(f'{tag}={count}' for tag, count in tag_counter.most_common(12))}")
     for label, items in checks:
         print(f"{label}: {len(items)}개")
-        for entry in items[:5]:
+        for entry in items[: max(0, limit)]:
             print(
                 f"  - {entry.get('ticker') or 'UNKNOWN'} | {entry.get('file_name') or entry.get('title') or '제목 없음'} | "
                 f"{entry.get('date') or '날짜 없음'} | tags={entry.get('tags') or []}"
             )
-        if items:
-            failed = True
 
     if strict and failed:
         print("자동 분류 품질 점검 실패")
@@ -157,8 +189,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check classification tags and RAG coverage")
     parser.add_argument("--vault-dir", default=str(PROJECT_ROOT / "research_vault"))
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
-    raise SystemExit(evaluate(Path(args.vault_dir), strict=args.strict))
+    raise SystemExit(evaluate(Path(args.vault_dir), strict=args.strict, limit=args.limit, json_output=args.json))
 
 
 if __name__ == "__main__":
