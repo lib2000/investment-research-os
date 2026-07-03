@@ -114,6 +114,18 @@ def load_git_sync_status_tool():
     return module
 
 
+def load_json_contracts_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_json_contracts.py"
+    spec = spec_from_file_location("check_json_contracts", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_operational_readiness_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -742,6 +754,24 @@ class GitSyncStatusToolTests(unittest.TestCase):
         self.assertIn('parser.add_argument("--json"', source)
         self.assertIn("json.dumps(result", source)
         self.assertIn('"is_synced"', source)
+
+
+class JsonContractsCheckToolTests(unittest.TestCase):
+    def test_json_contracts_check_passes_current_check_tools(self):
+        tool = load_json_contracts_check_tool()
+
+        result = tool.build_result()
+
+        self.assertEqual(result["status"], "success")
+        self.assertGreaterEqual(result["tool_count"], 45)
+        self.assertEqual(result["failed_count"], 0)
+
+    def test_json_contracts_check_supports_json_output_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_json_contracts.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('"failed_tools"', source)
 
 
 class PublicRepoSafetyCheckToolTests(unittest.TestCase):
