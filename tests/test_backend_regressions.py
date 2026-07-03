@@ -392,6 +392,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Firecrawl IR MCP 버전 확인 필요", script_source)
         self.assertIn("Firecrawl IR 최종 점검", script_source)
         self.assertIn("Firecrawl Monitor 최종 점검", script_source)
+        self.assertIn("Firecrawl Monitor 운영 프리플라이트", script_source)
+        self.assertIn("operational_preflight", script_source)
+        self.assertIn("webhook_secret_configured", script_source)
+        monitor_tool_source = (PROJECT_ROOT / "tools" / "check_firecrawl_monitor_collector.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("operational_preflight", monitor_tool_source)
+        self.assertIn("webhook_secret", monitor_tool_source)
         self.assertIn("needs_body_copy_entries", script_source)
         self.assertIn("needs_body_duplicate_title_group_count", script_source)
         self.assertIn("needs_body_duplicate_title_groups", script_source)
@@ -417,6 +425,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("automation-news-duplicate", console_source)
         self.assertIn("중복 ID", console_source)
         self.assertIn("news_duplicate_priority_groups", console_source)
+        self.assertIn("운영 프리플라이트", console_source)
+        self.assertIn("monitorPreflight.webhook_secret_configured", console_source)
         self.assertIn(".automation-news-duplicate", style_source)
 
     def test_enter_research_os_script_prints_recovery_commands(self):
@@ -1249,6 +1259,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             firecrawl_base_url="https://api.firecrawl.dev/v2",
             firecrawl_timeout_seconds=30,
             firecrawl_monitor_sources_json="",
+            firecrawl_monitor_webhook_secret="",
         )
 
         status = build_firecrawl_monitor_readiness_status(settings)
@@ -1256,12 +1267,54 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["status"], "disabled")
         self.assertFalse(status["hosted_api"]["api_key_configured"])
         self.assertEqual(status["source_registry"]["input_source"], "sample")
+        self.assertFalse(status["source_registry"]["configured"])
         self.assertEqual(status["sample_monitor"]["target_count"], 1)
         self.assertIn("scrape", status["sample_monitor"]["target_types"])
+        self.assertFalse(status["operational_preflight"]["ready"])
+        self.assertFalse(status["operational_preflight"]["registry_configured"])
+        self.assertFalse(status["operational_preflight"]["webhook_secret_configured"])
+        self.assertIn("FIRECRAWL_MONITOR_SOURCES_JSON", json.dumps(status["operational_preflight"]))
+        self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET", json.dumps(status["operational_preflight"]))
         self.assertFalse(status["create_ready"])
         self.assertIn("--require-create-ready", status["operations"]["preflight_commands"]["create_ready_required"])
         self.assertIn("create_firecrawl_monitor_env_template.py", status["operations"]["env_template_command"])
         self.assertNotIn("fc-secret", json.dumps(status))
+
+    def test_firecrawl_monitor_readiness_reports_operational_preflight_ready(self):
+        from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
+
+        settings = SimpleNamespace(
+            firecrawl_monitor_enabled=True,
+            firecrawl_monitor_dry_run=True,
+            firecrawl_api_key="fc-secret-value",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_monitor_webhook_secret="webhook-secret-value",
+            firecrawl_monitor_sources_json=json.dumps(
+                {
+                    "monitors": [
+                        {
+                            "name": "Policy monitor",
+                            "url": "https://www.sec.gov/newsroom/press-releases",
+                            "goal": "Alert on policy changes",
+                            "webhook": {"url": "https://example.com/firecrawl/webhook"},
+                        }
+                    ]
+                }
+            ),
+        )
+
+        status = build_firecrawl_monitor_readiness_status(settings)
+
+        self.assertEqual(status["source_registry"]["input_source"], "env_registry")
+        self.assertTrue(status["source_registry"]["configured"])
+        self.assertTrue(status["operational_preflight"]["ready"])
+        self.assertTrue(status["operational_preflight"]["registry_configured"])
+        self.assertTrue(status["operational_preflight"]["webhook_secret_configured"])
+        self.assertEqual(status["operational_preflight"]["errors"], [])
+        self.assertIn("--require-webhook-secret", status["operational_preflight"]["command"])
+        self.assertNotIn("fc-secret-value", json.dumps(status))
+        self.assertNotIn("webhook-secret-value", json.dumps(status))
 
     def test_firecrawl_monitor_sources_normalize_scrape_and_search_targets(self):
         from research_os.firecrawl_monitor_collector import normalize_firecrawl_monitor_sources

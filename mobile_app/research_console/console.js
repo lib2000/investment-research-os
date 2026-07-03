@@ -17311,6 +17311,7 @@ function formatKoreanResult(value) {
     const monitorOps = firecrawlMonitor.operations || {};
     const monitorCommands = monitorOps.preflight_commands || {};
     const monitorSample = firecrawlMonitor.sample_monitor || {};
+    const monitorPreflight = firecrawlMonitor.operational_preflight || {};
     const monitorRouteCounts = firecrawlMonitorEvents.by_route || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
@@ -17367,6 +17368,10 @@ function formatKoreanResult(value) {
       `Hosted API: ${monitorHosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${monitorHosted.base_url || "https://api.firecrawl.dev/v2"}`,
       `샘플: ${monitorSample.name || "Investment web monitor"} · 대상 ${formatNumber(monitorSample.target_count || 0)}개 · ${(monitorSample.target_types || []).join(", ") || "유형 미확인"}`,
       `Create ready: ${firecrawlMonitor.create_ready ? "true" : "false"} · webhook=${monitorSample.webhook_configured ? "true" : "false"} · payload=${monitorSample.payload_hash_prefix || "미확인"}`,
+      `운영 프리플라이트: ready=${monitorPreflight.ready ? "true" : "false"} · registry=${monitorPreflight.registry_configured ? "true" : "false"} · webhook_secret=${monitorPreflight.webhook_secret_configured ? "true" : "false"}`,
+      ...(Array.isArray(monitorPreflight.errors) && monitorPreflight.errors.length
+        ? monitorPreflight.errors.slice(0, 3).map((item) => `운영 프리플라이트 차단: ${compactOutputText(item, 140)}`)
+        : []),
       `이벤트 저장: 전체 ${formatNumber(firecrawlMonitorEvents.event_count || 0)}건 · 의미있는 변화 ${formatNumber(firecrawlMonitorEvents.meaningful_count || 0)}건 · 오류 ${formatNumber(firecrawlMonitorEvents.error_count || 0)}건`,
       `Webhook: ready=${firecrawlMonitorWebhook.webhook_ready ? "true" : "false"} · 최근 상태 ${firecrawlMonitorWebhook.last_webhook_status || "없음"} · 저장 ${formatNumber(firecrawlMonitorWebhook.last_saved_count || 0)}건`,
       firecrawlMonitorWebhook.last_webhook_error ? `Webhook 오류: ${compactOutputText(firecrawlMonitorWebhook.last_webhook_error, 120)}` : "",

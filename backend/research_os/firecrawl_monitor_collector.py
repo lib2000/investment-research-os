@@ -56,6 +56,11 @@ def _settings_float(settings: Any, name: str, default: float) -> float:
         return default
 
 
+def _looks_like_placeholder(value: str) -> bool:
+    lowered = str(value or "").strip().lower()
+    return not lowered or lowered.startswith("replace-with-") or lowered in {"changeme", "todo", "placeholder"}
+
+
 def _sha256_json(value: Any) -> str:
     return sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -222,10 +227,20 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
     enabled = _settings_bool(settings, "firecrawl_monitor_enabled")
     dry_run = _settings_bool(settings, "firecrawl_monitor_dry_run", True)
     api_key_configured = bool(_settings_str(settings, "firecrawl_api_key"))
+    registry_configured = bool(_settings_str(settings, "firecrawl_monitor_sources_json"))
+    webhook_secret = _settings_str(settings, "firecrawl_monitor_webhook_secret")
+    webhook_secret_configured = bool(webhook_secret) and not _looks_like_placeholder(webhook_secret)
     sources, parse_error = _firecrawl_monitor_sources(settings)
     create_errors = _monitor_create_readiness_errors(settings)
     sample = sources[0] if sources else None
     warnings = [parse_error] if parse_error else []
+    operational_errors: list[str] = []
+    if not registry_configured:
+        operational_errors.append("FIRECRAWL_MONITOR_SOURCES_JSON must be configured for operational preflight")
+    if not webhook_secret_configured:
+        operational_errors.append("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured for webhook preflight")
+    if parse_error:
+        operational_errors.append(parse_error)
     if not enabled:
         status = "disabled"
         next_action = "FIRECRAWL_MONITOR_ENABLED=false 상태입니다. 모니터 registry와 dry-run 검증을 먼저 완료하세요."
@@ -269,7 +284,8 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
         },
         "source_registry": {
             "item_count": len(sources),
-            "input_source": "env_registry" if _settings_str(settings, "firecrawl_monitor_sources_json") else "sample",
+            "input_source": "env_registry" if registry_configured else "sample",
+            "configured": registry_configured,
             "parse_error": parse_error,
         },
         "sample_monitor": {
@@ -280,6 +296,15 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
             "goal_configured": bool(sample and sample.get("goal")),
             "webhook_configured": bool(sample and sample.get("webhook")),
             "payload_hash_prefix": _sha256_json(sample)[:12] if sample else "",
+        },
+        "operational_preflight": {
+            "ready": not operational_errors,
+            "registry_configured": registry_configured,
+            "webhook_secret_configured": webhook_secret_configured,
+            "requires_create_ready": False,
+            "errors": operational_errors,
+            "command": preflight_commands["operational_preflight"],
+            "create_ready_command": preflight_commands["create_ready_required"],
         },
         "create_ready": not create_errors and not parse_error,
         "create_readiness_errors": create_errors,

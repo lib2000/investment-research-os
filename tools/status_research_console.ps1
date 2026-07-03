@@ -456,7 +456,16 @@ if ($publicIrSecStatus) {
   if ($firecrawlMonitor) {
     $firecrawlMonitorHostedApi = $firecrawlMonitor.hosted_api
     $firecrawlMonitorSample = $firecrawlMonitor.sample_monitor
+    $firecrawlMonitorPreflight = $firecrawlMonitor.operational_preflight
     Write-Host "Firecrawl Monitor: $($firecrawlMonitor.status), enabled $($firecrawlMonitor.enabled), dry_run $($firecrawlMonitor.dry_run), api_key $($firecrawlMonitorHostedApi.api_key_configured), create_ready $($firecrawlMonitor.create_ready), sample_targets $($firecrawlMonitorSample.target_count)"
+    if ($firecrawlMonitorPreflight) {
+      Write-Host "Firecrawl Monitor 운영 프리플라이트: ready $($firecrawlMonitorPreflight.ready), registry $($firecrawlMonitorPreflight.registry_configured), webhook_secret $($firecrawlMonitorPreflight.webhook_secret_configured)"
+      if ($firecrawlMonitorPreflight.errors) {
+        @($firecrawlMonitorPreflight.errors | Select-Object -First 3) | ForEach-Object {
+          Write-Host "Firecrawl Monitor 운영 차단: $(Limit-StatusText $_ -MaxLength 160)"
+        }
+      }
+    }
     if ($firecrawlMonitor.next_action) {
       Write-Host "Firecrawl Monitor 다음 조치: $($firecrawlMonitor.next_action)"
     }

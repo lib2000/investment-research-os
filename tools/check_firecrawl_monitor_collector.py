@@ -165,6 +165,7 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
+        preflight = readiness.get("operational_preflight") if isinstance(readiness, dict) else {}
         print(f"[{result['status']}] {DESIGN_NAME}")
         print(f"- input_source: {input_source}")
         print(f"- item_count: {result['item_count']}")
@@ -173,6 +174,15 @@ def main() -> int:
         print(f"- firecrawl_api_key_configured: {result['firecrawl_api_key_configured']}")
         print(f"- firecrawl_base_url: {result['firecrawl_base_url']}")
         print(f"- create_ready: {result['create_ready']}")
+        if isinstance(preflight, dict):
+            print(
+                "- operational_preflight: "
+                f"ready={bool(preflight.get('ready'))} "
+                f"registry={bool(preflight.get('registry_configured'))} "
+                f"webhook_secret={bool(preflight.get('webhook_secret_configured'))}"
+            )
+            for error in preflight.get("errors") or []:
+                print(f"  - {error}")
         for error in result["create_readiness_errors"]:
             print(f"  - {error}")
         print(
