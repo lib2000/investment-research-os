@@ -114,6 +114,18 @@ def load_operational_readiness_tool():
     return module
 
 
+def load_recent_weekly_brief_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_recent_weekly_brief.py"
+    spec = spec_from_file_location("check_recent_weekly_brief", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_policy_signal_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -872,6 +884,17 @@ class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
         self.assertEqual(result["record_count"], 2)
         self.assertEqual(result["score_applied_count"], 1)
         self.assertEqual(result["level_counts"]["direct"], 1)
+
+
+class RecentWeeklyBriefCheckToolTests(unittest.TestCase):
+    def test_recent_weekly_brief_check_supports_json_result_contract(self):
+        tool = load_recent_weekly_brief_check_tool()
+        source = Path(tool.__file__).read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"linked_recent"', source)
+        self.assertIn('"recent_counts"', source)
+        self.assertIn('"recommendation"', source)
 
 
 class DailyRecommendationCitationCheckToolTests(unittest.TestCase):

@@ -193,6 +193,7 @@ def main() -> int:
     )
     parser.add_argument("--min-target-digest", type=int, default=1, help="종목별 자료 묶음 최소 수")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -306,6 +307,55 @@ def main() -> int:
     if public_ir and not any(item.get("usable_for_recommendation") for item in public_ir):
         warnings.append("최근 공개 IR/SEC 자료가 있으나 추천 가산 가능한 본문 추출 항목이 없습니다.")
 
+    latest_date = latest_records[0].get("recommendation_date") if latest_records else "미확인"
+    result = {
+        "status": "error" if issues or (warnings and args.strict) else "warning" if warnings else "ok",
+        "errors": issues,
+        "warnings": warnings,
+        "project_root": str(root),
+        "days": args.days,
+        "cutoff": cutoff,
+        "target_scope": {
+            "tickers": len(target_terms["tickers"]),
+            "names": len(target_terms["names"]),
+            "sectors": len(target_terms["sectors"]),
+        },
+        "recent_counts": {
+            "total": len(recent_items),
+            "filings": len(filings),
+            "important_filings": len(important_filings),
+            "ownership": len(ownership),
+            "reports_visible": len(display_reports),
+            "reports_total": len(reports),
+            "public_ir_sec": len(public_ir),
+            "customs_exports": len(customs),
+            "market_context": len(market),
+        },
+        "group_counts": {
+            "visible_groups": len(visible_groups),
+            "quality_ready_groups": len(quality_ready_groups),
+            "target_digest": len(target_digest),
+        },
+        "recommendation": {
+            "latest_date": latest_date,
+            "record_count": len(latest_records),
+            "local_evidence_existing": len(existing_evidence),
+            "local_evidence_total": len(local_evidence_paths),
+            "external_evidence": len(external_evidence),
+            "missing_local_evidence": missing_local_evidence,
+        },
+        "linked_recent": {
+            "path_count": len(linked_recent_paths),
+            "item_count": len(linked_recent_items),
+            "missing_rag_query": len(linked_items_missing_rag),
+            "missing_navigation_hint": len(linked_items_missing_navigation),
+        },
+        "impact_counts": dict(impact_counts),
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if result["status"] == "error" else 0
+
     print(f"프로젝트 루트: {root}")
     print(f"기간: 최근 {args.days}일 | 기준 시작일 {cutoff}")
     print(f"대상 범위: 티커 {len(target_terms['tickers'])}개 | 회사명 {len(target_terms['names'])}개 | 섹터 {len(target_terms['sectors'])}개")
@@ -317,7 +367,6 @@ def main() -> int:
     )
     print(f"표시 자료 묶음: {len(visible_groups)}개 | " + ", ".join(f"{group.get('label')}={group.get('count')}" for group in visible_groups))
     print(f"자료 묶음 품질 요약: {len(quality_ready_groups)}/{len(visible_groups)}개 | 종목별 자료 묶음 {len(target_digest)}개")
-    latest_date = latest_records[0].get("recommendation_date") if latest_records else "미확인"
     print(
         f"최신 추천일: {latest_date} | 추천 {len(latest_records)}개 | "
         f"로컬 근거 문서 {len(existing_evidence)}/{len(local_evidence_paths)}개 | 외부 URL 근거 {len(external_evidence)}개"
