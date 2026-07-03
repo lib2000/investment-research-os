@@ -11631,6 +11631,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
 
         digest = automation_status.build_research_automation_dashboard_digest(runtime, settings)
 
+        self.assertEqual(automation_status.NEWS_PRIORITY_PREVIEW_LIMIT, 8)
         self.assertEqual(digest["news_inbox_count"], 122)
         self.assertEqual(digest["news_unpromoted_count"], 115)
         self.assertEqual(digest["news_actionable_unpromoted_count"], 7)

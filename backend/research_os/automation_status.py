@@ -18,6 +18,9 @@ class AutomationStatusRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
 
 
+NEWS_PRIORITY_PREVIEW_LIMIT = 8
+
+
 def safe_rag_memory_status(runtime: AutomationStatusRuntime, vault_dir: Path) -> dict:
     try:
         return runtime.rag_memory_status(vault_dir)
@@ -359,8 +362,8 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         "news_actionable_unpromoted_count": news_actionable_unpromoted_count,
         "news_quality_issue_count": news_quality_issue_count,
         "news_priority_count": news_actionable_unpromoted_count,
-        "news_priority_preview_count": len(news_priority_preview[:5]),
-        "news_priority_preview": news_priority_preview[:5],
+        "news_priority_preview_count": len(news_priority_preview[:NEWS_PRIORITY_PREVIEW_LIMIT]),
+        "news_priority_preview": news_priority_preview[:NEWS_PRIORITY_PREVIEW_LIMIT],
         "news_duplicate_priority_group_count": news_duplicate_priority_group_count,
         "news_duplicate_priority_entry_count": news_duplicate_priority_entry_count,
         "news_duplicate_priority_groups": news_duplicate_priority_groups[:5],
