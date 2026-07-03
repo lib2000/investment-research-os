@@ -242,6 +242,8 @@ if ($dailyRecommendations) {
   Write-Host "일일 추천 최신일: $($dailyRecommendations.latest_recommendation_date)"
   Write-Host "일일 추천 저장 건수: $($dailyRecommendations.record_count)"
   Write-Host "일일 추천 실행 시각: $($dailyRecommendations.daily_time)"
+  $todayRecords = if ($dailyRecommendations.today_records) { @($dailyRecommendations.today_records | ForEach-Object { $_ }) } else { @() }
+  Write-Host "오늘 추천 실행 필요: $($dailyRecommendations.due_now), 대상일 $($dailyRecommendations.today_recommendation_date), 오늘 저장 $($todayRecords.Count)개"
   $latestRecommendationRecords = if ($dailyRecommendations.latest_records) { @($dailyRecommendations.latest_records | ForEach-Object { $_ }) } else { @() }
   foreach ($market in @("KR", "US")) {
     $marketLabel = if ($market -eq "KR") { "한국" } else { "미국" }
