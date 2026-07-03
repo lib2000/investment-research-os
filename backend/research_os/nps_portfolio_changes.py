@@ -256,6 +256,16 @@ def build_nps_portfolio_change_snapshot(
     portfolio_label, holdings = _portfolio_holdings(settings, portfolio_name)
     matches = _match_holdings(dated_events, holdings)
     stale = bool(latest_event_date and latest_event_date < as_of_date.isoformat())
+    latest_event_dt = _parse_date(latest_event_date)
+    staleness_days = (as_of_date - latest_event_dt).days if latest_event_dt else None
+    if not latest_event_date:
+        freshness_status = "no_large_holding_source"
+    elif stale and refresh_attempted:
+        freshness_status = "source_stale_after_successful_refresh"
+    elif stale:
+        freshness_status = "cache_stale_refresh_not_attempted"
+    else:
+        freshness_status = "current_for_as_of"
     if stale:
         warnings.append(f"캐시 내 최신 대량보유 기준일은 {latest_event_date}로 요청 기준일 {as_of_date.isoformat()}보다 오래되었습니다.")
     status = "warning" if warnings else "success"
@@ -275,6 +285,22 @@ def build_nps_portfolio_change_snapshot(
         "domestic_stock_latest_year": _latest_year(domestic_rows, "연도"),
         "large_holding_latest_base_date": latest_event_date,
         "large_holding_stale_for_as_of": stale,
+        "large_holding_staleness_days": staleness_days,
+        "freshness_status": freshness_status,
+        "staleness_reason": (
+            "공공데이터포털 API 호출은 가능하지만 원천 대량보유 공개자료의 최신 기준일이 요청 기준일보다 오래되었습니다."
+            if freshness_status == "source_stale_after_successful_refresh"
+            else "API 키가 없어 기존 캐시 기준으로만 최신성을 판단했습니다."
+            if freshness_status == "cache_stale_refresh_not_attempted"
+            else "요청 기준일 이하 대량보유 공개자료가 없습니다."
+            if freshness_status == "no_large_holding_source"
+            else "요청 기준일 기준 공개 대량보유 자료가 최신입니다."
+        ),
+        "trusted_use": (
+            "public_disclosure_pressure_only"
+            if stale or not latest_event_date
+            else "public_disclosure_current_for_as_of"
+        ),
     }
     first_next_action = (
         "공공데이터포털 API 호출은 성공했지만 원천 최신 기준일이 오래되었습니다. 국민연금/공시 포털의 최신 대량보유 공개 여부를 별도 확인하세요."
