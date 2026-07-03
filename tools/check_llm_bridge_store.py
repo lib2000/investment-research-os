@@ -173,6 +173,7 @@ def main() -> int:
     parser.add_argument("--min-rag-connected-count", type=int, default=1)
     parser.add_argument("--require-active-rag", action="store_true")
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -204,6 +205,36 @@ def main() -> int:
             failures.append(f"LLM 응답 누락: {item.relative_path}")
         if not item.rag_connected and not item.archived:
             failures.append(f"RAG 연결 누락: {item.relative_path}")
+
+    recent_captures = [
+        {
+            "date": item.date,
+            "ticker": item.ticker,
+            "label": item.label,
+            "file_name": item.file_name,
+            "relative_path": item.relative_path,
+            "archived": item.archived,
+            "rag_connected": item.rag_connected,
+        }
+        for item in captures[: max(0, args.limit)]
+    ]
+    result = {
+        "status": "error" if failures else "ok",
+        "project_root": str(root),
+        "manifest_path": str(manifest_path.relative_to(root)),
+        "rag_db_path": str(rag_db_path.relative_to(root)),
+        "saved_count": len(captures),
+        "active_count": len(active),
+        "rag_connected_count": len(rag_connected),
+        "active_rag_connected_count": len(active_rag_connected),
+        "failure_count": len(failures),
+        "failures": failures[: max(0, args.limit)],
+        "truncated_failure_count": max(0, len(failures) - max(0, args.limit)),
+        "recent_captures": recent_captures,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if failures else 0
 
     print(f"manifest: {manifest_path.relative_to(root)}")
     print(f"RAG DB: {rag_db_path.relative_to(root)}")
