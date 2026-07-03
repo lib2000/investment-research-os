@@ -4685,7 +4685,7 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                 "file_name": "otly-6-k.md",
                 "title": "Oatly Group 6-K SEC filing",
                 "ticker": "OTLY",
-                "source_url": "https://www.sec.gov/a",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/1843586/000184358626000018/otly_6k_result_2026_agm.htm",
                 "published_at": "2026-05-20",
                 "filing_form": "6-K",
                 "source_url_processing": {
@@ -4736,6 +4736,15 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(status["needs_body_copy_entries"][0]["file_name"], "otly-6-k.md")
         self.assertEqual(status["needs_body_copy_entries"][0]["body_followup"]["reason"], "sec_exhibit_followup")
         self.assertEqual(status["needs_body_copy_entries"][0]["body_followup"]["label"], "6-K 첨부 Exhibit 추적")
+        self.assertEqual(status["needs_body_copy_entries"][0]["body_followup"]["expected_exhibits"], ["99.1"])
+        self.assertEqual(
+            status["needs_body_copy_entries"][0]["body_followup"]["sec_accession_number"],
+            "0001843586-26-000018",
+        )
+        self.assertEqual(
+            status["needs_body_copy_entries"][0]["body_followup"]["sec_filing_index_url"],
+            "https://www.sec.gov/Archives/edgar/data/1843586/000184358626000018/0001843586-26-000018-index.html",
+        )
         self.assertEqual(status["sec_exhibit_followup_count"], 1)
         self.assertEqual(status["sec_exhibit_followup_entries"][0]["file_name"], "otly-6-k.md")
         self.assertEqual(status["needs_body_duplicate_title_group_count"], 1)
@@ -4751,7 +4760,10 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         )
         self.assertEqual(
             status["needs_body_duplicate_title_groups"][0]["source_urls"],
-            ["https://www.sec.gov/a", "https://www.sec.gov/b"],
+            [
+                "https://www.sec.gov/Archives/edgar/data/1843586/000184358626000018/otly_6k_result_2026_agm.htm",
+                "https://www.sec.gov/b",
+            ],
         )
         self.assertEqual(status["recent_entries"][0]["file_name"], "otly-6-k.md")
 

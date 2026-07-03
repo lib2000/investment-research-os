@@ -409,10 +409,12 @@ def _body_followup_reason(entry: dict[str, Any]) -> dict[str, Any]:
     )
     normalized = text.upper()
     if "6-K" in normalized and ("EXHIBIT" in normalized or "99.1" in normalized):
+        sec_hint = _sec_exhibit_followup_hint(entry)
         return {
             "reason": "sec_exhibit_followup",
             "label": "6-K 첨부 Exhibit 추적",
             "recommended_action": "6-K 본문은 wrapper가 짧습니다. 참조된 Exhibit 99.1/연간보고서/보도자료 원문을 별도 수집해 보강하세요.",
+            **sec_hint,
         }
     if quality.get("url_text_unavailable"):
         return {
@@ -431,6 +433,29 @@ def _body_followup_reason(entry: dict[str, Any]) -> dict[str, Any]:
         "label": "보강 확인",
         "recommended_action": str(quality.get("recommended_action") or "원문 확인 후 보강 여부를 판단하세요."),
     }
+
+
+def _sec_exhibit_followup_hint(entry: dict[str, Any]) -> dict[str, Any]:
+    source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
+    source_url = str(entry.get("source_url") or source.get("source_url") or source.get("final_url") or "").strip()
+    parsed = urlparse(source_url)
+    parts = [part for part in parsed.path.split("/") if part]
+    hint: dict[str, Any] = {}
+    if len(parts) >= 5 and parts[:3] == ["Archives", "edgar", "data"]:
+        cik = parts[3]
+        accession = parts[4]
+        base_url = f"{parsed.scheme}://{parsed.netloc}/Archives/edgar/data/{cik}/{accession}"
+        hint["sec_archive_directory_url"] = f"{base_url}/"
+        if len(accession) == 18 and accession.isdigit():
+            dashed = f"{accession[:10]}-{accession[10:12]}-{accession[12:]}"
+            hint["sec_filing_index_url"] = f"{base_url}/{dashed}-index.html"
+            hint["sec_accession_number"] = dashed
+        else:
+            hint["sec_accession_number"] = accession
+    exhibit_labels = sorted(set(findall(r"\b99\.\d+\b", str(source.get("original_text") or source.get("text") or ""))))
+    if exhibit_labels:
+        hint["expected_exhibits"] = exhibit_labels[:10]
+    return hint
 
 
 def _needs_body_entry_preview(entry: dict[str, Any]) -> dict[str, Any]:

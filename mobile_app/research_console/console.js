@@ -17314,7 +17314,7 @@ function formatKoreanResult(value) {
     const monitorRouteCounts = firecrawlMonitorEvents.by_route || {};
     const needsBodyLines = needsBodyEntries.length
       ? needsBodyEntries.slice(0, 8).map((item, index) =>
-          `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.body_followup?.label || "본문 보강"} · ${item.relative_path || item.source_url || "경로 미확인"}`
+          `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.body_followup?.label || "본문 보강"} · ${item.body_followup?.expected_exhibits?.length ? `Exhibit ${item.body_followup.expected_exhibits.join(", ")}` : "Exhibit 확인"} · ${item.body_followup?.sec_filing_index_url || item.relative_path || item.source_url || "경로 미확인"}`
         )
       : [];
     const duplicateTitleLines = duplicateTitleGroups.length
