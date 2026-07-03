@@ -946,6 +946,13 @@ def run_click_smoke(
                     ].join(" ");
                     return /정상|kis|활성|완료/.test(statusText);
                   }}, 15000, "backend status");
+                  try {{
+                    await waitFor(
+                      () => /정상|오류|실패/.test(document.querySelector("#backendStatus")?.textContent || ""),
+                      5000,
+                      "backend status badge"
+                    );
+                  }} catch (_error) {{}}
                   const assertNoRuntimeErrors = (label) => {{
                     if (runtimeErrors.length) {{
                       throw new Error(`${{label}} runtime errors: ${{runtimeErrors.join(" | ")}}`);
@@ -953,10 +960,22 @@ def run_click_smoke(
                   }};
                   const tickerRegex = new RegExp({json.dumps(COMMON_TICKER_PATTERN)});
                   const stopAfter = {stop_after_json};
+                  const observedBackendStatus = () => {{
+                    const badge = document.querySelector("#backendStatus")?.textContent || "";
+                    if (badge && badge !== "확인 중") {{
+                      return badge;
+                    }}
+                    const combined = [
+                      badge,
+                      document.querySelector("#providerStatus")?.textContent || "",
+                      document.querySelector("#output")?.innerText || "",
+                    ].join(" ");
+                    return /정상|kis|활성|완료/.test(combined) ? "정상" : badge;
+                  }};
                   const partialResult = (stage, values) => ({{
                     smokeStage: stage,
                     partial: true,
-                    backendStatus: document.querySelector("#backendStatus")?.textContent || "",
+                    backendStatus: observedBackendStatus(),
                     runtimeErrors,
                     ...values,
                   }});
