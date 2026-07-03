@@ -54,6 +54,7 @@ def main() -> int:
     parser.add_argument("--max-active-ocr-needed", type=int, default=0)
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -79,6 +80,24 @@ def main() -> int:
         if has_ocr_issue and active:
             ocr_needed.append(path)
 
+    ok = len(body_missing) <= args.max_active_body_missing and len(ocr_needed) <= args.max_active_ocr_needed
+    result = {
+        "status": "ok" if ok else "warning",
+        "project_root": str(root),
+        "vault_path": str(vault),
+        "active_body_missing_count": len(body_missing),
+        "active_ocr_needed_count": len(ocr_needed),
+        "advisory_body_count": len(advisory_body),
+        "max_active_body_missing": args.max_active_body_missing,
+        "max_active_ocr_needed": args.max_active_ocr_needed,
+        "body_missing_paths": [str(path.relative_to(root)) for path in body_missing[: max(0, args.limit)]],
+        "ocr_needed_paths": [str(path.relative_to(root)) for path in ocr_needed[: max(0, args.limit)]],
+        "advisory_body_paths": [str(path.relative_to(root)) for path in advisory_body[: max(0, args.limit)]],
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if ok else (1 if args.strict else 0)
+
     print(f"저장소: {vault}")
     print(f"활성 본문 보강 필요: {len(body_missing)}개")
     print(f"활성 OCR 확인 필요: {len(ocr_needed)}개")
@@ -87,7 +106,6 @@ def main() -> int:
         for path in rows[: max(0, args.limit)]:
             print(f"{label}: {path.relative_to(root)}")
 
-    ok = len(body_missing) <= args.max_active_body_missing and len(ocr_needed) <= args.max_active_ocr_needed
     if ok:
         print("오프라인 저장 품질 상태 정상")
         return 0

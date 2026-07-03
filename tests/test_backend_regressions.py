@@ -736,6 +736,17 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"freshness_warning_count"', source)
 
 
+class StorageQualityStoreCheckToolTests(unittest.TestCase):
+    def test_storage_quality_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_storage_quality_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"active_body_missing_count"', source)
+        self.assertIn('"active_ocr_needed_count"', source)
+        self.assertIn('"advisory_body_count"', source)
+        self.assertIn('"advisory_body_paths"', source)
+
+
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
         tool = load_operational_readiness_tool()
