@@ -9157,6 +9157,22 @@ function dailyRecommendationPreviewMismatchText(item = {}) {
   return `${market} ${rank}위 저장 ${stored}(${storedScore}) → 재계산 ${preview}(${previewScore})`;
 }
 
+function dailyRecommendationPreviewMismatchSummary(candidatePreview = {}, previewMismatches = []) {
+  const total = Number.isFinite(Number(candidatePreview.stored_preview_mismatch_count))
+    ? Number(candidatePreview.stored_preview_mismatch_count)
+    : previewMismatches.length;
+  const byMarket = candidatePreview.stored_preview_mismatch_counts_by_market || {};
+  const marketLabels = ["KR", "US"]
+    .map((market) => {
+      const count = Number(byMarket[market] || 0);
+      return count ? `${dailyRecommendationMarketLabel(market)} ${formatNumber(count)}` : "";
+    })
+    .filter(Boolean);
+  return marketLabels.length
+    ? `${formatNumber(total)}개 (${marketLabels.join(" · ")})`
+    : `${formatNumber(total)}개`;
+}
+
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
   const schedule = payload?.daily_time || "08:00";
   const records = dailyRecommendationTopRecords(payload || {});
@@ -9183,8 +9199,9 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
   const driftText = policyDriftTickers.length
     ? ` · 정책 이탈 ${policyDriftTickers.join(", ")} 재정렬 필요`
     : "";
+  const previewMismatchSummary = dailyRecommendationPreviewMismatchSummary(candidatePreview, previewMismatches);
   const mismatchText = previewMismatches.length
-    ? ` · 저장/재계산 차이 ${previewMismatches.length}개`
+    ? ` · 저장/재계산 차이 ${previewMismatchSummary}`
     : "";
   const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length || previewMismatches.length ? "warning" : "ok";
   const marketGroups = dailyRecommendationMarketGroups(records);
@@ -9275,7 +9292,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
   const mismatchAlert = previewMismatches.length
     ? `
       <div class="daily-recommendation-preview-drift" role="note" aria-label="추천 저장과 재계산 프리뷰 차이">
-        <strong>재계산 프리뷰와 순위 차이 ${escapeHtml(formatNumber(previewMismatches.length))}개</strong>
+        <strong>재계산 프리뷰와 순위 차이 ${escapeHtml(previewMismatchSummary)}</strong>
         <span>${escapeHtml(
           previewMismatches
             .slice(0, 4)

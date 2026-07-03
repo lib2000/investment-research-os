@@ -447,6 +447,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("운영 프리플라이트", console_source)
         self.assertIn("monitorPreflight.webhook_secret_configured", console_source)
         self.assertIn("monitorPreflight.monitor_webhook_configured", console_source)
+        self.assertIn("dailyRecommendationPreviewMismatchSummary", console_source)
+        self.assertIn("stored_preview_mismatch_count", console_source)
+        self.assertIn("stored_preview_mismatch_counts_by_market", console_source)
         self.assertIn(".automation-news-duplicate", style_source)
 
     def test_enter_research_os_script_prints_recovery_commands(self):
@@ -7975,6 +7978,10 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
                         "status": "success",
                         "generated_at": "2026-07-03T17:23:08+00:00",
                         "scope_note": "runtime_candidate_preview_only_no_store_write",
+                        "failure_count": 0,
+                        "warning_count": 2,
+                        "stored_preview_mismatch_count": 1,
+                        "stored_preview_mismatch_counts_by_market": {"US": 1},
                         "stored_preview_mismatches": [
                             {
                                 "market": "US",
@@ -7996,6 +8003,9 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         preview = summary["candidate_policy_preview"]
         self.assertEqual(preview["status"], "success")
         self.assertEqual(preview["stored_preview_mismatch_count"], 1)
+        self.assertEqual(preview["stored_preview_mismatch_counts_by_market"], {"US": 1})
+        self.assertEqual(preview["warning_count"], 2)
+        self.assertEqual(preview["failure_count"], 0)
         self.assertEqual(preview["stored_preview_mismatches"][0]["preview_ticker"], "OTLY")
 
     def test_daily_recommendation_candidate_policy_result_includes_mismatch_summary(self):

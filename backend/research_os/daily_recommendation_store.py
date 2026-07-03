@@ -104,11 +104,17 @@ def summarize_daily_recommendation_candidate_policy_preview(settings: Settings) 
         for item in payload.get("stored_preview_mismatches", [])
         if isinstance(item, dict)
     ]
+    mismatch_counts_by_market = payload.get("stored_preview_mismatch_counts_by_market")
+    if not isinstance(mismatch_counts_by_market, dict):
+        mismatch_counts_by_market = {}
     return {
         "status": payload.get("status") or "unknown",
         "generated_at": payload.get("generated_at"),
         "scope_note": payload.get("scope_note"),
-        "stored_preview_mismatch_count": len(mismatches),
+        "failure_count": int(payload.get("failure_count") or 0),
+        "warning_count": int(payload.get("warning_count") or 0),
+        "stored_preview_mismatch_count": int(payload.get("stored_preview_mismatch_count") or len(mismatches)),
+        "stored_preview_mismatch_counts_by_market": mismatch_counts_by_market,
         "stored_preview_mismatches": mismatches[:12],
         "stored_top_records": payload.get("stored_top_records", [])[:12],
         "message": (
