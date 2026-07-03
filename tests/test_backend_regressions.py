@@ -530,6 +530,9 @@ class PublicIrSecStoreCheckToolTests(unittest.TestCase):
         self.assertIn("본문 보강 플래그", tool_source)
         self.assertIn("sec_exhibit_followup_hint", tool_source)
         self.assertIn("sec_filing_index_url", tool_source)
+        self.assertIn('parser.add_argument("--json"', tool_source)
+        self.assertIn("body_followup_entries", tool_source)
+        self.assertIn("expected_exhibits", tool_source)
         self.assertNotIn("URL-only/본문 보강", tool_source)
 
     def test_public_ir_sec_store_check_builds_sec_exhibit_hint(self):

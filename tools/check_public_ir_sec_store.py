@@ -160,6 +160,7 @@ def sec_exhibit_followup_hint(entry: dict) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="공개 IR/SEC 저장 품질을 백엔드 없이 점검합니다.")
     parser.add_argument("--require-any", action="store_true", help="최소 1건 이상 저장되어 있어야 함")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -227,6 +228,39 @@ def main() -> int:
         errors.append("추천 가산 가능한 공개 IR/SEC 자료가 없습니다.")
     if entries and rag_linked_count != len(entries):
         errors.append(f"RAG 색인 누락: {len(entries) - rag_linked_count}개 / 전체 {len(entries)}개")
+
+    body_followup_entries = []
+    for entry in needs_body_entries[:10]:
+        quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
+        sec_hint = sec_exhibit_followup_hint(entry)
+        body_followup_entries.append(
+            {
+                "ticker": entry.get("ticker") or "",
+                "date": entry.get("date") or "",
+                "title": entry.get("title") or entry.get("file_name") or "",
+                "status": quality.get("status") or entry.get("capture_quality_status") or "",
+                "followup": body_followup_label(entry, quality),
+                "expected_exhibits": sec_hint.get("expected_exhibits") or [],
+                "sec_filing_index_url": sec_hint.get("sec_filing_index_url") or "",
+                "relative_path": entry.get("relative_path") or "",
+                "source_url": entry.get("source_url") or "",
+            }
+        )
+    result = {
+        "status": "error" if errors else "ok",
+        "errors": errors,
+        "entry_count": len(entries),
+        "archived_count": archived_count,
+        "url_only_count": url_only,
+        "needs_body_count": needs_body,
+        "recommendation_usable_count": usable_count,
+        "rag_linked_count": rag_linked_count,
+        "provider_counts": dict(sorted(provider_counts.items())),
+        "body_followup_entries": body_followup_entries,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
 
     if errors:
         for error in errors:
