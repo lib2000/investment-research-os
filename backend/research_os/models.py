@@ -845,6 +845,7 @@ class PortfolioImportResponse(BaseModel):
 
 class InterestTicker(BaseModel):
     ticker: str
+    region: Optional[str] = None
     priority: str = "medium"
     thesis: Optional[str] = None
     notes: Optional[str] = None

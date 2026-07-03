@@ -5306,9 +5306,19 @@ def normalize_interest_list(
         tags = list(item.tags or [])
         if not verification.verified and "verification_pending" not in tags:
             tags.append("verification_pending")
+        region = str(
+            item.region
+            or verification.country
+            or prior.get("region")
+            or (prior.get("verification") or {}).get("country")
+            or "KR"
+        ).strip().upper()
+        if region not in {"KR", "US"}:
+            region = "US" if region in {"USA", "UNITED-STATES", "UNITED_STATES"} else "KR"
         normalized_tickers.append(
             InterestTicker(
                 ticker=official_symbol,
+                region=region,
                 priority=item.priority or "medium",
                 thesis=item.thesis,
                 notes=item.notes,

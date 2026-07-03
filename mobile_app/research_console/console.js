@@ -1499,6 +1499,22 @@ function syncCompanyNameAlignment(row) {
   field.classList.add(`company-name-lines-${lineClass}`);
 }
 
+function normalizeInterestRegion(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (["US", "USA", "UNITED-STATES", "UNITED_STATES"].includes(normalized)) {
+    return "US";
+  }
+  return "KR";
+}
+
+function interestRegionLabel(value) {
+  return normalizeInterestRegion(value) === "US" ? "미국" : "한국";
+}
+
+function interestRegionGroupTitle(value, count) {
+  return `${interestRegionLabel(value)} ${count}개`;
+}
+
 function makePortfolioHoldingRow(holding = {}) {
   const row = document.createElement("div");
   row.className = "editor-row holding-row";
@@ -1595,6 +1611,15 @@ function makeInterestTickerRow(item = {}) {
       placeholder: "회사명 또는 티커 입력",
     }),
     createSelect({
+      name: "region",
+      label: "시장",
+      value: normalizeInterestRegion(item.region || item.verification?.country || "KR"),
+      options: [
+        ["KR", "한국"],
+        ["US", "미국"],
+      ],
+    }),
+    createSelect({
       name: "priority",
       label: "우선순위",
       value: item.priority || "medium",
@@ -1621,6 +1646,8 @@ function makeInterestTickerSummaryRow(item = {}) {
     "interest-summary-row interest-ticker-summary-row interest-ticker-row interest-compact-card-row";
   const companyName = item.companyName || item.company_name || item.verification?.company_name || item.ticker || "";
   const tickerCode = String(item.ticker || "").trim();
+  const region = normalizeInterestRegion(item.region || item.verification?.country || "");
+  const regionLabel = interestRegionLabel(region);
   const identityLabel = companyName || (tickerCode ? "회사명 확인 필요" : "");
   const priorityLabel = { high: "높음", medium: "보통", low: "낮음" }[item.priority || "medium"] || "보통";
   const tags = joinTags(item.tags);
@@ -1640,6 +1667,7 @@ function makeInterestTickerSummaryRow(item = {}) {
     </span>
     <span class="interest-summary-meta">
       <b class="priority">${escapeHtml(priorityLabel)}</b>
+      <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
       <b class="${verified ? "verified" : "pending"}">${verified ? "인증" : "보류"}</b>
       <b class="interest-detail-cue">상세</b>
     </span>
@@ -1655,6 +1683,15 @@ function makeInterestTickerSummaryRow(item = {}) {
   detailBody.append(
     createHiddenInput("ticker", tickerCode),
     createHiddenInput("companyName", companyName),
+    createSelect({
+      name: "region",
+      label: "시장",
+      value: region,
+      options: [
+        ["KR", "한국"],
+        ["US", "미국"],
+      ],
+    }),
     createSelect({
       name: "priority",
       label: "우선순위",
@@ -1692,11 +1729,14 @@ function makeInterestSectorRow(item = {}) {
       value: item.name || "",
       placeholder: "예: AI 인프라, 전력기기",
     }),
-    createInput({
+    createSelect({
       name: "region",
       label: "지역",
-      value: item.region || "KR",
-      placeholder: "KR, US, GLOBAL",
+      value: normalizeInterestRegion(item.region || "KR"),
+      options: [
+        ["KR", "한국"],
+        ["US", "미국"],
+      ],
     }),
     createSelect({
       name: "priority",
@@ -1724,6 +1764,8 @@ function makeInterestSectorSummaryRow(item = {}) {
   row.className =
     "interest-summary-row interest-sector-summary-row interest-sector-row interest-compact-card-row";
   const priorityLabel = { high: "높음", medium: "보통", low: "낮음" }[item.priority || "medium"] || "보통";
+  const region = normalizeInterestRegion(item.region || "KR");
+  const regionLabel = interestRegionLabel(region);
   const tags = joinTags(item.tags);
   const notePreview = compactOutputText(item.thesis || item.notes || "확인 포인트 없음", 72);
   const detail = document.createElement("details");
@@ -1733,11 +1775,12 @@ function makeInterestSectorSummaryRow(item = {}) {
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong>${escapeHtml(item.name || "관심섹터")}</strong>
-      <span>${escapeHtml(item.region || "KR")}</span>
+      <span>${escapeHtml(regionLabel)}</span>
       <span class="interest-summary-note">${escapeHtml(notePreview)}</span>
     </span>
     <span class="interest-summary-meta">
       <b class="priority">${escapeHtml(priorityLabel)}</b>
+      <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
       <b class="verified">섹터</b>
       <b class="interest-detail-cue">상세</b>
     </span>
@@ -1751,11 +1794,14 @@ function makeInterestSectorSummaryRow(item = {}) {
   detailBody.className = "interest-detail-grid";
   detailBody.append(
     createHiddenInput("name", item.name || ""),
-    createInput({
+    createSelect({
       name: "region",
       label: "지역",
-      value: item.region || "KR",
-      placeholder: "KR, US, GLOBAL",
+      value: region,
+      options: [
+        ["KR", "한국"],
+        ["US", "미국"],
+      ],
     }),
     createSelect({
       name: "priority",
@@ -1799,6 +1845,40 @@ function renderEditorRowsExact(container, rows, rowFactory, emptyMessage = "아�
     return;
   }
   rows.forEach((item) => container.append(rowFactory(item)));
+}
+
+function renderInterestRowsByRegion(container, rows, rowFactory, emptyMessage = "아직 추가된 항목이 없습니다.") {
+  container.replaceChildren();
+  if (!rows?.length) {
+    const empty = document.createElement("div");
+    empty.className = "editor-empty-state";
+    empty.textContent = emptyMessage;
+    container.append(empty);
+    return;
+  }
+  ["KR", "US"].forEach((region) => {
+    const grouped = rows.filter((item) => normalizeInterestRegion(item.region || item.verification?.country) === region);
+    const section = document.createElement("section");
+    section.className = `interest-region-group interest-region-group-${region.toLowerCase()}`;
+    const heading = document.createElement("div");
+    heading.className = "interest-region-heading";
+    heading.innerHTML = `
+      <strong>${escapeHtml(interestRegionLabel(region))}</strong>
+      <span>${escapeHtml(interestRegionGroupTitle(region, grouped.length))}</span>
+    `;
+    const grid = document.createElement("div");
+    grid.className = "interest-region-grid";
+    if (grouped.length) {
+      grouped.forEach((item) => grid.append(rowFactory(item)));
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "editor-empty-state interest-region-empty";
+      empty.textContent = `${interestRegionLabel(region)} 항목이 없습니다.`;
+      grid.append(empty);
+    }
+    section.append(heading, grid);
+    container.append(section);
+  });
 }
 
 function addEditorRow(container, rowFactory, rowData = {}) {
@@ -2576,6 +2656,7 @@ function collectInterestTickerRows(container = elements.interestTickerEditor) {
       return {
         ticker: rowValue(row, "ticker"),
         companyName: rowValue(row, "companyName") || verification?.company_name || null,
+        region: normalizeInterestRegion(rowValue(row, "region") || verification?.country || "KR"),
         priority: rowValue(row, "priority") || "medium",
         thesis: rowValue(row, "thesis") || null,
         notes: rowValue(row, "notes") || null,
@@ -2879,7 +2960,7 @@ function collectInterestSectorRows(container = elements.interestSectorEditor) {
   return [...container.querySelectorAll(".interest-sector-row")]
     .map((row) => ({
       name: rowValue(row, "name"),
-      region: rowValue(row, "region") || "KR",
+      region: normalizeInterestRegion(rowValue(row, "region") || "KR"),
       priority: rowValue(row, "priority") || "medium",
       thesis: rowValue(row, "thesis") || null,
       notes: rowValue(row, "notes") || null,
@@ -2897,7 +2978,7 @@ function resetInterestTickerDraft() {
     elements.interestTickerDraft,
     [],
     makeInterestTickerRow,
-    () => ({ ticker: "", priority: "medium", tags: [] })
+    () => ({ ticker: "", region: "KR", priority: "medium", tags: [] })
   );
 }
 
@@ -3002,10 +3083,18 @@ function updateInterestsSummary(response = {}) {
   const highPriorityTickers = tickers.filter((item) => item.priority === "high").length;
   const highPrioritySectors = sectors.filter((item) => item.priority === "high").length;
   const verifiedTickers = tickers.filter((item) => item.verification?.verified).length;
+  const krTickers = tickers.filter((item) => normalizeInterestRegion(item.region || item.verification?.country) === "KR").length;
+  const usTickers = tickers.filter((item) => normalizeInterestRegion(item.region || item.verification?.country) === "US").length;
+  const krSectors = sectors.filter((item) => normalizeInterestRegion(item.region) === "KR").length;
+  const usSectors = sectors.filter((item) => normalizeInterestRegion(item.region) === "US").length;
   elements.interestsSummary.replaceChildren(
     summaryPill("관심종목", `${tickers.length}개`),
+    summaryPill("한국 종목", `${krTickers}개`),
+    summaryPill("미국 종목", `${usTickers}개`),
     summaryPill("인증 완료", `${verifiedTickers}개`),
     summaryPill("관심섹터", `${sectors.length}개`),
+    summaryPill("한국 섹터", `${krSectors}개`),
+    summaryPill("미국 섹터", `${usSectors}개`),
     summaryPill("우선순위 높음", `${highPriorityTickers + highPrioritySectors}개`)
   );
 }
@@ -4447,19 +4536,23 @@ function fillInterestsForm(response) {
   const tickers = response?.tickers || [];
   const sectors = response?.sectors || [];
   lastInterestList = response || { tickers, sectors };
-  renderEditorRowsExact(
+  renderInterestRowsByRegion(
     elements.interestTickerEditor,
     tickers.map(({ verification, created_at, updated_at, ...item }) => ({
       ...item,
+      region: normalizeInterestRegion(item.region || verification?.country || "KR"),
       companyName: verification?.company_name || "",
       verification,
     })),
     makeInterestTickerSummaryRow,
     "추가된 관심종목이 없습니다. 위 입력칸에서 1개씩 추가하세요."
   );
-  renderEditorRowsExact(
+  renderInterestRowsByRegion(
     elements.interestSectorEditor,
-    sectors.map(({ created_at, updated_at, ...item }) => item),
+    sectors.map(({ created_at, updated_at, ...item }) => ({
+      ...item,
+      region: normalizeInterestRegion(item.region || "KR"),
+    })),
     makeInterestSectorSummaryRow,
     "추가된 관심섹터가 없습니다. 위 입력칸에서 1개씩 추가하세요."
   );
@@ -4486,6 +4579,7 @@ async function normalizeInterestTickersForSave(tickers = []) {
     if (!inputValue) {
       continue;
     }
+    const region = normalizeInterestRegion(item.region || item.verification?.country || "KR");
     const lookupValue = resolveLocalTickerAlias(inputValue);
     const cachedVerification =
       item.verification && typeof item.verification === "object" ? item.verification : null;
@@ -4496,6 +4590,7 @@ async function normalizeInterestTickersForSave(tickers = []) {
         verified: false,
         official_symbol: normalizeTickerDraft(lookupValue || inputValue),
         company_name: item.companyName || inputValue,
+        country: region,
         verification_source: "save_first_pending_verification",
         message: "먼저 관심종목에 저장합니다. 공식 인증은 저장 후 백엔드 로컬 사전과 티커 진단에서 보강합니다.",
       };
@@ -4513,6 +4608,7 @@ async function normalizeInterestTickersForSave(tickers = []) {
     seen.add(officialSymbol);
     normalized.push({
       ticker: officialSymbol,
+      region,
       priority: item.priority || "medium",
       thesis: item.thesis || null,
       notes: item.notes || null,
@@ -12658,6 +12754,7 @@ function appendLocalInterestTickerDraft(draft, verification, officialSymbol, ver
   const nextRow = makeInterestTickerSummaryRow({
     ...draft,
     ticker: officialSymbol,
+    region: normalizeInterestRegion(draft.region || verification?.country || "KR"),
     companyName: verification?.company_name || draft.ticker || officialSymbol,
     tags: verified ? draft.tags : [...(draft.tags || []), "verification_pending"],
     verification,
@@ -12695,6 +12792,7 @@ async function addInterestTickerDraftToList({ autoSave = true, announce = true }
     verified: false,
     official_symbol: officialSymbol,
     company_name: draft.ticker,
+    country: normalizeInterestRegion(draft.region || "KR"),
     verification_source: "save_first_pending_verification",
     message: "먼저 관심종목에 저장합니다. 공식 인증은 저장 후 백엔드 로컬 사전과 티커 진단에서 보강합니다.",
   };
@@ -12704,6 +12802,7 @@ async function addInterestTickerDraftToList({ autoSave = true, announce = true }
       const result = await addInterestTicker(token(), {
         ticker: draft.ticker,
         query: draft.ticker,
+        region: normalizeInterestRegion(draft.region || "KR"),
         priority: draft.priority || "medium",
         thesis: draft.thesis || null,
         notes: draft.notes || null,

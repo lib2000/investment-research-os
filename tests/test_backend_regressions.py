@@ -3723,6 +3723,44 @@ class InterestListNormalizationTests(unittest.TestCase):
         self.assertEqual(response.tickers[0].verification.company_name, "성호전자")
         self.assertEqual(response.tickers[0].verification.verification_source, "local_official_registry")
 
+    def test_interest_ticker_region_follows_verified_market(self):
+        import research_os_main as main
+        from research_os.models import (
+            InterestListUpdateRequest,
+            InterestTicker,
+            TickerVerificationResponse,
+        )
+        from research_os.settings import Settings
+
+        us_verification = TickerVerificationResponse(
+            status="success",
+            requested_symbol="PENG",
+            official_symbol="PENG",
+            company_name="Penguin Solutions, Inc. - Common Stock",
+            exchange="NASDAQ",
+            country="US",
+            asset_type="equity",
+            verified=True,
+            verification_source="nasdaq_trader_nasdaqlisted",
+            message="verified",
+        )
+
+        settings = Settings(research_vault_dir="research_vault")
+        with patch.object(main, "read_interest_list", return_value={"tickers": [], "sectors": []}):
+            response = main.normalize_interest_list(
+                InterestListUpdateRequest(
+                    tickers=[
+                        InterestTicker(ticker="PENG", verification=us_verification),
+                        InterestTicker(ticker="성호전자"),
+                    ]
+                ),
+                settings,
+            )
+
+        by_ticker = {item.ticker: item for item in response.tickers}
+        self.assertEqual(by_ticker["PENG"].region, "US")
+        self.assertEqual(by_ticker["043260"].region, "KR")
+
     def test_short_numeric_values_are_not_treated_as_equity_tickers(self):
         import research_os_main as main
 

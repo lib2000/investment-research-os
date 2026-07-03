@@ -3461,7 +3461,7 @@ label {
 }
 
 .compact-interest-draft {
-  grid-template-columns: minmax(180px, 1.2fr) minmax(120px, 0.55fr) minmax(260px, 1.8fr);
+  grid-template-columns: minmax(170px, 1.2fr) minmax(96px, 0.45fr) minmax(112px, 0.55fr) minmax(240px, 1.8fr);
   align-items: end;
 }
 
@@ -3483,6 +3483,33 @@ label {
 
 #interestTickerEditor,
 #interestSectorEditor {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.interest-region-group {
+  min-width: 0;
+}
+
+.interest-region-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.interest-region-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.interest-region-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 8px;
@@ -3622,6 +3649,18 @@ label {
   color: #334155;
   background: #f8fafc;
   border-color: #cbd5e1;
+}
+
+.interest-summary-meta b.interest-region {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.interest-summary-meta b.interest-region.us {
+  color: #4338ca;
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .interest-summary-meta b.interest-detail-cue {
