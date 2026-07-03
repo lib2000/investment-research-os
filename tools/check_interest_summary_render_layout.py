@@ -90,6 +90,14 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       rowVisible: visible(row),
                     };
                   };
+                  const regionGroupStats = (rootSelector) => [...document.querySelectorAll(`${rootSelector} .interest-region-group`)]
+                    .filter(visible)
+                    .map((section) => ({
+                      label: (section.querySelector(".interest-region-heading strong")?.textContent || "").trim(),
+                      title: (section.querySelector(".interest-region-heading span")?.textContent || "").trim(),
+                      rowCount: section.querySelectorAll(".interest-summary-row").length,
+                      hasEmptyState: Boolean(section.querySelector(".interest-region-empty")),
+                    }));
 
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#statusButton") && document.querySelector("#interestsLoadButton"), 15000, "console controls");
@@ -105,6 +113,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
 
                   const tickerBefore = summaryStats(".interest-ticker-summary-row");
                   const sectorBefore = summaryStats(".interest-sector-summary-row");
+                  const tickerRegionGroups = regionGroupStats("#interestTickerEditor");
+                  const sectorRegionGroups = regionGroupStats("#interestSectorEditor");
                   const tickerOpen = await openFirst(".interest-ticker-summary-row");
                   const sectorOpen = await openFirst(".interest-sector-summary-row");
 
@@ -114,6 +124,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     sectorSummaryCount: sectorBefore.length,
                     tickerSummarySamples: tickerBefore.slice(0, 5),
                     sectorSummarySamples: sectorBefore.slice(0, 5),
+                    tickerRegionGroups,
+                    sectorRegionGroups,
                     tickerNameOnlyCount: tickerBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     sectorNameOnlyCount: sectorBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     tickerDetailOpened: tickerOpen.opened && tickerOpen.hasDetailGrid,
@@ -160,6 +172,12 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("관심종목 요약 행에 종목명 외 정보가 노출됩니다.")
     if int(result.get("sectorNameOnlyCount") or 0) != sector_count:
         errors.append("관심섹터 요약 행에 섹터명 외 정보가 노출됩니다.")
+    ticker_group_labels = " ".join(item.get("label", "") for item in result.get("tickerRegionGroups") or [])
+    sector_group_labels = " ".join(item.get("label", "") for item in result.get("sectorRegionGroups") or [])
+    if "한국" not in ticker_group_labels or "미국" not in ticker_group_labels:
+        errors.append("관심종목 한국/미국 구분 섹션이 모두 보이지 않습니다.")
+    if "한국" not in sector_group_labels or "미국" not in sector_group_labels:
+        errors.append("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("sectorDetailOpened"):
