@@ -10549,16 +10549,18 @@ attachButtonActionFeedback(document.querySelector("#interests"), {
   addInterestSectorButton: "관심섹터 추가를 시작했습니다.",
 });
 
-document.querySelectorAll("[data-workflow-action]").forEach((button) => {
-  button.addEventListener("click", (event) => {
-    if (!button.closest("#dashboardForm")) {
-      const message = `${actionLabelFromButton(button)} 화면/작업을 열고 있습니다.`;
-      if (!registerActionClick(button, message, event)) {
-        return;
-      }
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-workflow-action]");
+  if (!button || button.closest("#dashboardCards")) {
+    return;
+  }
+  if (!button.closest("#dashboardForm")) {
+    const message = `${actionLabelFromButton(button)} 화면/작업을 열고 있습니다.`;
+    if (!registerActionClick(button, message, event)) {
+      return;
     }
-    handleWorkflowAction(button.dataset.workflowAction).catch(setError);
-  });
+  }
+  handleWorkflowAction(button.dataset.workflowAction).catch(setError);
 });
 
 elements.dashboardCards.addEventListener("click", (event) => {
@@ -10652,6 +10654,8 @@ elements.dashboardCards.addEventListener("keydown", (event) => {
   event.preventDefault();
   openDailyRecommendationDetailFromDashboard(dailyRecommendationCard).catch(setError);
 });
+
+window.__researchConsoleWorkflowReady = true;
 
 elements.memoryList.addEventListener("click", (event) => {
   const feedbackButton = event.target.closest(
