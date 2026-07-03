@@ -333,6 +333,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("news_priority_preview", script_source)
         self.assertIn("news_priority_count", script_source)
         self.assertIn("우선 뉴스: 표시", script_source)
+        self.assertIn("우선 뉴스 상위", script_source)
+        self.assertIn("$newsItem.source_url", script_source)
         self.assertIn("자동화 조치", script_source)
         self.assertIn("latest_records", script_source)
         self.assertIn("오늘 추천 $($marketLabel) 1~3위", script_source)
