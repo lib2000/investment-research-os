@@ -17,6 +17,35 @@ def write_kcif_reports_watch(runtime: KcifWatchRuntime, settings, payload: dict)
     runtime.write_json_store(runtime.kcif_reports_watch_path(settings), payload)
 
 
+def metadata_only_detail_analysis(report: dict) -> dict:
+    themes = [
+        str(theme).strip()
+        for theme in (report.get("matched_themes") or [])
+        if str(theme or "").strip()
+    ][:8]
+    points: list[str] = []
+    if themes:
+        points.append(f"목록 메타데이터 연결 테마: {', '.join(themes[:4])}")
+    category = str(report.get("category") or "").strip()
+    if category:
+        points.append(f"KCIF 분류: {category}")
+    report_date = str(report.get("date") or report.get("published_at") or "").strip()
+    if report_date:
+        points.append(f"목록 기준일: {report_date}")
+    points.append("상세 화면 신호가 없거나 상세 수집 제한 범위를 넘어 목록 메타데이터만 사용했습니다.")
+    return {
+        "detail_status": "metadata_only",
+        "source_summary_available": False,
+        "source_summary_length": 0,
+        "matched_themes": themes,
+        "numeric_signals": [],
+        "derived_points": points[:5],
+        "raw_text_stored": False,
+        "pdf_downloaded": False,
+        "note": "KCIF 원문/PDF 전문을 저장하지 않고 목록 메타데이터와 자체 분류 신호만 보관했습니다.",
+    }
+
+
 def build_kcif_reports_watch_payload(
     runtime: KcifWatchRuntime,
     settings,
@@ -69,7 +98,7 @@ def build_kcif_reports_watch_payload(
             username=settings.kcif_username if settings.kcif_use_login else "",
             password=settings.kcif_password if settings.kcif_use_login else "",
             login_proc_url=settings.kcif_login_proc_url,
-            max_reports=min(target_limit, 10),
+            max_reports=min(target_limit, 20),
         )
         detail_status = detail_result.get("detail_status") or "not_checked"
         if detail_result.get("auth_status"):
@@ -82,7 +111,7 @@ def build_kcif_reports_watch_payload(
         for report in enriched_reports:
             analysis = detail_analyses.get(str(report.get("report_id")))
             if not isinstance(analysis, dict):
-                continue
+                analysis = metadata_only_detail_analysis(report)
             report["detail_analysis"] = analysis
             combined_themes = list(
                 dict.fromkeys(

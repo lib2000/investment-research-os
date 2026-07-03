@@ -10382,7 +10382,10 @@ class KcifWatchModuleTests(unittest.TestCase):
                 },
             },
             fetch_kcif_report_list_with_status=lambda **_kwargs: {
-                "reports": [{"report_id": "r1", "title": "Rates report"}],
+                "reports": [
+                    {"report_id": "r1", "title": "Rates report", "category": "Daily"},
+                    {"report_id": "r2", "title": "Oil report", "category": "Commodity"},
+                ],
                 "auth_status": "anonymous",
                 "connection_mode": "public",
             },
@@ -10390,7 +10393,8 @@ class KcifWatchModuleTests(unittest.TestCase):
             kcif_report_list_url_default="https://default.example/reports",
             kcif_reports_watch_path=lambda _settings: Path("kcif_watch.json"),
             match_kcif_reports_to_targets=lambda reports, _targets: [
-                {**reports[0], "relevance_score": 80, "matched_themes": ["금리"]}
+                {**reports[0], "relevance_score": 80, "matched_themes": ["금리"]},
+                {**reports[1], "relevance_score": 70, "matched_themes": ["유가"]},
             ],
             portfolio_store_response=lambda _settings: SimpleNamespace(portfolios=[]),
             provider_error_message=lambda exc, _settings: str(exc),
@@ -10405,9 +10409,15 @@ class KcifWatchModuleTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["source_status"], "refreshed")
         self.assertEqual(result["detail_status"], "success")
-        self.assertEqual(result["related_count"], 1)
+        self.assertEqual(result["related_count"], 2)
         self.assertEqual(result["related_reports"][0]["matched_themes"], ["금리", "환율"])
         self.assertEqual(result["related_reports"][0]["relevance_score"], 86)
+        fallback = result["related_reports"][1]["detail_analysis"]
+        self.assertEqual(fallback["detail_status"], "metadata_only")
+        self.assertFalse(fallback["raw_text_stored"])
+        self.assertFalse(fallback["pdf_downloaded"])
+        self.assertIn("목록 메타데이터", fallback["derived_points"][0])
+        self.assertEqual(writes[0][1]["reports"][1]["detail_analysis"]["detail_status"], "metadata_only")
         self.assertEqual(result["policy"], {"mode": "metadata_only"})
         self.assertEqual(len(writes), 1)
         self.assertEqual(writes[0][0], Path("kcif_watch.json"))
