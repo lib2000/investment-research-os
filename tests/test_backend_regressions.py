@@ -401,6 +401,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("files ", script_source)
         self.assertIn("$group.filing_keys", script_source)
         self.assertIn("body_followup", script_source)
+        self.assertIn("expected_exhibits", script_source)
+        self.assertIn("sec_filing_index_url", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
         self.assertIn("ForEach-Object", script_source)
         self.assertIn("본문 보강 플래그", script_source)

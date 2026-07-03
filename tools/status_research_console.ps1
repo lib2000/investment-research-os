@@ -510,7 +510,19 @@ if ($publicIrSecStatus) {
     $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }
     $entryPath = if ($entry.relative_path) { $entry.relative_path } elseif ($entry.source_url) { $entry.source_url } else { "경로 미확인" }
     $followupLabel = if ($entry.body_followup -and $entry.body_followup.label) { " | $($entry.body_followup.label)" } else { "" }
-    Write-Host "공개 IR/SEC 보강 대상: $($entry.ticker) | $entryTitle | $entryPath$followupLabel"
+    $exhibitLabel = ""
+    if ($entry.body_followup -and $entry.body_followup.expected_exhibits) {
+      $expectedExhibits = @($entry.body_followup.expected_exhibits | ForEach-Object { $_ }) | Where-Object { $_ }
+      if ($expectedExhibits.Count -gt 0) {
+        $exhibitLabel = " | Exhibit " + (($expectedExhibits | Select-Object -First 3) -join ", ")
+      }
+    }
+    $secIndexLabel = if ($entry.body_followup -and $entry.body_followup.sec_filing_index_url) {
+      " | index $($entry.body_followup.sec_filing_index_url)"
+    } else {
+      ""
+    }
+    Write-Host "공개 IR/SEC 보강 대상: $($entry.ticker) | $entryTitle | $entryPath$followupLabel$exhibitLabel$secIndexLabel"
   }
   if ($publicIrSecStatus.status -and $publicIrSecStatus.status -ne "success") {
     Add-StatusFailure "public IR/SEC 상태가 success가 아닙니다: $($publicIrSecStatus.status)"
