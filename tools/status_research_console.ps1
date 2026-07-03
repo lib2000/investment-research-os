@@ -245,6 +245,11 @@ if ($dailyRecommendations) {
   $todayRecords = if ($dailyRecommendations.today_records) { @($dailyRecommendations.today_records | ForEach-Object { $_ }) } else { @() }
   Write-Host "오늘 추천 실행 필요: $($dailyRecommendations.due_now), 대상일 $($dailyRecommendations.today_recommendation_date), 오늘 저장 $($todayRecords.Count)개"
   $latestRecommendationRecords = if ($dailyRecommendations.latest_records) { @($dailyRecommendations.latest_records | ForEach-Object { $_ }) } else { @() }
+  $recommendationRankLabel = if ($todayRecords.Count -gt 0 -and $dailyRecommendations.latest_recommendation_date -eq $dailyRecommendations.today_recommendation_date) {
+    "오늘 추천"
+  } else {
+    "최신 추천(기준일 $($dailyRecommendations.latest_recommendation_date))"
+  }
   foreach ($market in @("KR", "US")) {
     $marketLabel = if ($market -eq "KR") { "한국" } else { "미국" }
     $topRecords = @(
@@ -259,7 +264,7 @@ if ($dailyRecommendations) {
         $companyName = if ($record.company_name) { $record.company_name } else { $record.ticker }
         $topLabels += "$($record.rank)위 $companyName($($record.ticker), $($record.score)점)"
       }
-      Write-Host "오늘 추천 $($marketLabel) 1~3위: $($topLabels -join ' / ')"
+      Write-Host "$recommendationRankLabel $($marketLabel) 1~3위: $($topLabels -join ' / ')"
     }
   }
   if ($dailyCandidatePolicyPreview) {
