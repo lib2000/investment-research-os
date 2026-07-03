@@ -1649,10 +1649,7 @@ function makeInterestTickerSummaryRow(item = {}) {
   const region = normalizeInterestRegion(item.region || item.verification?.country || "");
   const regionLabel = interestRegionLabel(region);
   const identityLabel = companyName || (tickerCode ? "회사명 확인 필요" : "");
-  const priorityLabel = { high: "높음", medium: "보통", low: "낮음" }[item.priority || "medium"] || "보통";
   const tags = joinTags(item.tags);
-  const verified = Boolean(item.verification?.verified || item.verification?.status === "success");
-  const notePreview = compactOutputText(item.thesis || item.notes || "추적 메모 없음", 72);
   const tickerHint = "";
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
@@ -1663,13 +1660,10 @@ function makeInterestTickerSummaryRow(item = {}) {
     <span class="interest-summary-main">
       <strong title="${escapeHtml(identityLabel)}">${escapeHtml(companyName)}</strong>
       ${tickerHint ? `<small class="interest-code-hint">${escapeHtml(tickerHint)}</small>` : ""}
-      <span class="interest-summary-note">${escapeHtml(notePreview)}</span>
     </span>
     <span class="interest-summary-meta">
-      <b class="priority">${escapeHtml(priorityLabel)}</b>
       <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
-      <b class="${verified ? "verified" : "pending"}">${verified ? "인증" : "보류"}</b>
-      <b class="interest-detail-cue">상세</b>
+      <b class="interest-detail-cue">상세 보기</b>
     </span>
   `;
   const quickActions = document.createElement("div");
@@ -1763,11 +1757,9 @@ function makeInterestSectorSummaryRow(item = {}) {
   const row = document.createElement("div");
   row.className =
     "interest-summary-row interest-sector-summary-row interest-sector-row interest-compact-card-row";
-  const priorityLabel = { high: "높음", medium: "보통", low: "낮음" }[item.priority || "medium"] || "보통";
   const region = normalizeInterestRegion(item.region || "KR");
   const regionLabel = interestRegionLabel(region);
   const tags = joinTags(item.tags);
-  const notePreview = compactOutputText(item.thesis || item.notes || "확인 포인트 없음", 72);
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
   const summary = document.createElement("summary");
@@ -1775,14 +1767,10 @@ function makeInterestSectorSummaryRow(item = {}) {
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong>${escapeHtml(item.name || "관심섹터")}</strong>
-      <span>${escapeHtml(regionLabel)}</span>
-      <span class="interest-summary-note">${escapeHtml(notePreview)}</span>
     </span>
     <span class="interest-summary-meta">
-      <b class="priority">${escapeHtml(priorityLabel)}</b>
       <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
-      <b class="verified">섹터</b>
-      <b class="interest-detail-cue">상세</b>
+      <b class="interest-detail-cue">상세 보기</b>
     </span>
   `;
   const quickActions = document.createElement("div");
@@ -9189,7 +9177,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
             : scoreComponents[0]?.label || exposure || "추천 근거 확인";
           const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
-            <article class="daily-recommendation-top-rank rank-${escapeHtml(rank)} market-${escapeHtml(market.toLowerCase())}${rank === 1 ? " is-leader" : ""}" role="cell">
+            <article class="daily-recommendation-top-rank rank-${escapeHtml(rank)} market-${escapeHtml(market.toLowerCase())}${rank === 1 ? " is-leader" : ""}" role="button" tabindex="0" data-daily-recommendation-open="${escapeHtml(record.ticker || "")}" data-daily-recommendation-rank="${escapeHtml(rank)}" data-daily-recommendation-market="${escapeHtml(market)}" aria-label="${escapeHtml(`${displayCompanyName(record)} 추천 상세 보기`)}">
               <div class="daily-recommendation-rank-badge">${escapeHtml(rank)}위</div>
               <div class="daily-recommendation-top-body">
                 <strong title="${escapeHtml(record.ticker || "")}">${escapeHtml(displayCompanyName(record))}</strong>
@@ -9240,6 +9228,41 @@ function refreshDashboardDailyRecommendationTop() {
     return;
   }
   renderDashboardEmptyState();
+}
+
+async function openDailyRecommendationDetailFromDashboard(target) {
+  const ticker = String(target?.dataset?.dailyRecommendationOpen || "").trim().toUpperCase();
+  const market = String(target?.dataset?.dailyRecommendationMarket || "").trim().toUpperCase();
+  const rank = String(target?.dataset?.dailyRecommendationRank || "").trim();
+  activateTab("memory", { keepOutput: true });
+  if (!latestDailyRecommendations) {
+    latestDailyRecommendations = await fetchDailyRecommendationsStatus(token());
+  }
+  renderDailyRecommendationCards(latestDailyRecommendations || {});
+  const selectorParts = [
+    ticker ? `[data-daily-recommendation-ticker="${CSS.escape(ticker)}"]` : "",
+    market ? `[data-daily-recommendation-market="${CSS.escape(market)}"]` : "",
+    rank ? `[data-daily-recommendation-rank="${CSS.escape(rank)}"]` : "",
+  ].filter(Boolean);
+  let card = selectorParts.length
+    ? elements.dailyRecommendationCards?.querySelector(`.daily-recommendation-rank-card${selectorParts.join("")}`)
+    : null;
+  if (!card && ticker) {
+    card = elements.dailyRecommendationCards?.querySelector(
+      `.daily-recommendation-rank-card[data-daily-recommendation-ticker="${CSS.escape(ticker)}"]`
+    );
+  }
+  if (!card) {
+    setOutput("추천 상세 카드를 찾지 못했습니다. 추천 추적 상태를 새로고침해 주세요.");
+    return;
+  }
+  const detail = card.querySelector(".daily-recommendation-detail");
+  if (detail && !detail.open) {
+    detail.open = true;
+  }
+  syncDailyRecommendationCardExpandedState();
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.focus({ preventScroll: true });
 }
 
 
@@ -9492,27 +9515,31 @@ function renderDailyRecommendationCards(payload) {
       return {
         record,
         html: `
-        <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}" tabindex="0" role="button" aria-expanded="false" aria-label="${escapeHtml(`${displayCompanyName(record)} 추천 상세 보기`)}">
-          <div class="daily-recommendation-rank-head">
-            <b>${escapeHtml(rank)}위</b>
-            <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")}</span>
-          </div>
-          <strong>${escapeHtml(displayCompanyName(record))}</strong>
-          ${publicIrSecLinked || investmentProfile.hasProfile ? `<div class="daily-recommendation-badges">${publicIrSecLinked ? `<em>공개 IR/SEC 근거</em>` : ""}${investmentProfile.badgeLabels.map((label) => `<em class="investment-profile">투자 방향: ${escapeHtml(label)}</em>`).join("")}</div>` : ""}
-          <div class="daily-recommendation-rank-metrics">
-            <span>점수 ${escapeHtml(record.score ?? "n/a")}</span>
-            <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
-          </div>
-          ${renderDailyRecommendationEvidenceQuality(record)}
-          <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(compactOutputText(topScoreComponent?.label || "저장 전", 46))}</p>
-          <ul class="daily-recommendation-primary-reasons">
-            ${primaryReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>근거 요약 없음</li>"}
-          </ul>
+        <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}" tabindex="0" role="button" aria-expanded="false" data-daily-recommendation-ticker="${escapeHtml(String(record.ticker || "").toUpperCase())}" data-daily-recommendation-market="${escapeHtml(dailyRecommendationRecordMarket(record))}" data-daily-recommendation-rank="${escapeHtml(rank)}" aria-label="${escapeHtml(`${displayCompanyName(record)} 추천 상세 보기`)}">
+          <button class="daily-recommendation-rank-trigger" type="button" data-daily-recommendation-toggle="detail" aria-expanded="false">
+            <span class="daily-recommendation-rank-badge">${escapeHtml(rank)}위</span>
+            <strong>${escapeHtml(displayCompanyName(record))}</strong>
+            <em>상세 보기</em>
+          </button>
           <details class="daily-recommendation-detail">
             <summary>
               <b>상세 근거</b>
               <span>${escapeHtml(detailSummary || "근거 세부 보기")}</span>
             </summary>
+            <div class="daily-recommendation-rank-head">
+              <b>${escapeHtml(rank)}위</b>
+              <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")}</span>
+            </div>
+            ${publicIrSecLinked || investmentProfile.hasProfile ? `<div class="daily-recommendation-badges">${publicIrSecLinked ? `<em>공개 IR/SEC 근거</em>` : ""}${investmentProfile.badgeLabels.map((label) => `<em class="investment-profile">투자 방향: ${escapeHtml(label)}</em>`).join("")}</div>` : ""}
+            <div class="daily-recommendation-rank-metrics">
+              <span>점수 ${escapeHtml(record.score ?? "n/a")}</span>
+              <span>기준가 ${escapeHtml(formatSmartPrice(record.baseline_price, record.currency || "KRW", "미확인"))}</span>
+            </div>
+            ${renderDailyRecommendationEvidenceQuality(record)}
+            <p class="daily-recommendation-score-summary">가점 ${escapeHtml(formatNumber(totalPositivePoints))}점 · 확인 ${escapeHtml(formatNumber(totalPenaltyCount))}건 · 핵심 ${escapeHtml(compactOutputText(topScoreComponent?.label || "저장 전", 46))}</p>
+            <ul class="daily-recommendation-primary-reasons">
+              ${primaryReasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>근거 요약 없음</li>"}
+            </ul>
             ${exposureSummary ? `<p class="daily-recommendation-exposure">추천 연결: ${escapeHtml(exposureSummary)}</p>` : ""}
             ${investmentProfile.hasProfile ? `<p class="daily-recommendation-investment-profile">투자 방향 반영: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.scoreBonus ? ` · +${escapeHtml(formatNumber(investmentProfile.scoreBonus))}점` : ""}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
             ${policySignal ? `<p class="daily-recommendation-investment-profile">정책 신호 반영: ${escapeHtml(policySignal)}</p>` : ""}
@@ -9727,6 +9754,12 @@ function initializeDailyRecommendationCardInteractions() {
   container.dataset.cardClickReady = "true";
   container.addEventListener("click", (event) => {
     const card = event.target.closest(".daily-recommendation-rank-card");
+    const toggleButton = event.target.closest('[data-daily-recommendation-toggle="detail"]');
+    if (toggleButton && card && container.contains(card)) {
+      event.preventDefault();
+      toggleDailyRecommendationCardDetail(card);
+      return;
+    }
     if (!card || !container.contains(card) || dailyRecommendationClickIsInteractive(event.target)) {
       return;
     }
@@ -9772,6 +9805,13 @@ function toggleDailyRecommendationCardDetail(card) {
   detail.open = !detail.open;
   card.setAttribute("aria-expanded", detail.open ? "true" : "false");
   card.classList.toggle("is-detail-open", detail.open);
+  card.querySelectorAll('[data-daily-recommendation-toggle="detail"]').forEach((button) => {
+    button.setAttribute("aria-expanded", detail.open ? "true" : "false");
+    const cue = button.querySelector("em");
+    if (cue) {
+      cue.textContent = detail.open ? "상세 접기" : "상세 보기";
+    }
+  });
 }
 
 function syncDailyRecommendationCardExpandedState(container = elements.dailyRecommendationCards) {
@@ -9780,6 +9820,13 @@ function syncDailyRecommendationCardExpandedState(container = elements.dailyReco
     const isOpen = Boolean(detail?.open);
     card.setAttribute("aria-expanded", isOpen ? "true" : "false");
     card.classList.toggle("is-detail-open", isOpen);
+    card.querySelectorAll('[data-daily-recommendation-toggle="detail"]').forEach((button) => {
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      const cue = button.querySelector("em");
+      if (cue) {
+        cue.textContent = isOpen ? "상세 접기" : "상세 보기";
+      }
+    });
   });
 }
 
@@ -10474,6 +10521,11 @@ document.querySelectorAll("[data-workflow-action]").forEach((button) => {
 });
 
 elements.dashboardCards.addEventListener("click", (event) => {
+  const dailyRecommendationCard = event.target.closest("[data-daily-recommendation-open]");
+  if (dailyRecommendationCard) {
+    openDailyRecommendationDetailFromDashboard(dailyRecommendationCard).catch(setError);
+    return;
+  }
   const todayActionButton = event.target.closest("[data-today-action]");
   if (todayActionButton) {
     const action = todayActionButton.dataset.todayAction;
@@ -10546,6 +10598,18 @@ elements.dashboardCards.addEventListener("click", (event) => {
     }
     handleWorkflowAction(button.dataset.workflowAction).catch(setError);
   }
+});
+
+elements.dashboardCards.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key)) {
+    return;
+  }
+  const dailyRecommendationCard = event.target.closest("[data-daily-recommendation-open]");
+  if (!dailyRecommendationCard) {
+    return;
+  }
+  event.preventDefault();
+  openDailyRecommendationDetailFromDashboard(dailyRecommendationCard).catch(setError);
 });
 
 elements.memoryList.addEventListener("click", (event) => {

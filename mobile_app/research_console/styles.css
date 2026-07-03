@@ -617,6 +617,19 @@ label {
   gap: 10px;
   align-items: start;
   min-height: 118px;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.daily-recommendation-top-rank:hover,
+.daily-recommendation-top-rank:focus-visible {
+  border-color: #0f766e;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.12);
+}
+
+.daily-recommendation-top-rank:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.24);
+  outline-offset: 2px;
 }
 
 .daily-recommendation-top-rank.is-leader {
@@ -3549,10 +3562,10 @@ label {
 
 .interest-card-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: start;
-  min-height: 78px;
+  align-items: center;
+  min-height: 48px;
   padding: 10px;
   cursor: pointer;
   list-style: none;
@@ -3580,8 +3593,9 @@ label {
 .interest-summary-main strong {
   overflow: hidden;
   color: var(--text);
-  font-size: 14px;
-  font-weight: 850;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3611,7 +3625,7 @@ label {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 4px;
 }
 
@@ -3939,6 +3953,7 @@ label {
 .daily-recommendation-rank-card {
   align-content: start;
   min-height: 0;
+  padding: 10px;
   border-color: #d8e1ec;
   background: #ffffff;
   cursor: pointer;
@@ -3975,6 +3990,70 @@ label {
 .daily-recommendation-rank-card.rank-3 {
   border-color: #ddd6fe;
   background: #fbfaff;
+}
+
+.daily-recommendation-rank-trigger {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.daily-recommendation-rank-trigger:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.24);
+  outline-offset: 3px;
+}
+
+.daily-recommendation-rank-trigger strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-recommendation-rank-trigger em {
+  padding: 5px 8px;
+  color: #0f766e;
+  background: #e6fffb;
+  border: 1px solid #99d5cb;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.daily-recommendation-rank-trigger .daily-recommendation-rank-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 32px;
+  padding: 0 8px;
+  color: #ffffff;
+  background: #0f766e;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.daily-recommendation-rank-card.rank-2 .daily-recommendation-rank-trigger .daily-recommendation-rank-badge {
+  background: #2563eb;
+}
+
+.daily-recommendation-rank-card.rank-3 .daily-recommendation-rank-trigger .daily-recommendation-rank-badge {
+  background: #7c3aed;
 }
 
 .daily-recommendation-rank-head {
