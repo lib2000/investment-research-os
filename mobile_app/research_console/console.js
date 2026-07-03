@@ -9396,7 +9396,7 @@ function renderDailyRecommendationCards(payload) {
       return {
         record,
         html: `
-        <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}">
+        <article class="daily-recommendation-card daily-recommendation-rank-card rank-${escapeHtml(rank)}${rank === 1 ? " is-leader" : ""}${publicIrSecLinked ? " has-public-ir-sec" : ""}" tabindex="0" role="button" aria-expanded="false" aria-label="${escapeHtml(`${displayCompanyName(record)} 추천 상세 보기`)}">
           <div class="daily-recommendation-rank-head">
             <b>${escapeHtml(rank)}위</b>
             <span>${escapeHtml(record.recommendation_date || payload.latest_recommendation_date || "추천일 미확인")}</span>
@@ -9619,6 +9619,72 @@ function renderDailyRecommendationCards(payload) {
       </div>
     </article>
   `;
+  initializeDailyRecommendationCardInteractions();
+}
+
+function initializeDailyRecommendationCardInteractions() {
+  const container = elements.dailyRecommendationCards;
+  if (!container || container.dataset.cardClickReady === "true") {
+    syncDailyRecommendationCardExpandedState(container);
+    return;
+  }
+  container.dataset.cardClickReady = "true";
+  container.addEventListener("click", (event) => {
+    const card = event.target.closest(".daily-recommendation-rank-card");
+    if (!card || !container.contains(card) || dailyRecommendationClickIsInteractive(event.target)) {
+      return;
+    }
+    toggleDailyRecommendationCardDetail(card);
+  });
+  container.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) {
+      return;
+    }
+    const card = event.target.closest(".daily-recommendation-rank-card");
+    if (!card || !container.contains(card) || dailyRecommendationClickIsInteractive(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    toggleDailyRecommendationCardDetail(card);
+  });
+  container.addEventListener("toggle", (event) => {
+    if (!event.target.matches(".daily-recommendation-detail")) {
+      return;
+    }
+    const card = event.target.closest(".daily-recommendation-rank-card");
+    if (card) {
+      card.setAttribute("aria-expanded", event.target.open ? "true" : "false");
+      card.classList.toggle("is-detail-open", event.target.open);
+    }
+  }, true);
+  syncDailyRecommendationCardExpandedState(container);
+}
+
+function dailyRecommendationClickIsInteractive(target) {
+  return Boolean(
+    target.closest(
+      "a, button, input, textarea, select, label, summary, details, [data-workflow-action], [data-no-card-toggle]"
+    )
+  );
+}
+
+function toggleDailyRecommendationCardDetail(card) {
+  const detail = card.querySelector(".daily-recommendation-detail");
+  if (!detail) {
+    return;
+  }
+  detail.open = !detail.open;
+  card.setAttribute("aria-expanded", detail.open ? "true" : "false");
+  card.classList.toggle("is-detail-open", detail.open);
+}
+
+function syncDailyRecommendationCardExpandedState(container = elements.dailyRecommendationCards) {
+  container?.querySelectorAll(".daily-recommendation-rank-card").forEach((card) => {
+    const detail = card.querySelector(".daily-recommendation-detail");
+    const isOpen = Boolean(detail?.open);
+    card.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    card.classList.toggle("is-detail-open", isOpen);
+  });
 }
 
 function translateTickerRegistrySourceName(source) {

@@ -3902,6 +3902,24 @@ label {
   min-height: 0;
   border-color: #d8e1ec;
   background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.daily-recommendation-rank-card:hover,
+.daily-recommendation-rank-card:focus-visible,
+.daily-recommendation-rank-card.is-detail-open {
+  border-color: #0f766e;
+  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.12);
+}
+
+.daily-recommendation-rank-card:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.24);
+  outline-offset: 2px;
+}
+
+.daily-recommendation-rank-card.is-detail-open {
+  transform: translateY(-1px);
 }
 
 .daily-recommendation-rank-card.is-leader {
@@ -4122,6 +4140,18 @@ label {
   color: #0f766e;
   font-size: 12px;
   font-weight: 950;
+}
+
+.daily-recommendation-detail summary b::after {
+  content: " 열기";
+  margin-left: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.daily-recommendation-detail[open] summary b::after {
+  content: " 접기";
 }
 
 .daily-recommendation-detail summary span {
