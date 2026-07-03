@@ -12529,6 +12529,22 @@ class AutomationStatusModuleTests(unittest.TestCase):
 
 
 class DailyBriefModuleTests(unittest.TestCase):
+    def test_latest_daily_briefing_route_uses_saved_payload_without_rebuilding(self):
+        source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+
+        self.assertIn('"/api/v1/daily-briefing/latest"', source)
+        self.assertIn("def get_latest_daily_research_briefing", source)
+        self.assertIn("latest = read_latest_daily_brief(settings)", source)
+        route_block = source[
+            source.index("def get_latest_daily_research_briefing") : source.index(
+                '@app.get(\n    "/api/v1/investment-insights"'
+            )
+        ]
+        self.assertIn("payload_summary = {", source)
+        self.assertIn('"module": "daily_research_briefing_latest"', route_block)
+        self.assertIn('"payload": payload_summary', route_block)
+        self.assertNotIn('"payload": payload,', route_block)
+
     def test_daily_brief_module_uses_runtime_date_for_thesis_age(self):
         from research_os import daily_brief
 
@@ -13285,6 +13301,18 @@ class ConsoleAssetHashTests(unittest.TestCase):
         ]
         for template in blocked_templates:
             self.assertNotIn(template, console_js)
+
+    def test_console_system_check_uses_latest_daily_briefing_status(self):
+        api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("export async function fetchLatestDailyBriefing", api_js)
+        self.assertIn('request("/api/v1/daily-briefing/latest"', api_js)
+        self.assertIn("fetchLatestDailyBriefing,", console_js)
+        self.assertIn('runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token()))', console_js)
+        self.assertNotIn('runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false))', console_js)
 
     def test_asset_hash_rewrite_reaches_fixed_point(self):
         tool = load_console_hash_tool()

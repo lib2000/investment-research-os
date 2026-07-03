@@ -21,6 +21,7 @@
   runStorageDuplicateReview,
   runDedupedDossierRefresh,
   fetchDailyBriefing,
+  fetchLatestDailyBriefing,
   fetchInvestmentInsights,
   searchAllRagMemoryDocuments,
   searchRagMemoryDocuments,
@@ -102,7 +103,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=6d4ac74040f4";
+} from "./api.js?v=1da8f1a9e22a";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -5550,6 +5551,15 @@ function summarizeSystemCheckValue(label, value) {
     return `Pulls 대상 ${digest.target_count || 0}개 · RAG ${digest.rag_document_count || 0}개 · Dossier ${digest.dossier_count || 0}개`;
   }
   if (label.includes("일일 브리핑")) {
+    const payload = value?.payload || value || {};
+    if (value?.module === "daily_research_briefing_latest") {
+      const storage = value.storage || {};
+      return `최신 ${payload.date || value.date || "미생성"} · 스냅샷 ${payload.snapshot_count || value.snapshot_count || 0}개 · 보유 ${
+        payload.portfolio_snapshot_count || value.portfolio_snapshot_count || 0
+      }/${payload.portfolio_holding_count || value.portfolio_holding_count || 0}개 · 최근 자료 ${
+        payload.recent_entry_count || value.recent_entry_count || 0
+      }개${storage.relative_path ? ` · 저장 ${storage.relative_path}` : ""}`;
+    }
     const nextActions = Array.isArray(value.next_actions) ? value.next_actions.length : 0;
     const priorityReviews = Array.isArray(value.portfolio_overview?.priority_reviews)
       ? value.portfolio_overview.priority_reviews.length
@@ -5750,7 +5760,7 @@ async function runConsoleSystemCheck() {
     runCheck("네이버 리서치/시장일지 자동 반영", () => fetchNaverResearchStatus(token())),
     runCheck("텔레그램 미국 시장일지 자동 반영", () => fetchTelegramMarketCloseTaskStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
-    runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false)),
+    runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token())),
   ]);
 
   renderDashboardTickerPicker();

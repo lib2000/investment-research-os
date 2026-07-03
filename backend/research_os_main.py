@@ -13196,6 +13196,39 @@ def get_daily_research_briefing(
 
 
 @app.get(
+    "/api/v1/daily-briefing/latest",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_latest_daily_research_briefing(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    시스템 점검용으로 저장된 최신 일일 브리핑 상태만 가볍게 조회합니다.
+    """
+    latest = read_latest_daily_brief(settings)
+    payload = (
+        latest.get("payload")
+        if isinstance(latest, dict) and isinstance(latest.get("payload"), dict)
+        else {}
+    )
+    payload_summary = {
+        "date": payload.get("date"),
+        "snapshot_count": payload.get("snapshot_count", 0),
+        "portfolio_snapshot_count": payload.get("portfolio_snapshot_count", 0),
+        "portfolio_holding_count": payload.get("portfolio_holding_count", 0),
+        "recent_entry_count": payload.get("recent_entry_count", 0),
+    }
+    return {
+        "status": "success",
+        "module": "daily_research_briefing_latest",
+        "updated_at": latest.get("updated_at") if isinstance(latest, dict) else None,
+        "storage": latest.get("storage") if isinstance(latest, dict) else None,
+        "payload": payload_summary,
+        **payload_summary,
+    }
+
+
+@app.get(
     "/api/v1/investment-insights",
     dependencies=[Depends(verify_user_token)],
 )

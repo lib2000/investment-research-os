@@ -1201,6 +1201,25 @@ export async function fetchDailyBriefing(accessToken, saveResult = false) {
 }
 
 /**
+ * 시스템 점검용으로 저장된 최신 일일 브리핑 상태만 빠르게 조회합니다.
+ *
+ * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
+ * @returns {Promise<Object|null>} 최신 일일 브리핑 상태
+ */
+export async function fetchLatestDailyBriefing(accessToken) {
+  try {
+    return request("/api/v1/daily-briefing/latest", {
+      method: "GET",
+      accessToken,
+      timeoutMs: 10000,
+    });
+  } catch (error) {
+    console.error("최신 일일 브리핑 상태를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
  * 시장 데이터, 공시, 정책/법령 뉴스, 일반 뉴스, 투자 심리를 통합한 인사이트를 조회합니다.
  *
  * @param {string} accessToken 앱 로그인 이후 발급받은 사용자 액세스 토큰
