@@ -1316,6 +1316,37 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertNotIn("fc-secret-value", json.dumps(status))
         self.assertNotIn("webhook-secret-value", json.dumps(status))
 
+    def test_firecrawl_monitor_readiness_rejects_placeholder_api_key(self):
+        from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
+
+        settings = SimpleNamespace(
+            firecrawl_monitor_enabled=True,
+            firecrawl_monitor_dry_run=False,
+            firecrawl_api_key="replace-with-firecrawl-api-key",
+            firecrawl_base_url="https://api.firecrawl.dev/v2",
+            firecrawl_timeout_seconds=30,
+            firecrawl_monitor_webhook_secret="webhook-secret-value",
+            firecrawl_monitor_sources_json=json.dumps(
+                {
+                    "monitors": [
+                        {
+                            "name": "Policy monitor",
+                            "url": "https://www.sec.gov/newsroom/press-releases",
+                            "goal": "Alert on policy changes",
+                        }
+                    ]
+                }
+            ),
+        )
+
+        status = build_firecrawl_monitor_readiness_status(settings)
+
+        self.assertEqual(status["status"], "needs_api_key")
+        self.assertFalse(status["hosted_api"]["api_key_configured"])
+        self.assertFalse(status["create_ready"])
+        self.assertIn("non-placeholder", json.dumps(status["create_readiness_errors"]))
+        self.assertNotIn("replace-with-firecrawl-api-key", json.dumps(status))
+
     def test_firecrawl_monitor_sources_normalize_scrape_and_search_targets(self):
         from research_os.firecrawl_monitor_collector import normalize_firecrawl_monitor_sources
 

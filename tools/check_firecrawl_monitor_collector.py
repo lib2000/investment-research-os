@@ -92,6 +92,11 @@ def _payload_hash_prefix(item: dict) -> str:
     return sha256(json.dumps(item, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
 
+def _looks_like_placeholder(value: str) -> bool:
+    lowered = str(value or "").strip().lower()
+    return not lowered or lowered.startswith("replace-with-") or lowered in {"changeme", "todo", "placeholder"}
+
+
 def _dry_run_from_items(items: list[dict], input_source: str, settings) -> dict:
     readiness = build_firecrawl_monitor_readiness_status(settings)
     return {
@@ -146,7 +151,8 @@ def main() -> int:
         "item_count": len(registry_items) if input_source != "sample" else int((dry_run.get("source_registry") or {}).get("item_count") or 0),
         "firecrawl_monitor_enabled": bool(getattr(settings, "firecrawl_monitor_enabled", False)),
         "firecrawl_monitor_dry_run": bool(getattr(settings, "firecrawl_monitor_dry_run", True)),
-        "firecrawl_api_key_configured": bool(getattr(settings, "firecrawl_api_key", "")),
+        "firecrawl_api_key_configured": bool(str(getattr(settings, "firecrawl_api_key", "") or "").strip())
+        and not _looks_like_placeholder(str(getattr(settings, "firecrawl_api_key", "") or "")),
         "firecrawl_base_url": str(getattr(settings, "firecrawl_base_url", "") or ""),
         "create_ready": bool(readiness.get("create_ready")),
         "create_readiness_errors": readiness.get("create_readiness_errors") or [],

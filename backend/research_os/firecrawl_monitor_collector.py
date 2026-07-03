@@ -218,15 +218,17 @@ def _monitor_create_readiness_errors(settings: Any) -> list[str]:
         errors.append("FIRECRAWL_MONITOR_ENABLED must be true for monitor create")
     if _settings_bool(settings, "firecrawl_monitor_dry_run", True):
         errors.append("FIRECRAWL_MONITOR_DRY_RUN must be false for monitor create")
-    if not _settings_str(settings, "firecrawl_api_key"):
-        errors.append("FIRECRAWL_API_KEY must be configured for monitor create")
+    api_key = _settings_str(settings, "firecrawl_api_key")
+    if not api_key or _looks_like_placeholder(api_key):
+        errors.append("FIRECRAWL_API_KEY must be configured with a non-placeholder value for monitor create")
     return errors
 
 
 def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
     enabled = _settings_bool(settings, "firecrawl_monitor_enabled")
     dry_run = _settings_bool(settings, "firecrawl_monitor_dry_run", True)
-    api_key_configured = bool(_settings_str(settings, "firecrawl_api_key"))
+    api_key = _settings_str(settings, "firecrawl_api_key")
+    api_key_configured = bool(api_key) and not _looks_like_placeholder(api_key)
     registry_configured = bool(_settings_str(settings, "firecrawl_monitor_sources_json"))
     webhook_secret = _settings_str(settings, "firecrawl_monitor_webhook_secret")
     webhook_secret_configured = bool(webhook_secret) and not _looks_like_placeholder(webhook_secret)
