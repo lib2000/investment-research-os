@@ -61,6 +61,7 @@ def main() -> int:
     parser.add_argument("--refresh", action="store_true", help="점검 전에 그래프를 다시 생성합니다.")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--max-graph-age-hours", type=float, default=24.0, help="그래프 생성 시각 최신성 기준")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -131,6 +132,34 @@ def main() -> int:
         warnings.append(f"콘솔 API call 노드가 예상보다 적음: {len(api_calls)}개")
     if len(buttons) < 80:
         warnings.append(f"버튼 노드가 예상보다 적음: {len(buttons)}개")
+
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "graph_path": str(graph_path.relative_to(root)),
+        "generated_at": graph.get("generated_at"),
+        "graph_age_hours": graph_age_hours,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "api_route_count": len(api_routes),
+        "api_call_count": len(api_calls),
+        "button_count": len(buttons),
+        "flow_count": len(flows),
+        "flows": [
+            {
+                "id": flow.get("id"),
+                "label": flow.get("label"),
+                "status": flow.get("status"),
+                "matched_file_count": flow.get("matched_file_count"),
+            }
+            for flow in flows
+        ],
+        "warnings": warnings,
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and errors else 0
 
     print(f"프로젝트 루트: {root}")
     print(f"그래프 파일: {graph_path.relative_to(root)}")

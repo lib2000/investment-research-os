@@ -3178,6 +3178,15 @@ class BackendModuleBoundaryTests(unittest.TestCase):
 
         self.assertTrue(graph["existing"])
 
+    def test_code_knowledge_graph_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_code_knowledge_graph.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"api_route_count"', source)
+        self.assertIn('"api_call_count"', source)
+        self.assertIn('"button_count"', source)
+        self.assertIn('"flows"', source)
+
     def test_code_knowledge_graph_tracks_news_inbox_priority_queue(self):
         tool = load_code_knowledge_graph_builder_tool()
 
