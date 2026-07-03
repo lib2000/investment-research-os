@@ -649,6 +649,34 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
 
 class OperationalReadinessToolTests(unittest.TestCase):
+    def test_build_result_returns_machine_readable_operational_summary(self):
+        tool = load_operational_readiness_tool()
+        good = tool.signal("good", "정상 신호", 100.0, "정상", "next")
+        weak = tool.signal("weak", "주의 신호", 80.0, "확인 필요", "fix")
+
+        with patch.object(tool, "graph_signal", return_value=good), \
+            patch.object(tool, "recommendation_signal", return_value=good), \
+            patch.object(tool, "recommendation_citations_signal", return_value=good), \
+            patch.object(tool, "recommendation_policy_signal", return_value=good), \
+            patch.object(tool, "storage_signal", return_value=good), \
+            patch.object(tool, "rag_diagnostics_signal", return_value=good), \
+            patch.object(tool, "source_signal", return_value=good), \
+            patch.object(tool, "investment_calendar_signal", return_value=good), \
+            patch.object(tool, "portfolio_signal", return_value=good), \
+            patch.object(tool, "nps_allocation_signal", return_value=weak), \
+            patch.object(tool, "investment_insight_hub_signal", return_value=good):
+            result = tool.build_result(
+                Path("C:/tmp/project"),
+                min_score=95.0,
+                daily_time="08:00",
+                enforce_nps_allocation=False,
+            )
+
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["score"], 98.2)
+        self.assertEqual(len(result["signals"]), 11)
+        self.assertEqual(result["warnings"][0]["id"], "weak")
+
     def test_policy_signal_quality_is_part_of_operational_readiness(self):
         tool = load_operational_readiness_tool()
         with TemporaryDirectory() as tmp:
@@ -823,6 +851,27 @@ class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
         }
 
         self.assertEqual(tool.strict_errors(dashboard, fail_on_review=True, require_metadata=True), [])
+
+    def test_build_result_returns_machine_readable_policy_signal_summary(self):
+        tool = load_policy_signal_check_tool()
+        dashboard = {
+            "recommendation_date": "2026-07-04",
+            "record_count": 2,
+            "score_applied_count": 1,
+            "review_count": 0,
+            "total_policy_net_points": 3,
+            "level_counts": {"direct": 1, "theme": 1, "market": 0, "none": 0},
+            "rows": [{"ticker": "005930", "policy_signal_summary": {"match_level": "direct"}}],
+            "review_rows": [],
+        }
+
+        result = tool.build_result(dashboard, fail_on_review=True, require_metadata=True)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["recommendation_date"], "2026-07-04")
+        self.assertEqual(result["record_count"], 2)
+        self.assertEqual(result["score_applied_count"], 1)
+        self.assertEqual(result["level_counts"]["direct"], 1)
 
 
 class DailyRecommendationCitationCheckToolTests(unittest.TestCase):

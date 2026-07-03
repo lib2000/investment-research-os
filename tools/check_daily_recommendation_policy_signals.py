@@ -73,10 +73,31 @@ def strict_errors(dashboard: dict[str, Any], *, fail_on_review: bool, require_me
     return errors
 
 
+def build_result(dashboard: dict[str, Any], *, fail_on_review: bool, require_metadata: bool) -> dict[str, Any]:
+    errors = strict_errors(
+        dashboard,
+        fail_on_review=fail_on_review,
+        require_metadata=require_metadata,
+    )
+    return {
+        "status": "warning" if errors else "ok",
+        "errors": errors,
+        "recommendation_date": dashboard.get("recommendation_date") or "",
+        "record_count": int(dashboard.get("record_count") or 0),
+        "score_applied_count": int(dashboard.get("score_applied_count") or 0),
+        "review_count": int(dashboard.get("review_count") or 0),
+        "total_policy_net_points": int(dashboard.get("total_policy_net_points") or 0),
+        "level_counts": dashboard.get("level_counts") if isinstance(dashboard.get("level_counts"), dict) else {},
+        "rows": dashboard.get("rows") if isinstance(dashboard.get("rows"), list) else [],
+        "review_rows": dashboard.get("review_rows") if isinstance(dashboard.get("review_rows"), list) else [],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="최신 매일 추천의 정책 신호 품질을 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="최신 추천/정책 점수 반영 누락을 실패로 처리합니다.")
     parser.add_argument("--fail-on-review", action="store_true", help="검토 필요 항목이 있으면 실패로 처리합니다.")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     parser.add_argument(
         "--allow-missing-metadata",
         action="store_true",
@@ -86,6 +107,15 @@ def main() -> int:
 
     root = project_root(Path.cwd())
     dashboard = dashboard_for_latest(root)
+    result = build_result(
+        dashboard,
+        fail_on_review=args.fail_on_review,
+        require_metadata=not args.allow_missing_metadata,
+    )
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and result["errors"] else 0
+
     level_counts = dashboard.get("level_counts") if isinstance(dashboard.get("level_counts"), dict) else {}
     rows = dashboard.get("rows") if isinstance(dashboard.get("rows"), list) else []
     review_rows = dashboard.get("review_rows") if isinstance(dashboard.get("review_rows"), list) else []
@@ -124,11 +154,7 @@ def main() -> int:
             if isinstance(row, dict):
                 print(f"  - {row.get('ticker') or ''}: {row.get('review_reason') or '확인 필요'}")
 
-    errors = strict_errors(
-        dashboard,
-        fail_on_review=args.fail_on_review,
-        require_metadata=not args.allow_missing_metadata,
-    )
+    errors = result["errors"]
     if args.strict and errors:
         print("정책 신호 품질 점검 실패")
         for error in errors:

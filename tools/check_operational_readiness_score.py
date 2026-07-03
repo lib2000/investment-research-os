@@ -426,11 +426,46 @@ def investment_insight_hub_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def build_result(
+    root: Path,
+    *,
+    min_score: float,
+    daily_time: str,
+    enforce_nps_allocation: bool,
+) -> dict[str, Any]:
+    vault_dir = root / "research_vault"
+    system_dir = vault_dir / "_system"
+    signals = [
+        graph_signal(system_dir),
+        recommendation_signal(system_dir, daily_time),
+        recommendation_citations_signal(root, system_dir),
+        recommendation_policy_signal(system_dir),
+        storage_signal(vault_dir),
+        rag_diagnostics_signal(vault_dir),
+        source_signal(system_dir),
+        investment_calendar_signal(vault_dir),
+        portfolio_signal(system_dir),
+        nps_allocation_signal(root, system_dir, enforce=enforce_nps_allocation),
+        investment_insight_hub_signal(root),
+    ]
+    score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
+    warnings = [item for item in signals if item["status"] != "ok"]
+    return {
+        "status": "ok" if score >= min_score and not warnings else "warning",
+        "project_root": str(root),
+        "score": score,
+        "min_score": float(min_score),
+        "signals": signals,
+        "warnings": warnings,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="운영 완성도 95% 기준을 백엔드 없이 점검합니다.")
     parser.add_argument("--min-score", type=float, default=95.0)
     parser.add_argument("--daily-time", default="08:00")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--json", action="store_true", help="운영 완성도 결과를 JSON으로 출력합니다.")
     parser.add_argument(
         "--enforce-nps-allocation",
         action="store_true",
@@ -439,23 +474,19 @@ def main() -> int:
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
-    vault_dir = root / "research_vault"
-    system_dir = vault_dir / "_system"
-    signals = [
-        graph_signal(system_dir),
-        recommendation_signal(system_dir, args.daily_time),
-        recommendation_citations_signal(root, system_dir),
-        recommendation_policy_signal(system_dir),
-        storage_signal(vault_dir),
-        rag_diagnostics_signal(vault_dir),
-        source_signal(system_dir),
-        investment_calendar_signal(vault_dir),
-        portfolio_signal(system_dir),
-        nps_allocation_signal(root, system_dir, enforce=args.enforce_nps_allocation),
-        investment_insight_hub_signal(root),
-    ]
-    score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
-    warnings = [item for item in signals if item["status"] != "ok"]
+    result = build_result(
+        root,
+        min_score=args.min_score,
+        daily_time=args.daily_time,
+        enforce_nps_allocation=args.enforce_nps_allocation,
+    )
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and result["status"] != "ok" else 0
+
+    signals = result["signals"]
+    score = float(result["score"])
+    warnings = result["warnings"]
 
     print(f"프로젝트 루트: {root}")
     print(f"운영 완성도 점수: {score:.1f}% / 목표 {args.min_score:.1f}%")
