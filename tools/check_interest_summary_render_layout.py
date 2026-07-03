@@ -1,0 +1,213 @@
+"""Headless layout check for name-only interest ticker and sector summaries."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+from smoke_research_console_clicks import CdpClient, assert_project_root, chrome_path, free_devtools_port, wait_for_page
+
+
+DEFAULT_URL = "http://127.0.0.1:8001/console/index.html?smoke=interest-summary-layout"
+
+
+def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict:
+    assert_project_root()
+    port = free_devtools_port()
+    with tempfile.TemporaryDirectory(prefix="research-console-interest-layout-", ignore_cleanup_errors=True) as profile_dir:
+        process = subprocess.Popen(
+            [
+                chrome_path(),
+                "--headless=new",
+                f"--remote-debugging-port={port}",
+                f"--user-data-dir={profile_dir}",
+                "--disable-gpu",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--window-size=1280,900",
+                url,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        client: CdpClient | None = None
+        try:
+            page = wait_for_page(port)
+            client = CdpClient(page["webSocketDebuggerUrl"])
+            client.call("Runtime.enable")
+            client.call("Page.enable")
+            result = client.evaluate(
+                """
+                (async () => {
+                  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+                  const visible = (el) => Boolean(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+                  const runtimeErrors = [];
+                  window.addEventListener("error", (event) => runtimeErrors.push(String(event.message || event.error || "error")));
+                  window.addEventListener("unhandledrejection", (event) => runtimeErrors.push(String(event.reason || "unhandledrejection")));
+                  const waitFor = async (predicate, timeout = 30000, label = "condition") => {
+                    const started = Date.now();
+                    while (Date.now() - started < timeout) {
+                      const value = predicate();
+                      if (value) return value;
+                      await sleep(250);
+                    }
+                    throw new Error(`Timed out waiting for ${label}`);
+                  };
+                  const summaryStats = (selector) => [...document.querySelectorAll(selector)]
+                    .filter(visible)
+                    .map((row) => {
+                      const details = row.querySelector("details.interest-card-details");
+                      const summary = row.querySelector("summary.interest-card-summary");
+                      const strong = summary?.querySelector("strong");
+                      const text = (summary?.textContent || "").replace(/\\s+/g, " ").trim();
+                      const name = (strong?.textContent || "").replace(/\\s+/g, " ").trim();
+                      return {
+                        text,
+                        name,
+                        nameOnly: Boolean(name) && text === name,
+                        hasMeta: Boolean(summary?.querySelector(".interest-summary-meta")),
+                        hasNote: Boolean(summary?.querySelector(".interest-summary-note")),
+                        hasDetailGrid: Boolean(details?.querySelector(".interest-detail-grid")),
+                        opened: Boolean(details?.open),
+                      };
+                    });
+                  const openFirst = async (selector) => {
+                    const row = [...document.querySelectorAll(selector)].find(visible);
+                    const details = row?.querySelector("details.interest-card-details");
+                    const summary = row?.querySelector("summary.interest-card-summary");
+                    summary?.scrollIntoView({block: "center", inline: "nearest"});
+                    await sleep(100);
+                    summary?.click();
+                    await sleep(400);
+                    return {
+                      opened: Boolean(details?.open),
+                      detailVisible: visible(details?.querySelector(".interest-detail-grid")),
+                      hasDetailGrid: Boolean(details?.querySelector(".interest-detail-grid")),
+                      summaryText: (summary?.textContent || "").replace(/\\s+/g, " ").trim(),
+                      rowVisible: visible(row),
+                    };
+                  };
+
+                  await waitFor(() => document.readyState === "complete", 15000, "page load");
+                  await waitFor(() => document.querySelector("#statusButton") && document.querySelector("#interestsLoadButton"), 15000, "console controls");
+                  document.querySelector("#apiBaseUrl").value = "http://127.0.0.1:8001";
+                  document.querySelector("#accessToken").value = "dev-local-token";
+                  document.querySelector("#statusButton").click();
+                  await waitFor(() => /정상|kis|활성|완료/.test(document.querySelector("#backendStatus")?.textContent || ""), 15000, "backend status");
+                  document.querySelector('button.tab[data-tab="interests"]')?.click();
+                  await waitFor(() => document.querySelector("#interests")?.classList.contains("active"), 5000, "interests active");
+                  document.querySelector("#interestsLoadButton")?.click();
+                  await waitFor(() => document.querySelectorAll(".interest-ticker-summary-row").length > 0, 30000, "ticker summaries");
+                  await waitFor(() => document.querySelectorAll(".interest-sector-summary-row").length > 0, 30000, "sector summaries");
+
+                  const tickerBefore = summaryStats(".interest-ticker-summary-row");
+                  const sectorBefore = summaryStats(".interest-sector-summary-row");
+                  const tickerOpen = await openFirst(".interest-ticker-summary-row");
+                  const sectorOpen = await openFirst(".interest-sector-summary-row");
+
+                  return {
+                    status: "success",
+                    tickerSummaryCount: tickerBefore.length,
+                    sectorSummaryCount: sectorBefore.length,
+                    tickerSummarySamples: tickerBefore.slice(0, 5),
+                    sectorSummarySamples: sectorBefore.slice(0, 5),
+                    tickerNameOnlyCount: tickerBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
+                    sectorNameOnlyCount: sectorBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
+                    tickerDetailOpened: tickerOpen.opened && tickerOpen.hasDetailGrid,
+                    sectorDetailOpened: sectorOpen.opened && sectorOpen.hasDetailGrid,
+                    tickerOpen,
+                    sectorOpen,
+                    runtimeErrors,
+                  };
+                })()
+                """,
+                timeout=90,
+            )
+            if output_screenshot:
+                screenshot = client.call(
+                    "Page.captureScreenshot",
+                    {"format": "png", "captureBeyondViewport": False},
+                    timeout=30,
+                )
+                output_screenshot.parent.mkdir(parents=True, exist_ok=True)
+                import base64
+
+                output_screenshot.write_bytes(base64.b64decode(screenshot["data"]))
+                result["screenshot"] = str(output_screenshot)
+            return result
+        finally:
+            if client:
+                client.close()
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
+def strict_errors(result: dict) -> list[str]:
+    errors: list[str] = []
+    ticker_count = int(result.get("tickerSummaryCount") or 0)
+    sector_count = int(result.get("sectorSummaryCount") or 0)
+    if ticker_count < 1:
+        errors.append("관심종목 요약 행이 렌더링되지 않았습니다.")
+    if sector_count < 1:
+        errors.append("관심섹터 요약 행이 렌더링되지 않았습니다.")
+    if int(result.get("tickerNameOnlyCount") or 0) != ticker_count:
+        errors.append("관심종목 요약 행에 종목명 외 정보가 노출됩니다.")
+    if int(result.get("sectorNameOnlyCount") or 0) != sector_count:
+        errors.append("관심섹터 요약 행에 섹터명 외 정보가 노출됩니다.")
+    if not result.get("tickerDetailOpened"):
+        errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
+    if not result.get("sectorDetailOpened"):
+        errors.append("관심섹터 요약 클릭 후 상세 정보가 열리지 않았습니다.")
+    runtime_errors = result.get("runtimeErrors") if isinstance(result.get("runtimeErrors"), list) else []
+    if runtime_errors:
+        errors.append(f"브라우저 런타임 오류 {len(runtime_errors)}개")
+    return errors
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="관심종목/섹터 이름-only 요약과 상세 열림을 헤드리스 Chrome으로 점검합니다.")
+    parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--output-screenshot", type=Path, default=None)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--strict", action="store_true")
+    args = parser.parse_args()
+
+    result = run_layout_check(args.url, output_screenshot=args.output_screenshot)
+    errors = strict_errors(result)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(
+            "관심 요약 렌더링: "
+            f"종목 {int(result.get('tickerSummaryCount') or 0)}개 / "
+            f"섹터 {int(result.get('sectorSummaryCount') or 0)}개"
+        )
+        print(
+            "이름-only: "
+            f"종목 {int(result.get('tickerNameOnlyCount') or 0)}개 / "
+            f"섹터 {int(result.get('sectorNameOnlyCount') or 0)}개"
+        )
+        print(
+            "상세 열림: "
+            f"종목 {'정상' if result.get('tickerDetailOpened') else '실패'} / "
+            f"섹터 {'정상' if result.get('sectorDetailOpened') else '실패'}"
+        )
+        if result.get("screenshot"):
+            print(f"스크린샷: {result['screenshot']}")
+    if args.strict and errors:
+        print("관심 요약 렌더링 점검 실패")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("관심 요약 렌더링 점검 정상")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

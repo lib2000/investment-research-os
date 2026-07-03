@@ -186,6 +186,18 @@ def load_daily_recommendation_render_layout_tool():
     return module
 
 
+def load_interest_summary_render_layout_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_interest_summary_render_layout.py"
+    spec = spec_from_file_location("check_interest_summary_render_layout", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_news_inbox_priority_queue_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1132,6 +1144,28 @@ class DailyRecommendationRenderLayoutCheckToolTests(unittest.TestCase):
         self.assertIn("페이지 전체에 가로 스크롤 오버플로가 있습니다.", errors)
         self.assertIn("추천 결과 스크린샷 대상이 카드 영역으로 스크롤되지 않았습니다.", errors)
         self.assertIn("추천 결과 텍스트 클리핑 1개", errors)
+
+
+class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
+    def test_strict_errors_require_name_only_rows_and_clickable_details(self):
+        tool = load_interest_summary_render_layout_tool()
+        result = {
+            "tickerSummaryCount": 2,
+            "sectorSummaryCount": 1,
+            "tickerNameOnlyCount": 1,
+            "sectorNameOnlyCount": 0,
+            "tickerDetailOpened": False,
+            "sectorDetailOpened": False,
+            "runtimeErrors": ["boom"],
+        }
+
+        errors = tool.strict_errors(result)
+
+        self.assertIn("관심종목 요약 행에 종목명 외 정보가 노출됩니다.", errors)
+        self.assertIn("관심섹터 요약 행에 섹터명 외 정보가 노출됩니다.", errors)
+        self.assertIn("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
+        self.assertIn("관심섹터 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
+        self.assertIn("브라우저 런타임 오류 1개", errors)
 
 
 class DailyRecommendationPolicySignalCheckToolTests(unittest.TestCase):
