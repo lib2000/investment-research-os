@@ -1022,6 +1022,14 @@ class RecentWeeklyBriefCheckToolTests(unittest.TestCase):
 
 
 class DailyRecommendationCitationCheckToolTests(unittest.TestCase):
+    def test_daily_recommendation_citations_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_daily_recommendation_citations.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"remaining_missing_count"', source)
+        self.assertIn('"remaining_invalid_count"', source)
+        self.assertIn('"missing_records"', source)
+
     def test_policy_source_url_citation_is_usable(self):
         tool = load_daily_recommendation_citations_tool()
 

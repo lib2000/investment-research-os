@@ -215,6 +215,7 @@ def main() -> int:
     parser.add_argument("--write-back", action="store_true")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--limit", type=int, default=12)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -260,6 +261,43 @@ def main() -> int:
         elif any(not citation_is_usable(row, root) for row in rows):
             remaining_invalid.append(record)
 
+    ok = not remaining_missing and not remaining_invalid
+    result = {
+        "status": "ok" if ok else "warning",
+        "project_root": str(root),
+        "store_path": str(store_path.relative_to(root)),
+        "record_count": len(records),
+        "initial_missing_count": len(missing),
+        "updated_count": updated,
+        "remaining_missing_count": len(remaining_missing),
+        "remaining_invalid_count": len(remaining_invalid),
+        "min_citations_per_record": args.min_citations_per_record,
+        "write_back": args.write_back,
+        "missing_records": [
+            {
+                "recommendation_date": record.get("recommendation_date"),
+                "market": record.get("market"),
+                "rank": record.get("rank"),
+                "ticker": record.get("ticker"),
+                "company_name": record.get("company_name"),
+            }
+            for record in remaining_missing[: max(0, args.limit)]
+        ],
+        "invalid_records": [
+            {
+                "recommendation_date": record.get("recommendation_date"),
+                "market": record.get("market"),
+                "rank": record.get("rank"),
+                "ticker": record.get("ticker"),
+                "company_name": record.get("company_name"),
+            }
+            for record in remaining_invalid[: max(0, args.limit)]
+        ],
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and not ok else 0
+
     print(f"추천 저장 파일: {store_path.relative_to(root)}")
     print(f"추천 기록: {len(records)}개 | 보강 대상 {len(missing)}개 | 이번 보강 {updated}개")
     print(f"근거 문서 부족: {len(remaining_missing)}개 | 경로 확인 필요: {len(remaining_invalid)}개")
@@ -276,7 +314,6 @@ def main() -> int:
             f"{record.get('company_name') or record.get('ticker')}"
         )
 
-    ok = not remaining_missing and not remaining_invalid
     if args.strict and not ok:
         print("매일 추천 RAG 근거 문서 연결 확인 필요")
         return 1
