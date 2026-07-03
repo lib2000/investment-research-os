@@ -284,13 +284,21 @@ def candidate_policy_result(
     )
     stored_top_records = latest_stored_top_records(root, top_limit=top_limit)
     preview_mismatches = stored_preview_mismatches(stored_top_records, details["top_candidates"])
+    mismatch_counts_by_market: dict[str, int] = {}
+    for item in preview_mismatches:
+        market = normalize_ticker(item.get("market")) or "UNKNOWN"
+        mismatch_counts_by_market[market] = mismatch_counts_by_market.get(market, 0) + 1
     return {
         "status": "failure" if failures else "success",
         "scope_note": "runtime_candidate_preview_only_no_store_write",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "failures": failures,
+        "failure_count": len(failures),
         "stored_top_records": stored_top_records,
+        "stored_preview_mismatch_count": len(preview_mismatches),
+        "stored_preview_mismatch_counts_by_market": dict(sorted(mismatch_counts_by_market.items())),
         "stored_preview_mismatches": preview_mismatches,
+        "warning_count": len(details.get("warnings") or []),
         **details,
     }
 

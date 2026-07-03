@@ -7995,6 +7995,30 @@ class DailyRecommendationStoreModuleTests(unittest.TestCase):
         self.assertEqual(preview["stored_preview_mismatch_count"], 1)
         self.assertEqual(preview["stored_preview_mismatches"][0]["preview_ticker"], "OTLY")
 
+    def test_daily_recommendation_candidate_policy_result_includes_mismatch_summary(self):
+        from tools import check_daily_recommendation_candidate_policy as tool
+
+        payload = {
+            "candidates": [
+                {"market": "US", "rank": 1, "ticker": "OTLY", "company_name": "Oatly", "score": 174},
+                {"market": "US", "rank": 2, "ticker": "ABSI", "company_name": "Absci", "score": 168},
+                {"market": "KR", "rank": 1, "ticker": "005930", "company_name": "삼성전자", "score": 120},
+            ],
+            "warnings": ["테스트 경고"],
+        }
+        stored = [
+            {"market": "US", "rank": 1, "ticker": "ABSI", "score": 168},
+            {"market": "KR", "rank": 1, "ticker": "005930", "score": 120},
+        ]
+
+        with patch.object(tool, "latest_stored_top_records", return_value=stored):
+            result = tool.candidate_policy_result(Path("."), payload, top_limit=1)
+
+        self.assertEqual(result["stored_preview_mismatch_count"], 1)
+        self.assertEqual(result["stored_preview_mismatch_counts_by_market"], {"US": 1})
+        self.assertEqual(result["warning_count"], 1)
+        self.assertEqual(result["failure_count"], 0)
+
 
 class DailyRecommendationQualityModuleTests(unittest.TestCase):
     def test_daily_recommendation_quality_counts_and_applies_storage_penalties(self):
