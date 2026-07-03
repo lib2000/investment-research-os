@@ -191,6 +191,7 @@ def main() -> int:
     parser.add_argument("--write-backlog", action="store_true")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -232,6 +233,12 @@ def main() -> int:
 
     average = float(result["average_completion"])
     ready = int(result["ready_count"])
+    ok = average >= args.min_average_completion and ready >= args.min_ready_count
+    result["status"] = "ok" if ok else "warning"
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if ok else (1 if args.strict else 0)
+
     print(f"프로젝트 루트: {root}")
     print(
         f"포트폴리오: {result['portfolio_name']} | 보유 {result['holding_count']}개 "
@@ -243,7 +250,6 @@ def main() -> int:
     if args.write_backlog:
         print(f"보강 큐 저장: {result['backlog_path']}")
 
-    ok = average >= args.min_average_completion and ready >= args.min_ready_count
     if ok:
         print("포트폴리오 분석 커버리지 점검 정상")
         return 0

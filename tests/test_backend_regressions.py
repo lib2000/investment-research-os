@@ -740,6 +740,17 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"freshness_warning_count"', source)
 
 
+class PortfolioAnalysisCoverageCheckToolTests(unittest.TestCase):
+    def test_portfolio_analysis_coverage_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_portfolio_analysis_coverage.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"portfolio_analysis_coverage"', source)
+        self.assertIn('"average_completion"', source)
+        self.assertIn('"ready_count"', source)
+        self.assertIn('"status"', source)
+
+
 class StorageQualityStoreCheckToolTests(unittest.TestCase):
     def test_storage_quality_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_storage_quality_store.py").read_text(encoding="utf-8")
