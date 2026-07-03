@@ -1648,23 +1648,17 @@ function makeInterestTickerSummaryRow(item = {}) {
   const companyName = item.companyName || item.company_name || item.verification?.company_name || item.ticker || "";
   const tickerCode = String(item.ticker || "").trim();
   const region = normalizeInterestRegion(item.region || item.verification?.country || "");
-  const regionLabel = interestRegionLabel(region);
   const identityLabel = companyName || (tickerCode ? "회사명 확인 필요" : "");
   const tags = joinTags(item.tags);
-  const tickerHint = "";
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
   const summary = document.createElement("summary");
   summary.className = "interest-card-summary";
   summary.title = identityLabel;
+  summary.setAttribute("aria-label", `${identityLabel} 상세 정보 열기`);
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong title="${escapeHtml(identityLabel)}">${escapeHtml(companyName)}</strong>
-      ${tickerHint ? `<small class="interest-code-hint">${escapeHtml(tickerHint)}</small>` : ""}
-    </span>
-    <span class="interest-summary-meta">
-      <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
-      <b class="interest-detail-cue">상세 보기</b>
     </span>
   `;
   const quickActions = document.createElement("div");
@@ -1759,19 +1753,16 @@ function makeInterestSectorSummaryRow(item = {}) {
   row.className =
     "interest-summary-row interest-sector-summary-row interest-sector-row interest-compact-card-row";
   const region = normalizeInterestRegion(item.region || "KR");
-  const regionLabel = interestRegionLabel(region);
   const tags = joinTags(item.tags);
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
   const summary = document.createElement("summary");
   summary.className = "interest-card-summary";
+  summary.title = item.name || "관심섹터";
+  summary.setAttribute("aria-label", `${item.name || "관심섹터"} 상세 정보 열기`);
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong>${escapeHtml(item.name || "관심섹터")}</strong>
-    </span>
-    <span class="interest-summary-meta">
-      <b class="interest-region ${escapeHtml(region.toLowerCase())}">${escapeHtml(regionLabel)}</b>
-      <b class="interest-detail-cue">상세 보기</b>
     </span>
   `;
   const quickActions = document.createElement("div");

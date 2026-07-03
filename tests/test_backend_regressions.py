@@ -13339,6 +13339,25 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn("!records.length && payload.has_today_recommendations === false", top_records_block)
         self.assertNotIn("if (payload.has_today_recommendations === false) {\n    return [];", top_records_block)
 
+    def test_interest_summary_rows_show_names_only_before_details(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        ticker_start = console_js.index("function makeInterestTickerSummaryRow")
+        ticker_end = console_js.index("function makeInterestSectorRow")
+        ticker_block = console_js[ticker_start:ticker_end]
+        sector_start = console_js.index("function makeInterestSectorSummaryRow")
+        sector_end = console_js.index("function renderEditorRows")
+        sector_block = console_js[sector_start:sector_end]
+
+        for block in (ticker_block, sector_block):
+            self.assertIn('summary.className = "interest-card-summary"', block)
+            self.assertIn('summary.setAttribute("aria-label"', block)
+            self.assertIn('class="interest-summary-main"', block)
+            self.assertNotIn('class="interest-summary-meta"', block)
+            self.assertNotIn("interest-detail-cue", block)
+            self.assertNotIn("interest-code-hint", block)
+
     def test_asset_hash_rewrite_reaches_fixed_point(self):
         tool = load_console_hash_tool()
         project_root = PROJECT_ROOT
