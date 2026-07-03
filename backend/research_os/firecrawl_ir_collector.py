@@ -526,6 +526,24 @@ def build_firecrawl_ir_readiness_status(settings: Any) -> dict[str, Any]:
     else:
         status = "ready"
         next_action = "공개 IR/SEC 수집에서 Firecrawl hosted scrape를 선택 provider로 붙일 수 있습니다."
+    preflight_commands = {
+        "sample_payload": (
+            "python tools\\check_firecrawl_ir_collector.py "
+            "--input-json docs\\examples\\firecrawl_ir_registry.sample.json --json"
+        ),
+        "hosted_scrape_dry_run": (
+            "python tools\\check_firecrawl_ir_collector.py "
+            "--env-file backend\\.env.firecrawl-ir --use-env-registry --hosted-scrape-dry-run --json"
+        ),
+        "rpc_ready_required": (
+            "python tools\\check_firecrawl_ir_collector.py "
+            "--env-file backend\\.env.firecrawl-ir --use-env-registry --require-rpc-ready --json"
+        ),
+        "rpc_submit": (
+            "python tools\\check_firecrawl_ir_collector.py "
+            "--env-file backend\\.env.firecrawl-ir --use-env-registry --require-rpc-ready --submit --json"
+        ),
+    }
     return {
         "status": status,
         "module": "firecrawl_ir_readiness",
@@ -561,6 +579,20 @@ def build_firecrawl_ir_readiness_status(settings: Any) -> dict[str, Any]:
             "enabled": bool(_settings_bool(settings, "market_signal_graph_enabled") and enabled),
             "submit_ready": not rpc_errors,
             "readiness_errors": rpc_errors,
+        },
+        "operations": {
+            "secret_env_example": "docs\\examples\\firecrawl_ir_rpc.env.example",
+            "local_secret_env": "backend\\.env.firecrawl-ir",
+            "preflight_commands": preflight_commands,
+            "production_checklist": [
+                "FIRECRAWL_API_KEY configured in backend secret env",
+                "FIRECRAWL_IR_ENABLED=true",
+                "FIRECRAWL_IR_DRY_RUN=false",
+                "MARKET_SIGNAL_GRAPH_ENABLED=true",
+                "MARKET_SIGNAL_GRAPH_RPC_URL or SUPABASE_URL configured",
+                "MARKET_SIGNAL_GRAPH_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY configured",
+                "final preflight: --require-rpc-ready before --submit",
+            ],
         },
         "warnings": warnings,
         "next_action": next_action,

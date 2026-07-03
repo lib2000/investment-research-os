@@ -434,6 +434,12 @@ if ($publicIrSecStatus) {
     if ($firecrawlIr.next_action) {
       Write-Host "Firecrawl IR 다음 조치: $($firecrawlIr.next_action)"
     }
+    if ($firecrawlIr.operations -and $firecrawlIr.operations.preflight_commands) {
+      $irCommands = $firecrawlIr.operations.preflight_commands
+      if ($irCommands.rpc_ready_required) {
+        Write-Host "Firecrawl IR 최종 점검: $($irCommands.rpc_ready_required)"
+      }
+    }
     if ($firecrawlMcp -and $firecrawlMcp.version_ok -eq $false) {
       Add-StatusFailure "Firecrawl IR MCP 버전 확인 필요: $($firecrawlMcp.configured_version)"
     }
@@ -445,6 +451,12 @@ if ($publicIrSecStatus) {
     Write-Host "Firecrawl Monitor: $($firecrawlMonitor.status), enabled $($firecrawlMonitor.enabled), dry_run $($firecrawlMonitor.dry_run), api_key $($firecrawlMonitorHostedApi.api_key_configured), create_ready $($firecrawlMonitor.create_ready), sample_targets $($firecrawlMonitorSample.target_count)"
     if ($firecrawlMonitor.next_action) {
       Write-Host "Firecrawl Monitor 다음 조치: $($firecrawlMonitor.next_action)"
+    }
+    if ($firecrawlMonitor.operations -and $firecrawlMonitor.operations.preflight_commands) {
+      $monitorCommands = $firecrawlMonitor.operations.preflight_commands
+      if ($monitorCommands.create_ready_required) {
+        Write-Host "Firecrawl Monitor 최종 점검: $($monitorCommands.create_ready_required)"
+      }
     }
   }
   $needsBodyEntries = if ($publicIrSecStatus.needs_body_copy_entries) { @($publicIrSecStatus.needs_body_copy_entries) } else { @() }

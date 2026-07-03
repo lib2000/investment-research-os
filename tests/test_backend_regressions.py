@@ -281,6 +281,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("firecrawl_api_key_missing", smoke_source)
         self.assertIn("publicIrSecStatusApiFallback", smoke_source)
         self.assertIn("clickAndWaitForStart", smoke_source)
+        self.assertIn("Firecrawl 최종 점검", smoke_source)
         self.assertIn("needs_body_copy_entries", smoke_source)
         self.assertIn("needs_body_duplicate_title_groups", smoke_source)
         self.assertIn("needs_body_repeated_title_groups", smoke_source)
@@ -295,6 +296,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("needs_body_copy_entries", console_source)
         self.assertIn("needs_body_duplicate_title_groups", console_source)
         self.assertIn("needs_body_repeated_title_groups", console_source)
+        self.assertIn("Firecrawl 최종 점검", console_source)
+        self.assertIn("Monitor 최종 점검", console_source)
         self.assertIn("본문 보강 대상", console_source)
         self.assertIn("동일 공시 보강 그룹", console_source)
         self.assertIn("반복 제목 보강 그룹", console_source)
@@ -378,6 +381,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Firecrawl IR:", script_source)
         self.assertIn("firecrawl_ir", script_source)
         self.assertIn("Firecrawl IR MCP 버전 확인 필요", script_source)
+        self.assertIn("Firecrawl IR 최종 점검", script_source)
+        self.assertIn("Firecrawl Monitor 최종 점검", script_source)
         self.assertIn("needs_body_copy_entries", script_source)
         self.assertIn("needs_body_duplicate_title_group_count", script_source)
         self.assertIn("needs_body_duplicate_title_groups", script_source)
@@ -1183,7 +1188,9 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["source_registry"]["input_source"], "sample")
         self.assertEqual(status["dry_run_sample"]["source_platform"], "firecrawl_ir")
         self.assertEqual(status["dry_run_sample"]["ticker"], "AAPL")
-        self.assertNotIn("firecrawl_api_key", json.dumps(status).lower())
+        self.assertIn("--require-rpc-ready", status["operations"]["preflight_commands"]["rpc_ready_required"])
+        self.assertIn("docs\\examples\\firecrawl_ir_rpc.env.example", status["operations"]["secret_env_example"])
+        self.assertNotIn("fc-secret", json.dumps(status).lower())
 
     def test_firecrawl_ir_readiness_uses_env_registry_without_exposing_key(self):
         from research_os.firecrawl_ir_collector import build_firecrawl_ir_readiness_status
@@ -1240,6 +1247,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["sample_monitor"]["target_count"], 1)
         self.assertIn("scrape", status["sample_monitor"]["target_types"])
         self.assertFalse(status["create_ready"])
+        self.assertIn("--require-create-ready", status["operations"]["preflight_commands"]["create_ready_required"])
+        self.assertIn("create_firecrawl_monitor_env_template.py", status["operations"]["env_template_command"])
         self.assertNotIn("fc-secret", json.dumps(status))
 
     def test_firecrawl_monitor_sources_normalize_scrape_and_search_targets(self):

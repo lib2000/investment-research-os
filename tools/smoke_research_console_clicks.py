@@ -544,6 +544,7 @@ def run_click_smoke(
                         const payload = await response.json();
                         const firecrawl = payload.firecrawl_ir || {};
                         const hosted = firecrawl.hosted_api || {};
+                        const firecrawlCommands = (firecrawl.operations || {}).preflight_commands || {};
                         const needsBodyEntries = Array.isArray(payload.needs_body_copy_entries) ? payload.needs_body_copy_entries : [];
                         const duplicateTitleGroups = Array.isArray(payload.needs_body_duplicate_title_groups) ? payload.needs_body_duplicate_title_groups : [];
                         const repeatedTitleGroups = Array.isArray(payload.needs_body_repeated_title_groups) ? payload.needs_body_repeated_title_groups : [];
@@ -573,6 +574,7 @@ def run_click_smoke(
                           "Firecrawl IR 보조 수집",
                           `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,
                           `Hosted API: ${hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${hosted.base_url || "https://api.firecrawl.dev/v2"}`,
+                          firecrawlCommands.rpc_ready_required ? `Firecrawl 최종 점검: ${firecrawlCommands.rpc_ready_required}` : "",
                         ].filter(Boolean).join("\\n");
                       };
                       const clickAndWaitForStart = async (selector, startedPattern, label) => {

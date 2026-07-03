@@ -241,6 +241,21 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
     else:
         status = "ready"
         next_action = "Firecrawl /v2/monitor 생성 호출이 가능합니다."
+    preflight_commands = {
+        "sample_payload": (
+            "python tools\\check_firecrawl_monitor_collector.py "
+            "--input-json docs\\examples\\firecrawl_monitor_registry.sample.json --json"
+        ),
+        "operational_preflight": (
+            "python tools\\check_firecrawl_monitor_operational_preflight.py "
+            "--env-file backend\\.env.firecrawl-monitor --require-env-registry --require-webhook-secret --json"
+        ),
+        "create_ready_required": (
+            "python tools\\check_firecrawl_monitor_operational_preflight.py "
+            "--env-file backend\\.env.firecrawl-monitor --require-env-registry --require-webhook-secret "
+            "--require-create-ready --json"
+        ),
+    }
     return {
         "status": status,
         "module": "firecrawl_monitor_readiness",
@@ -268,6 +283,19 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
         },
         "create_ready": not create_errors and not parse_error,
         "create_readiness_errors": create_errors,
+        "operations": {
+            "local_secret_env": "backend\\.env.firecrawl-monitor",
+            "env_template_command": "python tools\\create_firecrawl_monitor_env_template.py --output backend\\.env.firecrawl-monitor",
+            "preflight_commands": preflight_commands,
+            "production_checklist": [
+                "FIRECRAWL_API_KEY configured in backend secret env",
+                "FIRECRAWL_MONITOR_ENABLED=true",
+                "FIRECRAWL_MONITOR_DRY_RUN=false",
+                "FIRECRAWL_MONITOR_SOURCES_JSON configured",
+                "FIRECRAWL_MONITOR_WEBHOOK_SECRET configured",
+                "final preflight: --require-create-ready before creating monitors",
+            ],
+        },
         "warnings": warnings,
         "next_action": next_action,
     }
@@ -350,4 +378,3 @@ def create_firecrawl_monitor(item: dict[str, Any], settings: Any) -> dict[str, A
         }
     except (httpx.RequestError, ValueError) as exc:
         return {"status": "skipped", "reason": "firecrawl_monitor_unreachable", "design": DESIGN_NAME, "message": str(exc)[:500]}
-
