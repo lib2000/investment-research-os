@@ -11,6 +11,7 @@
   [switch]$CheckSourceAutomationStore,
   [switch]$CheckDailyRecommendations,
   [switch]$CheckDailyRecommendationStore,
+  [switch]$CheckInterestSummaryLayout,
   [switch]$CheckInvestmentInsightHub,
   [switch]$CheckPortfolioQuantityProtection,
   [switch]$CheckPortfolioStore,
@@ -185,6 +186,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     tools\smoke_research_console_clicks.py `
     tools\check_daily_recommendations_store.py `
     tools\check_daily_recommendation_candidate_policy.py `
+    tools\check_interest_summary_render_layout.py `
     tools\check_investment_insight_hub.py `
     tools\check_research_source_store.py `
     tools\check_investment_calendar_store.py `
@@ -403,6 +405,12 @@ if ($CheckDailyRecommendationStore) {
 if ($CheckInvestmentInsightHub) {
   Invoke-VerifyStep "통합 투자 인사이트 허브 오프라인 확인" {
     python tools\check_investment_insight_hub.py --strict
+  }
+}
+
+if ($CheckInterestSummaryLayout) {
+  Invoke-VerifyStep "관심종목/섹터 이름-only 상세 열림 확인" {
+    pythonLiveSmoke tools\check_interest_summary_render_layout.py --url $ConsoleUrl --strict
   }
 }
 

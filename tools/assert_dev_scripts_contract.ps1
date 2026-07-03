@@ -299,6 +299,7 @@ $contracts = @(
       '리서치 소스 저장 파일 오프라인 확인',
       '[switch]$CheckDailyRecommendations',
       '[switch]$CheckDailyRecommendationStore',
+      '[switch]$CheckInterestSummaryLayout',
       '[switch]$CheckInvestmentInsightHub',
       '[string]$ClickSmokeStopAfter',
       '[switch]$ClickSmokeOnlyPublicIrSec',
@@ -307,6 +308,7 @@ $contracts = @(
       '--stop-after',
       '--only-public-ir-sec',
       'check_daily_recommendations_store.py',
+      'check_interest_summary_render_layout.py',
       'check_investment_insight_hub.py',
       'backend\research_os\investment_insight_hub.py',
       'Resolve-VerifyPython',
@@ -316,6 +318,7 @@ $contracts = @(
       'Convert-ToWslPath',
       'Convert-ToolArgsForWsl',
       '일일 추천 저장 파일 오프라인 확인',
+      '관심종목/섹터 이름-only 상세 열림 확인',
       '통합 투자 인사이트 허브 오프라인 확인',
       '$CustomsBaseUrl',
       '$CustomsDevUserToken',
@@ -594,6 +597,20 @@ $contracts = @(
       'pageHasHorizontalOverflow',
       '--output-screenshot',
       '추천 결과 렌더링 점검 정상'
+    )
+  },
+
+  @{
+    Path = "tools\check_interest_summary_render_layout.py"
+    Snippets = @(
+      '관심종목/섹터 이름-only 요약과 상세 열림',
+      'interest-ticker-summary-row',
+      'interest-sector-summary-row',
+      'tickerNameOnlyCount',
+      'sectorNameOnlyCount',
+      'tickerDetailOpened',
+      'sectorDetailOpened',
+      '관심 요약 렌더링 점검 정상'
     )
   },
 
