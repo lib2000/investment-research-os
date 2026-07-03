@@ -2849,6 +2849,13 @@ class TelegramBriefSenderTests(unittest.TestCase):
 
 
 class EarningsTranscriptCollectorTests(unittest.TestCase):
+    def test_earnings_transcript_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_earnings_transcript_collector.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('result.get("status") == "success"', source)
+
     def test_earnings_transcript_payload_matches_market_signal_contract(self):
         from research_os.earnings_transcript_collector import build_earnings_transcript_signal_payload, sha256_hex
 
@@ -2910,6 +2917,13 @@ class EarningsTranscriptCollectorTests(unittest.TestCase):
 
 
 class FirecrawlEarningsCollectorTests(unittest.TestCase):
+    def test_firecrawl_earnings_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_firecrawl_earnings_collector.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('result.get("status") == "success"', source)
+
     def test_firecrawl_earnings_payload_matches_market_signal_contract(self):
         from research_os.firecrawl_earnings_collector import build_firecrawl_earnings_signal_payload, sha256_hex
 
@@ -2969,6 +2983,13 @@ class FirecrawlEarningsCollectorTests(unittest.TestCase):
 
 
 class DeepSeekIrAnalysisTests(unittest.TestCase):
+    def test_deepseek_ir_analysis_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_deepseek_ir_analysis.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('result.get("status") == "success"', source)
+
     def test_deepseek_ir_analysis_payload_matches_signal_analysis_contract(self):
         from research_os.deepseek_ir_analysis import build_deepseek_ir_analysis_payload, sha256_hex
         from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
