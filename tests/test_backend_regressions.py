@@ -10226,6 +10226,45 @@ class PolicySourcesWatchModuleTests(unittest.TestCase):
         self.assertIn("official_policy_source", inbox_writes[0]["items"][0]["tags"])
         self.assertEqual(writes[0][0], Path("policy_sources.json"))
 
+    def test_policy_sources_watch_module_skips_canonical_news_url_duplicates(self):
+        from research_os import policy_sources_watch
+
+        inbox_writes = []
+        settings = SimpleNamespace()
+        existing = {
+            "id": "old",
+            "fingerprint": "old-fingerprint",
+            "title": "AI 관계장관 간담회 전체 제목",
+            "source_url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176&pageIndex=1&startDate=2025-07-01",
+        }
+        items = [
+            {
+                "source_provider": "대한민국 정책브리핑",
+                "agency": "국무조정실",
+                "title": "AI 관계장관 간담회",
+                "published_at": "2026-07-02",
+                "detail_url": "https://www.korea.kr/briefing/pressReleaseView.do?newsId=156769176&pageIndex=1&startDate=2025-07-02",
+                "matched_themes": ["AI"],
+            }
+        ]
+        runtime = SimpleNamespace(
+            current_storage_timestamp=lambda: "2026-07-04T01:00:00+09:00",
+            infer_news_policy_law_classification=lambda _text: {"tags": ["policy_law:regulation"]},
+            news_item_fingerprint=lambda title, _raw, source_url: f"{title}:{source_url}",
+            news_scope_label=lambda scope: scope,
+            policy_sources_copyright_policy=lambda: {"mode": "official_policy_metadata_only"},
+            read_news_inbox=lambda _settings: {"items": [dict(existing)]},
+            write_news_inbox=lambda _settings, payload: inbox_writes.append(payload),
+        )
+
+        synced_count = policy_sources_watch.sync_policy_items_to_news_inbox(runtime, settings, items, limit=5)
+
+        self.assertEqual(synced_count, 0)
+        self.assertEqual(len(inbox_writes), 1)
+        self.assertEqual(len(inbox_writes[0]["items"]), 1)
+        self.assertEqual(inbox_writes[0]["items"][0]["id"], "old")
+        self.assertEqual(inbox_writes[0]["items"][0]["title"], "AI 관계장관 간담회")
+
 
 class RegionalBusinessWatchModuleTests(unittest.TestCase):
     def test_regional_business_watch_module_disabled_payload_uses_cached_items(self):
@@ -11130,6 +11169,18 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         )
         self.assertEqual([entry["id"] for entry in groups[0]["entries"]], ["n1", "n2"])
         self.assertEqual(groups[0]["entries"][0]["relevance_score"], 0.0)
+
+    def test_news_inbox_held_item_is_not_actionable(self):
+        from research_os import news_inbox
+
+        item = {
+            "promoted": False,
+            "review_status": "보류",
+            "target_matches": [{"label": "피지컬 AI"}],
+            "relevance_score": 80,
+        }
+
+        self.assertFalse(news_inbox.is_actionable_unpromoted_news(item))
 
     def test_news_inbox_priority_queue_cli_prints_duplicate_ids(self):
         tool_source = (PROJECT_ROOT / "tools" / "check_news_inbox_priority_queue.py").read_text(encoding="utf-8")

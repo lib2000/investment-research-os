@@ -314,6 +314,8 @@ def news_filter_counts(runtime: NewsInboxRuntime, items: list[dict]) -> dict:
 def is_actionable_unpromoted_news(item: dict) -> bool:
     if item.get("promoted"):
         return False
+    if str(item.get("review_status") or "").strip() == "보류":
+        return False
     target_matches = item.get("target_matches")
     if isinstance(target_matches, list) and target_matches:
         return True

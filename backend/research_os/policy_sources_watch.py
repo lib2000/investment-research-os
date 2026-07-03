@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from research_os.news_inbox import canonical_news_url
+
 
 class PolicySourcesWatchRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
@@ -69,6 +71,11 @@ def sync_policy_items_to_news_inbox(
         for item in existing_items
         if isinstance(item, dict) and str(item.get("source_url") or "")
     }
+    existing_by_canonical_url = {
+        canonical_news_url(item.get("source_url")): item
+        for item in existing_items
+        if isinstance(item, dict) and canonical_news_url(item.get("source_url"))
+    }
     now = runtime.current_storage_timestamp()
     created: list[dict] = []
     changed_existing = False
@@ -80,8 +87,13 @@ def sync_policy_items_to_news_inbox(
         if not source_url or not title:
             continue
         fingerprint = _policy_item_fingerprint(runtime, item)
-        if fingerprint in existing_keys or source_url in existing_keys:
-            existing = existing_by_source_url.get(source_url)
+        source_canonical_url = canonical_news_url(source_url)
+        if (
+            fingerprint in existing_keys
+            or source_url in existing_keys
+            or (source_canonical_url and source_canonical_url in existing_by_canonical_url)
+        ):
+            existing = existing_by_source_url.get(source_url) or existing_by_canonical_url.get(source_canonical_url)
             if isinstance(existing, dict) and len(title) < len(str(existing.get("title") or title)):
                 existing["title"] = title
                 existing["summary"] = f"{item.get('source_provider') or item.get('agency') or '공식기관'} {item.get('published_at') or ''} {title}".strip()
@@ -169,6 +181,8 @@ def sync_policy_items_to_news_inbox(
         created.append(news_item)
         existing_keys.add(fingerprint)
         existing_keys.add(source_url)
+        if source_canonical_url:
+            existing_by_canonical_url[source_canonical_url] = news_item
     if created or changed_existing:
         runtime.write_news_inbox(settings, {"items": created + existing_items})
     return len(created)
