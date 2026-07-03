@@ -516,7 +516,30 @@ class PublicIrSecStoreCheckToolTests(unittest.TestCase):
 
         self.assertIn("URL-only 원문 제한", tool_source)
         self.assertIn("본문 보강 플래그", tool_source)
+        self.assertIn("sec_exhibit_followup_hint", tool_source)
+        self.assertIn("sec_filing_index_url", tool_source)
         self.assertNotIn("URL-only/본문 보강", tool_source)
+
+    def test_public_ir_sec_store_check_builds_sec_exhibit_hint(self):
+        tool = load_public_ir_sec_store_check_tool()
+
+        hint = tool.sec_exhibit_followup_hint(
+            {
+                "title": "Oatly Group 6-K SEC filing",
+                "filing_form": "6-K",
+                "source_url": "https://www.sec.gov/Archives/edgar/data/1843586/000184358626000018/otly_6k.htm",
+                "source_url_processing": {
+                    "original_text": "A copy is furnished as Exhibit 99.1. EXHIBIT INDEX 99.1 Press release.",
+                },
+            }
+        )
+
+        self.assertEqual(hint["expected_exhibits"], ["99.1"])
+        self.assertEqual(hint["sec_accession_number"], "0001843586-26-000018")
+        self.assertEqual(
+            hint["sec_filing_index_url"],
+            "https://www.sec.gov/Archives/edgar/data/1843586/000184358626000018/0001843586-26-000018-index.html",
+        )
 
     def test_load_manifest_retries_during_transient_empty_write(self):
         tool = load_public_ir_sec_store_check_tool()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -125,6 +126,37 @@ def body_followup_label(entry: dict, quality: dict) -> str:
     return "보강 확인"
 
 
+def sec_exhibit_followup_hint(entry: dict) -> dict[str, object]:
+    source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
+    text = " ".join(
+        str(value or "")
+        for value in [
+            entry.get("title"),
+            entry.get("filing_form"),
+            source.get("original_text"),
+            source.get("text"),
+        ]
+    )
+    if "6-K" not in text.upper() or "EXHIBIT" not in text.upper():
+        return {}
+    hint: dict[str, object] = {}
+    source_url = str(entry.get("source_url") or entry.get("final_url") or "").strip()
+    match = re.search(r"(https://www\.sec\.gov/Archives/edgar/data/\d+/(\d{18}))/", source_url)
+    if match:
+        archive_url = match.group(1)
+        accession = match.group(2)
+        dashed = f"{accession[:10]}-{accession[10:12]}-{accession[12:]}"
+        hint["sec_archive_directory_url"] = f"{archive_url}/"
+        hint["sec_accession_number"] = dashed
+        hint["sec_filing_index_url"] = f"{archive_url}/{dashed}-index.html"
+    exhibits = []
+    if re.search(r"\b99\.1\b", text, flags=re.IGNORECASE):
+        exhibits.append("99.1")
+    if exhibits:
+        hint["expected_exhibits"] = exhibits
+    return hint
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="공개 IR/SEC 저장 품질을 백엔드 없이 점검합니다.")
     parser.add_argument("--require-any", action="store_true", help="최소 1건 이상 저장되어 있어야 함")
@@ -211,9 +243,16 @@ def main() -> int:
         for entry in needs_body_entries[:10]:
             quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
             followup = body_followup_label(entry, quality)
+            sec_hint = sec_exhibit_followup_hint(entry)
+            exhibit_note = (
+                f" | Exhibit {', '.join(sec_hint['expected_exhibits'])}"
+                if sec_hint.get("expected_exhibits")
+                else ""
+            )
+            index_note = f" | index {sec_hint['sec_filing_index_url']}" if sec_hint.get("sec_filing_index_url") else ""
             print(
                 f"- {entry.get('ticker')} {entry.get('date')} {entry.get('title') or entry.get('file_name')} "
-                f"| {quality.get('status') or entry.get('capture_quality_status')} | {followup} | {entry.get('relative_path')}"
+                f"| {quality.get('status') or entry.get('capture_quality_status')} | {followup}{exhibit_note}{index_note} | {entry.get('relative_path')}"
             )
     for entry in entries[:10]:
         quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
