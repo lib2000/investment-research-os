@@ -265,6 +265,10 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         if isinstance(news_payload.get("duplicate_priority_groups"), list)
         else []
     ) if isinstance(news_payload, dict) else []
+    news_duplicate_priority_group_count = len(news_duplicate_priority_groups)
+    news_duplicate_priority_entry_count = sum(
+        int(group.get("count") or 0) for group in news_duplicate_priority_groups
+    )
     daily_brief_date = status.get("daily_brief_date") or brief_payload.get("date")
     source_quality_dashboard = build_source_quality_dashboard(
         dart_daily=dart_daily,
@@ -300,6 +304,8 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         daily_recommendations_due=daily_recommendations_due,
         daily_recommendations=daily_recommendations,
         duplicate_refresh_candidate_count=duplicate_refresh_candidate_count,
+        news_duplicate_priority_group_count=news_duplicate_priority_group_count,
+        news_duplicate_priority_entry_count=news_duplicate_priority_entry_count,
     )
     nps_rebalance_plan: dict = {}
     if nps_allocation.get("status") in {"above_target", "below_target"} and hasattr(
@@ -353,8 +359,8 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         "news_priority_count": news_actionable_unpromoted_count,
         "news_priority_preview_count": len(news_priority_preview[:5]),
         "news_priority_preview": news_priority_preview[:5],
-        "news_duplicate_priority_group_count": len(news_duplicate_priority_groups),
-        "news_duplicate_priority_entry_count": sum(int(group.get("count") or 0) for group in news_duplicate_priority_groups),
+        "news_duplicate_priority_group_count": news_duplicate_priority_group_count,
+        "news_duplicate_priority_entry_count": news_duplicate_priority_entry_count,
         "news_duplicate_priority_groups": news_duplicate_priority_groups[:5],
         "kcif_related_count": kcif_related_count,
         "kcif_due": bool(kcif_due),

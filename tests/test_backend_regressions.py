@@ -11595,6 +11595,32 @@ class AutomationStatusModuleTests(unittest.TestCase):
 
         self.assertTrue(any("우선 분류 7개" in item and "전체 미승격 115개" in item for item in actions))
 
+    def test_automation_digest_next_actions_prioritize_duplicate_news_groups(self):
+        from research_os.automation_digest_helpers import build_dashboard_next_actions
+
+        actions = build_dashboard_next_actions(
+            target_count=1,
+            daily_brief_date="2026-06-18",
+            duplicate_count=0,
+            failed_count=0,
+            news_unpromoted_count=115,
+            news_actionable_unpromoted_count=7,
+            news_quality_issue_count=0,
+            news_duplicate_priority_group_count=1,
+            news_duplicate_priority_entry_count=2,
+            kcif_due=False,
+            kcif_related_count=0,
+            regional_sources_due=False,
+            regional_sources_related_count=0,
+            dart_daily={"due": False, "failure_count": 0},
+            daily_recommendations_due=False,
+            daily_recommendations={"latest_recommendation_date": "2026-06-18"},
+        )
+
+        duplicate_index = next(i for i, item in enumerate(actions) if "뉴스 우선 분류 중복 후보 1묶음/2개" in item)
+        actionable_index = next(i for i, item in enumerate(actions) if "우선 분류 7개" in item)
+        self.assertLess(duplicate_index, actionable_index)
+
     def test_automation_schedule_status_builds_source_rows(self):
         from research_os import automation_schedule_status
 

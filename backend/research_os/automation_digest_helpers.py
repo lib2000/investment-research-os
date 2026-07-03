@@ -126,6 +126,8 @@ def build_dashboard_next_actions(
     daily_recommendations_due: bool,
     daily_recommendations: dict,
     duplicate_refresh_candidate_count: int | None = None,
+    news_duplicate_priority_group_count: int = 0,
+    news_duplicate_priority_entry_count: int = 0,
 ) -> list[str]:
     next_actions = []
     if not target_count:
@@ -140,6 +142,11 @@ def build_dashboard_next_actions(
         next_actions.append(f"중복 의심 자료 {duplicate_count}개를 Dossier 합성에서 묶어 확인하세요.")
     if failed_count:
         next_actions.append(f"자동화 실패 {failed_count}건의 API/소스 상태를 점검하세요.")
+    if news_duplicate_priority_group_count and news_duplicate_priority_entry_count:
+        next_actions.append(
+            f"뉴스 우선 분류 중복 후보 {news_duplicate_priority_group_count}묶음/"
+            f"{news_duplicate_priority_entry_count}개를 먼저 보류·통합하세요."
+        )
     if news_unpromoted_count:
         if news_actionable_unpromoted_count and news_actionable_unpromoted_count < news_unpromoted_count:
             next_actions.append(
