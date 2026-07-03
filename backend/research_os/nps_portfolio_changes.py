@@ -115,6 +115,15 @@ def _parse_float(value: Any) -> float | None:
         return None
 
 
+def _latest_year(rows: Iterable[dict], key: str) -> str | None:
+    years = []
+    for row in rows:
+        text = str(row.get(key) or "").strip()
+        if len(text) >= 4 and text[:4].isdigit():
+            years.append(text[:4])
+    return max(years) if years else None
+
+
 def _read_cache_records(settings: Settings) -> tuple[list[dict], list[dict], list[str], str | None]:
     path = _cache_file(settings)
     if not path.exists():
@@ -257,6 +266,16 @@ def build_nps_portfolio_change_snapshot(
         f"{as_of_date.isoformat()} 기준 국민연금 대량보유 캐시 {len(dated_events)}건 분석, "
         f"최신 기준일 {latest_event_date or '없음'}, 포트폴리오 매칭 {len(matches)}건"
     )
+    source_freshness = {
+        "api_enabled": bool(settings.nps_odcloud_enabled),
+        "api_key_configured": bool(settings.nps_odcloud_api_key),
+        "refresh_attempted": refresh_attempted,
+        "cache_updated_at": cache_updated_at,
+        "source_url_count": len(source_urls),
+        "domestic_stock_latest_year": _latest_year(domestic_rows, "연도"),
+        "large_holding_latest_base_date": latest_event_date,
+        "large_holding_stale_for_as_of": stale,
+    }
     first_next_action = (
         "공공데이터포털 API 호출은 성공했지만 원천 최신 기준일이 오래되었습니다. 국민연금/공시 포털의 최신 대량보유 공개 여부를 별도 확인하세요."
         if refresh_attempted
@@ -273,6 +292,7 @@ def build_nps_portfolio_change_snapshot(
         "public_rebalancing_context": _public_rebalancing_context(as_of_date, refresh_attempted=refresh_attempted),
         "cache_updated_at": cache_updated_at,
         "source_urls": source_urls,
+        "source_freshness": source_freshness,
         "domestic_stock_row_count": len(domestic_rows),
         "large_holding_row_count": len(large_rows),
         "event_count_as_of": len(dated_events),
