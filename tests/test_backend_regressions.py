@@ -259,6 +259,14 @@ def load_clicks_smoke_tool():
 
 
 class ConsoleSmokeToolTests(unittest.TestCase):
+    def test_console_asset_and_js_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_console_asset_and_js.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"asset_status"', source)
+        self.assertIn('"node_checked"', source)
+        self.assertIn("redirect_stdout", source)
+
     def test_click_smoke_exposes_ordered_partial_stages(self):
         tool = load_clicks_smoke_tool()
 
