@@ -5832,6 +5832,17 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("포함 섹션 4개", telegram_attempt)
         self.assertIn("MARKET-US-market-close-review-2026-06-18-003.md", telegram_attempt)
 
+    def test_research_source_store_json_contract_includes_market_journal_status(self):
+        from tools import check_research_source_store
+
+        source = Path(check_research_source_store.__file__).read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"telegram_market_close_attempt"', source)
+        self.assertIn('"market_journal"', source)
+        self.assertIn('"by_market"', source)
+        self.assertIn('"impact"', source)
+
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main
         from research_os.settings import Settings

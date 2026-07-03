@@ -280,6 +280,7 @@ def main() -> int:
     parser.add_argument("--min-market-journal-impact-links", type=int, default=1, help="관심/보유 자동화 보드에 필요한 시장일지 연결 최소 건수")
     parser.add_argument("--min-market-journal-linked-targets", type=int, default=1, help="시장일지가 연결되어야 하는 관심/보유 자동화 대상 최소 수")
     parser.add_argument("--max-dossier-queue-age-hours", type=float, default=72.0, help="중복 Dossier 큐 갱신 최신성 기준")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
     parser.add_argument(
         "--required-market-journal-market",
         action="append",
@@ -502,6 +503,80 @@ def main() -> int:
         int(market_journal_impact.get("linked_target_count") or 0) < args.min_market_journal_linked_targets,
         "시장일지 관심/보유 자동화 연결 대상 부족",
     )
+
+    result = {
+        "status": "warning" if issues else "ok",
+        "issues": issues,
+        "system_dir": str(system_dir),
+        "kcif": {
+            "related_count": kcif_related,
+            "source_status": kcif.get("source_status"),
+            "updated_at": kcif.get("updated_at"),
+            "age_hours": kcif_age,
+        },
+        "regional_sources": {
+            "related_count": regional_related,
+            "provider_counts": dict(sorted(provider_counts.items())),
+            "failed_source_count": len(failed_sources),
+            "updated_at": regional.get("updated_at"),
+            "age_hours": regional_age,
+        },
+        "ticker_registry": {
+            "entry_count": int(registry.get("entry_count") or 0),
+            "success_count": int(registry.get("success_count") or 0),
+            "source_count": int(registry.get("source_count") or 0),
+            "updated_at": registry.get("updated_at"),
+            "age_hours": registry_age,
+        },
+        "automation": {
+            "save_result": automation.get("save_result"),
+            "dossier_count": int(automation.get("dossier_count") or 0),
+            "rag_connected_count": int(automation.get("rag_connected_count") or 0),
+            "failed_count": int(automation.get("failed_count") or 0),
+            "news_unpromoted_count": int(automation.get("news_unpromoted_count") or 0),
+            "updated_at": automation_timestamp,
+        },
+        "research_caches": {
+            "naver_count": len(naver_rows),
+            "naver_storage_count": len(naver_storage_rows),
+            "naver_missing_storage": naver_missing_storage,
+            "naver_missing_files": len(naver_missing_files),
+            "naver_category_counts": dict(naver_category_counts),
+            "shinhan_count": len(shinhan_rows),
+            "shinhan_storage_count": len(shinhan_storage_rows),
+            "shinhan_missing_files": len(shinhan_missing_files),
+        },
+        "market_close_attempt": {
+            "status": market_close_state.get("status") or "",
+            "last_attempt_date": market_close_state.get("last_attempt_date") or "",
+            "last_attempt_at": market_close_state.get("last_attempt_at") or "",
+            "message": market_close_state.get("last_attempt_message") or "",
+        },
+        "telegram_market_close_attempt": {
+            "status": telegram_market_close_state.get("status") or "",
+            "last_attempt_date": telegram_market_close_state.get("last_attempt_date") or "",
+            "last_attempt_at": telegram_market_close_state.get("last_attempt_at") or "",
+            "message": telegram_market_close_state.get("last_attempt_message") or "",
+            "included_post_count": int(telegram_market_close_state.get("included_post_count") or 0),
+            "storage_relative_path": (
+                telegram_market_close_state.get("storage", {}).get("relative_path")
+                if isinstance(telegram_market_close_state.get("storage"), dict)
+                else ""
+            ),
+        },
+        "market_journal": {
+            "entry_count": len(market_journal_rows),
+            "auto_complete_count": len(market_journal_auto_complete_rows),
+            "auto_count": len(market_journal_auto_rows),
+            "updated_at": market_journal.get("updated_at"),
+            "required_markets": required_market_journal_markets,
+            "by_market": market_journal_by_market,
+            "impact": market_journal_impact,
+        },
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and issues else 0
 
     print(f"소스 상태 폴더: {system_dir}")
     print(f"KCIF 관련 보고서: {kcif_related}개 | 상태 {kcif.get('source_status')} | 갱신 {kcif.get('updated_at')}")
