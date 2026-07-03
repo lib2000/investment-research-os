@@ -747,6 +747,17 @@ class StorageQualityStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"advisory_body_paths"', source)
 
 
+class RagFailureDiagnosticsCheckToolTests(unittest.TestCase):
+    def test_rag_failure_diagnostics_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_rag_failure_diagnostics.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"active_research_count"', source)
+        self.assertIn('"rag_linked_count"', source)
+        self.assertIn('"issue_type_counts"', source)
+        self.assertIn('"truncated_issue_count"', source)
+
+
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
         tool = load_operational_readiness_tool()

@@ -11,7 +11,7 @@ import argparse
 import json
 import sqlite3
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -254,6 +254,7 @@ def main() -> int:
     parser.add_argument("--max-errors", type=int, default=0)
     parser.add_argument("--max-warnings", type=int, default=999)
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -276,6 +277,25 @@ def main() -> int:
         score -= len(errors) / len(active) * 70.0
         score -= len(warnings) / len(active) * 20.0
     score = max(0.0, min(100.0, score))
+    ok = len(errors) <= args.max_errors and len(warnings) <= args.max_warnings
+    result = {
+        "status": "ok" if ok else "warning",
+        "project_root": str(root),
+        "manifest_path": str(manifest_path.relative_to(root)),
+        "rag_db_path": str(rag_db_path.relative_to(root)),
+        "active_research_count": len(active),
+        "rag_linked_count": linked_count,
+        "rag_document_count": len(rag_docs),
+        "score": round(score, 1),
+        "error_count": len(errors),
+        "warning_count": len(warnings),
+        "issue_type_counts": dict(by_code.most_common()),
+        "issues": [asdict(issue) for issue in issues[: max(0, args.limit)]],
+        "truncated_issue_count": max(0, len(issues) - max(0, args.limit)),
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and not ok else 0
 
     print(f"프로젝트 루트: {root}")
     print(f"manifest: {manifest_path.relative_to(root)}")
@@ -298,7 +318,6 @@ def main() -> int:
     if len(issues) > args.limit:
         print(f"- 추가 진단 항목 {len(issues) - args.limit}개")
 
-    ok = len(errors) <= args.max_errors and len(warnings) <= args.max_warnings
     if args.strict and not ok:
         print("저장/RAG 실패 진단 확인 필요")
         return 1
