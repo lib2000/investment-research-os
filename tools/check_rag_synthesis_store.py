@@ -163,6 +163,7 @@ def main() -> int:
     parser.add_argument("--min-source-count", type=int, default=1)
     parser.add_argument("--require-latest-rag", action="store_true")
     parser.add_argument("--limit", type=int, default=8)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -201,6 +202,41 @@ def main() -> int:
             failures.append(f"다음 액션 누락: {item.relative_path}")
         if not item.rag_connected:
             failures.append(f"RAG 연결 누락: {item.relative_path}")
+
+    recent_entries = [
+        {
+            "date": item.date,
+            "ticker": item.ticker or "SEARCH",
+            "file_name": item.file_name,
+            "relative_path": item.relative_path,
+            "source_count": item.source_count,
+            "candidate_count": item.candidate_count,
+            "rag_connected": item.rag_connected,
+            "is_noop": item.is_noop,
+            "query": item.query,
+        }
+        for item in entries[: max(0, args.limit)]
+    ]
+    result = {
+        "status": "error" if failures else "ok",
+        "project_root": str(root),
+        "manifest_path": str(manifest_path.relative_to(root)),
+        "rag_db_path": str(rag_db_path.relative_to(root)),
+        "manifest_entry_count": len(entries),
+        "rag_document_count": rag_count,
+        "rag_connected_count": len(connected),
+        "legacy_db_only_count": max(0, rag_count - len(entries)),
+        "skipped_noop_count": skipped_noop,
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "failure_count": len(failures),
+        "failures": failures[: max(0, args.limit)],
+        "truncated_failure_count": max(0, len(failures) - max(0, args.limit)),
+        "recent_entries": recent_entries,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if failures else 0
 
     print(f"manifest: {manifest_path.relative_to(root)}")
     print(f"RAG DB: {rag_db_path.relative_to(root)}")

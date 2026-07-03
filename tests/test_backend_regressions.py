@@ -773,6 +773,17 @@ class DailyRecommendationsStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"latest_rows"', source)
 
 
+class RagSynthesisStoreCheckToolTests(unittest.TestCase):
+    def test_rag_synthesis_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_rag_synthesis_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"manifest_entry_count"', source)
+        self.assertIn('"rag_connected_count"', source)
+        self.assertIn('"legacy_db_only_count"', source)
+        self.assertIn('"recent_entries"', source)
+
+
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
         tool = load_operational_readiness_tool()
