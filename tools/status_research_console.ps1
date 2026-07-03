@@ -276,6 +276,25 @@ if ($dailyRecommendations) {
     } else {
       @()
     }
+    $previewMismatchCount = $previewMismatches.Count
+    if ($null -ne $dailyCandidatePolicyPreview.stored_preview_mismatch_count) {
+      $previewMismatchCount = [int]$dailyCandidatePolicyPreview.stored_preview_mismatch_count
+    }
+    $previewMismatchMarketLabels = @()
+    if ($dailyCandidatePolicyPreview.stored_preview_mismatch_counts_by_market) {
+      foreach ($market in @("KR", "US")) {
+        $count = $dailyCandidatePolicyPreview.stored_preview_mismatch_counts_by_market.$market
+        if ($null -ne $count) {
+          $previewMismatchMarketLabels += "$market $count"
+        }
+      }
+    }
+    $previewMismatchSummary = if ($previewMismatchMarketLabels.Count -gt 0) {
+      "$($previewMismatchCount)건 ($($previewMismatchMarketLabels -join ', '))"
+    } else {
+      "$($previewMismatchCount)건"
+    }
+    Write-Host "추천 저장/재계산 차이 요약: $previewMismatchSummary"
     if ($previewMismatches.Count -gt 0) {
       $previewMismatchLabels = @()
       foreach ($item in ($previewMismatches | Select-Object -First 6)) {
