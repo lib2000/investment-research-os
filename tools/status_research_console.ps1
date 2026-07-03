@@ -193,6 +193,7 @@ $researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/
 $publicIrSecStatus = Invoke-JsonStatus -Name "public IR/SEC status" -Path "/api/v1/public-ir-sec/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 $marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")
+$naverKrMarketJournalState = Read-OptionalJsonFile -Name "naver KR market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\naver_market_close_journal_state.json")
 $telegramUsMarketJournalState = Read-OptionalJsonFile -Name "telegram US market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_market_close_journal_state.json")
 $storageDuplicateReview = Read-OptionalJsonFile -Name "storage duplicate review" -Path (Join-Path $ProjectRootPath "research_vault\_system\storage_duplicate_review.json")
 $dailyCandidatePolicyPreviewPath = Join-Path $ProjectRootPath "tmp\daily_recommendation_candidate_policy_preview.json"
@@ -303,6 +304,27 @@ if ($marketJournal) {
     if ([string]::IsNullOrWhiteSpace($latestSession) -or $null -eq $ageDays -or $ageDays -gt $MaxMarketJournalSessionAgeDays) {
       Add-StatusFailure "시장일지 $market 최신 세션 확인 필요: $($latestSession)"
     }
+  }
+}
+if ($naverKrMarketJournalState) {
+  $savedPath = if ($naverKrMarketJournalState.storage -and $naverKrMarketJournalState.storage.relative_path) {
+    $naverKrMarketJournalState.storage.relative_path
+  } else {
+    "저장 경로 미확인"
+  }
+  $sourcePublishedAt = if ($naverKrMarketJournalState.source_published_at) {
+    $naverKrMarketJournalState.source_published_at
+  } else {
+    "원천 발행일 미확인"
+  }
+  $attemptMessage = if ($naverKrMarketJournalState.last_attempt_message) {
+    $naverKrMarketJournalState.last_attempt_message
+  } else {
+    "시도 메시지 없음"
+  }
+  Write-Host "국내 시장일지 자동 시도: $($naverKrMarketJournalState.status), 시도일 $($naverKrMarketJournalState.last_attempt_date), 원천 발행일 $sourcePublishedAt, 저장 $savedPath"
+  if ($naverKrMarketJournalState.status -eq "skipped_duplicate" -and $naverKrMarketJournalState.source_published_at) {
+    Write-Host "국내 시장일지 원천 상태: $attemptMessage"
   }
 }
 if ($telegramUsMarketJournalState) {
