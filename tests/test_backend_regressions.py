@@ -102,6 +102,18 @@ def load_offline_readiness_tool():
     return module
 
 
+def load_git_sync_status_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_git_sync_status.py"
+    spec = spec_from_file_location("check_git_sync_status", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_operational_readiness_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -667,6 +679,41 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("매크로/지역 소스 연결 신호", checks)
         self.assertEqual(checks["매크로/지역 소스 연결 신호"], ["tools/check_macro_source_signal_linkage.py", "--strict"])
+
+
+class GitSyncStatusToolTests(unittest.TestCase):
+    def test_build_result_returns_machine_readable_git_summary(self):
+        tool = load_git_sync_status_tool()
+
+        def fake_git(_root, *args):
+            if args == ("branch", "--show-current"):
+                return "main"
+            if args == ("status", "--short", "--branch"):
+                return "## main...origin/main [ahead 1]\n M tools/example.py"
+            if args == ("rev-list", "--count", "origin/main..HEAD"):
+                return "1"
+            if args == ("rev-list", "--count", "HEAD..origin/main"):
+                return "0"
+            if args == ("log", "-1", "--oneline"):
+                return "abc1234 Example commit"
+            raise AssertionError(args)
+
+        with patch.object(tool, "git", side_effect=fake_git):
+            result = tool.build_result(Path("C:/tmp/project"))
+
+        self.assertEqual(result["branch"], "main")
+        self.assertEqual(result["upstream"], "origin/main")
+        self.assertEqual(result["ahead"], 1)
+        self.assertEqual(result["behind"], 0)
+        self.assertEqual(result["dirty_count"], 1)
+        self.assertFalse(result["is_synced"])
+
+    def test_git_sync_status_supports_json_output(self):
+        source = (PROJECT_ROOT / "tools" / "check_git_sync_status.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('"is_synced"', source)
 
 
 class OperationalReadinessToolTests(unittest.TestCase):

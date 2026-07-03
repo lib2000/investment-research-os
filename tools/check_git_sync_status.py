@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 from pathlib import Path
 
@@ -27,30 +28,58 @@ def count(root: Path, rev_range: str) -> int:
     return int(output or "0")
 
 
+def build_result(root: Path, remote: str = "origin", branch: str | None = None) -> dict:
+    selected_branch = branch or git(root, "branch", "--show-current")
+    upstream = f"{remote}/{selected_branch}"
+    status = git(root, "status", "--short", "--branch")
+    dirty_lines = [line for line in status.splitlines()[1:] if line.strip()]
+    ahead = count(root, f"{upstream}..HEAD")
+    behind = count(root, f"HEAD..{upstream}")
+    latest = git(root, "log", "-1", "--oneline")
+    return {
+        "project_root": str(root),
+        "branch": selected_branch,
+        "remote": remote,
+        "upstream": upstream,
+        "latest_commit": latest,
+        "ahead": ahead,
+        "behind": behind,
+        "dirty_count": len(dirty_lines),
+        "dirty_lines": dirty_lines,
+        "status": status,
+        "is_clean": not dirty_lines,
+        "is_synced": ahead == 0 and behind == 0 and not dirty_lines,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="로컬 Git 동기화 상태를 확인합니다.")
     parser.add_argument("--remote", default="origin")
     parser.add_argument("--branch", default=None)
     parser.add_argument("--strict", action="store_true", help="작업트리 변경 또는 원격 ahead가 있으면 실패합니다")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
-    branch = args.branch or git(root, "branch", "--show-current")
-    upstream = f"{args.remote}/{branch}"
-    status = git(root, "status", "--short", "--branch")
-    ahead = count(root, f"{upstream}..HEAD")
-    behind = count(root, f"HEAD..{upstream}")
-    latest = git(root, "log", "-1", "--oneline")
+    result = build_result(root, remote=args.remote, branch=args.branch)
+    branch = result["branch"]
+    upstream = result["upstream"]
+    ahead = result["ahead"]
+    behind = result["behind"]
+    dirty_lines = result["dirty_lines"]
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and (behind > 0 or dirty_lines) else 0
 
     print(f"프로젝트 루트: {root}")
     print(f"브랜치: {branch}")
     print(f"업스트림: {upstream}")
-    print(f"최신 커밋: {latest}")
-    dirty_lines = [line for line in status.splitlines()[1:] if line.strip()]
+    print(f"최신 커밋: {result['latest_commit']}")
     print(f"동기화: ahead={ahead}, behind={behind}")
     print(f"작업트리 변경: {len(dirty_lines)}개")
     print("상태:")
-    print(status)
+    print(result["status"])
     if ahead > 0:
         print(f"푸시 대기 커밋 {ahead}개가 있습니다. Windows Git 인증이 가능한 터미널에서 `git push {args.remote} {branch}`를 실행하세요.")
     if behind > 0:
