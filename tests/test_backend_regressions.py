@@ -11858,6 +11858,14 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
 
 
 class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
+    def test_macro_source_signal_linkage_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_macro_source_signal_linkage.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"project_root"', source)
+        self.assertIn('"errors"', source)
+        self.assertIn("json.dumps(status", source)
+
     def test_macro_source_signal_linkage_summarizes_kcif_and_regional_sources(self):
         tool = load_macro_source_signal_linkage_tool()
 

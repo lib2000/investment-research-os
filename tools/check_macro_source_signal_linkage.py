@@ -158,10 +158,25 @@ def main() -> int:
     parser.add_argument("--min-regional", type=int, default=1, help="최소 지역/매크로 연결 자료 수")
     parser.add_argument("--min-linked-ratio", type=float, default=0.9, help="테마/타깃 연결률 최소 기준")
     parser.add_argument("--min-kcif-detail-ratio", type=float, default=0.6, help="KCIF 상세 신호 분석 최소 커버리지")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
     status = source_linkage_status(root)
+    errors = strict_errors(
+        status,
+        min_kcif=args.min_kcif,
+        min_regional=args.min_regional,
+        min_linked_ratio=args.min_linked_ratio,
+        min_kcif_detail_ratio=args.min_kcif_detail_ratio,
+    )
+    status["status"] = "error" if errors else "ok"
+    status["project_root"] = str(root)
+    status["errors"] = errors
+    if args.json:
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+        return 1 if args.strict and errors else 0
+
     print(
         "매크로/지역 소스 연결 신호: "
         f"KCIF {status['kcif_count']}개 | "
@@ -189,13 +204,6 @@ def main() -> int:
             f"타깃 {item['target_count']}개: {targets}",
             flush=True,
         )
-    errors = strict_errors(
-        status,
-        min_kcif=args.min_kcif,
-        min_regional=args.min_regional,
-        min_linked_ratio=args.min_linked_ratio,
-        min_kcif_detail_ratio=args.min_kcif_detail_ratio,
-    )
     if errors:
         print("점검 오류:", flush=True)
         for error in errors:
