@@ -720,6 +720,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn("매크로/지역 소스 연결 신호", checks)
         self.assertEqual(checks["매크로/지역 소스 연결 신호"], ["tools/check_macro_source_signal_linkage.py", "--strict"])
 
+    def test_offline_readiness_checks_json_contracts(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("점검 스크립트 JSON 계약", checks)
+        self.assertEqual(checks["점검 스크립트 JSON 계약"], ["tools/check_json_contracts.py"])
+
 
 class GitSyncStatusToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_git_summary(self):
