@@ -104,12 +104,50 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const marketLabels = marketSections.map((section) => section.querySelector(".daily-recommendation-market-head span")?.textContent?.trim() || "");
                   const title = cardsRoot.querySelector(".daily-recommendation-board-summary strong")?.textContent?.trim() || "";
                   const cardsTop = Math.round(cardsRoot.getBoundingClientRect().top);
+                  const topRankCard = document.querySelector(".daily-recommendation-top-rank[data-daily-recommendation-open]");
+                  const topRankTicker = topRankCard?.dataset?.dailyRecommendationOpen || "";
+                  const topRankMarket = topRankCard?.dataset?.dailyRecommendationMarket || "";
+                  const topRankRank = topRankCard?.dataset?.dailyRecommendationRank || "";
+                  let detailOpenedAfterTopRankClick = false;
+                  let detailFocusedTicker = "";
+                  let detailFocusedMarket = "";
+                  let detailFocusedRank = "";
+                  let detailTabActive = false;
+                  if (topRankCard) {
+                    topRankCard.click();
+                    const openedCard = await waitFor(() => {
+                      const selectorParts = [
+                        topRankTicker ? `[data-daily-recommendation-ticker="${CSS.escape(topRankTicker)}"]` : "",
+                        topRankMarket ? `[data-daily-recommendation-market="${CSS.escape(topRankMarket)}"]` : "",
+                        topRankRank ? `[data-daily-recommendation-rank="${CSS.escape(topRankRank)}"]` : "",
+                      ].filter(Boolean).join("");
+                      const card = cardsRoot.querySelector(`.daily-recommendation-rank-card${selectorParts}`);
+                      const detail = card?.querySelector(".daily-recommendation-detail");
+                      return card && detail?.open ? card : null;
+                    }, 15000, "opened daily recommendation detail");
+                    detailOpenedAfterTopRankClick = true;
+                    detailFocusedTicker = openedCard.dataset.dailyRecommendationTicker || "";
+                    detailFocusedMarket = openedCard.dataset.dailyRecommendationMarket || "";
+                    detailFocusedRank = openedCard.dataset.dailyRecommendationRank || "";
+                    detailTabActive = document.querySelector('button.tab[data-tab="memory"]')?.classList.contains("active") || false;
+                    cardsRoot.scrollIntoView({block: "start", inline: "nearest"});
+                    await sleep(200);
+                  }
                   return {
                     status: "success",
                     title,
                     marketSectionCount: marketSections.length,
                     recommendationCardCount: recommendationCards.length,
                     marketLabels,
+                    topRankClickFound: Boolean(topRankCard),
+                    topRankTicker,
+                    topRankMarket,
+                    topRankRank,
+                    detailOpenedAfterTopRankClick,
+                    detailFocusedTicker,
+                    detailFocusedMarket,
+                    detailFocusedRank,
+                    detailTabActive,
                     scrolledToDailyRecommendationCards: cardsTop >= 0 && cardsTop < Math.round(window.innerHeight * 0.35),
                     dailyRecommendationCardsTop: cardsTop,
                     scrollY: Math.round(window.scrollY),
@@ -157,6 +195,12 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("페이지 전체에 가로 스크롤 오버플로가 있습니다.")
     if not result.get("scrolledToDailyRecommendationCards"):
         errors.append("추천 결과 스크린샷 대상이 카드 영역으로 스크롤되지 않았습니다.")
+    if not result.get("topRankClickFound"):
+        errors.append("상단 추천 후보 클릭 대상을 찾지 못했습니다.")
+    if not result.get("detailOpenedAfterTopRankClick"):
+        errors.append("상단 추천 후보 클릭 후 추천 상세 카드가 열리지 않았습니다.")
+    if not result.get("detailTabActive"):
+        errors.append("상단 추천 후보 클릭 후 추천 상세 탭으로 이동하지 않았습니다.")
     clipped = result.get("clippedTextElements") if isinstance(result.get("clippedTextElements"), list) else []
     if clipped:
         errors.append(f"추천 결과 텍스트 클리핑 {len(clipped)}개")

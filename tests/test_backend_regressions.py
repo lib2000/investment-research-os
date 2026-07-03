@@ -13314,6 +13314,31 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token()))', console_js)
         self.assertNotIn('runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false))', console_js)
 
+    def test_daily_recommendation_status_refreshes_dashboard_top_even_when_hidden(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        refresh_start = console_js.index("function refreshDashboardDailyRecommendationTop()")
+        refresh_end = console_js.index("async function openDailyRecommendationDetailFromDashboard")
+        refresh_block = console_js[refresh_start:refresh_end]
+
+        self.assertNotIn('activePanelId() !== "dashboard"', refresh_block)
+        self.assertIn("renderDashboardCards(lastDashboard)", refresh_block)
+        self.assertIn("renderDashboardEmptyState()", refresh_block)
+
+    def test_daily_recommendation_top_panel_falls_back_to_latest_records(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        top_records_start = console_js.index("function dailyRecommendationTopRecords")
+        top_records_end = console_js.index("function dailyRecommendationRecordMarket")
+        top_records_block = console_js[top_records_start:top_records_end]
+
+        self.assertIn("const latest = Array.isArray(payload.latest_records)", top_records_block)
+        self.assertIn("const records = latest.length ? latest", top_records_block)
+        self.assertIn("!records.length && payload.has_today_recommendations === false", top_records_block)
+        self.assertNotIn("if (payload.has_today_recommendations === false) {\n    return [];", top_records_block)
+
     def test_asset_hash_rewrite_reaches_fixed_point(self):
         tool = load_console_hash_tool()
         project_root = PROJECT_ROOT

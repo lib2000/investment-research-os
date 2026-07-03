@@ -9106,11 +9106,11 @@ function dailyRecommendationTopRecords(payload = {}) {
       .slice()
       .sort(dailyRecommendationRecordSort);
   }
-  if (payload.has_today_recommendations === false) {
-    return [];
-  }
   const latest = Array.isArray(payload.latest_records) ? payload.latest_records : [];
   const records = latest.length ? latest : Array.isArray(payload.records) ? payload.records : [];
+  if (!records.length && payload.has_today_recommendations === false) {
+    return [];
+  }
   return records
     .slice()
     .sort(dailyRecommendationRecordSort);
@@ -9330,9 +9330,6 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
 }
 
 function refreshDashboardDailyRecommendationTop() {
-  if (activePanelId() !== "dashboard") {
-    return;
-  }
   if (lastDashboard) {
     renderDashboardCards(lastDashboard);
     return;
