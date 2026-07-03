@@ -11665,11 +11665,21 @@ class AutomationStatusModuleTests(unittest.TestCase):
             dart_daily={"due": False, "failure_count": 0},
             daily_recommendations_due=False,
             daily_recommendations={"latest_recommendation_date": "2026-06-18"},
+            kcif_watch={
+                "related_reports": [
+                    {
+                        "title": "미국 고용지표와 금리 전망 점검",
+                        "matched_themes": ["금리/채권", "글로벌 경기"],
+                    }
+                ]
+            },
         )
 
         self.assertEqual(ranked[0]["ticker"], "HIGH")
         self.assertIn("중복 의심 자료 2개", actions[0])
-        self.assertTrue(any("KCIF 관련 매크로 보고서 3개" in item for item in actions))
+        self.assertTrue(
+            any("KCIF 최우선 `미국 고용지표와 금리 전망 점검`" in item and "금리/채권" in item for item in actions)
+        )
         self.assertTrue(any("2026-06-18 한국/미국 추천 후보" in item for item in actions))
 
     def test_automation_digest_next_actions_prioritize_actionable_news(self):

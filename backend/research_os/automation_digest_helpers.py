@@ -109,6 +109,43 @@ def automation_tone(
     return tone, headline
 
 
+def _short_title(value: object, *, limit: int = 70) -> str:
+    title = str(value or "").strip()
+    if len(title) <= limit:
+        return title
+    return f"{title[: limit - 1]}..."
+
+
+def _watch_item_action(
+    watch: dict | None,
+    *,
+    item_keys: tuple[str, ...],
+    source_label: str,
+    fallback_count: int,
+    fallback: str,
+) -> str:
+    if not isinstance(watch, dict):
+        return fallback
+    item = None
+    for key in item_keys:
+        rows = watch.get(key)
+        if isinstance(rows, list) and rows:
+            item = next((row for row in rows if isinstance(row, dict)), None)
+            if item:
+                break
+    if not item:
+        return fallback
+
+    title = _short_title(item.get("title")) or "상위 자료"
+    themes = [str(theme).strip() for theme in (item.get("matched_themes") or []) if str(theme).strip()]
+    theme_text = ", ".join(themes[:3]) if themes else "매크로/지역 리스크"
+    target_matches = item.get("target_matches") or item.get("matched_targets") or []
+    target_count = len(target_matches) if isinstance(target_matches, list) else 0
+    target_suffix = f" · 보유/관심 연결 {target_count}개" if target_count else ""
+    count_suffix = f" (관련 {fallback_count}개)" if fallback_count else ""
+    return f"{source_label} 최우선 `{title}`를 {theme_text} 관점의 시장일지/리스크 메모에 반영하세요{target_suffix}{count_suffix}."
+
+
 def build_dashboard_next_actions(
     *,
     target_count: int,
@@ -125,6 +162,8 @@ def build_dashboard_next_actions(
     dart_daily: dict,
     daily_recommendations_due: bool,
     daily_recommendations: dict,
+    kcif_watch: dict | None = None,
+    regional_sources_watch: dict | None = None,
     duplicate_refresh_candidate_count: int | None = None,
     news_duplicate_priority_group_count: int = 0,
     news_duplicate_priority_entry_count: int = 0,
@@ -160,12 +199,29 @@ def build_dashboard_next_actions(
     if kcif_due:
         next_actions.append("KCIF 매크로 보고서 목록 일일 점검이 필요합니다.")
     elif kcif_related_count:
-        next_actions.append(f"KCIF 관련 매크로 보고서 {kcif_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요.")
+        next_actions.append(
+            _watch_item_action(
+                kcif_watch,
+                item_keys=("related_reports", "reports"),
+                source_label="KCIF",
+                fallback_count=kcif_related_count,
+                fallback=f"KCIF 관련 매크로 보고서 {kcif_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요.",
+            )
+        )
     if regional_sources_due:
         next_actions.append("EMERiCs/CSF/KIEP 지역·매크로 자료 일일 점검이 필요합니다.")
     elif regional_sources_related_count:
         next_actions.append(
-            f"EMERiCs/CSF/KIEP 관련 자료 {regional_sources_related_count}개를 시장일지/보유종목 리스크 메모와 연결하세요."
+            _watch_item_action(
+                regional_sources_watch,
+                item_keys=("related_items", "items"),
+                source_label="EMERiCs/CSF/KIEP",
+                fallback_count=regional_sources_related_count,
+                fallback=(
+                    f"EMERiCs/CSF/KIEP 관련 자료 {regional_sources_related_count}개를 "
+                    "시장일지/보유종목 리스크 메모와 연결하세요."
+                ),
+            )
         )
     if dart_daily.get("due"):
         next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")
