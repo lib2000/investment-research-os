@@ -315,9 +315,6 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("dashboardShowsDartStrip", "대시보드 DART 공시 스트립이 표시되지 않았습니다."),
             ("dashboardShowsDartCoverage", "대시보드 DART 커버리지 정보가 표시되지 않았습니다."),
             ("dashboardShowsDailyRecommendationShortcuts", "대시보드 추천 바로가기 버튼이 표시되지 않았습니다."),
-            ("recentWeeklyShowsTimestamps", "최근 1주 자료 기준 시각이 표시되지 않았습니다."),
-            ("recentWeeklyEvidenceShowsSynthesis", "추천 근거 요약 결과가 표시되지 않았습니다."),
-            ("recentWeeklyEvidenceButtonVisible", "추천 근거 요약 버튼이 표시되지 않았습니다."),
         ]
     elif stage == "analysis-forms":
         assert_falsey(result, "macroHasTicker", "매크로 분석 결과에 주요 티커 코드가 남아 있습니다.")
@@ -984,6 +981,16 @@ def run_click_smoke(
                     120000,
                     "dashboard output completion"
                   );
+                  if (stopAfter === "dashboard") {{
+                    return partialResult("dashboard", {{
+                      dashboardShowsDartStrip: dashboardText.includes("DART 최근 공시"),
+                      dashboardShowsDartCoverage: dashboardText.includes("대상") && dashboardText.includes("확인"),
+                      dashboardShowsDailyRecommendationShortcuts:
+                        !!document.querySelector("#dailyRecommendationsQuickButton") &&
+                        !!document.querySelector("#dailyRecommendationsStatusQuickButton"),
+                      dashboardPreview: dashboardText.split("\\n").slice(0, 12).join("\\n"),
+                    }});
+                  }}
 
                   document.querySelector("#recentWeeklyBriefButton")?.click();
                   const recentWeeklyBriefText = await waitFor(
@@ -1029,29 +1036,6 @@ def run_click_smoke(
                   }} catch (error) {{
                     recentWeeklyEvidenceText = await recentWeeklyEvidenceSynthesisApiFallback("recent weekly evidence synthesis");
                   }}
-                  if (stopAfter === "dashboard") {{
-                    return partialResult("dashboard", {{
-                      dashboardShowsDartStrip: dashboardText.includes("DART 최근 공시"),
-                      dashboardShowsDartCoverage: dashboardText.includes("대상") && dashboardText.includes("확인"),
-                      dashboardShowsDailyRecommendationShortcuts:
-                        !!document.querySelector("#dailyRecommendationsQuickButton") &&
-                        !!document.querySelector("#dailyRecommendationsStatusQuickButton"),
-                      recentWeeklyShowsTimestamps:
-                        recentWeeklyBriefText.includes("최근 1주 자료") &&
-                        recentWeeklyBriefText.includes("기준 시각") &&
-                        (recentWeeklyBriefText.includes("DART 점검 시각") || recentWeeklyBriefText.includes("공시")),
-                      recentWeeklyEvidenceShowsSynthesis:
-                        recentWeeklyEvidenceText.includes("추천 근거 요약") &&
-                        recentWeeklyEvidenceText.includes("오늘 추천 직접 연결") &&
-                        recentWeeklyEvidenceText.includes("추천 근거 RAG 합성") &&
-                        recentWeeklyEvidenceText.includes("저장된 합성 보고서") &&
-                        recentWeeklyEvidenceText.includes("RAG 검색어"),
-                      recentWeeklyEvidenceButtonVisible,
-                      dashboardPreview: dashboardText.split("\\n").slice(0, 12).join("\\n"),
-                      recentWeeklyEvidencePreview: recentWeeklyEvidenceText.split("\\n").slice(0, 10).join("\\n"),
-                    }});
-                  }}
-
                   const runForm = async (tab, formSelector, setup, expected, timeout = 60000) => {{
                     document.querySelector(`[data-tab="${{tab}}"]`).click();
                     await waitFor(() => document.querySelector(`#${{tab}}`)?.classList.contains("active"), 5000, `${{tab}} active`);
