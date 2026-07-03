@@ -6,9 +6,12 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 
+LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 CHECKS = [
     ("Git 동기화 상태", ["tools/check_git_sync_status.py"]),
     ("점검 스크립트 JSON 계약", ["tools/check_json_contracts.py"]),
@@ -165,6 +168,8 @@ def build_json_payload(root: Path, *, tail_lines: int) -> dict:
     return {
         "status": "error" if failed else "ok",
         "project_root": str(root),
+        "generated_at": datetime.now(LOCAL_TIMEZONE).isoformat(timespec="seconds"),
+        "timezone": str(LOCAL_TIMEZONE),
         "check_count": len(results),
         "expected_check_count": len(CHECKS),
         "failed_count": len(failed),

@@ -739,6 +739,8 @@ class OfflineReadinessToolTests(unittest.TestCase):
             payload = tool.build_json_payload(Path("C:/tmp/project"), tail_lines=1)
 
         self.assertEqual(payload["status"], "ok")
+        self.assertIn("generated_at", payload)
+        self.assertEqual(payload["timezone"], "Asia/Seoul")
         self.assertEqual(payload["expected_check_count"], len(tool.CHECKS))
         self.assertEqual(payload["failed_count"], 0)
         self.assertEqual(payload["results"][0]["output_tail"], ["line2"])
