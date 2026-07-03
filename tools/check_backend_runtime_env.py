@@ -149,13 +149,16 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true", help="의존성 또는 백엔드 미가동을 실패로 처리합니다.")
     parser.add_argument("--check-daily-tests", action="store_true", help="일일 추천 단위 테스트까지 실행합니다.")
     parser.add_argument("--test-timeout", type=float, default=90.0, help="단위 테스트 실행 제한 시간(초)입니다.")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
     runtime_python = preferred_python(root)
-    print(f"프로젝트 루트: {root}")
-    print(f"Python: {runtime_python}")
-    if Path(sys.executable).absolute() != runtime_python.absolute():
+    using_runtime_python = Path(sys.executable).absolute() == runtime_python.absolute()
+    if not args.json:
+        print(f"프로젝트 루트: {root}")
+        print(f"Python: {runtime_python}")
+    if not using_runtime_python and not args.json:
         print(f"검사 실행 Python: {sys.executable}")
 
     detected_versions = installed_versions_with_python(
@@ -168,33 +171,63 @@ def main() -> int:
         actual = detected_versions.get(distribution)
         if actual is None:
             missing.append(distribution)
-            print(f"{distribution}: 없음 | 기대 {expected}")
+            if not args.json:
+                print(f"{distribution}: 없음 | 기대 {expected}")
         elif actual != expected:
             mismatched.append(f"{distribution}={actual} (기대 {expected})")
-            print(f"{distribution}: {actual} | 기대 {expected} | 확인 필요")
+            if not args.json:
+                print(f"{distribution}: {actual} | 기대 {expected} | 확인 필요")
         else:
-            print(f"{distribution}: {actual} | 정상")
+            if not args.json:
+                print(f"{distribution}: {actual} | 정상")
 
     health_url = args.base_url.rstrip("/") + "/api/v1/system/health"
     health_ok, health_message = check_http_health(health_url, args.timeout)
-    print(f"백엔드 health: {health_url} | {health_message}")
+    if not args.json:
+        print(f"백엔드 health: {health_url} | {health_message}")
     health_sandbox_blocked = health_blocked_by_local_sandbox(health_message)
-    if health_sandbox_blocked:
+    if health_sandbox_blocked and not args.json:
         print("참고: WSL/Codex 격리 환경에서 localhost 접근이 차단된 상태일 수 있습니다. Windows PowerShell의 Python으로 재확인하세요.")
 
     daily_tests_ok = True
+    daily_test_lines: list[str] = []
     if args.check_daily_tests:
-        print("일일 추천 단위 테스트: 실행")
+        if not args.json:
+            print("일일 추천 단위 테스트: 실행")
         daily_tests_ok, daily_test_lines = run_daily_recommendation_tests(
             runtime_python,
             root,
             timeout=args.test_timeout,
         )
-        for line in daily_test_lines:
-            print(f"  {line}")
-        print(f"일일 추천 단위 테스트: {'통과' if daily_tests_ok else '실패'}")
+        if not args.json:
+            for line in daily_test_lines:
+                print(f"  {line}")
+            print(f"일일 추천 단위 테스트: {'통과' if daily_tests_ok else '실패'}")
 
-    if missing or mismatched or not health_ok or not daily_tests_ok:
+    has_problem = bool(missing or mismatched or not health_ok or not daily_tests_ok)
+    result = {
+        "status": "warning" if has_problem else "ok",
+        "project_root": str(root),
+        "runtime_python": str(runtime_python),
+        "probe_python": sys.executable,
+        "using_runtime_python": using_runtime_python,
+        "required_distributions": REQUIRED_DISTRIBUTIONS,
+        "detected_versions": detected_versions,
+        "missing_distributions": missing,
+        "mismatched_distributions": mismatched,
+        "health_url": health_url,
+        "health_ok": health_ok,
+        "health_message": health_message,
+        "health_sandbox_blocked": health_sandbox_blocked,
+        "daily_tests_checked": args.check_daily_tests,
+        "daily_tests_ok": daily_tests_ok,
+        "daily_test_tail": daily_test_lines,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and has_problem else 0
+
+    if has_problem:
         print("권장 조치:")
         action_number = 1
         if missing or mismatched:

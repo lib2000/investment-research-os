@@ -484,6 +484,10 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
         self.assertIn("restart-research-backend.ps1 -Port 8001", script_source)
         self.assertIn("status_research_console.ps1 -Strict", script_source)
+        self.assertIn('parser.add_argument("--json"', script_source)
+        self.assertIn('"health_ok"', script_source)
+        self.assertIn('"missing_distributions"', script_source)
+        self.assertIn('"daily_tests_ok"', script_source)
 
     def test_verify_wrapper_exposes_public_ir_sec_click_mode(self):
         verify_source = (PROJECT_ROOT / "tools" / "verify_research_console.ps1").read_text(encoding="utf-8")
