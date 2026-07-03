@@ -728,6 +728,21 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn("점검 스크립트 JSON 계약", checks)
         self.assertEqual(checks["점검 스크립트 JSON 계약"], ["tools/check_json_contracts.py"])
 
+    def test_offline_readiness_json_payload_can_be_built_for_file_output(self):
+        tool = load_offline_readiness_tool()
+
+        with patch.object(
+            tool.subprocess,
+            "run",
+            return_value=SimpleNamespace(returncode=0, stdout="line1\nline2\n", stderr=""),
+        ):
+            payload = tool.build_json_payload(Path("C:/tmp/project"), tail_lines=1)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["expected_check_count"], len(tool.CHECKS))
+        self.assertEqual(payload["failed_count"], 0)
+        self.assertEqual(payload["results"][0]["output_tail"], ["line2"])
+
 
 class GitSyncStatusToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_git_summary(self):

@@ -139,46 +139,57 @@ def project_root(start: Path) -> Path:
     raise SystemExit("InvestmentJournalApp 프로젝트 루트를 찾지 못했습니다.")
 
 
+def build_json_payload(root: Path, *, tail_lines: int) -> dict:
+    results = []
+    for label, check_args in CHECKS:
+        completed = subprocess.run(
+            [sys.executable, *check_args],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+        results.append(
+            {
+                "label": label,
+                "args": check_args,
+                "returncode": completed.returncode,
+                "status": "ok" if completed.returncode == 0 else "error",
+                "output_tail": output.splitlines()[-max(0, tail_lines) :],
+            }
+        )
+        if completed.returncode != 0:
+            break
+    failed = [item for item in results if item["returncode"] != 0]
+    return {
+        "status": "error" if failed else "ok",
+        "project_root": str(root),
+        "check_count": len(results),
+        "expected_check_count": len(CHECKS),
+        "failed_count": len(failed),
+        "failed_labels": [item["label"] for item in failed],
+        "results": results,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Investment Research OS 오프라인 운영 점검을 실행합니다.")
     parser.add_argument("--json", action="store_true", help="전체 점검 결과 요약을 JSON으로 출력합니다.")
+    parser.add_argument("--output-json", type=Path, help="전체 점검 결과 요약을 JSON 파일로 저장합니다.")
     parser.add_argument("--tail-lines", type=int, default=12, help="JSON 출력에 포함할 각 점검 출력 마지막 줄 수")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
-    if args.json:
-        results = []
-        for label, check_args in CHECKS:
-            completed = subprocess.run(
-                [sys.executable, *check_args],
-                cwd=root,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
-            results.append(
-                {
-                    "label": label,
-                    "args": check_args,
-                    "returncode": completed.returncode,
-                    "status": "ok" if completed.returncode == 0 else "error",
-                    "output_tail": output.splitlines()[-max(0, args.tail_lines) :],
-                }
-            )
-            if completed.returncode != 0:
-                break
-        failed = [item for item in results if item["returncode"] != 0]
-        payload = {
-            "status": "error" if failed else "ok",
-            "project_root": str(root),
-            "check_count": len(results),
-            "expected_check_count": len(CHECKS),
-            "failed_count": len(failed),
-            "failed_labels": [item["label"] for item in failed],
-            "results": results,
-        }
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    if args.json or args.output_json:
+        payload = build_json_payload(root, tail_lines=args.tail_lines)
+        if args.output_json:
+            output_path = args.output_json if args.output_json.is_absolute() else root / args.output_json
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        failed = [item for item in payload["results"] if item["returncode"] != 0]
         return failed[0]["returncode"] if failed else 0
 
     print(f"프로젝트 루트: {root}", flush=True)
