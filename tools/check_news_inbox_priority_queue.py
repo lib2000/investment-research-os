@@ -126,6 +126,7 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
         "total_count": len(items),
         "filter_counts": counts,
         "priority_count": len(priority_items),
+        "display_count": len(queue),
         "policy_priority_count": policy_priority_count,
         "target_matched_count": target_matched_count,
         "quality_issue_count": quality_issue_count,
@@ -157,7 +158,7 @@ def strict_errors(status: dict[str, Any]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="뉴스 인박스 우선 분류 큐를 백엔드 없이 점검합니다.")
-    parser.add_argument("--limit", type=int, default=7, help="표시할 우선 뉴스 수")
+    parser.add_argument("--limit", type=int, default=8, help="표시할 우선 뉴스 수")
     parser.add_argument("--strict", action="store_true", help="운영 품질 문제가 있으면 실패 코드로 종료")
     parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
     args = parser.parse_args()

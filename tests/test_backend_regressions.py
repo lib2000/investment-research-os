@@ -11280,6 +11280,7 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
 
         self.assertEqual(status["total_count"], 2)
         self.assertEqual(status["priority_count"], 1)
+        self.assertEqual(status["display_count"], 1)
         self.assertEqual(status["policy_priority_count"], 1)
         self.assertEqual(status["target_matched_count"], 1)
         self.assertEqual(status["queue"][0]["id"], "p1")
@@ -11290,6 +11291,8 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         tool_source = (PROJECT_ROOT / "tools" / "check_news_inbox_priority_queue.py").read_text(encoding="utf-8")
 
         self.assertIn('parser.add_argument("--json"', tool_source)
+        self.assertIn('default=8', tool_source)
+        self.assertIn('"display_count": len(queue)', tool_source)
         self.assertIn('"errors": errors', tool_source)
         self.assertIn("json.dumps(result", tool_source)
 
