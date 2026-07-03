@@ -762,6 +762,17 @@ class InterestStoreCheckToolTests(unittest.TestCase):
         self.assertIn("def item_market", source)
 
 
+class InvestmentCalendarStoreCheckToolTests(unittest.TestCase):
+    def test_investment_calendar_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_investment_calendar_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"kr_event_count"', source)
+        self.assertIn('"us_event_count"', source)
+        self.assertIn('"earnings_event_count"', source)
+        self.assertIn('"earnings_events"', source)
+
+
 class StorageQualityStoreCheckToolTests(unittest.TestCase):
     def test_storage_quality_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_storage_quality_store.py").read_text(encoding="utf-8")

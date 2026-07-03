@@ -96,6 +96,7 @@ def main() -> int:
     parser.add_argument("--min-us-events", type=int, default=1)
     parser.add_argument("--min-earnings-events", type=int, default=1)
     parser.add_argument("--max-age-hours", type=float, default=24 * 45)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -147,6 +148,33 @@ def main() -> int:
         "실적발표 이벤트 관련 종목 누락",
     )
     add_issue(issues, not universe, "보유/관심종목 유니버스가 비어 있음")
+
+    result = {
+        "status": "warning" if issues else "ok",
+        "project_root": str(root),
+        "source_file": payload.get("source_file"),
+        "calendar_month": calendar_month,
+        "updated_at": payload.get("updated_at"),
+        "source_age_hours": source_age,
+        "universe_count": len(universe),
+        "kr_event_count": len(kr_events),
+        "us_event_count": len(us_events),
+        "weekly_bucket_count": len(weekly),
+        "earnings_event_count": len(earnings_events),
+        "earnings_events": [
+            {
+                "date": event.get("date"),
+                "market": event.get("market"),
+                "title": event.get("title"),
+                "related": event.get("related") if isinstance(event.get("related"), list) else [],
+            }
+            for event in earnings_events[:5]
+        ],
+        "issues": issues,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and issues else 0
 
     print(f"투자 캘린더 파일: {payload.get('source_file')}")
     print(f"캘린더 월: {calendar_month} | 갱신 {payload.get('updated_at')} | 유니버스 {len(universe)}개")
