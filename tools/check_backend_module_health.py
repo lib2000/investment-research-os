@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import builtins
+import json
 from pathlib import Path
 
 EXPECTED_MODULES = {
@@ -230,6 +231,7 @@ def main() -> int:
     parser.add_argument("--main-large-warning-lines", type=int, default=20000)
     parser.add_argument("--main-max-lines", type=int, default=DEFAULT_MAIN_MAX_LINES, help="research_os_main.py가 이 줄 수를 넘으면 실패")
     parser.add_argument("--min-module-count", type=int, default=DEFAULT_MIN_MODULE_COUNT, help="분리 도메인 모듈 최소 개수")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -292,6 +294,29 @@ def main() -> int:
         key=lambda item: item[1],
         reverse=True,
     )[:5]
+
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "module_count": len(module_files),
+        "min_module_count": args.min_module_count,
+        "python_file_count": len(python_files),
+        "main_line_count": main_lines,
+        "main_max_lines": args.main_max_lines,
+        "main_large_warning_lines": args.main_large_warning_lines,
+        "largest_modules": [{"name": name, "line_count": lines} for name, lines in largest_modules],
+        "missing_expected_modules": missing,
+        "missing_main_imports": missing_imports,
+        "simple_namespace_missing_dependencies": [
+            {"line": lineno, "name": name, "value": value}
+            for lineno, name, value in missing_runtime_dependencies
+        ],
+        "warnings": warnings,
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and errors else 0
 
     print(f"프로젝트 루트: {root}")
     print(f"백엔드 모듈 수: {len(module_files)}개 / 최소 {args.min_module_count}개")

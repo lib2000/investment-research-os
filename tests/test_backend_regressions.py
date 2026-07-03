@@ -3163,6 +3163,15 @@ class BackendModuleBoundaryTests(unittest.TestCase):
             [(4, "broken", "missing_name")],
         )
 
+    def test_backend_module_health_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_backend_module_health.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"module_count"', source)
+        self.assertIn('"main_line_count"', source)
+        self.assertIn('"largest_modules"', source)
+        self.assertIn('"simple_namespace_missing_dependencies"', source)
+
     def test_code_knowledge_graph_check_uses_existing_graph_when_refresh_write_is_blocked(self):
         tool = load_code_knowledge_graph_check_tool()
 
