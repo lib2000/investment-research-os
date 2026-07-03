@@ -546,23 +546,30 @@ def run_click_smoke(
                         const hosted = firecrawl.hosted_api || {};
                         const needsBodyEntries = Array.isArray(payload.needs_body_copy_entries) ? payload.needs_body_copy_entries : [];
                         const duplicateTitleGroups = Array.isArray(payload.needs_body_duplicate_title_groups) ? payload.needs_body_duplicate_title_groups : [];
+                        const repeatedTitleGroups = Array.isArray(payload.needs_body_repeated_title_groups) ? payload.needs_body_repeated_title_groups : [];
                         const needsBodyLines = needsBodyEntries.slice(0, 5).map((item, index) =>
                           `${index + 1}. ${item.ticker || item.storage_key || "티커 미확인"} · ${item.title || item.file_name || "제목 없음"} · ${item.relative_path || item.source_url || "경로 미확인"}`
                         );
                         const duplicateTitleLines = duplicateTitleGroups.slice(0, 5).map((group, index) =>
                           `${index + 1}. ${group.ticker || "티커 미확인"} · ${group.count || 0}건 · ${group.title || "제목 없음"}`
                         );
+                        const repeatedTitleLines = repeatedTitleGroups.slice(0, 5).map((group, index) =>
+                          `${index + 1}. ${group.ticker || "티커 미확인"} · ${group.count || 0}건 · ${group.title || "제목 없음"} · 기준 ${(group.filing_keys || []).slice(0, 3).join(", ") || "미확인"}`
+                        );
                         return [
                           "공개 IR/SEC 저장 상태",
                           `전체 저장: ${payload.entry_count || 0}건`,
                           `본문 보강 필요: ${payload.needs_body_copy_count || 0}건`,
-                          `동일 제목 보강 그룹: ${payload.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0}건`,
+                          `동일 공시 보강 그룹: ${payload.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0}건`,
+                          `반복 제목 보강 그룹: ${payload.needs_body_repeated_title_group_count || repeatedTitleGroups.length || 0}건`,
                           `저장 키: ${payload.storage_key || "PUBLIC_IR_SEC"}`,
                           `정책: ${payload.policy || "공개 IR/SEC 자료만 수집합니다."}`,
                           needsBodyLines.length ? "본문 보강 대상" : "",
                           ...needsBodyLines,
-                          duplicateTitleLines.length ? "동일 제목 보강 그룹" : "",
+                          duplicateTitleLines.length ? "동일 공시 보강 그룹" : "",
                           ...duplicateTitleLines,
+                          repeatedTitleLines.length ? "반복 제목 보강 그룹" : "",
+                          ...repeatedTitleLines,
                           "Firecrawl IR 보조 수집",
                           `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,
                           `Hosted API: ${hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"} · ${hosted.base_url || "https://api.firecrawl.dev/v2"}`,

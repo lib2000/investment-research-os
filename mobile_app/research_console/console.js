@@ -17209,6 +17209,9 @@ function formatKoreanResult(value) {
     const duplicateTitleGroups = Array.isArray(value.needs_body_duplicate_title_groups)
       ? value.needs_body_duplicate_title_groups
       : [];
+    const repeatedTitleGroups = Array.isArray(value.needs_body_repeated_title_groups)
+      ? value.needs_body_repeated_title_groups
+      : [];
     const firecrawl = value.firecrawl_ir || {};
     const firecrawlMonitor = value.firecrawl_monitor || {};
     const firecrawlMonitorEvents = value.firecrawl_monitor_events || {};
@@ -17228,6 +17231,11 @@ function formatKoreanResult(value) {
           `${index + 1}. ${group.ticker || "티커 미확인"} · ${formatNumber(group.count || 0)}건 · ${group.title || "제목 없음"}`
         )
       : [];
+    const repeatedTitleLines = repeatedTitleGroups.length
+      ? repeatedTitleGroups.slice(0, 5).map((group, index) =>
+          `${index + 1}. ${group.ticker || "티커 미확인"} · ${formatNumber(group.count || 0)}건 · ${group.title || "제목 없음"} · 기준 ${(group.filing_keys || []).slice(0, 3).join(", ") || "미확인"}`
+        )
+      : [];
     const entryLines = entries.length
       ? entries.slice(0, 12).map((item, index) => `${index + 1}. ${item.title || item.file_name || "제목 없음"} · ${item.date || "날짜 없음"} · ${item.source_provider || "출처 미확인"} · ${item.capture_quality_status || item.capture_quality?.status || "품질 미확인"}`)
       : [value.empty_state?.title || "아직 수집된 공개 IR/SEC 자료가 없습니다."];
@@ -17241,15 +17249,19 @@ function formatKoreanResult(value) {
       `### 공개 IR/SEC 저장 상태`,
       `전체 저장: ${formatNumber(value.entry_count || 0)}건`,
       `본문 보강 필요: ${formatNumber(value.needs_body_copy_count || 0)}건`,
-      `동일 제목 보강 그룹: ${formatNumber(value.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0)}건`,
+      `동일 공시 보강 그룹: ${formatNumber(value.needs_body_duplicate_title_group_count || duplicateTitleGroups.length || 0)}건`,
+      `반복 제목 보강 그룹: ${formatNumber(value.needs_body_repeated_title_group_count || repeatedTitleGroups.length || 0)}건`,
       `저장 키: ${value.storage_key || "PUBLIC_IR_SEC"}`,
       `정책: ${value.policy || "공개 자료만 수집합니다."}`,
       needsBodyLines.length ? `` : "",
       needsBodyLines.length ? `본문 보강 대상` : "",
       ...needsBodyLines,
       duplicateTitleLines.length ? `` : "",
-      duplicateTitleLines.length ? `동일 제목 보강 그룹` : "",
+      duplicateTitleLines.length ? `동일 공시 보강 그룹` : "",
       ...duplicateTitleLines,
+      repeatedTitleLines.length ? `` : "",
+      repeatedTitleLines.length ? `반복 제목 보강 그룹` : "",
+      ...repeatedTitleLines,
       ``,
       `Firecrawl IR 보조 수집`,
       `상태: ${firecrawl.status || "미확인"} · enabled=${firecrawl.enabled === true ? "true" : "false"} · dry-run=${firecrawl.dry_run === false ? "false" : "true"}`,

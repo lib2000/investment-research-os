@@ -360,6 +360,41 @@ def _needs_body_duplicate_title_groups(entries: list[dict[str, Any]], limit: int
     return groups[: max(1, min(limit, 50))]
 
 
+def _needs_body_repeated_title_groups(entries: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for entry in entries:
+        ticker = str(entry.get("ticker") or "").upper()
+        title = str(entry.get("title") or entry.get("file_name") or "").strip()
+        if not title:
+            continue
+        grouped.setdefault((ticker, title), []).append(entry)
+
+    groups: list[dict[str, Any]] = []
+    for (ticker, title), group_entries in grouped.items():
+        if len(group_entries) < 2:
+            continue
+        filing_keys: list[str] = []
+        for entry in group_entries:
+            filing_key = str(entry.get("published_at") or entry.get("source_url") or entry.get("final_url") or "").strip()
+            if filing_key and filing_key not in filing_keys:
+                filing_keys.append(filing_key)
+        groups.append(
+            {
+                "ticker": ticker,
+                "title": title,
+                "count": len(group_entries),
+                "filing_keys": filing_keys[: max(1, min(limit, 50))],
+                "file_names": [
+                    str(item.get("file_name") or "")
+                    for item in group_entries[: max(1, min(limit, 50))]
+                    if item.get("file_name")
+                ],
+            }
+        )
+    groups.sort(key=lambda item: (-int(item["count"]), str(item["ticker"]), str(item["title"])))
+    return groups[: max(1, min(limit, 50))]
+
+
 def _body_followup_reason(entry: dict[str, Any]) -> dict[str, Any]:
     quality = entry.get("capture_quality") if isinstance(entry.get("capture_quality"), dict) else {}
     source = entry.get("source_url_processing") if isinstance(entry.get("source_url_processing"), dict) else {}
@@ -420,6 +455,7 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         for entry in needs_body[: max(1, min(limit, 50))]
     ]
     needs_body_duplicate_title_groups = _needs_body_duplicate_title_groups(needs_body, limit=limit)
+    needs_body_repeated_title_groups = _needs_body_repeated_title_groups(needs_body, limit=limit)
     next_actions = [
         "공개 IR/SEC URL을 입력해 보유/관심 종목과 연결되는 자료를 수집하세요.",
         "URL-only 자료는 원문 링크 확인 또는 파일/본문 복사로 보강하세요.",
@@ -439,6 +475,8 @@ def public_ir_sec_status_payload(settings: Any, limit: int = 10) -> dict[str, An
         "needs_body_copy_entries": needs_body_preview,
         "needs_body_duplicate_title_group_count": len(needs_body_duplicate_title_groups),
         "needs_body_duplicate_title_groups": needs_body_duplicate_title_groups,
+        "needs_body_repeated_title_group_count": len(needs_body_repeated_title_groups),
+        "needs_body_repeated_title_groups": needs_body_repeated_title_groups,
         "policy": "공개 IR/SEC 자료만 수집하고 제한 자료는 URL/메타데이터 중심으로 보관합니다.",
         "firecrawl_ir": build_firecrawl_ir_readiness_status(settings),
         "firecrawl_monitor": build_firecrawl_monitor_readiness_status(settings),

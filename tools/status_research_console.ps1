@@ -458,12 +458,28 @@ if ($publicIrSecStatus) {
   } else {
     0
   }
-  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건, 동일 제목 그룹 $($needsBodyDuplicateTitleGroupCount)개"
+  $needsBodyRepeatedTitleGroups = if ($publicIrSecStatus.needs_body_repeated_title_groups) {
+    @($publicIrSecStatus.needs_body_repeated_title_groups | ForEach-Object { $_ })
+  } else {
+    @()
+  }
+  $needsBodyRepeatedTitleGroupCount = if ($publicIrSecStatus.needs_body_repeated_title_group_count) {
+    $publicIrSecStatus.needs_body_repeated_title_group_count
+  } else {
+    0
+  }
+  Write-Host "공개 IR/SEC: 전체 $($publicIrSecStatus.entry_count)건, 본문 보강 플래그 $($publicIrSecStatus.needs_body_copy_count)건, 동일 공시 그룹 $($needsBodyDuplicateTitleGroupCount)개, 반복 제목 그룹 $($needsBodyRepeatedTitleGroupCount)개"
   foreach ($group in $needsBodyDuplicateTitleGroups | Select-Object -First 3) {
     $groupTitle = Limit-StatusText -Text $group.title -MaxLength 80
     $groupFiles = @($group.file_names) | Where-Object { $_ } | ForEach-Object { Limit-StatusText -Text $_ -MaxLength 80 }
     $groupFileLabel = if ($groupFiles.Count -gt 0) { " | files " + (($groupFiles | Select-Object -First 2) -join ", ") } else { "" }
-    Write-Host "공개 IR/SEC 동일 제목: $($group.ticker) | $($group.count)건 | $groupTitle$groupFileLabel"
+    Write-Host "공개 IR/SEC 동일 공시: $($group.ticker) | $($group.count)건 | $groupTitle$groupFileLabel"
+  }
+  foreach ($group in $needsBodyRepeatedTitleGroups | Select-Object -First 3) {
+    $groupTitle = Limit-StatusText -Text $group.title -MaxLength 80
+    $filingKeys = @($group.filing_keys) | Where-Object { $_ } | ForEach-Object { Limit-StatusText -Text $_ -MaxLength 30 }
+    $filingLabel = if ($filingKeys.Count -gt 0) { " | 기준 " + (($filingKeys | Select-Object -First 3) -join ", ") } else { "" }
+    Write-Host "공개 IR/SEC 반복 제목: $($group.ticker) | $($group.count)건 | $groupTitle$filingLabel"
   }
   foreach ($entry in $needsBodyEntries | Select-Object -First 3) {
     $entryTitle = if ($entry.title) { $entry.title } elseif ($entry.file_name) { $entry.file_name } else { "제목 미확인" }

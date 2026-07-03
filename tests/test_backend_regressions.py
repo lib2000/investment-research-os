@@ -283,7 +283,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("clickAndWaitForStart", smoke_source)
         self.assertIn("needs_body_copy_entries", smoke_source)
         self.assertIn("needs_body_duplicate_title_groups", smoke_source)
-        self.assertIn("동일 제목 보강 그룹", smoke_source)
+        self.assertIn("needs_body_repeated_title_groups", smoke_source)
+        self.assertIn("동일 공시 보강 그룹", smoke_source)
+        self.assertIn("반복 제목 보강 그룹", smoke_source)
 
     def test_console_public_ir_sec_status_lists_body_followups(self):
         console_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
@@ -292,8 +294,10 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
         self.assertIn("needs_body_copy_entries", console_source)
         self.assertIn("needs_body_duplicate_title_groups", console_source)
+        self.assertIn("needs_body_repeated_title_groups", console_source)
         self.assertIn("본문 보강 대상", console_source)
-        self.assertIn("동일 제목 보강 그룹", console_source)
+        self.assertIn("동일 공시 보강 그룹", console_source)
+        self.assertIn("반복 제목 보강 그룹", console_source)
 
     def test_windows_smoke_wrapper_exposes_public_ir_sec_utf8_mode(self):
         smoke_path = PROJECT_ROOT / "tools" / "smoke_research_console_windows.ps1"
@@ -377,13 +381,19 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("needs_body_copy_entries", script_source)
         self.assertIn("needs_body_duplicate_title_group_count", script_source)
         self.assertIn("needs_body_duplicate_title_groups", script_source)
+        self.assertIn("needs_body_repeated_title_group_count", script_source)
+        self.assertIn("needs_body_repeated_title_groups", script_source)
         self.assertIn("$group.file_names", script_source)
         self.assertIn("files ", script_source)
+        self.assertIn("$group.filing_keys", script_source)
         self.assertIn("body_followup", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
         self.assertIn("ForEach-Object", script_source)
         self.assertIn("본문 보강 플래그", script_source)
-        self.assertIn("공개 IR/SEC 동일 제목", script_source)
+        self.assertIn("동일 공시 그룹", script_source)
+        self.assertIn("반복 제목 그룹", script_source)
+        self.assertIn("공개 IR/SEC 동일 공시", script_source)
+        self.assertIn("공개 IR/SEC 반복 제목", script_source)
         self.assertIn("공개 IR/SEC 보강 대상", script_source)
         console_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(encoding="utf-8")
         style_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "styles.css").read_text(encoding="utf-8")
@@ -4711,6 +4721,13 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["ticker"], "OTLY")
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["count"], 2)
         self.assertEqual(status["needs_body_duplicate_title_groups"][0]["filing_key"], "2026-05-20")
+        self.assertEqual(status["needs_body_repeated_title_group_count"], 1)
+        self.assertEqual(status["needs_body_repeated_title_groups"][0]["ticker"], "OTLY")
+        self.assertEqual(status["needs_body_repeated_title_groups"][0]["count"], 3)
+        self.assertEqual(
+            status["needs_body_repeated_title_groups"][0]["filing_keys"],
+            ["2026-05-20", "2026-04-27"],
+        )
         self.assertEqual(
             status["needs_body_duplicate_title_groups"][0]["source_urls"],
             ["https://www.sec.gov/a", "https://www.sec.gov/b"],
