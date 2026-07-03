@@ -29,6 +29,15 @@ def safe_rag_memory_status(runtime: AutomationStatusRuntime, vault_dir: Path) ->
         }
 
 
+def optional_int(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_external_source_schedule_status(runtime: AutomationStatusRuntime, settings) -> list[dict]:
     return automation_schedule_status.build_external_source_schedule_status(runtime, settings)
 
@@ -191,6 +200,9 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0,
     )
     duplicate_review_count = int(duplicate_review.get("duplicate_entry_count") or 0) if isinstance(duplicate_review, dict) else 0
+    duplicate_refresh_candidate_count = (
+        optional_int(refresh_queue.get("candidate_count")) if isinstance(refresh_queue, dict) else None
+    )
     failed_count = int(status.get("failed_count") or 0)
     target_count = int(board.get("target_count") or 0)
     dossier_count = int(status.get("dossier_count") or 0)
@@ -287,6 +299,7 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         dart_daily=dart_daily,
         daily_recommendations_due=daily_recommendations_due,
         daily_recommendations=daily_recommendations,
+        duplicate_refresh_candidate_count=duplicate_refresh_candidate_count,
     )
     nps_rebalance_plan: dict = {}
     if nps_allocation.get("status") in {"above_target", "below_target"} and hasattr(

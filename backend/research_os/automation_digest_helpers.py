@@ -125,13 +125,18 @@ def build_dashboard_next_actions(
     dart_daily: dict,
     daily_recommendations_due: bool,
     daily_recommendations: dict,
+    duplicate_refresh_candidate_count: int | None = None,
 ) -> list[str]:
     next_actions = []
     if not target_count:
         next_actions.append("포트폴리오나 관심목록을 저장해 자동 수집 대상을 먼저 구성하세요.")
     if not daily_brief_date:
         next_actions.append("오늘 리서치 업데이트를 실행해 일일 브리핑을 생성하세요.")
-    if duplicate_count:
+    if duplicate_count and duplicate_refresh_candidate_count == 0:
+        next_actions.append(
+            f"중복 의심 자료 {duplicate_count}개는 대표 자료 정책으로 Dossier/추천 근거에서 제외됐고, 재합성 후보는 없습니다."
+        )
+    elif duplicate_count:
         next_actions.append(f"중복 의심 자료 {duplicate_count}개를 Dossier 합성에서 묶어 확인하세요.")
     if failed_count:
         next_actions.append(f"자동화 실패 {failed_count}건의 API/소스 상태를 점검하세요.")
