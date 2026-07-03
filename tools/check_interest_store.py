@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -47,12 +48,25 @@ def normalized(value: Any) -> str:
     return str(value or "").replace(" ", "").strip().lower()
 
 
+def item_market(item: dict[str, Any]) -> str:
+    market = str(item.get("market") or item.get("region") or "").strip().upper()
+    ticker = item_ticker(item)
+    if market in {"KR", "KOREA", "한국", "국내"}:
+        return "KR"
+    if market in {"US", "USA", "UNITED STATES", "미국"}:
+        return "US"
+    if ticker.isdigit() and len(ticker) == 6:
+        return "KR"
+    return "US"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="관심종목/관심섹터 저장 품질을 점검합니다.")
     parser.add_argument("--store", type=Path, default=None, help="interest_list.json 경로")
     parser.add_argument("--min-tickers", type=int, default=1, help="최소 관심종목 수")
     parser.add_argument("--min-sectors", type=int, default=0, help="최소 관심섹터 수")
     parser.add_argument("--required-names", default=DEFAULT_REQUIRED_NAMES, help="쉼표로 구분한 필수 회사명")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -93,6 +107,8 @@ def main() -> int:
     if missing_names:
         errors.append(f"필수 관심종목 누락: {', '.join(missing_names)}")
 
+    ticker_market_counts = Counter(item_market(item) for item in tickers)
+    sector_region_counts = Counter(str(item.get("region") or "미확인").strip() or "미확인" for item in sectors)
     for item in sectors:
         name = str(item.get("name") or "").strip()
         if not name:
@@ -101,6 +117,39 @@ def main() -> int:
             errors.append(f"지역 누락 관심섹터: {name or item}")
         if not item.get("updated_at"):
             errors.append(f"updated_at 누락 관심섹터: {name or item}")
+
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "store_path": str(store),
+        "ticker_count": len(tickers),
+        "sector_count": len(sectors),
+        "ticker_market_counts": dict(sorted(ticker_market_counts.items())),
+        "sector_region_counts": dict(sorted(sector_region_counts.items())),
+        "duplicate_tickers": duplicate_tickers,
+        "missing_required_names": missing_names,
+        "sample_tickers": [
+            {
+                "company_name": item_company_name(item),
+                "ticker": item_ticker(item),
+                "market": item_market(item),
+                "priority": item.get("priority"),
+            }
+            for item in tickers[: max(0, 12)]
+        ],
+        "sectors": [
+            {
+                "name": item.get("name"),
+                "region": item.get("region"),
+                "updated_at": item.get("updated_at"),
+            }
+            for item in sectors
+        ],
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
 
     print(f"저장 파일: {store}")
     print(f"관심종목: {len(tickers)}개 | 관심섹터: {len(sectors)}개")

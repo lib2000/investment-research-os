@@ -751,6 +751,17 @@ class PortfolioAnalysisCoverageCheckToolTests(unittest.TestCase):
         self.assertIn('"status"', source)
 
 
+class InterestStoreCheckToolTests(unittest.TestCase):
+    def test_interest_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_interest_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"ticker_market_counts"', source)
+        self.assertIn('"sector_region_counts"', source)
+        self.assertIn('"sample_tickers"', source)
+        self.assertIn("def item_market", source)
+
+
 class StorageQualityStoreCheckToolTests(unittest.TestCase):
     def test_storage_quality_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_storage_quality_store.py").read_text(encoding="utf-8")
