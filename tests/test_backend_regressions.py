@@ -786,8 +786,9 @@ class JsonContractsCheckToolTests(unittest.TestCase):
         result = tool.build_result()
 
         self.assertEqual(result["status"], "success")
-        self.assertGreaterEqual(result["tool_count"], 45)
+        self.assertGreaterEqual(result["tool_count"], 47)
         self.assertEqual(result["failed_count"], 0)
+        self.assertIn("tools\\analyze_code_diff_impact.py", {item["path"] for item in result["results"]})
 
     def test_json_contracts_check_supports_json_output_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_json_contracts.py").read_text(encoding="utf-8")
@@ -3294,6 +3295,39 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(tool.fallback_flow_ids("docs/new-note.md"), {"backend_module_health"})
         self.assertEqual(tool.fallback_flow_ids("backend/main.py"), {"portfolio_realtime", "backend_module_health"})
         self.assertEqual(tool.fallback_flow_ids("backend/.env.example"), {"source_automation", "backend_module_health"})
+
+    def test_code_diff_impact_builds_json_ready_result(self):
+        tool = load_code_diff_impact_tool()
+        graph = {
+            "nodes": [{"type": "file", "path": "backend/research_os/daily_recommendation_store.py"}],
+            "flows": [
+                {
+                    "id": "daily_recommendations",
+                    "label": "매일 추천",
+                    "expected_files": ["backend/research_os/daily_recommendation_store.py"],
+                    "sample_files": [],
+                    "keyword_hits": [],
+                }
+            ],
+        }
+
+        with (
+            patch.object(tool, "load_graph", return_value=graph),
+            patch.object(tool, "changed_files", return_value=["backend/research_os/daily_recommendation_store.py"]),
+        ):
+            result = tool.build_impact_result(Path("C:/tmp/project"), base=None, graph_path=Path("graph.json"), refresh=False, strict=True)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["changed_file_count"], 1)
+        self.assertEqual(result["impacted_flow_ids"], ["daily_recommendations"])
+        self.assertEqual(result["file_impacts"][0]["flow_labels"], ["매일 추천"])
+
+    def test_code_diff_impact_check_supports_json_output_contract(self):
+        source = (PROJECT_ROOT / "tools" / "analyze_code_diff_impact.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('"impacted_flow_ids"', source)
 
     def test_backend_module_health_flags_missing_simplenamespace_dependency(self):
         from tools import check_backend_module_health

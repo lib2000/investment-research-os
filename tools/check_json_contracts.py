@@ -10,6 +10,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = PROJECT_ROOT / "tools"
+EXTRA_TOOL_PATHS = [TOOLS_DIR / "analyze_code_diff_impact.py"]
 
 
 def check_tool_source(path: Path) -> dict:
@@ -50,7 +51,8 @@ def check_tool_source(path: Path) -> dict:
 
 
 def build_result() -> dict:
-    results = [check_tool_source(path) for path in sorted(TOOLS_DIR.glob("check_*.py"))]
+    tool_paths = sorted({*TOOLS_DIR.glob("check_*.py"), *EXTRA_TOOL_PATHS})
+    results = [check_tool_source(path) for path in tool_paths]
     failed = [item for item in results if item["status"] != "success"]
     return {
         "status": "success" if not failed else "failure",

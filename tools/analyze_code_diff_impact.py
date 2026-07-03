@@ -117,53 +117,96 @@ def impacted_flows(graph: dict, path: str) -> list[dict]:
     return [flow_by_id[flow_id] for flow_id in sorted(hit_ids) if flow_id in flow_by_id]
 
 
+def build_impact_result(root: Path, *, base: str | None, graph_path: Path, refresh: bool, strict: bool) -> dict:
+    graph = load_graph(root, graph_path, refresh=refresh)
+    files = changed_files(root, base)
+    known_files = file_nodes(graph)
+    relevant = [path for path in files if path == "README.md" or path.startswith(("backend/", "mobile_app/", "tools/", "scripts/", "docs/"))]
+    unmapped = [path for path in relevant if path not in known_files and not fallback_flow_ids(path)]
+    flow_hits: dict[str, dict] = {}
+    file_impacts: list[dict] = []
+    for path in relevant:
+        hits = impacted_flows(graph, path)
+        file_impacts.append(
+            {
+                "path": path,
+                "flow_ids": [str(flow.get("id")) for flow in hits],
+                "flow_labels": [str(flow.get("label") or flow.get("id")) for flow in hits],
+                "mapped": bool(hits),
+                "unmapped": path in unmapped,
+            }
+        )
+        for flow in hits:
+            flow_hits[str(flow.get("id"))] = flow
+    recommendations = [
+        {
+            "flow_id": flow_id,
+            "label": str(flow_hits[flow_id].get("label") or flow_id),
+            "hint": FLOW_IMPACT_HINTS.get(flow_id, "관련 기능을 수동/스모크로 재검증하세요."),
+        }
+        for flow_id in sorted(flow_hits)
+    ]
+    status = "failure" if strict and unmapped else "success"
+    return {
+        "status": status,
+        "project_root": str(root),
+        "base": base,
+        "graph_path": str(graph_path),
+        "changed_file_count": len(files),
+        "relevant_file_count": len(relevant),
+        "unmapped_count": len(unmapped),
+        "unmapped_files": unmapped,
+        "impacted_flow_count": len(flow_hits),
+        "impacted_flow_ids": sorted(flow_hits),
+        "file_impacts": file_impacts,
+        "recommendations": recommendations,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="코드 변경이 어떤 운영 흐름에 영향을 주는지 점검합니다.")
     parser.add_argument("--base", help="비교 기준 ref. 생략하면 워킹트리 diff를 사용합니다.")
     parser.add_argument("--graph", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--refresh", action="store_true", help="분석 전에 코드 지식 그래프를 다시 생성합니다.")
     parser.add_argument("--strict", action="store_true", help="그래프에 매핑되지 않은 코드 변경이 있으면 실패합니다.")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
-    graph = load_graph(root, args.graph, refresh=args.refresh)
-    files = changed_files(root, args.base)
-    known_files = file_nodes(graph)
-    relevant = [path for path in files if path == "README.md" or path.startswith(("backend/", "mobile_app/", "tools/", "scripts/", "docs/"))]
-    unmapped = [path for path in relevant if path not in known_files and not fallback_flow_ids(path)]
-    flow_hits: dict[str, dict] = {}
-    file_impacts: list[tuple[str, list[dict]]] = []
-    for path in relevant:
-        hits = impacted_flows(graph, path)
-        file_impacts.append((path, hits))
-        for flow in hits:
-            flow_hits[str(flow.get("id"))] = flow
+    result = build_impact_result(
+        root,
+        base=args.base,
+        graph_path=args.graph,
+        refresh=args.refresh,
+        strict=args.strict,
+    )
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] == "success" else 1
 
     print(f"프로젝트 루트: {root}")
-    print(f"변경 파일: {len(files)}개 / 분석 대상: {len(relevant)}개")
-    if not relevant:
+    print(f"변경 파일: {result['changed_file_count']}개 / 분석 대상: {result['relevant_file_count']}개")
+    if not result["file_impacts"]:
         print("분석 대상 코드/문서 변경이 없습니다.")
         return 0
     print("\n파일별 영향")
-    for path, hits in file_impacts:
-        if hits:
-            labels = ", ".join(str(flow.get("label") or flow.get("id")) for flow in hits)
-            print(f"- {path}: {labels}")
+    for impact in result["file_impacts"]:
+        if impact["flow_labels"]:
+            print(f"- {impact['path']}: {', '.join(impact['flow_labels'])}")
         else:
-            marker = "그래프 매핑 없음" if path in unmapped else "직접 연결 흐름 없음"
-            print(f"- {path}: {marker}")
+            marker = "그래프 매핑 없음" if impact["unmapped"] else "직접 연결 흐름 없음"
+            print(f"- {impact['path']}: {marker}")
     print("\n운영 흐름별 재검증 권장")
-    if flow_hits:
-        for flow_id in sorted(flow_hits):
-            flow = flow_hits[flow_id]
-            print(f"- {flow.get('label') or flow_id}: {FLOW_IMPACT_HINTS.get(flow_id, '관련 기능을 수동/스모크로 재검증하세요.')}")
+    if result["recommendations"]:
+        for item in result["recommendations"]:
+            print(f"- {item['label']}: {item['hint']}")
     else:
         print("- 직접 매핑된 운영 흐름이 없습니다. 변경 파일의 개별 테스트를 우선 실행하세요.")
-    if unmapped:
+    if result["unmapped_files"]:
         print("\n주의: 코드 지식 그래프에 아직 매핑되지 않은 파일")
-        for path in unmapped:
+        for path in result["unmapped_files"]:
             print(f"- {path}")
-        if args.strict:
+        if result["status"] != "success":
             return 1
     return 0
 
