@@ -10,7 +10,7 @@ from typing import Any
 
 
 DEFAULT_STORE = Path("research_vault/_system/interest_list.json")
-DEFAULT_REQUIRED_NAMES = "성호전자,RF머트리얼즈,LG디스플레이"
+DEFAULT_REQUIRED_NAMES = ""
 
 
 def project_root(start: Path) -> Path:

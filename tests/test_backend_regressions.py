@@ -851,6 +851,8 @@ class InterestStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"sector_region_counts"', source)
         self.assertIn('"sample_tickers"', source)
         self.assertIn("def item_market", source)
+        self.assertIn('DEFAULT_REQUIRED_NAMES = ""', source)
+        self.assertNotIn("성호전자,RF머트리얼즈,LG디스플레이", source)
 
 
 class InvestmentCalendarStoreCheckToolTests(unittest.TestCase):
