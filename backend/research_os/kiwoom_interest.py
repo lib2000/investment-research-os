@@ -294,15 +294,15 @@ def build_kiwoom_interest_sync_preview(
             already_tracked = bool(ticker and ticker in existing_tickers)
             standard_domestic_stock = is_standard_domestic_stock_ticker(ticker)
             buy_group = is_kiwoom_buy_interest_group(group_name)
-            if already_tracked:
-                action = "already_tracked"
-                reason = "이미 로컬 관심종목에 등록되어 있습니다."
-            elif not standard_domestic_stock:
+            if not standard_domestic_stock:
                 action = "needs_review"
                 reason = "키움 국내 6자리 종목/상품 코드 형식이 아니라 자동 저장 전 확인이 필요합니다."
             elif not buy_group:
                 action = "needs_review"
                 reason = "매수 관심그룹이 아니라 자동 저장 대상에서 제외했습니다."
+            elif already_tracked:
+                action = "already_tracked"
+                reason = "이미 로컬 관심종목에 등록되어 있습니다."
             else:
                 action = "add_candidate"
                 reason = "키움 매수 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
@@ -326,6 +326,7 @@ def build_kiwoom_interest_sync_preview(
     add_candidates = [item for item in candidates if item.get("action") == "add_candidate"]
     already_tracked = [item for item in candidates if item.get("action") == "already_tracked"]
     needs_review = [item for item in candidates if item.get("action") == "needs_review"]
+    outside_buy_group = [item for item in candidates if not item.get("buy_group")]
     return {
         "status": "success",
         "module": "kiwoom_interest_sync_preview",
@@ -335,6 +336,7 @@ def build_kiwoom_interest_sync_preview(
         "add_candidate_count": len(add_candidates),
         "already_tracked_count": len(already_tracked),
         "needs_review_count": len(needs_review),
+        "outside_buy_group_count": len(outside_buy_group),
         "candidates": candidates,
         "next_action": (
             "추가 후보를 검토한 뒤 /api/v1/interests/tickers 또는 콘솔 관심종목 저장으로 반영하세요."

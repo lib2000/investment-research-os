@@ -16344,10 +16344,12 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
                     }
                 ]
             },
-            {"tickers": []},
+            {"tickers": [{"ticker": "005930", "company_name": "삼성전자"}]},
         )
         self.assertEqual(non_buy_preview["add_candidate_count"], 0)
+        self.assertEqual(non_buy_preview["already_tracked_count"], 0)
         self.assertEqual(non_buy_preview["needs_review_count"], 1)
+        self.assertEqual(non_buy_preview["outside_buy_group_count"], 1)
         self.assertFalse(non_buy_preview["candidates"][0]["buy_group"])
         self.assertEqual(non_buy_preview["candidates"][0]["action"], "needs_review")
         self.assertIn("매수 관심그룹이 아니라", non_buy_preview["candidates"][0]["reason"])
