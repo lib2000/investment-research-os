@@ -762,6 +762,17 @@ class RagFailureDiagnosticsCheckToolTests(unittest.TestCase):
         self.assertIn('"truncated_issue_count"', source)
 
 
+class DailyRecommendationsStoreCheckToolTests(unittest.TestCase):
+    def test_daily_recommendations_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_daily_recommendations_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"latest_recommendation_date"', source)
+        self.assertIn('"latest_market_counts"', source)
+        self.assertIn('"policy_alignment"', source)
+        self.assertIn('"latest_rows"', source)
+
+
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
         tool = load_operational_readiness_tool()

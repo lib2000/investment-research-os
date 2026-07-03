@@ -470,6 +470,7 @@ def main() -> int:
     parser.add_argument("--max-baseline-age-hours", type=float, default=24.0, help="기준가 조회 시각 최신성 기준")
     parser.add_argument("--daily-time", default="08:00", help="매일 추천 생성 예정 시각. 이 시각 전에는 전일 추천의 기준가 허용 시간을 넓힙니다.")
     parser.add_argument("--skip-all-date-integrity", action="store_true", help="전체 추천 이력의 날짜별 1~3위 무결성 점검을 건너뜁니다.")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -661,6 +662,58 @@ def main() -> int:
                     errors.append("근거 보강 큐 completed_count 누락")
             if not str(repair_status.get("storage_path") or "").strip():
                 errors.append("근거 보강 큐 저장 경로 누락")
+
+    latest_rows: list[dict[str, Any]] = []
+    for record in latest[: args.min_latest]:
+        evidence = non_empty_strings(record.get("evidence_sources"))
+        evidence_quality = record.get("evidence_quality_summary") if isinstance(record.get("evidence_quality_summary"), dict) else {}
+        profile = record.get("investment_direction_profile") if isinstance(record.get("investment_direction_profile"), dict) else {}
+        profile_themes = profile.get("themes") if isinstance(profile.get("themes"), list) else []
+        latest_rows.append(
+            {
+                "market": record_market(record),
+                "rank": record_rank(record),
+                "ticker": record.get("ticker"),
+                "company_name": record.get("company_name"),
+                "score": record.get("score"),
+                "score_component_count": len(record.get("score_components") or []),
+                "evidence_count": len(evidence),
+                "evidence_category_count": len(evidence_category_names(evidence)),
+                "evidence_quality_grade": evidence_quality.get("grade"),
+                "evidence_quality_score": evidence_quality.get("score"),
+                "tracking_milestone_count": len(record.get("tracking_milestones") or []),
+                "next_tracking": nearest_milestone_label(record),
+                "investment_direction_labels": [
+                    str(theme.get("label") or theme.get("key") or "").strip()
+                    for theme in profile_themes
+                    if isinstance(theme, dict) and str(theme.get("label") or theme.get("key") or "").strip()
+                ],
+            }
+        )
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "store_path": str(store),
+        "state_path": str(state_path),
+        "repair_status_path": str(repair_status_path) if args.require_repair_queue_status else None,
+        "schedule_status": state.get("status"),
+        "last_run_date": state.get("last_run_date"),
+        "last_tracking_date": state.get("last_tracking_date"),
+        "selected_count": state.get("selected_count"),
+        "record_count": len(records),
+        "counts_by_date": dict(sorted(counts.items())),
+        "latest_recommendation_date": latest_date,
+        "latest_age_days": latest_age_days,
+        "latest_count": len(latest),
+        "latest_market_counts": dict(latest_by_market),
+        "baseline_limit_hours": baseline_limit_hours,
+        "policy_alignment": policy_alignment,
+        "latest_rows": latest_rows,
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
 
     print(f"저장 파일: {store}")
     print(f"상태 파일: {state_path}")
