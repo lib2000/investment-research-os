@@ -2694,6 +2694,13 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
 
 
 class PortfolioChangeDetectionTests(unittest.TestCase):
+    def test_portfolio_change_detection_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_portfolio_change_detection.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('status == "success"', source)
+
     def test_portfolio_change_detection_tracks_health_stance_and_confidence_changes(self):
         from research_os.portfolio_change_detection import detect_portfolio_changes
 
@@ -3023,6 +3030,13 @@ class DeepSeekIrAnalysisTests(unittest.TestCase):
 
 
 class PortfolioBriefContractTests(unittest.TestCase):
+    def test_portfolio_brief_contract_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_portfolio_brief_contract.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('result.get("status") == "success"', source)
+
     def test_portfolio_brief_contract_builds_ir_and_health_payloads(self):
         from research_os.deepseek_ir_analysis import build_deepseek_ir_analysis_payload
         from research_os.firecrawl_ir_collector import build_firecrawl_ir_signal_payload
@@ -3061,6 +3075,13 @@ class PortfolioBriefContractTests(unittest.TestCase):
 
 
 class PortfolioSignalScoreTests(unittest.TestCase):
+    def test_portfolio_signal_score_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_portfolio_signal_score.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn('result.get("status") == "success"', source)
+
     def test_portfolio_signal_score_integrates_ir_earnings_sec_and_dart(self):
         from research_os.portfolio_signal_score import build_portfolio_signal_scores
 

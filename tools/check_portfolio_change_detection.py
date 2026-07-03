@@ -62,6 +62,7 @@ def main() -> int:
     parser.add_argument("--output-json", type=Path, help="변화 감지 결과를 JSON으로 저장")
     parser.add_argument("--score-threshold", type=float, default=0.3)
     parser.add_argument("--confidence-threshold", type=float, default=0.1)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     if bool(args.previous_json) != bool(args.current_json):
@@ -80,6 +81,10 @@ def main() -> int:
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
     status = result.get("status") or "unknown"
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if status == "success" else 1
+
     print(f"[{status}] {DESIGN_NAME}")
     print(f"- previous_as_of: {result.get('previous_as_of') or 'sample'}")
     print(f"- current_as_of: {result.get('current_as_of') or 'sample'}")

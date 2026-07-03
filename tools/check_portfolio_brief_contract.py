@@ -58,6 +58,7 @@ def main() -> int:
     parser.add_argument("--analysis-json", type=Path, help="DeepSeek analysis payload list/wrapper JSON")
     parser.add_argument("--as-of", default="2026-06-19T08:00:00+09:00")
     parser.add_argument("--output-json", type=Path, help="brief batch 결과 저장")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     if args.analysis_json:
@@ -80,6 +81,9 @@ def main() -> int:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("status") == "success" else 1
 
     print(f"[{result.get('status')}] {DESIGN_NAME}")
     print(f"- brief_count: {result.get('brief_count')}")

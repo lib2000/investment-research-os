@@ -39,6 +39,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="IR/Earnings/SEC/DART 통합 포트폴리오 점수 계약을 점검합니다.")
     parser.add_argument("--input-json", type=Path, help="signal item JSON")
     parser.add_argument("--output-json", type=Path, help="score 결과 저장")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     signals = read_signals(args.input_json) if args.input_json else sample_signals()
@@ -47,6 +48,9 @@ def main() -> int:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("status") == "success" else 1
 
     print(f"[{result.get('status')}] {DESIGN_NAME}")
     print(f"- signal_count: {result.get('signal_count')}")
