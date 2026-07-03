@@ -911,6 +911,32 @@ class DailyRecommendationsStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"policy_alignment"', source)
         self.assertIn('"latest_rows"', source)
 
+    def test_daily_recommendations_store_accepts_public_ir_sec_evidence_documents(self):
+        from tools import check_daily_recommendations_store as tool
+
+        errors: list[str] = []
+        tool.validate_score_evidence_alignment(
+            {
+                "company_name": "Oatly Group AB",
+                "score": 8,
+                "score_components": [{"label": "최근 공개 IR/SEC 반영", "points": 8}],
+                "score_explanation": {
+                    "positive_points": 8,
+                    "penalty_points": 0,
+                    "final_score": 8,
+                    "component_weights": [{"label": "최근 공개 IR/SEC 반영", "points": 8}],
+                },
+                "evidence_sources": ["RAG 연결 문서 37건"],
+                "evidence_documents": [{"source_type": "public_ir_sec", "title": "Oatly Group 6-K SEC filing"}],
+                "reasons": ["본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨"],
+                "quality_flags": [],
+                "risk_notes": [],
+            },
+            errors,
+        )
+
+        self.assertEqual(errors, [])
+
 
 class RagSynthesisStoreCheckToolTests(unittest.TestCase):
     def test_rag_synthesis_store_check_supports_json_result_contract(self):
@@ -6182,10 +6208,11 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(summary["market_counts"], {"KR": 1, "US": 2})
         self.assertEqual(summary["latest_session_date"], "2026-06-18")
         self.assertEqual(summary["sample_targets"], ["AAPL", "AI"])
+        self.assertEqual(summary["unlinked_samples"], ["MSFT"])
         formatted = check_research_source_store.format_market_journal_impact(summary)
         self.assertIn("매칭 3건", formatted)
         self.assertIn("연결률 66.7%", formatted)
-        self.assertIn("미연결 1개", formatted)
+        self.assertIn("미연결 1개(샘플 MSFT)", formatted)
         self.assertIn("티커 1/2, 섹터 1/1", formatted)
         self.assertIn(
             "설명 같은 원본이라 중복 저장하지 않았습니다.",
@@ -6223,6 +6250,7 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn('"market_journal"', source)
         self.assertIn('"by_market"', source)
         self.assertIn('"impact"', source)
+        self.assertIn('"unlinked_samples"', source)
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main

@@ -186,9 +186,13 @@ def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
     linked_sector_count = 0
     match_count = 0
     samples: list[str] = []
+    unlinked_samples: list[str] = []
     for row, group in [(row, "ticker") for row in ticker_rows] + [(row, "sector") for row in sector_rows]:
         matches = [match for match in (row.get("market_journal_matches") or []) if isinstance(match, dict)]
         if not matches:
+            label = str(row.get("ticker") or row.get("name") or row.get("company_name") or "").strip()
+            if label and len(unlinked_samples) < 10:
+                unlinked_samples.append(label)
             continue
         linked_target_count += 1
         if group == "ticker":
@@ -220,6 +224,7 @@ def market_journal_impact_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "market_counts": dict(sorted(market_counts.items())),
         "latest_session_date": latest_session_date,
         "sample_targets": samples,
+        "unlinked_samples": unlinked_samples,
     }
 
 
@@ -228,11 +233,13 @@ def format_market_journal_impact(summary: dict[str, Any]) -> str:
     market_label = ", ".join(f"{market}={count}" for market, count in market_counts.items()) or "시장 미확인"
     samples = summary.get("sample_targets") if isinstance(summary.get("sample_targets"), list) else []
     sample_label = ", ".join(str(item) for item in samples[:5]) or "없음"
+    unlinked_samples = summary.get("unlinked_samples") if isinstance(summary.get("unlinked_samples"), list) else []
+    unlinked_sample_label = ", ".join(str(item) for item in unlinked_samples[:5]) or "없음"
     ratio = float(summary.get("linked_target_ratio") or 0.0)
     return (
         f"대상 {summary.get('target_count', 0)}개 중 {summary.get('linked_target_count', 0)}개 연결"
         f"(연결률 {ratio:.1%}) | "
-        f"미연결 {summary.get('unlinked_target_count', 0)}개 | "
+        f"미연결 {summary.get('unlinked_target_count', 0)}개(샘플 {unlinked_sample_label}) | "
         f"티커 {summary.get('linked_ticker_count', 0)}/{summary.get('ticker_target_count', 0)}, "
         f"섹터 {summary.get('linked_sector_count', 0)}/{summary.get('sector_target_count', 0)} | "
         f"매칭 {summary.get('match_count', 0)}건({market_label}) | "

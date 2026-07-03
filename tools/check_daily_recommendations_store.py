@@ -380,7 +380,13 @@ def validate_score_evidence_alignment(record: dict[str, Any], errors: list[str])
     if "최근 핵심 리포트 반영" in labels and "최근 1주 핵심 리포트" not in evidence:
         errors.append(f"{label} 최근 리포트 점수와 근거 문구 불일치")
     if "최근 공개 IR/SEC 반영" in labels:
-        if "최근 1주 공개 IR/SEC" not in evidence:
+        public_ir_sec_documents = [
+            item
+            for item in (record.get("evidence_documents") or [])
+            if isinstance(item, dict)
+            and str(item.get("source_type") or item.get("report_type") or "").strip() == "public_ir_sec"
+        ]
+        if "최근 1주 공개 IR/SEC" not in evidence and not public_ir_sec_documents:
             errors.append(f"{label} 공개 IR/SEC 점수와 근거 문구 불일치")
         if "공개 IR/SEC" not in reasons:
             errors.append(f"{label} 공개 IR/SEC 점수의 추천 사유 누락")
