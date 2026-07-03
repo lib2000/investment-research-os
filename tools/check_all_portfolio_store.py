@@ -194,6 +194,7 @@ def main() -> int:
     parser.add_argument("--max-sync-age-hours", type=float, default=168.0, help="수동/해외 수량 동기화 확인 시각 실패 기준")
     parser.add_argument("--max-portfolio-age-hours", type=float, default=240.0, help="포트폴리오 updated_at 실패 기준")
     parser.add_argument("--stale-warning-age-hours", type=float, default=24.0, help="포트폴리오 갱신 권고를 표시할 기준")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -223,6 +224,22 @@ def main() -> int:
         )
         errors.extend(portfolio_errors)
         summaries.append(summary)
+
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "store_path": str(store),
+        "portfolio_count": len(summaries),
+        "total_holding_count": sum(int(summary.get("holdings") or 0) for summary in summaries),
+        "total_overseas_count": sum(int(summary.get("overseas") or 0) for summary in summaries),
+        "total_overseas_protected_count": sum(int(summary.get("protected") or 0) for summary in summaries),
+        "freshness_warning_count": sum(1 for summary in summaries if summary.get("freshness_warning")),
+        "summaries": summaries,
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
 
     print(f"저장 파일: {store}")
     print(f"포트폴리오 수: {len(summaries)}개")

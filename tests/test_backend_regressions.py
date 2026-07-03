@@ -726,6 +726,15 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"oldest_price_age_hours"', source)
         self.assertIn('"errors"', source)
 
+    def test_all_portfolio_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_all_portfolio_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"portfolio_count"', source)
+        self.assertIn('"total_holding_count"', source)
+        self.assertIn('"total_overseas_protected_count"', source)
+        self.assertIn('"freshness_warning_count"', source)
+
 
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
