@@ -71,6 +71,7 @@ def main() -> int:
     parser.add_argument("--output-json", type=Path, help="Telegram payload 결과 저장")
     parser.add_argument("--chat-id", default=None, help="실제 전송 없이 payload에 넣을 chat id")
     parser.add_argument("--max-message-chars", type=int, default=3600)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     env_chat_id, env_chat_source = default_telegram_chat_id()
@@ -86,6 +87,9 @@ def main() -> int:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0 if payload.get("status") == "success" and payload.get("text") else 1
 
     print(f"[{payload.get('status')}] {DESIGN_NAME}")
     print(f"- chat_id_configured: {payload.get('chat_id_configured')}")

@@ -159,6 +159,7 @@ def run_check(url: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Kiwoom interest console workflow QA")
     parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다. 기본 출력도 JSON입니다.")
     args = parser.parse_args()
     try:
         result = run_check(args.url)

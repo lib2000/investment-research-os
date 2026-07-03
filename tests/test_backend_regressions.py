@@ -2767,6 +2767,13 @@ class PortfolioChangeDetectionTests(unittest.TestCase):
 
 
 class TelegramBriefSenderTests(unittest.TestCase):
+    def test_telegram_brief_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_telegram_brief_sender.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(payload", source)
+        self.assertIn('payload.get("status") == "success"', source)
+
     def test_telegram_brief_check_tool_uses_env_chat_id(self):
         tool = load_telegram_brief_check_tool()
 
@@ -16077,6 +16084,13 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
 
 
 class KiwoomResearchOsIntegrationTests(unittest.TestCase):
+    def test_kiwoom_interest_console_workflow_check_supports_json_flag(self):
+        source = (PROJECT_ROOT / "tools" / "check_kiwoom_interest_console_workflow.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn("json.dumps(result", source)
+        self.assertIn("json.dumps({\"status\": \"failure\"", source)
+
     def test_kiwoom_interest_group_status_normalizes_groups_and_details(self):
         from research_os.kiwoom_interest import (
             build_kiwoom_interest_groups_status,
