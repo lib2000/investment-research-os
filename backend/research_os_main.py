@@ -12430,7 +12430,7 @@ def sync_kiwoom_interest_candidates(
                 {
                     "ticker": ticker,
                     "company_name": candidate.company_name,
-                    "reason": "일반 국내주식 6자리 코드가 아니라 자동 저장 전 확인이 필요합니다.",
+                    "reason": "키움 국내 6자리 종목/상품 코드 형식이 아니라 자동 저장 전 확인이 필요합니다.",
                 }
             )
             continue

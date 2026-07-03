@@ -7,6 +7,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from re import fullmatch
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -38,6 +39,13 @@ def load_json(path: Path, default: Any | None = None) -> Any:
 
 def normalized_ticker(value: Any) -> str:
     return str(value or "").strip().upper()
+
+
+def is_kiwoom_domestic_instrument(value: Any) -> bool:
+    ticker = normalized_ticker(value)
+    if ticker in {"", "UNKNOWN", "CASH"}:
+        return False
+    return bool(fullmatch(r"[0-9A-Z]{6}", ticker)) and any(ch.isdigit() for ch in ticker)
 
 
 def company_name(item: dict[str, Any]) -> str:
@@ -114,7 +122,10 @@ def build_report(root: Path) -> dict[str, Any]:
         if "kiwoom_interest_sync" in tags(item)
     ]
     kiwoom_codes = {normalized_ticker(item.get("ticker")) for item in kiwoom_tickers if item.get("ticker")}
-    nonstandard = sorted(code for code in kiwoom_codes if not (code.isdigit() and len(code) == 6))
+    unsupported_codes = sorted(code for code in kiwoom_codes if not is_kiwoom_domestic_instrument(code))
+    domestic_product_codes = sorted(
+        code for code in kiwoom_codes if is_kiwoom_domestic_instrument(code) and not (code.isdigit() and len(code) == 6)
+    )
 
     board = board_payload.get("payload") if isinstance(board_payload.get("payload"), dict) else board_payload
     ticker_targets = [
@@ -179,7 +190,7 @@ def build_report(root: Path) -> dict[str, Any]:
             stale_board = True
 
     return {
-        "status": "success" if not nonstandard and not missing_board_count and not stale_board else "needs_attention",
+        "status": "success" if not unsupported_codes and not missing_board_count and not stale_board else "needs_attention",
         "module": "kiwoom_interest_research_pipeline",
         "checked_at": datetime.now(ZoneInfo("Asia/Seoul")).isoformat(timespec="seconds"),
         "latest_kiwoom_sync": {
@@ -191,8 +202,10 @@ def build_report(root: Path) -> dict[str, Any]:
         "interest_store": {
             "total_ticker_count": len(tickers),
             "kiwoom_synced_ticker_count": len(kiwoom_codes),
-            "kiwoom_nonstandard_count": len(nonstandard),
-            "kiwoom_nonstandard_samples": nonstandard[:10],
+            "kiwoom_domestic_product_code_count": len(domestic_product_codes),
+            "kiwoom_domestic_product_code_samples": domestic_product_codes[:10],
+            "kiwoom_unsupported_code_count": len(unsupported_codes),
+            "kiwoom_unsupported_code_samples": unsupported_codes[:10],
             "kiwoom_group_counts": dict(sorted(group_counts.items())),
         },
         "collection_board": {
@@ -241,7 +254,7 @@ def main() -> int:
     else:
         print(f"상태: {report['status']} | 모듈: {report['module']}")
         print(
-            "관심종목: 전체 {total_ticker_count}개 | 키움 동기화 {kiwoom_synced_ticker_count}개 | 비표준 {kiwoom_nonstandard_count}개".format(
+            "관심종목: 전체 {total_ticker_count}개 | 키움 동기화 {kiwoom_synced_ticker_count}개 | 국내상품코드 {kiwoom_domestic_product_code_count}개 | 미지원 {kiwoom_unsupported_code_count}개".format(
                 **report["interest_store"]
             )
         )

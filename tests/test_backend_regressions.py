@@ -15348,10 +15348,11 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
 
         self.assertEqual(preview["write_mode"], "preview_only")
         self.assertEqual(preview["already_tracked_count"], 1)
-        self.assertEqual(preview["add_candidate_count"], 1)
-        self.assertEqual(preview["needs_review_count"], 1)
-        self.assertEqual(preview["candidates"][0]["action"], "needs_review")
-        self.assertFalse(preview["candidates"][0]["sync_eligible"])
+        self.assertEqual(preview["add_candidate_count"], 2)
+        self.assertEqual(preview["needs_review_count"], 0)
+        self.assertEqual(preview["candidates"][0]["action"], "add_candidate")
+        self.assertTrue(preview["candidates"][0]["sync_eligible"])
+        self.assertEqual(preview["candidates"][0]["ticker_quality"], "kiwoom_domestic_instrument")
         self.assertEqual(preview["candidates"][1]["action"], "already_tracked")
         self.assertEqual(preview["candidates"][1]["company_name"], "SK하이닉스")
         self.assertEqual(preview["candidates"][2]["action"], "add_candidate")
@@ -15405,9 +15406,9 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
         append_history.assert_called_once()
         self.assertTrue(append_history.call_args.kwargs["summary"]["dry_run"])
         self.assertEqual(dry_run["write_mode"], "preview_only")
-        self.assertEqual(dry_run["prepared_count"], 1)
-        self.assertEqual(dry_run["skipped_count"], 4)
-        self.assertEqual(dry_run["prepared_tickers"][0]["ticker"], "042660")
+        self.assertEqual(dry_run["prepared_count"], 2)
+        self.assertEqual(dry_run["skipped_count"], 3)
+        self.assertEqual([item["ticker"] for item in dry_run["prepared_tickers"]], ["0117V0", "042660"])
 
         request.dry_run = False
         with (
@@ -15419,10 +15420,10 @@ class KiwoomResearchOsIntegrationTests(unittest.TestCase):
             saved = main.sync_kiwoom_interest_candidates(request, settings)
 
         self.assertEqual(saved["write_mode"], "saved")
-        self.assertEqual(saved["prepared_count"], 1)
+        self.assertEqual(saved["prepared_count"], 2)
         write_json.assert_called_once()
         saved_payload = write_json.call_args.args[1]
-        self.assertEqual([item["ticker"] for item in saved_payload["tickers"]], ["000660", "042660"])
+        self.assertEqual([item["ticker"] for item in saved_payload["tickers"]], ["000660", "0117V0", "042660"])
         self.assertIn("kiwoom_interest_sync", saved_payload["tickers"][1]["tags"])
         append_history.assert_called_once()
         self.assertFalse(append_history.call_args.kwargs["summary"]["dry_run"])

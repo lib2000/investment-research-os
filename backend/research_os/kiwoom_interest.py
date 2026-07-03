@@ -72,7 +72,10 @@ def _ticker_key(value: Any) -> str:
 
 
 def is_standard_domestic_stock_ticker(value: Any) -> bool:
-    return bool(re.fullmatch(r"\d{6}", _ticker_key(value)))
+    ticker = _ticker_key(value)
+    if ticker in {"", "UNKNOWN", "CASH"}:
+        return False
+    return bool(re.fullmatch(r"[0-9A-Z]{6}", ticker)) and any(ch.isdigit() for ch in ticker)
 
 
 def _resolved_company_name(
@@ -288,7 +291,7 @@ def build_kiwoom_interest_sync_preview(
                 reason = "이미 로컬 관심종목에 등록되어 있습니다."
             elif not standard_domestic_stock:
                 action = "needs_review"
-                reason = "일반 국내주식 6자리 코드가 아니라 자동 저장 전 확인이 필요합니다."
+                reason = "키움 국내 6자리 종목/상품 코드 형식이 아니라 자동 저장 전 확인이 필요합니다."
             else:
                 action = "add_candidate"
                 reason = "키움 관심그룹에는 있으나 로컬 관심종목에는 없어 추가 후보입니다."
@@ -299,7 +302,7 @@ def build_kiwoom_interest_sync_preview(
                     "group_id": group_id,
                     "group_name": group_name,
                     "ticker_quality": (
-                        "standard_domestic_stock"
+                        "kiwoom_domestic_instrument"
                         if standard_domestic_stock
                         else "needs_review"
                     ),
@@ -324,7 +327,7 @@ def build_kiwoom_interest_sync_preview(
         "next_action": (
             "추가 후보를 검토한 뒤 /api/v1/interests/tickers 또는 콘솔 관심종목 저장으로 반영하세요."
             if add_candidates
-            else "비표준 코드는 확인 필요로 분리했습니다. 저장할 신규 6자리 국내주식 후보는 없습니다."
+            else "비표준 코드는 확인 필요로 분리했습니다. 저장할 신규 키움 국내 종목/상품 후보는 없습니다."
             if needs_review
             else "키움 관심그룹과 로컬 관심종목의 티커 기준 차이가 없습니다."
         ),
