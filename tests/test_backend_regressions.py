@@ -716,6 +716,17 @@ class GitSyncStatusToolTests(unittest.TestCase):
         self.assertIn('"is_synced"', source)
 
 
+class PortfolioStoreCheckToolTests(unittest.TestCase):
+    def test_portfolio_store_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_portfolio_store.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"holding_count"', source)
+        self.assertIn('"portfolio_updated_age_hours"', source)
+        self.assertIn('"oldest_price_age_hours"', source)
+        self.assertIn('"errors"', source)
+
+
 class OperationalReadinessToolTests(unittest.TestCase):
     def test_build_result_returns_machine_readable_operational_summary(self):
         tool = load_operational_readiness_tool()

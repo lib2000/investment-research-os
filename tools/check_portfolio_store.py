@@ -121,6 +121,7 @@ def main() -> int:
     parser.add_argument("--value-tolerance", type=float, default=1.0, help="저장 총액과 종목 평가금액 합계 허용 오차")
     parser.add_argument("--weight-tolerance", type=float, default=0.02, help="보유 종목 weight 합계 허용 오차")
     parser.add_argument("--calculation-relative-tolerance", type=float, default=0.03, help="평가금액/투자금/수익 계산 상대 허용 오차")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -244,7 +245,8 @@ def main() -> int:
     newest_price = min(valid_price_ages) if valid_price_ages else None
     oldest_price = max(valid_price_ages) if valid_price_ages else None
 
-    for ticker, (expected_qty, expected_currency) in parse_expected(args.expected).items():
+    expected_holdings = parse_expected(args.expected)
+    for ticker, (expected_qty, expected_currency) in expected_holdings.items():
         item = by_ticker.get(ticker)
         if not item:
             errors.append(f"기대 종목 누락: {ticker}")
@@ -258,10 +260,52 @@ def main() -> int:
 
     newest_price_label = f"{newest_price:.1f}" if newest_price is not None else "-"
     oldest_price_label = f"{oldest_price:.1f}" if oldest_price is not None else "-"
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "store_path": str(store),
+        "portfolio_key": selected_key,
+        "portfolio_name": selected.get("portfolio_name") or selected_key,
+        "holding_count": len(holding_rows),
+        "stored_holding_count": selected.get("holding_count"),
+        "expected_holdings_count": args.expected_holdings_count,
+        "min_holdings": args.min_holdings,
+        "max_holdings": args.max_holdings,
+        "portfolio_value": stored_value,
+        "market_value_sum": market_sum,
+        "value_gap": None if stored_value is None else stored_value - market_sum,
+        "weight_sum": weight_sum,
+        "updated_at": selected.get("updated_at"),
+        "portfolio_updated_age_hours": portfolio_updated_age,
+        "newest_price_age_hours": newest_price,
+        "oldest_price_age_hours": oldest_price,
+        "duplicate_tickers": duplicate_tickers,
+        "cash_like_count": len(cash_like),
+        "expected_tickers": list(expected_holdings),
+        "holdings": [
+            {
+                "ticker": holding_ticker(item),
+                "name": item.get("name"),
+                "quantity": number(item.get("quantity")),
+                "currency": item.get("currency"),
+                "market_value": number(item.get("market_value")),
+                "weight": number(item.get("weight")),
+                "sync_status": item.get("sync_status"),
+                "price_checked_at": item.get("price_checked_at"),
+                "sync_checked_at": item.get("sync_checked_at"),
+            }
+            for item in holding_rows
+        ],
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
+
     print(f"저장 파일: {store}")
     print(f"포트폴리오: {selected.get('portfolio_name') or selected_key} | 보유 {len(holding_rows)}개 | 총액 {stored_value if stored_value is not None else '-'}")
     print(f"포트폴리오 갱신: {selected.get('updated_at') or '미확인'} | 비중 합계 {weight_sum:.4f} | 가격 확인 범위 {newest_price_label}~{oldest_price_label}시간")
-    for ticker in parse_expected(args.expected):
+    for ticker in expected_holdings:
         item = by_ticker.get(ticker)
         if item:
             print(f"{ticker} {item.get('name')} | 수량 {item.get('quantity')} | 통화 {item.get('currency')} | 동기화 {item.get('sync_status')}")
