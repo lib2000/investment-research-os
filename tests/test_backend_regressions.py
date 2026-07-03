@@ -267,6 +267,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn('"node_checked"', source)
         self.assertIn("redirect_stdout", source)
 
+    def test_console_static_contract_check_supports_json_result_contract(self):
+        source = (PROJECT_ROOT / "tools" / "check_console_static_contract.py").read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--json"', source)
+        self.assertIn('"html_id_count"', source)
+        self.assertIn('"js_contract_ok_count"', source)
+        self.assertIn('"workflow_action_ok_count"', source)
+
     def test_click_smoke_exposes_ordered_partial_stages(self):
         tool = load_clicks_smoke_tool()
 

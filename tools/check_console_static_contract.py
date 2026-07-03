@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -361,6 +362,7 @@ def button_has_feedback(js_text: str, button_id: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="클래식 콘솔 HTML/JS 정적 계약을 점검합니다.")
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     root = project_root(Path.cwd())
@@ -448,6 +450,33 @@ def main() -> int:
         errors.append("HTML 버튼 type 값 확인 필요: " + ", ".join(html_buttons_invalid_type))
     if js_buttons_missing_type:
         errors.append("JS 템플릿 버튼 type 속성 누락: " + ", ".join(js_buttons_missing_type[:20]))
+
+    result = {
+        "status": "error" if errors else "ok",
+        "project_root": str(root),
+        "html_id_count": len(ids),
+        "js_referenced_id_count": len(referenced_ids),
+        "tab_section_count": len(parser_obj.sections & REQUIRED_TABS),
+        "required_tab_count": len(REQUIRED_TABS),
+        "button_count": len(parser_obj.buttons),
+        "feedback_button_ok_count": len(REQUIRED_FEEDBACK_BUTTON_IDS - set(missing_feedback_buttons) - set(feedback_without_handler)),
+        "required_feedback_button_count": len(REQUIRED_FEEDBACK_BUTTON_IDS),
+        "workflow_action_ok_count": len(workflow_actions - set(workflow_actions_without_handler)),
+        "workflow_action_count": len(workflow_actions),
+        "css_contract_ok_count": len(REQUIRED_CSS_SNIPPETS) - len(missing_css_snippets),
+        "css_contract_count": len(REQUIRED_CSS_SNIPPETS),
+        "js_contract_ok_count": len(REQUIRED_JS_SNIPPETS) - len(missing_js_snippets),
+        "js_contract_count": len(REQUIRED_JS_SNIPPETS),
+        "live_region_ok_count": len(REQUIRED_LIVE_REGIONS) - len(missing_live_regions),
+        "live_region_count": len(REQUIRED_LIVE_REGIONS),
+        "html_button_type_ok_count": len(parser_obj.buttons) - len(html_buttons_missing_type) - len(html_buttons_invalid_type),
+        "js_button_type_ok_count": len(js_buttons) - len(js_buttons_missing_type),
+        "js_button_count": len(js_buttons),
+        "errors": errors,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if args.strict and errors else 0
 
     print(f"HTML id 수: {len(ids)}개")
     print(f"JS 참조 id 수: {len(referenced_ids)}개")
