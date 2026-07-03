@@ -15,6 +15,7 @@ Thank you for considering a contribution to Investment Research OS. The project 
 ```powershell
 python tools\check_public_repo_safety.py
 python tools\check_offline_readiness.py
+python tools\check_offline_readiness.py --output-json tmp\offline_readiness_latest.json --tail-lines 3
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict
 python tools\check_daily_recommendations_store.py --require-milestones --require-quality

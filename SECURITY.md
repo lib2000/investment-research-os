@@ -35,6 +35,7 @@ Before publishing changes, run:
 ```powershell
 python tools\check_public_repo_safety.py
 python tools\check_offline_readiness.py
+python tools\check_offline_readiness.py --output-json tmp\offline_readiness_latest.json --tail-lines 3
 python tools\check_backend_runtime_env.py --strict
 ```
 

@@ -75,6 +75,7 @@
 ```powershell
 cd C:\Users\lib20\InvestmentJournalApp
 python tools\check_offline_readiness.py
+python tools\check_offline_readiness.py --output-json tmp\offline_readiness_latest.json --tail-lines 3
 python tools\check_git_sync_status.py
 python tools\check_git_sync_status.py --strict
 python tools\check_backend_runtime_env.py --check-daily-tests
