@@ -2599,22 +2599,9 @@ label {
 .holding-row {
   --holding-control-height: 44px;
   min-width: 900px;
-  gap: 5px;
-  grid-template-columns:
-    minmax(136px, 1.08fr)
-    minmax(56px, 0.43fr)
-    minmax(100px, 0.74fr)
-    minmax(88px, 0.64fr)
-    minmax(68px, 0.42fr)
-    minmax(82px, 0.54fr)
-    minmax(82px, 0.56fr)
-    minmax(54px, 0.34fr)
-    minmax(72px, 0.48fr)
-    minmax(48px, 0.3fr)
-    minmax(78px, 0.42fr);
-  align-items: stretch;
+  display: block;
   margin: 0;
-  padding: 6px 8px;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
@@ -2627,6 +2614,101 @@ label {
 
 .holding-row:last-child {
   border-bottom: 0;
+}
+
+.holding-card-details {
+  width: 100%;
+}
+
+.holding-card-summary {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.holding-card-summary::-webkit-details-marker {
+  display: none;
+}
+
+.holding-card-summary:hover {
+  background: #f8fbfd;
+}
+
+.holding-card-details[open] .holding-card-summary {
+  background: #f1f7fa;
+  border-bottom: 1px solid #d8e2ec;
+}
+
+.holding-summary-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.holding-summary-main strong,
+.holding-summary-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holding-summary-main strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.holding-summary-main small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.holding-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.holding-summary-metrics b {
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 950;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holding-detail-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(136px, 1.08fr)
+    minmax(56px, 0.43fr)
+    minmax(100px, 0.74fr)
+    minmax(88px, 0.64fr)
+    minmax(68px, 0.42fr)
+    minmax(82px, 0.54fr)
+    minmax(82px, 0.56fr)
+    minmax(54px, 0.34fr)
+    minmax(72px, 0.48fr)
+    minmax(48px, 0.3fr)
+    minmax(78px, 0.42fr);
+  gap: 5px;
+  align-items: stretch;
+  padding: 6px 8px;
 }
 
 .holding-row label {
@@ -5553,6 +5635,12 @@ pre {
     min-width: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
+  }
+
+  .holding-card-summary,
+  .holding-summary-metrics,
+  .holding-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .holding-actions {

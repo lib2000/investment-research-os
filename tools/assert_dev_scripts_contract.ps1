@@ -603,7 +603,9 @@ $contracts = @(
   @{
     Path = "tools\check_interest_summary_render_layout.py"
     Snippets = @(
-      '관심종목/섹터 이름-only 요약과 상세 열림',
+      '보유종목과 관심종목/섹터 요약 클릭 상세 열림',
+      'holding-card-summary',
+      'holdingDetailOpened',
       'interest-ticker-summary-row',
       'interest-sector-summary-row',
       'tickerNameOnlyCount',

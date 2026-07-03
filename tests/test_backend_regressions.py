@@ -1156,6 +1156,8 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
             "sectorNameOnlyCount": 0,
             "tickerRegionGroups": [{"label": "한국"}],
             "sectorRegionGroups": [{"label": "한국"}],
+            "holdingCount": 1,
+            "holdingDetailOpened": False,
             "tickerDetailOpened": False,
             "sectorDetailOpened": False,
             "runtimeErrors": ["boom"],
@@ -1167,6 +1169,7 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
         self.assertIn("관심섹터 요약 행에 섹터명 외 정보가 노출됩니다.", errors)
         self.assertIn("관심종목 한국/미국 구분 섹션이 모두 보이지 않습니다.", errors)
         self.assertIn("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.", errors)
+        self.assertIn("보유 종목 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
         self.assertIn("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
         self.assertIn("관심섹터 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
         self.assertIn("브라우저 런타임 오류 1개", errors)

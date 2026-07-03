@@ -1521,7 +1521,35 @@ function makePortfolioHoldingRow(holding = {}) {
   row.className = "editor-row holding-row";
   const currency = normalizeCurrency(holding.currency, holding.ticker);
   const fxRate = inferHoldingFxRateFromValues(holding, currency);
-  row.append(
+  const companyName = holding.name || "보유 종목";
+  const ticker = holding.ticker || "";
+  const marketValue = formatMoney(holding.market_value, "KRW", "평가금액 미확인");
+  const gain = formatMoney(holding.unrealized_gain, "KRW", "수익 미확인");
+  const returnRate =
+    holding.unrealized_return === undefined || holding.unrealized_return === null
+      ? "수익률 미확인"
+      : toPercent(holding.unrealized_return);
+  const details = document.createElement("details");
+  details.className = "holding-card-details";
+  details.open = !ticker && !holding.name;
+  const summary = document.createElement("summary");
+  summary.className = "holding-card-summary";
+  summary.title = `${companyName}${ticker ? ` (${ticker})` : ""} 상세 정보 열기`;
+  summary.setAttribute("aria-label", `${companyName}${ticker ? ` ${ticker}` : ""} 상세 정보 열기`);
+  summary.innerHTML = `
+    <span class="holding-summary-main">
+      <strong>${escapeHtml(companyName)}</strong>
+      ${ticker ? `<small>${escapeHtml(ticker)}</small>` : ""}
+    </span>
+    <span class="holding-summary-metrics">
+      <b>${escapeHtml(marketValue)}</b>
+      <b class="${signedPortfolioClass(holding.unrealized_gain)}">${escapeHtml(gain)}</b>
+      <b class="${signedPortfolioClass(holding.unrealized_gain)}">${escapeHtml(returnRate)}</b>
+    </span>
+  `;
+  const detailBody = document.createElement("div");
+  detailBody.className = "holding-detail-grid";
+  detailBody.append(
     createInput({
       name: "name",
       label: "회사명",
@@ -1596,6 +1624,8 @@ function makePortfolioHoldingRow(holding = {}) {
     createHiddenInput("sync_message", holding.sync_message || ""),
     createHoldingActionGroup()
   );
+  details.append(summary, detailBody);
+  row.append(details);
   syncCompanyNameAlignment(row);
   syncPortfolioRowColors(row);
   return row;

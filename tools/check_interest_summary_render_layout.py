@@ -1,4 +1,4 @@
-"""Headless layout check for name-only interest ticker and sector summaries."""
+"""Headless layout check for clickable portfolio holdings and interest summaries."""
 
 from __future__ import annotations
 
@@ -98,6 +98,35 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       rowCount: section.querySelectorAll(".interest-summary-row").length,
                       hasEmptyState: Boolean(section.querySelector(".interest-region-empty")),
                     }));
+                  const openFirstHolding = async () => {
+                    document.querySelector('button.tab[data-tab="portfolio"]')?.click();
+                    await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio active");
+                    const portfolioSelect = document.querySelector("#portfolioSelect");
+                    await waitFor(() => [...portfolioSelect.options].some((option) => option.value), 15000, "portfolio options");
+                    const portfolioOption =
+                      [...portfolioSelect.options].find((option) => option.value.includes("이형주")) ||
+                      [...portfolioSelect.options].find((option) => option.value.includes("가족")) ||
+                      [...portfolioSelect.options].find((option) => option.value);
+                    portfolioSelect.value = portfolioOption.value;
+                    portfolioSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                    document.querySelector("#portfolioLoadButton")?.click();
+                    await waitFor(() => document.querySelectorAll("#holdingsEditor .holding-row").length > 0, 50000, "portfolio holdings");
+                    const row = [...document.querySelectorAll("#holdingsEditor .holding-row")].find(visible);
+                    const details = row?.querySelector("details.holding-card-details");
+                    const summary = row?.querySelector("summary.holding-card-summary");
+                    const text = (summary?.textContent || "").replace(/\\s+/g, " ").trim();
+                    summary?.scrollIntoView({block: "center", inline: "nearest"});
+                    await sleep(100);
+                    summary?.click();
+                    await sleep(300);
+                    return {
+                      portfolioName: portfolioOption.value,
+                      holdingCount: document.querySelectorAll("#holdingsEditor .holding-row").length,
+                      summaryText: text,
+                      opened: Boolean(details?.open),
+                      hasDetailGrid: Boolean(details?.querySelector(".holding-detail-grid")),
+                    };
+                  };
 
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#statusButton") && document.querySelector("#interestsLoadButton"), 15000, "console controls");
@@ -117,9 +146,14 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const sectorRegionGroups = regionGroupStats("#interestSectorEditor");
                   const tickerOpen = await openFirst(".interest-ticker-summary-row");
                   const sectorOpen = await openFirst(".interest-sector-summary-row");
+                  const holdingOpen = await openFirstHolding();
 
                   return {
                     status: "success",
+                    holdingCount: holdingOpen.holdingCount,
+                    holdingSummaryText: holdingOpen.summaryText,
+                    holdingDetailOpened: holdingOpen.opened && holdingOpen.hasDetailGrid,
+                    holdingOpen,
                     tickerSummaryCount: tickerBefore.length,
                     sectorSummaryCount: sectorBefore.length,
                     tickerSummarySamples: tickerBefore.slice(0, 5),
@@ -178,6 +212,10 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("관심종목 한국/미국 구분 섹션이 모두 보이지 않습니다.")
     if "한국" not in sector_group_labels or "미국" not in sector_group_labels:
         errors.append("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.")
+    if int(result.get("holdingCount") or 0) < 1:
+        errors.append("보유 종목 행이 렌더링되지 않았습니다.")
+    if not result.get("holdingDetailOpened"):
+        errors.append("보유 종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("sectorDetailOpened"):
@@ -189,7 +227,7 @@ def strict_errors(result: dict) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="관심종목/섹터 이름-only 요약과 상세 열림을 헤드리스 Chrome으로 점검합니다.")
+    parser = argparse.ArgumentParser(description="보유종목과 관심종목/섹터 요약 클릭 상세 열림을 헤드리스 Chrome으로 점검합니다.")
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--output-screenshot", type=Path, default=None)
     parser.add_argument("--json", action="store_true")
@@ -205,6 +243,11 @@ def main() -> int:
             "관심 요약 렌더링: "
             f"종목 {int(result.get('tickerSummaryCount') or 0)}개 / "
             f"섹터 {int(result.get('sectorSummaryCount') or 0)}개"
+        )
+        print(
+            "보유 종목 상세: "
+            f"{int(result.get('holdingCount') or 0)}개 / "
+            f"{'정상' if result.get('holdingDetailOpened') else '실패'}"
         )
         print(
             "이름-only: "
