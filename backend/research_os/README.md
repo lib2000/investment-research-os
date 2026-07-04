@@ -76,6 +76,7 @@
 - `company_ir_sec.py`: SEC company submissions 파싱, 공시 분류, archive URL helper
 - `telegram_market_journal.py`: 텔레그램 @ehdwl 공개 채널의 미국 시장일지 후보 파싱/선정
 - `telegram_market_close_automation.py`: 텔레그램 미국 시장일지 자동 반영, 소급 저장, 중복 방지, 작업 상태 조립
+- `telegram_favorite_posts.py`: 명시된 텔레그램 즐겨찾기 공개 채널의 인기글을 조회수 기준으로 선별해 뉴스 인박스에 반영
 - `text_repair.py`: 로그/캐시 payload mojibake 복구 helper
 - `web_search_data_provider.py`: Tavily/Brave 검색 기반 보강 데이터 provider와 무료 한도 guard
 - `models.py`: API 입출력 모델과 도메인 스키마

@@ -159,6 +159,7 @@ from research_os.kcif_reports import (
 )
 from research_os.market_journal import naver_market_close_source_metadata
 import research_os.naver_market_close_automation as naver_market_close_automation
+import research_os.telegram_favorite_posts as telegram_favorite_posts
 import research_os.telegram_market_close_automation as telegram_market_close_automation
 from research_os.telegram_market_journal import (
     fetch_telegram_public_channel_posts,
@@ -2437,6 +2438,10 @@ def telegram_market_close_journal_task_log_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "telegram_market_close_journal_task.log"
 
 
+def telegram_favorite_posts_state_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "telegram_favorite_posts_state.json"
+
+
 def read_naver_research_cache(settings: Settings) -> dict:
     return read_json_store(
         naver_research_cache_path(settings),
@@ -3593,6 +3598,46 @@ def build_telegram_market_close_task_status(settings: Settings, log_limit: int =
         log_limit=log_limit,
     )
 
+
+def _telegram_favorite_posts_runtime() -> telegram_favorite_posts.TelegramFavoritePostsRuntime:
+    return telegram_favorite_posts.TelegramFavoritePostsRuntime(
+        current_storage_date=current_storage_date,
+        current_storage_timestamp=current_storage_timestamp,
+        current_storage_datetime=current_storage_datetime,
+        read_json_store=read_json_store,
+        write_json_store=write_json_store,
+        read_news_inbox=read_news_inbox,
+        write_news_inbox=write_news_inbox,
+        content_fingerprint=content_fingerprint,
+        provider_error_message=provider_error_message,
+        telegram_favorite_posts_state_path=telegram_favorite_posts_state_path,
+        fetch_telegram_public_channel_posts=fetch_telegram_public_channel_posts,
+    )
+
+
+def refresh_telegram_favorite_posts(settings: Settings, force: bool = False) -> dict:
+    return telegram_favorite_posts.refresh_telegram_favorite_posts(
+        _telegram_favorite_posts_runtime(),
+        settings,
+        force=force,
+    )
+
+
+def should_run_telegram_favorite_posts(settings: Settings, now: datetime | None = None) -> bool:
+    return telegram_favorite_posts.should_run_telegram_favorite_posts(
+        _telegram_favorite_posts_runtime(),
+        settings,
+        now=now,
+    )
+
+
+def build_telegram_favorite_posts_task_status(settings: Settings) -> dict:
+    return telegram_favorite_posts.build_telegram_favorite_posts_task_status(
+        _telegram_favorite_posts_runtime(),
+        settings,
+    )
+
+
 _NAVER_RESEARCH_SCHEDULER_STARTED = False
 
 
@@ -3614,6 +3659,8 @@ def naver_research_scheduler_loop() -> None:
                 refresh_naver_market_close_journal(settings)
             if should_run_telegram_us_market_close_journal(settings, now):
                 refresh_telegram_us_market_close_journal(settings)
+            if should_run_telegram_favorite_posts(settings, now):
+                refresh_telegram_favorite_posts(settings)
         except Exception:
             pass
         threading.Event().wait(interval_seconds)
@@ -9847,9 +9894,11 @@ def _automation_status_runtime() -> SimpleNamespace:
         should_refresh_policy_sources_cache=should_refresh_policy_sources_cache,
         should_refresh_regional_business_cache=should_refresh_regional_business_cache,
         should_run_daily_recommendations=should_run_daily_recommendations,
+        should_run_telegram_favorite_posts=should_run_telegram_favorite_posts,
         storage_duplicate_review_path=storage_duplicate_review_path,
         summarize_daily_recommendation_store=summarize_daily_recommendation_store,
         synthesize_and_save_dossier=synthesize_and_save_dossier,
+        telegram_favorite_posts_state_path=telegram_favorite_posts_state_path,
         write_json_store=write_json_store,
     )
 
@@ -12270,6 +12319,27 @@ def get_telegram_market_close_task_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_telegram_market_close_task_status(settings, log_limit=log_limit)
+
+
+@app.post(
+    "/api/v1/telegram/favorite-posts/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_telegram_favorite_posts_endpoint(
+    force: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return refresh_telegram_favorite_posts(settings, force=force)
+
+
+@app.get(
+    "/api/v1/telegram/favorite-posts/task-status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_telegram_favorite_posts_task_status(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_telegram_favorite_posts_task_status(settings)
 
 
 @app.get(

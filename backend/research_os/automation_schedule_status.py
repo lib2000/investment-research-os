@@ -11,6 +11,7 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
     naver_cache = runtime.read_naver_research_cache(settings)
     shinhan_cache = runtime.read_shinhan_research_cache(settings)
     dart_cache = runtime.read_dart_filing_cache(settings)
+    telegram_favorite_state = runtime.read_json_store(runtime.telegram_favorite_posts_state_path(settings), {})
     dart_daily = runtime.dart_daily_check_status(dart_cache, settings)
     dart_related_count = (
         int(dart_daily.get("checked_count") or 0)
@@ -108,5 +109,17 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
             "related_count": dart_related_count,
             "source_status": dart_cache.get("status") if isinstance(dart_cache, dict) else "not_checked",
             "policy": "official_filings_metadata_and_links",
+        },
+        {
+            "key": "telegram_favorite_posts",
+            "label": "텔레그램 즐겨찾기 인기글",
+            "enabled": settings.telegram_favorite_posts_enabled,
+            "auto_refresh": settings.telegram_favorite_posts_enabled,
+            "refresh_hours": 24,
+            "last_checked_at": telegram_favorite_state.get("last_attempt_at") if isinstance(telegram_favorite_state, dict) else None,
+            "due": runtime.should_run_telegram_favorite_posts(settings),
+            "related_count": int(telegram_favorite_state.get("candidate_count") or 0) if isinstance(telegram_favorite_state, dict) else 0,
+            "source_status": telegram_favorite_state.get("status") if isinstance(telegram_favorite_state, dict) else "not_checked",
+            "policy": "public_telegram_metadata_and_short_notes",
         },
     ]

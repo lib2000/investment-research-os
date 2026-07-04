@@ -27,6 +27,7 @@ class TelegramMarketPost:
     title: str
     text: str
     published_at: str | None = None
+    view_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,24 @@ def compact_telegram_text(text: str) -> str:
     return normalized.strip()
 
 
+def parse_telegram_count(value: str | None) -> int | None:
+    text = str(value or "").strip().replace(",", "")
+    if not text:
+        return None
+    multiplier = 1
+    suffix = text[-1:].lower()
+    if suffix == "k":
+        multiplier = 1_000
+        text = text[:-1]
+    elif suffix == "m":
+        multiplier = 1_000_000
+        text = text[:-1]
+    try:
+        return int(float(text) * multiplier)
+    except ValueError:
+        return None
+
+
 def parse_telegram_public_channel_html(
     html: str,
     *,
@@ -108,6 +127,8 @@ def parse_telegram_public_channel_html(
         href = str(link_node.get("href") or "").strip() if link_node else ""
         time_node = node.select_one("time")
         published_at = str(time_node.get("datetime") or "").strip() or None if time_node else None
+        views_node = node.select_one(".tgme_widget_message_views")
+        view_count = parse_telegram_count(views_node.get_text(" ") if views_node else None)
         posts.append(
             TelegramMarketPost(
                 message_id=data_post,
@@ -116,6 +137,7 @@ def parse_telegram_public_channel_html(
                 title=first_non_empty_line(text),
                 text=text,
                 published_at=published_at,
+                view_count=view_count,
             )
         )
     return posts

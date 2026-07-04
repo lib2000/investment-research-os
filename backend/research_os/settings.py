@@ -159,6 +159,13 @@ class Settings(BaseModel):
     telegram_market_close_max_posts: int = 20
     telegram_market_close_max_summary_chars: int = 12000
     telegram_market_close_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    telegram_favorite_posts_enabled: bool = False
+    telegram_favorite_posts_time: str = "22:00"
+    telegram_favorite_channels_json: str = ""
+    telegram_favorite_posts_timeout_seconds: float = 10.0
+    telegram_favorite_posts_top_n: int = 10
+    telegram_favorite_posts_min_views: int = 0
+    telegram_favorite_posts_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     daily_recommendations_enabled: bool = True
     daily_recommendations_time: str = "08:00"
     daily_recommendations_tracking_enabled: bool = True
@@ -429,6 +436,28 @@ class Settings(BaseModel):
             ),
             telegram_market_close_user_agent=os.getenv(
                 "TELEGRAM_MARKET_CLOSE_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            telegram_favorite_posts_enabled=_read_bool(
+                "TELEGRAM_FAVORITE_POSTS_ENABLED", False
+            ),
+            telegram_favorite_posts_time=os.getenv(
+                "TELEGRAM_FAVORITE_POSTS_TIME", "22:00"
+            ),
+            telegram_favorite_channels_json=os.getenv(
+                "TELEGRAM_FAVORITE_CHANNELS_JSON", ""
+            ),
+            telegram_favorite_posts_timeout_seconds=float(
+                os.getenv("TELEGRAM_FAVORITE_POSTS_TIMEOUT_SECONDS", "10")
+            ),
+            telegram_favorite_posts_top_n=int(
+                os.getenv("TELEGRAM_FAVORITE_POSTS_TOP_N", "10")
+            ),
+            telegram_favorite_posts_min_views=int(
+                os.getenv("TELEGRAM_FAVORITE_POSTS_MIN_VIEWS", "0")
+            ),
+            telegram_favorite_posts_user_agent=os.getenv(
+                "TELEGRAM_FAVORITE_POSTS_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
             daily_recommendations_enabled=_read_bool(

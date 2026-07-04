@@ -100,6 +100,7 @@
 | `backend\research_os\naver_market_close_automation.py` | 네이버 국내 마감 시황 자동 반영, 중복 방지, 작업 상태 조립 | `NaverResearchIngestTests` |
 | `backend\research_os\telegram_market_journal.py` | 텔레그램 @ehdwl 공개 채널 미국 시장일지 파싱/후보 선정 | `NaverResearchIngestTests` |
 | `backend\research_os\telegram_market_close_automation.py` | 텔레그램 미국 시장일지 자동 반영, 소급 저장, 중복 방지, 작업 상태 조립 | `NaverResearchIngestTests` |
+| `backend\research_os\telegram_favorite_posts.py` | 텔레그램 즐겨찾기 공개 채널 인기글을 22:00 이후 뉴스 인박스에 메타데이터/짧은 메모로 반영 | `BackendRegressionTests` |
 | `backend\research_os\telegram_brief_sender.py` | OpenClaw Portfolio Health/Top Movers/Watch Items 텔레그램 dry-run 메시지 렌더링 | `TelegramBriefSenderTests`, `check_telegram_brief_sender.py` |
 | `backend\research_os\models.py` | FastAPI 요청/응답 모델 | `python -m py_compile backend\research_os_main.py` |
 | `backend\research_os\portfolio_analysis_coverage.py` | 포트폴리오별 보유 종목 분석 커버리지와 보강 큐 생성 | `check_portfolio_analysis_coverage.py` |

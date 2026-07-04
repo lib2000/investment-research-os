@@ -6515,6 +6515,109 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("원자력, 우라늄", candidate.raw_summary)
         self.assertIn("한국 증시 관련 수치", candidate.raw_summary)
 
+    def test_telegram_public_channel_parser_reads_view_counts(self):
+        from research_os.telegram_market_journal import parse_telegram_public_channel_html
+
+        html = """
+        <div class="tgme_widget_message" data-post="sample/7">
+          <div class="tgme_widget_message_text">AI 반도체 공급망 점검</div>
+          <span class="tgme_widget_message_views">1.2K</span>
+          <a class="tgme_widget_message_date" href="https://t.me/sample/7"><time datetime="2026-07-04T11:00:00+00:00"></time></a>
+        </div>
+        """
+
+        posts = parse_telegram_public_channel_html(html, channel_username="sample", base_url="https://t.me/s/sample")
+
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].view_count, 1200)
+
+    def test_telegram_favorite_posts_syncs_popular_posts_to_news_inbox(self):
+        from datetime import datetime
+
+        from research_os.dossier_text import content_fingerprint
+        from research_os.settings import Settings
+        from research_os.state_store import news_inbox_path, read_json_store, write_json_store
+        from research_os.telegram_favorite_posts import (
+            TelegramFavoritePostsRuntime,
+            refresh_telegram_favorite_posts,
+        )
+        from research_os.telegram_market_journal import TelegramMarketPost
+
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            settings = Settings(
+                research_vault_dir=str(vault_dir),
+                telegram_favorite_posts_enabled=True,
+                telegram_favorite_posts_time="22:00",
+                telegram_favorite_channels_json='[{"username":"alpha","label":"Alpha","max_posts":10}]',
+                telegram_favorite_posts_top_n=2,
+                telegram_favorite_posts_min_views=100,
+            )
+
+            def fetch_posts(**_kwargs):
+                return (
+                    [
+                        TelegramMarketPost(
+                            message_id="alpha/1",
+                            post_id="1",
+                            url="https://t.me/alpha/1",
+                            title="낮은 조회수",
+                            text="필터링 대상",
+                            published_at="2026-07-04T10:00:00+00:00",
+                            view_count=50,
+                        ),
+                        TelegramMarketPost(
+                            message_id="alpha/2",
+                            post_id="2",
+                            url="https://t.me/alpha/2",
+                            title="AI 전력망 인기글",
+                            text="AI 데이터센터 전력망 병목과 변압기 공급 이슈",
+                            published_at="2026-07-04T11:00:00+00:00",
+                            view_count=1800,
+                        ),
+                        TelegramMarketPost(
+                            message_id="alpha/3",
+                            post_id="3",
+                            url="https://t.me/alpha/3",
+                            title="반도체 장비 인기글",
+                            text="HBM 테스트 장비 수요와 후공정 병목",
+                            published_at="2026-07-04T12:00:00+00:00",
+                            view_count=1200,
+                        ),
+                    ],
+                    [],
+                )
+
+            runtime = TelegramFavoritePostsRuntime(
+                current_storage_date=lambda: date(2026, 7, 4),
+                current_storage_timestamp=lambda: "2026-07-04T22:01:00+09:00",
+                current_storage_datetime=lambda: datetime(2026, 7, 4, 22, 1),
+                read_json_store=read_json_store,
+                write_json_store=write_json_store,
+                read_news_inbox=lambda local_settings: read_json_store(news_inbox_path(local_settings), {"items": []}),
+                write_news_inbox=lambda local_settings, payload: write_json_store(news_inbox_path(local_settings), payload),
+                content_fingerprint=content_fingerprint,
+                provider_error_message=lambda exc, _settings: str(exc),
+                telegram_favorite_posts_state_path=lambda local_settings: vault_dir / "_system" / "telegram_favorite_posts_state.json",
+                fetch_telegram_public_channel_posts=fetch_posts,
+            )
+
+            result = refresh_telegram_favorite_posts(runtime, settings, force=True)
+            duplicate_result = refresh_telegram_favorite_posts(runtime, settings, force=True)
+            inbox = read_json_store(news_inbox_path(settings), {"items": []})
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["candidate_count"], 2)
+        self.assertEqual(result["saved_count"], 2)
+        self.assertEqual(result["top_posts"][0]["title"], "AI 전력망 인기글")
+        self.assertEqual(duplicate_result["saved_count"], 0)
+        self.assertEqual(duplicate_result["duplicate_count"], 2)
+        self.assertEqual(len(inbox["items"]), 2)
+        self.assertIn("telegram_favorite", inbox["items"][0]["tags"])
+        self.assertEqual(inbox["items"][0]["scope"], "MARKET")
+
     def test_telegram_market_close_refresh_marks_auto_source(self):
         import research_os_main as main
         from research_os.models import MarketCloseEntry, MarketCloseReviewResponse
@@ -12614,11 +12717,13 @@ class AutomationStatusModuleTests(unittest.TestCase):
             dart_api_key="dummy",
             dart_filing_auto_refresh=True,
             dart_filing_refresh_hours=24,
+            telegram_favorite_posts_enabled=True,
         )
         runtime = SimpleNamespace(
             dart_daily_check_status=lambda _cache, _settings: {"due": True, "target_count": 3},
             read_company_ir_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}]},
             read_dart_filing_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "status": "success"},
+            read_json_store=lambda _path, _default: {"last_attempt_at": "2026-06-18T22:00:00+09:00", "status": "success", "candidate_count": 4},
             read_kcif_reports_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_reports": [{}, {}], "source_status": "cached"},
             read_naver_research_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "entries": {"a": {}}, "status": "success"},
             read_policy_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
@@ -12628,18 +12733,21 @@ class AutomationStatusModuleTests(unittest.TestCase):
             should_refresh_kcif_cache=lambda _watch: False,
             should_refresh_policy_sources_cache=lambda _watch, refresh_hours=24: False,
             should_refresh_regional_business_cache=lambda _watch: False,
+            should_run_telegram_favorite_posts=lambda _settings: False,
+            telegram_favorite_posts_state_path=lambda _settings: Path("telegram_favorite_posts_state.json"),
         )
 
         rows = automation_schedule_status.build_external_source_schedule_status(runtime, settings)
         by_key = {row["key"]: row for row in rows}
 
-        self.assertEqual(len(rows), 7)
+        self.assertEqual(len(rows), 8)
         self.assertEqual(by_key["kcif_reports_watch"]["related_count"], 2)
         self.assertEqual(by_key["policy_sources_watch"]["related_count"], 1)
         self.assertFalse(by_key["policy_sources_watch"]["due"])
         self.assertTrue(by_key["shinhan_research"]["due"])
         self.assertEqual(by_key["dart_filing_watch"]["related_count"], 3)
         self.assertTrue(by_key["dart_filing_watch"]["due"])
+        self.assertEqual(by_key["telegram_favorite_posts"]["related_count"], 4)
 
     def test_automation_pipeline_uses_runtime_refresh_callbacks(self):
         from research_os import automation_status
