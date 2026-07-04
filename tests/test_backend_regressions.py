@@ -17656,6 +17656,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `investment_research_context.md`: human-readable sanitized summary\n"
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
+                "- `openclaw_bridge_completion_report.json`: machine-readable completion audit report\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
                 "- `bridge_status.json`: first-read runtime status, source git state, completion report paths, operational commands, core file SHA256 hashes, and `completion_report_sha256`\n"
                 "- source git: `main abc1234`\n"
@@ -17700,8 +17701,10 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
+        self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
+        self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 

@@ -26,7 +26,7 @@ OpenClaw 워크스페이스 동기화 위치:
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_completion_report.md`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/README.md`
 
-`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 완료 리포트 파일명, 안전 갱신 명령, 최종 엄격 갱신 명령, 검증 명령, 완료 감사 명령, 최종 완료 해시 감사 명령, 민감정보 제외 범위를 포함한다.
+`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 완료 리포트 Markdown/JSON 파일명, 안전 갱신 명령, 최종 엄격 갱신 명령, 검증 명령, 완료 감사 명령, 최종 완료 해시 감사 명령, 민감정보 제외 범위를 포함한다.
 
 `bridge_status.json`은 OpenClaw가 가장 먼저 읽는 런타임 상태 파일이다. 원본 커밋/브랜치/dirty 상태, 컨텍스트 생성 시각, 최신성 기준 시간, 최신 추천일, 한국/미국 추천 수, 텔레그램 반영 수, 민감정보 제외 확인, 완료 리포트 경로, 시작 안내 갱신 여부, 운영 명령 묶음, 핵심 파일 SHA256, 완료 리포트 SHA256을 포함한다.
 
@@ -82,7 +82,7 @@ python tools\check_openclaw_bridge_completion.py --max-age-hours 1 --require-rep
 - 원본 Git 브랜치가 `main`이고 upstream과 동기화되어 있으며 작업트리가 clean인지 여부
 - `bridge_status.json`의 원본 커밋/브랜치/dirty 상태가 현재 Git 상태와 일치하는지 여부
 - OpenClaw 시작 노트가 현재 source git 커밋과 최종 완료 해시 감사 명령을 포함하는지 여부
-- `openclaw_bridge_completion_report.md/json`에 최종 감사 결과가 저장되는지 여부
+- `openclaw_bridge_completion_report.md/json`에 최종 감사 결과가 저장되고 매니페스트가 두 파일명을 모두 노출하는지 여부
 - 최신 추천 한국 3개, 미국 3개 포함 여부
 - 텔레그램 인기글 반영 여부
 - 국민연금 컨텍스트가 공개자료 기반으로 표시되는지 여부
@@ -91,7 +91,7 @@ python tools\check_openclaw_bridge_completion.py --max-age-hours 1 --require-rep
 
 ## OpenClaw 사용 규칙
 
-- OpenClaw는 먼저 `data/investment_research/bridge_status.json`과 `data/investment_research/openclaw_bridge_manifest.json`을 읽어 최신성, 파일명, 갱신 명령을 확인한다.
+- OpenClaw는 먼저 `data/investment_research/bridge_status.json`과 `data/investment_research/openclaw_bridge_manifest.json`을 읽어 최신성, 파일명, 갱신 명령, 완료 리포트 Markdown/JSON 위치를 확인한다.
 - 사람이 읽을 요약은 `data/investment_research/investment_research_context.md`를 사용한다.
 - 더 구조적인 처리가 필요하면 `data/investment_research/investment_research_context.json`을 읽는다.
 - 원본 상세 판단은 Investment Research OS 콘솔에서 확인한다.

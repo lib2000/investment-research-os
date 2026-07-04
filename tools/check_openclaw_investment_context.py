@@ -87,6 +87,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must point to bridge_status.json")
     if usage.get("completion_report") != "openclaw_bridge_completion_report.md":
         raise AssertionError("OpenClaw usage must point to completion report")
+    if usage.get("completion_report_json") != "openclaw_bridge_completion_report.json":
+        raise AssertionError("OpenClaw usage must point to completion report JSON")
     final_audit = str(usage.get("final_completion_audit_command") or "")
     if "--require-report-hashes" not in final_audit:
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
@@ -142,6 +144,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError(f"OpenClaw bridge manifest must include commands: {', '.join(missing_commands)}")
     if manifest.get("completion_report_file") != "openclaw_bridge_completion_report.md":
         raise AssertionError("OpenClaw bridge manifest completion_report_file mismatch")
+    if manifest.get("completion_report_json_file") != "openclaw_bridge_completion_report.json":
+        raise AssertionError("OpenClaw bridge manifest completion_report_json_file mismatch")
     markdown = md_path.read_text(encoding="utf-8-sig")
     for required in ["오늘 추천 최신일", "민감정보", "오픈클로 사용 규칙", "KR 1위", "US 1위"]:
         if required not in markdown:
@@ -212,6 +216,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "investment_research_context.md",
             "investment_research_context.json",
             "openclaw_bridge_manifest.json",
+            "openclaw_bridge_completion_report.json",
             "openclaw_bridge_completion_report.md",
             "bridge_status.json",
             "secrets",
