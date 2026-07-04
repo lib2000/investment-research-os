@@ -17531,9 +17531,32 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
             output_dir = root / "out"
             export_tool.write_context(context, output_dir)
             messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
+            (output_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "context_generated_at": context["generated_at"],
+                        "secrets_excluded": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "README"):
+                check_tool.validate_bundle(output_dir, max_age_hours=1)
+            (output_dir / "README.md").write_text(
+                "# Investment Research OS Bridge\n\n"
+                "- `investment_research_context.md`: human-readable sanitized summary\n"
+                "- `investment_research_context.json`: machine-readable sanitized summary\n"
+                "- `bridge_status.json`: last copy status and source/target paths\n"
+                "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
+                encoding="utf-8",
+            )
+            bridge_messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
             exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
 
         self.assertTrue(messages)
+        self.assertTrue(bridge_messages)
         self.assertIn('"raw_tokens_excluded": true', exported_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)

@@ -117,6 +117,20 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError("bridge status generated_at does not match context")
         if status.get("secrets_excluded") is not True:
             raise AssertionError("bridge status must confirm secrets_excluded=true")
+        readme_path = directory / "README.md"
+        if not readme_path.exists():
+            raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")
+        validate_no_secret_like_content(readme_path)
+        readme = readme_path.read_text(encoding="utf-8-sig")
+        for required in [
+            "investment_research_context.md",
+            "investment_research_context.json",
+            "bridge_status.json",
+            "secrets",
+            "account-auth material are excluded",
+        ]:
+            if required not in readme:
+                raise AssertionError(f"OpenClaw bridge README is missing required text: {required}")
     return messages
 
 
@@ -126,17 +140,37 @@ def main() -> int:
     parser.add_argument("--openclaw-dir", type=Path, default=DEFAULT_OPENCLAW_DIR)
     parser.add_argument("--skip-openclaw", action="store_true")
     parser.add_argument("--max-age-hours", type=float, default=24.0)
+    parser.add_argument("--json", action="store_true", help="검증 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
     checks = [(args.source_dir.resolve(), "source")]
     if not args.skip_openclaw:
         checks.append((args.openclaw_dir.resolve(), "openclaw"))
-    for directory, label in checks:
-        messages = validate_bundle(directory, max_age_hours=args.max_age_hours)
-        print(f"[{label}] ok: {directory}")
-        for message in messages:
-            print(f"  - {message}")
-    return 0
+    result = {
+        "status": "ok",
+        "source_dir": str(args.source_dir.resolve()),
+        "openclaw_dir": None if args.skip_openclaw else str(args.openclaw_dir.resolve()),
+        "checks": [],
+    }
+    try:
+        for directory, label in checks:
+            messages = validate_bundle(directory, max_age_hours=args.max_age_hours)
+            result["checks"].append({"label": label, "directory": str(directory), "messages": messages})
+    except AssertionError as exc:
+        result["status"] = "failure"
+        result["error"] = str(exc)
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        if result["status"] == "ok":
+            for check in result["checks"]:
+                print(f"[{check['label']}] ok: {check['directory']}")
+                for message in check["messages"]:
+                    print(f"  - {message}")
+        else:
+            print(f"[failure] {result['error']}")
+    return 0 if result["status"] == "ok" else 1
 
 
 if __name__ == "__main__":
