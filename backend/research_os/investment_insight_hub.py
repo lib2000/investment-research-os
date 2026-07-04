@@ -7,6 +7,7 @@ from re import search
 from typing import Any
 
 from research_os.models import PortfolioHolding
+from research_os.news_inbox import remove_news_storage_policy_boilerplate
 
 
 DESIGN_NAME = "investment_insight_hub_v1"
@@ -164,13 +165,24 @@ def _news_items(news_inbox: dict, today: date, days: int, tickers: set[str], nam
         if not _recent_enough(item_date, today, days):
             continue
         tags = [str(tag) for tag in item.get("tags") or []]
-        text = " ".join(
-            _safe_text(item.get(key))
-            for key in ["title", "summary", "safe_user_note", "raw_content", "scope", "review_status"]
+        text = remove_news_storage_policy_boilerplate(
+            " ".join(
+                _safe_text(item.get(key))
+                for key in ["title", "summary", "safe_user_note", "raw_content", "scope", "review_status"]
+            )
         )
         related = _matches_targets(text + " " + " ".join(tags), tickers, names, sectors)
-        is_policy = bool(item.get("is_policy_law")) or str(item.get("scope") or "").upper() == "POLICY" or any(
-            term.lower() in (text + " " + " ".join(tags)).lower() for term in POLICY_TERMS
+        telegram_popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+        is_telegram_favorite = "telegram_favorite" in {tag.lower() for tag in tags} or str(
+            item.get("scope_reason") or ""
+        ) == "telegram_favorite_popular_post"
+        is_policy = (
+            not is_telegram_favorite
+            and (
+                bool(item.get("is_policy_law"))
+                or str(item.get("scope") or "").upper() == "POLICY"
+                or any(term.lower() in (text + " " + " ".join(tags)).lower() for term in POLICY_TERMS)
+            )
         )
         rows.append(
             {
@@ -179,6 +191,8 @@ def _news_items(news_inbox: dict, today: date, days: int, tickers: set[str], nam
                 "title": _safe_text(item.get("title") or item.get("source_title") or "뉴스"),
                 "scope": item.get("scope") or "INBOX",
                 "is_policy_or_law": is_policy,
+                "is_telegram_favorite": is_telegram_favorite,
+                "telegram_popularity": telegram_popularity,
                 "related_targets": related,
                 "summary": _safe_text(item.get("summary") or item.get("safe_user_note") or item.get("raw_content")),
                 "score": _sentiment_score(text, tags),
@@ -186,6 +200,53 @@ def _news_items(news_inbox: dict, today: date, days: int, tickers: set[str], nam
         )
     rows.sort(key=lambda item: (bool(item["related_targets"]), bool(item["is_policy_or_law"]), item["date"]), reverse=True)
     return rows[:limit]
+
+
+def _telegram_sentiment_items(news_inbox: dict, today: date, days: int, limit: int) -> list[dict]:
+    items = news_inbox.get("items") if isinstance(news_inbox, dict) else []
+    if not isinstance(items, list):
+        return []
+    rows: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        tags = [str(tag) for tag in item.get("tags") or []]
+        is_telegram_favorite = "telegram_favorite" in {tag.lower() for tag in tags} or str(
+            item.get("scope_reason") or ""
+        ) == "telegram_favorite_popular_post"
+        if not is_telegram_favorite:
+            continue
+        item_date = item.get("created_at") or item.get("updated_at") or item.get("source_published_at") or item.get("date")
+        if not _recent_enough(item_date, today, days):
+            continue
+        telegram_popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+        text = remove_news_storage_policy_boilerplate(
+            " ".join(_safe_text(item.get(key)) for key in ["title", "summary", "safe_user_note", "raw_content"])
+        )
+        rows.append(
+            {
+                "source": "telegram_favorite",
+                "date": str(item_date or ""),
+                "title": _safe_text(item.get("title") or "텔레그램 인기글"),
+                "scope": item.get("scope") or "MARKET",
+                "is_policy_or_law": False,
+                "is_telegram_favorite": True,
+                "telegram_popularity": telegram_popularity,
+                "related_targets": [],
+                "summary": _safe_text(item.get("summary") or item.get("safe_user_note") or item.get("raw_content")),
+                "score": _sentiment_score(text, tags),
+            }
+        )
+    rows.sort(
+        key=lambda item: (
+            _safe_float((item.get("telegram_popularity") or {}).get("popularity_score"))
+            or _safe_float((item.get("telegram_popularity") or {}).get("view_count"))
+            or 0.0,
+            item["date"],
+        ),
+        reverse=True,
+    )
+    return rows[: max(1, min(int(limit or 12), 30))]
 
 
 def _filing_items(dart_cache: dict, today: date, days: int, tickers: set[str], limit: int) -> list[dict]:
@@ -278,7 +339,9 @@ def build_investment_insight_hub(
     normalized_limit = max(3, min(int(limit or 12), 30))
     tickers, names, sectors = _holding_terms(holdings)
     market_rows = _market_entries(market_journal or {}, today, normalized_days, normalized_limit)
-    news_rows = _news_items(news_inbox or {}, today, normalized_days, tickers, names, sectors, normalized_limit)
+    news_scan_limit = max(normalized_limit * 3, normalized_limit)
+    news_rows = _news_items(news_inbox or {}, today, normalized_days, tickers, names, sectors, news_scan_limit)
+    telegram_sentiment_rows = _telegram_sentiment_items(news_inbox or {}, today, normalized_days, normalized_limit)
     filing_rows = _filing_items(dart_cache or {}, today, normalized_days, tickers, normalized_limit)
     market_data_rows = _market_data_items(holdings, normalized_limit)
     policy_rows = [item for item in news_rows if item.get("is_policy_or_law")]
@@ -336,6 +399,18 @@ def build_investment_insight_hub(
                 sum(float(item.get("score") or 0.0) for item in related_news_rows) / len(related_news_rows),
             )
         )
+    if telegram_sentiment_rows:
+        insights.append(
+            _insight(
+                68,
+                "telegram_market_sentiment",
+                f"텔레그램 인기글 심리 신호 {len(telegram_sentiment_rows)}건",
+                " / ".join(item.get("title") or "텔레그램 인기글" for item in telegram_sentiment_rows[:3]),
+                "조회수 높은 텔레그램 인기글은 시장 심리 과열/관심 이동 신호로 보고 뉴스 인박스에서 승격 여부를 확인하세요.",
+                telegram_sentiment_rows,
+                sum(float(item.get("score") or 0.0) for item in telegram_sentiment_rows) / len(telegram_sentiment_rows),
+            )
+        )
     volatile = [item for item in market_data_rows if abs(float(item.get("unrealized_return") or 0.0)) >= 10.0]
     if volatile:
         insights.append(
@@ -370,6 +445,7 @@ def build_investment_insight_hub(
         "news_items": len(news_rows),
         "policy_law_items": len(policy_rows),
         "related_news_items": len(related_news_rows),
+        "telegram_sentiment_items": len(telegram_sentiment_rows),
         "holding_count": len(holdings),
         "ticker_count": len(tickers),
     }
@@ -397,6 +473,7 @@ def build_investment_insight_hub(
         "market_context": market_rows[:5],
         "filing_context": filing_rows[:8],
         "policy_law_context": policy_rows[:8],
+        "telegram_sentiment_context": telegram_sentiment_rows[:8],
         "news_context": news_rows[:8],
         "market_data_context": market_data_rows[:8],
         "next_actions": next_actions,

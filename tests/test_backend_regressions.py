@@ -17265,6 +17265,16 @@ class InvestmentInsightHubTests(unittest.TestCase):
                         "scope": "POLICY",
                         "summary": "삼양식품 수출 정책 수혜 가능성",
                         "tags": ["policy", "regulation"],
+                    },
+                    {
+                        "created_at": "2026-06-24T22:00:00+09:00",
+                        "title": "Telegram 인기글: 음식료 수출주 관심 증가",
+                        "scope": "MARKET",
+                        "scope_reason": "telegram_favorite_popular_post",
+                        "summary": "삼양식품 등 음식료 수출주 관심 증가",
+                        "safe_user_note": "짧은 메모: 음식료 수출주 심리 개선 저장 정책: 원문 전체를 장기 보관하지 않습니다.",
+                        "tags": ["telegram_favorite", "market_sentiment"],
+                        "telegram_popularity": {"view_count": 28800, "popularity_score": 28800},
                     }
                 ]
             },
@@ -17292,10 +17302,14 @@ class InvestmentInsightHubTests(unittest.TestCase):
         self.assertEqual(payload["module"], "investment_insight_hub")
         self.assertEqual(payload["coverage"]["market_journal_items"], 1)
         self.assertEqual(payload["coverage"]["policy_law_items"], 1)
+        self.assertEqual(payload["coverage"]["telegram_sentiment_items"], 1)
         self.assertEqual(payload["coverage"]["official_filing_items"], 1)
+        self.assertEqual(payload["telegram_sentiment_context"][0]["scope"], "MARKET")
+        self.assertFalse(payload["telegram_sentiment_context"][0]["is_policy_or_law"])
         self.assertGreaterEqual(len(payload["insights"]), 4)
         self.assertTrue(any(item["source_family"] == "policy_law_news" for item in payload["insights"]))
         self.assertTrue(any(item["source_family"] == "official_filings" for item in payload["insights"]))
+        self.assertTrue(any(item["source_family"] == "telegram_market_sentiment" for item in payload["insights"]))
 
 
 if __name__ == "__main__":
