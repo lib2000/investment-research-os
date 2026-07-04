@@ -1429,6 +1429,7 @@ $contracts = @(
       'latest_recommendation_date',
       'latest_recommendations',
       'summarize_latest_recommendations',
+      'latest_recommendations count mismatch',
       'telegram_saved_count',
       'final_completion_audit',
       '--json'

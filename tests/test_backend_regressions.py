@@ -17915,7 +17915,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "current_state": {
                             "daily_recommendations": {
                                 "latest_recommendation_date": "2026-07-04",
-                                "latest_market_counts": {"KR": 3, "US": 3},
+                                "latest_market_counts": {"KR": 1, "US": 1},
                                 "latest_rows": [
                                     {
                                         "market": "KR",
@@ -17971,18 +17971,27 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
             summary = tool.build_status_summary(openclaw_dir)
             rendered = tool.render_text(summary)
+            context_payload = json.loads((openclaw_dir / "investment_research_context.json").read_text(encoding="utf-8"))
+            context_payload["current_state"]["daily_recommendations"]["latest_rows"] = []
+            (openclaw_dir / "investment_research_context.json").write_text(
+                json.dumps(context_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            mismatch_summary = tool.build_status_summary(openclaw_dir)
 
         self.assertEqual("ok", summary["status"])
         self.assertEqual("abc1234", summary["source_git"]["commit"])
         self.assertIsInstance(summary["context_age_hours"], float)
-        self.assertEqual({"KR": 3, "US": 3}, summary["latest_market_counts"])
+        self.assertEqual({"KR": 1, "US": 1}, summary["latest_market_counts"])
         self.assertEqual("한국1", summary["latest_recommendations"][0]["company_name"])
         self.assertEqual("미국1", summary["latest_recommendations"][1]["company_name"])
         self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
         self.assertIn("context_age_hours:", rendered)
-        self.assertIn('latest_market_counts: {"KR":3,"US":3}', rendered)
+        self.assertIn('latest_market_counts: {"KR":1,"US":1}', rendered)
         self.assertIn("KR#1 001 한국1 score=99", rendered)
         self.assertIn("US#1 AAA 미국1 score=98", rendered)
+        self.assertEqual("failure", mismatch_summary["status"])
+        self.assertIn("latest_recommendations count mismatch", mismatch_summary["errors"][0])
 
     def test_completion_audit_writes_json_and_markdown_reports(self):
         tool = load_openclaw_bridge_completion_tool()

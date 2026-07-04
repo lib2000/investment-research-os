@@ -53,6 +53,8 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     rec = ((context.get("current_state") or {}).get("daily_recommendations") or {})
     telegram = (((context.get("current_state") or {}).get("news_and_telegram") or {}).get("telegram_favorite_posts") or {})
     read_order = status.get("read_order") or manifest.get("read_order") or []
+    market_counts = rec.get("latest_market_counts") or {}
+    latest_recommendations = summarize_latest_recommendations(rec.get("latest_rows") or [])
     context_generated_at = context.get("generated_at")
     context_age_hours = None
     if context_generated_at:
@@ -78,6 +80,11 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
         errors.append("manifest context_generated_at does not match context generated_at")
     if status.get("context_generated_at") != context_generated_at:
         errors.append("bridge_status context_generated_at does not match context generated_at")
+    expected_recommendation_count = sum(int(count or 0) for count in market_counts.values())
+    if expected_recommendation_count and len(latest_recommendations) != expected_recommendation_count:
+        errors.append(
+            f"latest_recommendations count mismatch: {len(latest_recommendations)} != {expected_recommendation_count}"
+        )
     return {
         "status": "ok" if not errors else "failure",
         "errors": errors,
@@ -91,8 +98,8 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
         "context_generated_at": context_generated_at,
         "context_age_hours": context_age_hours,
         "latest_recommendation_date": rec.get("latest_recommendation_date"),
-        "latest_market_counts": rec.get("latest_market_counts"),
-        "latest_recommendations": summarize_latest_recommendations(rec.get("latest_rows") or []),
+        "latest_market_counts": market_counts,
+        "latest_recommendations": latest_recommendations,
         "telegram_saved_count": telegram.get("saved_count"),
         "read_order": read_order,
         "read_order_files_present": files_present,
