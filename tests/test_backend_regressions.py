@@ -766,6 +766,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
             checks["OpenClaw 투자리서치 브리지"],
             ["tools/check_openclaw_investment_context.py", "--max-age-hours", "24"],
         )
+        self.assertIn("OpenClaw 완료 감사", checks)
+        self.assertEqual(
+            checks["OpenClaw 완료 감사"],
+            ["tools/check_openclaw_bridge_completion.py", "--max-age-hours", "24", "--require-report-hashes"],
+        )
 
     def test_offline_readiness_prints_nps_rebalance_plan(self):
         tool = load_offline_readiness_tool()
@@ -17788,6 +17793,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
+                "read data/investment_research/openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.md\n"
                 "read completion_report_sha256\n"
                 "source git main abc1234\n"

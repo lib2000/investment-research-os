@@ -158,6 +158,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "data/investment_research",
         "bridge_status.json",
         "openclaw_bridge_manifest.json",
+        "openclaw_bridge_completion_report.json",
         "openclaw_bridge_completion_report.md",
         "completion_report_sha256",
         "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
