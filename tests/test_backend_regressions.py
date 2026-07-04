@@ -12761,11 +12761,17 @@ class AutomationStatusModuleTests(unittest.TestCase):
             dart_daily={"due": False, "failure_count": 0},
             daily_recommendations_due=False,
             daily_recommendations={"latest_recommendation_date": "2026-06-18"},
+            telegram_favorite_count=3,
+            telegram_favorite_top_posts=[
+                {"channel_label": "AI Masters", "title": "AI 인프라 인기글"},
+            ],
         )
 
         duplicate_index = next(i for i, item in enumerate(actions) if "뉴스 우선 분류 중복 후보 1묶음/2개" in item)
         actionable_index = next(i for i, item in enumerate(actions) if "우선 분류 7개" in item)
+        telegram_index = next(i for i, item in enumerate(actions) if "텔레그램 인기글 3개" in item)
         self.assertLess(duplicate_index, actionable_index)
+        self.assertGreater(telegram_index, actionable_index)
 
     def test_automation_schedule_status_builds_source_rows(self):
         from research_os import automation_schedule_status
@@ -12790,6 +12796,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
             dart_filing_auto_refresh=True,
             dart_filing_refresh_hours=24,
             telegram_favorite_posts_enabled=True,
+            telegram_favorite_channels_json='[{"url":"https://t.me/sample_a"},{"username":"sample_b"}]',
         )
         runtime = SimpleNamespace(
             dart_daily_check_status=lambda _cache, _settings: {"due": True, "target_count": 3},
@@ -12820,6 +12827,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
         self.assertEqual(by_key["dart_filing_watch"]["related_count"], 3)
         self.assertTrue(by_key["dart_filing_watch"]["due"])
         self.assertEqual(by_key["telegram_favorite_posts"]["related_count"], 4)
+        self.assertEqual(by_key["telegram_favorite_posts"]["configured_channel_count"], 2)
 
     def test_automation_pipeline_uses_runtime_refresh_callbacks(self):
         from research_os import automation_status

@@ -2,6 +2,25 @@
 
 from __future__ import annotations
 
+import json
+
+
+def _configured_telegram_channel_count(settings) -> int:
+    raw_value = str(getattr(settings, "telegram_favorite_channels_json", "") or "").strip()
+    if not raw_value:
+        return 0
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return 0
+    if isinstance(parsed, list):
+        return sum(1 for item in parsed if isinstance(item, dict) and (item.get("username") or item.get("url")))
+    if isinstance(parsed, dict):
+        channels = parsed.get("channels")
+        if isinstance(channels, list):
+            return sum(1 for item in channels if isinstance(item, dict) and (item.get("username") or item.get("url")))
+    return 0
+
 
 def build_external_source_schedule_status(runtime, settings) -> list[dict]:
     kcif_watch = runtime.read_kcif_reports_watch(settings)
@@ -12,6 +31,7 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
     shinhan_cache = runtime.read_shinhan_research_cache(settings)
     dart_cache = runtime.read_dart_filing_cache(settings)
     telegram_favorite_state = runtime.read_json_store(runtime.telegram_favorite_posts_state_path(settings), {})
+    telegram_channel_count = _configured_telegram_channel_count(settings)
     dart_daily = runtime.dart_daily_check_status(dart_cache, settings)
     dart_related_count = (
         int(dart_daily.get("checked_count") or 0)
@@ -119,6 +139,7 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
             "last_checked_at": telegram_favorite_state.get("last_attempt_at") if isinstance(telegram_favorite_state, dict) else None,
             "due": runtime.should_run_telegram_favorite_posts(settings),
             "related_count": int(telegram_favorite_state.get("candidate_count") or 0) if isinstance(telegram_favorite_state, dict) else 0,
+            "configured_channel_count": telegram_channel_count,
             "source_status": telegram_favorite_state.get("status") if isinstance(telegram_favorite_state, dict) else "not_checked",
             "policy": "public_telegram_metadata_and_short_notes",
         },

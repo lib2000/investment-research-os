@@ -48,7 +48,28 @@ def build_source_quality_dashboard(
     regional_sources_due: bool,
     regional_sources_related_count: int,
     regional_sources_watch: dict,
+    telegram_favorite_state: dict | None = None,
+    telegram_favorite_enabled: bool = False,
+    telegram_favorite_channel_count: int = 0,
+    telegram_favorite_due: bool = False,
 ) -> list[dict]:
+    telegram_state = telegram_favorite_state if isinstance(telegram_favorite_state, dict) else {}
+    telegram_status = str(telegram_state.get("status") or "not_checked")
+    telegram_warnings = telegram_state.get("warnings") if isinstance(telegram_state.get("warnings"), list) else []
+    if not telegram_favorite_enabled:
+        telegram_display_status = "꺼짐"
+    elif telegram_status == "error" or telegram_warnings:
+        telegram_display_status = "주의"
+    elif telegram_favorite_due:
+        telegram_display_status = "점검 필요"
+    elif telegram_status in {"success", "ok"}:
+        telegram_display_status = "정상"
+    elif telegram_status == "not_found":
+        telegram_display_status = "확인 완료"
+    else:
+        telegram_display_status = "미점검"
+    telegram_candidate_count = int(telegram_state.get("candidate_count") or 0)
+    telegram_saved_count = int(telegram_state.get("saved_count") or 0)
     return [
         {
             "source": "DART 공시",
@@ -87,6 +108,18 @@ def build_source_quality_dashboard(
             if isinstance(regional_sources_watch, dict)
             else None,
             "detail": "지역·중국·신흥국 리스크 소스 일일 점검",
+        },
+        {
+            "source": "텔레그램 즐겨찾기 인기글",
+            "status": telegram_display_status,
+            "copyright_policy": "공개 t.me preview의 제목·링크·조회수·짧은 메모만 활용",
+            "duplicate_guard": "게시글 URL/지문 기준 뉴스 인박스 중복 제외",
+            "related_count": telegram_candidate_count,
+            "last_checked_at": telegram_state.get("last_attempt_at") or telegram_state.get("last_run_at"),
+            "detail": (
+                f"채널 {telegram_favorite_channel_count}개 · 후보 {telegram_candidate_count}개 · "
+                f"신규 {telegram_saved_count}개"
+            ),
         },
     ]
 
@@ -167,6 +200,9 @@ def build_dashboard_next_actions(
     duplicate_refresh_candidate_count: int | None = None,
     news_duplicate_priority_group_count: int = 0,
     news_duplicate_priority_entry_count: int = 0,
+    telegram_favorite_count: int = 0,
+    telegram_favorite_top_posts: list[dict] | None = None,
+    telegram_favorite_due: bool = False,
 ) -> list[str]:
     next_actions = []
     if not target_count:
@@ -222,6 +258,16 @@ def build_dashboard_next_actions(
                     "시장일지/보유종목 리스크 메모와 연결하세요."
                 ),
             )
+        )
+    if telegram_favorite_due:
+        next_actions.append("텔레그램 즐겨찾기 인기글 22:00 자동 수집 상태를 확인하세요.")
+    elif telegram_favorite_count:
+        top_posts = telegram_favorite_top_posts if isinstance(telegram_favorite_top_posts, list) else []
+        first_post = next((post for post in top_posts if isinstance(post, dict)), {})
+        title = _short_title(first_post.get("title"), limit=60) if first_post else "상위 인기글"
+        channel = first_post.get("channel_label") or first_post.get("channel_username") or "텔레그램"
+        next_actions.append(
+            f"텔레그램 인기글 {telegram_favorite_count}개 중 `{channel} · {title}`를 시장 심리/뉴스 반영 후보로 확인하세요."
         )
     if dart_daily.get("due"):
         next_actions.append("보유·관심 종목 DART 신규 공시 일일 점검이 필요합니다.")

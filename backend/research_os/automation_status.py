@@ -217,6 +217,22 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
     )
     news_payload = runtime.build_news_inbox_payload(settings, limit=10)
     source_schedule = runtime.build_external_source_schedule_status(settings)
+    telegram_favorite_state = {}
+    if hasattr(runtime, "telegram_favorite_posts_state_path"):
+        telegram_favorite_state = runtime.read_json_store(runtime.telegram_favorite_posts_state_path(settings), {})
+    telegram_favorite_schedule = next(
+        (item for item in source_schedule if isinstance(item, dict) and item.get("key") == "telegram_favorite_posts"),
+        {},
+    )
+    telegram_favorite_top_posts = (
+        telegram_favorite_state.get("top_posts") if isinstance(telegram_favorite_state.get("top_posts"), list) else []
+    ) if isinstance(telegram_favorite_state, dict) else []
+    telegram_favorite_count = (
+        int(telegram_favorite_state.get("candidate_count") or 0) if isinstance(telegram_favorite_state, dict) else 0
+    )
+    telegram_favorite_due = bool(telegram_favorite_schedule.get("due"))
+    telegram_favorite_channel_count = int(telegram_favorite_schedule.get("configured_channel_count") or 0)
+    telegram_favorite_enabled = bool(getattr(settings, "telegram_favorite_posts_enabled", False))
     daily_recommendations = runtime.summarize_daily_recommendation_store(settings, limit=10)
     daily_recommendation_state = runtime.read_json_store(runtime.daily_recommendation_state_path(settings), {})
     daily_recommendations_due = runtime.should_run_daily_recommendations(settings)
@@ -284,6 +300,10 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         regional_sources_due=regional_sources_due,
         regional_sources_related_count=regional_sources_related_count,
         regional_sources_watch=regional_sources_watch,
+        telegram_favorite_state=telegram_favorite_state,
+        telegram_favorite_enabled=telegram_favorite_enabled,
+        telegram_favorite_channel_count=telegram_favorite_channel_count,
+        telegram_favorite_due=telegram_favorite_due,
     )
     tone, headline = automation_tone(
         failed_count=failed_count,
@@ -311,6 +331,9 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         duplicate_refresh_candidate_count=duplicate_refresh_candidate_count,
         news_duplicate_priority_group_count=news_duplicate_priority_group_count,
         news_duplicate_priority_entry_count=news_duplicate_priority_entry_count,
+        telegram_favorite_count=telegram_favorite_count,
+        telegram_favorite_top_posts=telegram_favorite_top_posts,
+        telegram_favorite_due=telegram_favorite_due,
     )
     nps_rebalance_plan: dict = {}
     if nps_allocation.get("status") in {"above_target", "below_target"} and hasattr(
@@ -378,6 +401,23 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
         "source_schedule": source_schedule,
         "source_schedule_due_count": sum(1 for item in source_schedule if item.get("due")),
         "source_quality_dashboard": source_quality_dashboard,
+        "telegram_favorite_posts": {
+            "enabled": telegram_favorite_enabled,
+            "configured_channel_count": telegram_favorite_channel_count,
+            "candidate_count": telegram_favorite_count,
+            "saved_count": int(telegram_favorite_state.get("saved_count") or 0)
+            if isinstance(telegram_favorite_state, dict)
+            else 0,
+            "duplicate_count": int(telegram_favorite_state.get("duplicate_count") or 0)
+            if isinstance(telegram_favorite_state, dict)
+            else 0,
+            "due": telegram_favorite_due,
+            "status": telegram_favorite_state.get("status") if isinstance(telegram_favorite_state, dict) else "not_checked",
+            "last_attempt_at": telegram_favorite_state.get("last_attempt_at")
+            if isinstance(telegram_favorite_state, dict)
+            else None,
+            "top_posts": telegram_favorite_top_posts[:5],
+        },
         "dart_daily_check": dart_daily,
         "dart_due": bool(dart_daily.get("due")),
         "dart_failure_count": int(dart_daily.get("failure_count") or 0),
