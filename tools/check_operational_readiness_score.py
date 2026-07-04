@@ -453,6 +453,34 @@ def openclaw_bridge_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def openclaw_completion_signal(root: Path) -> dict[str, Any]:
+    tools_dir = root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from check_openclaw_bridge_completion import build_result as build_openclaw_completion_result
+
+    result = build_openclaw_completion_result(project_root=root, max_age_hours=24.0)
+    if result.get("status") != "ok":
+        errors = result.get("errors") or []
+        message = "; ".join(str(error) for error in errors[:3]) or "완료 감사 실패"
+        return signal(
+            "openclaw_completion_audit",
+            "OpenClaw 완료 감사",
+            0.0,
+            message,
+            "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+        )
+    git_state = result.get("git") or {}
+    bridge_status = result.get("bridge_status") or {}
+    return signal(
+        "openclaw_completion_audit",
+        "OpenClaw 완료 감사",
+        100.0,
+        f"{git_state.get('branch')} {git_state.get('commit')} synced / bridge {bridge_status.get('context_generated_at')}",
+        "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+    )
+
+
 def build_result(
     root: Path,
     *,
@@ -475,6 +503,7 @@ def build_result(
         nps_allocation_signal(root, system_dir, enforce=enforce_nps_allocation),
         investment_insight_hub_signal(root),
         openclaw_bridge_signal(root),
+        openclaw_completion_signal(root),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]

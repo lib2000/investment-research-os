@@ -1057,7 +1057,9 @@ class OperationalReadinessToolTests(unittest.TestCase):
             patch.object(tool, "investment_calendar_signal", return_value=good), \
             patch.object(tool, "portfolio_signal", return_value=good), \
             patch.object(tool, "nps_allocation_signal", return_value=weak), \
-            patch.object(tool, "investment_insight_hub_signal", return_value=good):
+            patch.object(tool, "investment_insight_hub_signal", return_value=good), \
+            patch.object(tool, "openclaw_bridge_signal", return_value=good), \
+            patch.object(tool, "openclaw_completion_signal", return_value=good):
             result = tool.build_result(
                 Path("C:/tmp/project"),
                 min_score=95.0,
@@ -1066,8 +1068,8 @@ class OperationalReadinessToolTests(unittest.TestCase):
             )
 
         self.assertEqual(result["status"], "warning")
-        self.assertEqual(result["score"], 98.2)
-        self.assertEqual(len(result["signals"]), 11)
+        self.assertEqual(result["score"], 98.5)
+        self.assertEqual(len(result["signals"]), 13)
         self.assertEqual(result["warnings"][0]["id"], "weak")
 
     def test_policy_signal_quality_is_part_of_operational_readiness(self):
@@ -1149,6 +1151,26 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(result["score"], 100.0)
         self.assertIn("OpenClaw 투자리서치 브리지", result["label"])
         self.assertIn("check_openclaw_investment_context.py", result["next_action"])
+
+    def test_openclaw_completion_audit_is_part_of_operational_readiness(self):
+        tool = load_operational_readiness_tool()
+        fake_module = SimpleNamespace(
+            build_result=lambda **_kwargs: {
+                "status": "ok",
+                "errors": [],
+                "git": {"branch": "main", "commit": "abc1234"},
+                "bridge_status": {"context_generated_at": "2026-07-05T04:46:32+09:00"},
+            }
+        )
+
+        with patch.dict(sys.modules, {"check_openclaw_bridge_completion": fake_module}):
+            result = tool.openclaw_completion_signal(PROJECT_ROOT)
+
+        self.assertEqual(result["id"], "openclaw_completion_audit")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["score"], 100.0)
+        self.assertIn("OpenClaw 완료 감사", result["label"])
+        self.assertIn("check_openclaw_bridge_completion.py", result["next_action"])
 
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
