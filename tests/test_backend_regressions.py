@@ -628,6 +628,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("$RequireCompletionAudit.IsPresent", script_source)
         self.assertIn("--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours", script_source)
         self.assertIn("OpenClaw final context validation failed", script_source)
+        self.assertIn("--require-report-hashes", script_source)
+        self.assertIn("OpenClaw final completion audit failed", script_source)
         self.assertIn("--source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours", script_source)
 
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
@@ -17690,6 +17692,13 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             status, errors = tool.validate_bridge_status(openclaw_dir, git_state, max_age_hours=1)
             self.assertEqual("abc1234", status["source_git_commit"])
             self.assertEqual([], errors)
+            _, errors = tool.validate_bridge_status(
+                openclaw_dir,
+                git_state,
+                max_age_hours=1,
+                require_report_hashes=True,
+            )
+            self.assertTrue(any("missing completion_report_sha256" in error for error in errors))
 
             (openclaw_dir / "bridge_status.json").write_text(
                 json.dumps(

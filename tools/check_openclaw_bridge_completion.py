@@ -92,7 +92,13 @@ def validate_git_state(git_state: dict) -> list[str]:
     return errors
 
 
-def validate_bridge_status(openclaw_dir: Path, git_state: dict, *, max_age_hours: float) -> tuple[dict, list[str]]:
+def validate_bridge_status(
+    openclaw_dir: Path,
+    git_state: dict,
+    *,
+    max_age_hours: float,
+    require_report_hashes: bool = False,
+) -> tuple[dict, list[str]]:
     errors: list[str] = []
     status = load_json(openclaw_dir / "bridge_status.json")
     copied_at = parse_datetime(status.get("copied_at"))
@@ -133,6 +139,8 @@ def validate_bridge_status(openclaw_dir: Path, git_state: dict, *, max_age_hours
     for hash_key, hash_path in expected_report_hashes.items():
         recorded_hash = report_hashes.get(hash_key)
         if not recorded_hash:
+            if require_report_hashes:
+                errors.append(f"bridge status missing completion_report_sha256: {hash_key}")
             continue
         if not hash_path.exists():
             errors.append(f"OpenClaw completion report hash target missing: {hash_path}")
@@ -172,6 +180,7 @@ def build_result(
     openclaw_workspace: Path = DEFAULT_OPENCLAW_WORKSPACE,
     openclaw_dir: Path = DEFAULT_OPENCLAW_DIR,
     max_age_hours: float = 1.0,
+    require_report_hashes: bool = False,
 ) -> dict:
     errors: list[str] = []
     details: dict = {
@@ -211,6 +220,7 @@ def build_result(
                 openclaw_dir,
                 git_state,
                 max_age_hours=max_age_hours,
+                require_report_hashes=require_report_hashes,
             )
             details["bridge_status"] = bridge_status
             errors.extend(bridge_errors)
@@ -319,6 +329,11 @@ def main() -> int:
     parser.add_argument("--max-age-hours", type=float, default=1.0)
     parser.add_argument("--json", action="store_true", help="감사 결과를 JSON으로 출력합니다.")
     parser.add_argument("--write-report", action="store_true", help="OpenClaw 브리지 폴더에 완료 감사 리포트를 저장합니다.")
+    parser.add_argument(
+        "--require-report-hashes",
+        action="store_true",
+        help="bridge_status.json의 completion_report_sha256 항목을 필수로 검증합니다.",
+    )
     args = parser.parse_args()
 
     result = build_result(
@@ -327,6 +342,7 @@ def main() -> int:
         openclaw_workspace=args.openclaw_workspace.resolve(),
         openclaw_dir=args.openclaw_dir.resolve(),
         max_age_hours=args.max_age_hours,
+        require_report_hashes=args.require_report_hashes,
     )
     report_paths = None
     if args.write_report:

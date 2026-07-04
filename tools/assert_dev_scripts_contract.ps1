@@ -1252,6 +1252,9 @@ $contracts = @(
       'Operational Commands',
       'file_sha256',
       'completion_report_sha256',
+      'require_report_hashes',
+      '--require-report-hashes',
+      'bridge status missing completion_report_sha256',
       'bridge status file_sha256 mismatch',
       'bridge status completion_report_sha256 mismatch',
       'completion report hashes match completion report files',
@@ -1295,6 +1298,8 @@ $contracts = @(
       '--write-report',
       'OpenClaw completion audit skipped because source git worktree is dirty.',
       'OpenClaw final context validation failed',
+      'OpenClaw final completion audit failed',
+      '--require-report-hashes',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
     )
