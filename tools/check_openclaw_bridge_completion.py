@@ -125,6 +125,20 @@ def validate_bridge_status(openclaw_dir: Path, git_state: dict, *, max_age_hours
             continue
         if recorded_hash.lower() != sha256_hex(hash_path):
             errors.append(f"bridge status file_sha256 mismatch: {hash_key}")
+    expected_report_hashes = {
+        "completion_report_json": openclaw_dir / "openclaw_bridge_completion_report.json",
+        "completion_report_markdown": openclaw_dir / "openclaw_bridge_completion_report.md",
+    }
+    report_hashes = status.get("completion_report_sha256") or {}
+    for hash_key, hash_path in expected_report_hashes.items():
+        recorded_hash = report_hashes.get(hash_key)
+        if not recorded_hash:
+            continue
+        if not hash_path.exists():
+            errors.append(f"OpenClaw completion report hash target missing: {hash_path}")
+            continue
+        if recorded_hash.lower() != sha256_hex(hash_path):
+            errors.append(f"bridge status completion_report_sha256 mismatch: {hash_key}")
     return status, errors
 
 
@@ -283,7 +297,16 @@ def write_completion_report(result: dict, output_dir: Path) -> dict:
     markdown_path = output_dir / "openclaw_bridge_completion_report.md"
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     markdown_path.write_text(render_markdown_report(result), encoding="utf-8")
-    return {"json_path": str(json_path), "markdown_path": str(markdown_path)}
+    report_hashes = {
+        "completion_report_json": sha256_hex(json_path),
+        "completion_report_markdown": sha256_hex(markdown_path),
+    }
+    status_path = output_dir / "bridge_status.json"
+    if status_path.exists():
+        status = load_json(status_path)
+        status["completion_report_sha256"] = report_hashes
+        status_path.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"json_path": str(json_path), "markdown_path": str(markdown_path), "report_sha256": report_hashes}
 
 
 def main() -> int:

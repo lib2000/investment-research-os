@@ -17610,6 +17610,25 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
             )
+            (output_dir / "openclaw_bridge_completion_report.json").write_text("{}", encoding="utf-8")
+            status_payload = json.loads((output_dir / "bridge_status.json").read_text(encoding="utf-8"))
+            status_payload["completion_report_sha256"] = {
+                "completion_report_json": "bad",
+            }
+            (output_dir / "bridge_status.json").write_text(
+                json.dumps(status_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "completion_report_sha256 mismatch"):
+                check_tool.validate_bundle(output_dir, max_age_hours=1)
+            status_payload = json.loads((output_dir / "bridge_status.json").read_text(encoding="utf-8"))
+            status_payload["completion_report_sha256"] = {
+                "completion_report_json": check_tool.sha256_hex(output_dir / "openclaw_bridge_completion_report.json"),
+            }
+            (output_dir / "bridge_status.json").write_text(
+                json.dumps(status_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
             bridge_messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
             exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
             manifest_text = (output_dir / "openclaw_bridge_manifest.json").read_text(encoding="utf-8")
@@ -17744,12 +17763,20 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         }
 
         with TemporaryDirectory() as tmp:
-            paths = tool.write_completion_report(result, Path(tmp))
+            output_dir = Path(tmp)
+            (output_dir / "bridge_status.json").write_text(
+                json.dumps({"status": "ok"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            paths = tool.write_completion_report(result, output_dir)
             json_payload = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
             markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+            status_payload = json.loads((output_dir / "bridge_status.json").read_text(encoding="utf-8"))
 
         self.assertEqual("ok", json_payload["status"])
         self.assertIn("strict_refresh", json_payload["operational_commands"])
+        self.assertIn("report_sha256", paths)
+        self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
         self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
         self.assertIn("- bridge max age hours: 1", markdown)

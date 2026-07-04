@@ -178,6 +178,19 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
                 raise AssertionError(f"bridge status missing file_sha256: {hash_key}")
             if recorded_hash.lower() != sha256_hex(hash_path):
                 raise AssertionError(f"bridge status file_sha256 mismatch: {hash_key}")
+        report_hashes = status.get("completion_report_sha256") or {}
+        expected_report_hashes = {
+            "completion_report_json": directory / "openclaw_bridge_completion_report.json",
+            "completion_report_markdown": directory / "openclaw_bridge_completion_report.md",
+        }
+        for hash_key, hash_path in expected_report_hashes.items():
+            recorded_hash = report_hashes.get(hash_key)
+            if not recorded_hash:
+                continue
+            if not hash_path.exists():
+                raise AssertionError(f"OpenClaw completion report hash target missing: {hash_path}")
+            if recorded_hash.lower() != sha256_hex(hash_path):
+                raise AssertionError(f"bridge status completion_report_sha256 mismatch: {hash_key}")
         readme_path = directory / "README.md"
         if not readme_path.exists():
             raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")

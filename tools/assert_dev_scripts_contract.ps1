@@ -1251,7 +1251,9 @@ $contracts = @(
       'operational_commands',
       'Operational Commands',
       'file_sha256',
+      'completion_report_sha256',
       'bridge status file_sha256 mismatch',
+      'bridge status completion_report_sha256 mismatch',
       'source git must be synced with upstream',
       'openclaw_bridge_completion_report.md',
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',
@@ -1304,6 +1306,7 @@ $contracts = @(
       '운영 명령 묶음',
       '최신성 기준 시간',
       '핵심 파일 SHA256',
+      '완료 리포트 SHA256',
       '매니페스트 명령과 일치',
       '민감정보 제외',
       '실거래 주문'
