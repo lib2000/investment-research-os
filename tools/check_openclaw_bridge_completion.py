@@ -296,6 +296,23 @@ def render_markdown_report(result: dict) -> str:
             lines.append(f"{index}. `{item}`")
     else:
         lines.append("- none")
+    lines.extend(["", "## Latest Recommendations", ""])
+    latest_recommendations = bridge_status.get("latest_recommendations") or []
+    if latest_recommendations:
+        for item in latest_recommendations:
+            lines.append(
+                "- {market}#{rank} `{ticker}` {name} | score {score} | baseline {baseline} {currency}".format(
+                    market=item.get("market"),
+                    rank=item.get("rank"),
+                    ticker=item.get("ticker"),
+                    name=item.get("company_name"),
+                    score=item.get("score"),
+                    baseline=item.get("baseline_price"),
+                    currency=item.get("currency"),
+                )
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "## Operational Commands", ""])
     commands = result.get("operational_commands") or {}
     for label in (

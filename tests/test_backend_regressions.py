@@ -18015,6 +18015,17 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "context_generated_at": "2026-07-05T04:46:32+09:00",
                 "latest_recommendation_date": "2026-07-04",
                 "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [
+                    {
+                        "market": "KR",
+                        "rank": 1,
+                        "ticker": "001",
+                        "company_name": "한국1",
+                        "score": 99,
+                        "baseline_price": 1001,
+                        "currency": "KRW",
+                    }
+                ],
                 "telegram_saved_count": 10,
                 "secrets_excluded": True,
                 "read_order": [
@@ -18071,6 +18082,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("OpenClaw completion report hashes match completion report files", markdown)
         self.assertIn("## Read Order", markdown)
         self.assertIn("1. `bridge_status.json`", markdown)
+        self.assertIn("## Latest Recommendations", markdown)
+        self.assertIn("- KR#1 `001` 한국1 | score 99 | baseline 1001 KRW", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)

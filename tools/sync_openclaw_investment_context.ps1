@@ -120,6 +120,21 @@ $fileSha256 = [ordered]@{
   context_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.md")).Hash.ToLowerInvariant()
   bridge_manifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_bridge_manifest.json")).Hash.ToLowerInvariant()
 }
+$latestRecommendations = @()
+foreach ($row in @($context.current_state.daily_recommendations.latest_rows)) {
+  if ($null -eq $row) {
+    continue
+  }
+  $latestRecommendations += [ordered]@{
+    market = $row.market
+    rank = $row.rank
+    ticker = $row.ticker
+    company_name = $row.company_name
+    score = $row.score
+    baseline_price = $row.baseline_price
+    currency = $row.currency
+  }
+}
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
@@ -149,6 +164,7 @@ $status = [ordered]@{
   context_generated_at = $context.generated_at
   latest_recommendation_date = $context.current_state.daily_recommendations.latest_recommendation_date
   latest_market_counts = $context.current_state.daily_recommendations.latest_market_counts
+  latest_recommendations = $latestRecommendations
   telegram_saved_count = $context.current_state.news_and_telegram.telegram_favorite_posts.saved_count
   secrets_excluded = $true
 }

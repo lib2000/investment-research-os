@@ -1362,6 +1362,7 @@ $contracts = @(
       'context generated at',
       'latest recommendation date',
       'latest market counts',
+      'latest_recommendations',
       'telegram favorite saved',
       'core file SHA256 hashes',
       'completion_report_sha256',
@@ -1420,6 +1421,15 @@ $contracts = @(
       '매니페스트 명령과 일치',
       '민감정보 제외',
       '실거래 주문'
+    )
+  },
+  @{
+    Path = "tools\check_openclaw_bridge_completion.py"
+    Snippets = @(
+      '## Latest Recommendations',
+      'latest_recommendations',
+      'baseline_price',
+      'OpenClaw Investment Research Bridge Completion Report'
     )
   },
   @{
