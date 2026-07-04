@@ -1243,6 +1243,9 @@ $contracts = @(
       'source_git_dirty',
       'validate_openclaw_workspace',
       'source git must be synced with upstream',
+      'openclaw_bridge_completion_report.md',
+      'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',
+      'check_openclaw_bridge_completion.py --max-age-hours 24',
       'OpenClaw startup notes point to bridge files'
     )
   },
@@ -1253,6 +1256,8 @@ $contracts = @(
       'MaxAgeHours',
       'SkipValidation',
       'RequireCompletionAudit',
+      'Set-OpenClawBridgeNoteSection',
+      'investment-research-os-bridge:start',
       'export_openclaw_investment_context.py',
       'check_openclaw_investment_context.py',
       'check_openclaw_bridge_completion.py',

@@ -15,6 +15,30 @@ $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completi
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
+function Set-OpenClawBridgeNoteSection {
+  param(
+    [string]$Path,
+    [string[]]$Lines
+  )
+  $startMarker = "<!-- investment-research-os-bridge:start -->"
+  $endMarker = "<!-- investment-research-os-bridge:end -->"
+  $section = @($startMarker) + $Lines + @($endMarker)
+  $sectionText = ($section -join [Environment]::NewLine)
+  $content = ""
+  if (Test-Path -LiteralPath $Path) {
+    $content = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+  }
+  $pattern = "(?s)" + [regex]::Escape($startMarker) + ".*?" + [regex]::Escape($endMarker)
+  if ($content -match $pattern) {
+    $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $sectionText })
+  } elseif ([string]::IsNullOrWhiteSpace($content)) {
+    $content = $sectionText + [Environment]::NewLine
+  } else {
+    $content = $content.TrimEnd() + ([Environment]::NewLine * 2) + $sectionText + [Environment]::NewLine
+  }
+  Set-Content -Path $Path -Value $content -Encoding UTF8
+}
+
 if (-not (Test-Path -LiteralPath $exportScript)) {
   throw "OpenClaw export script not found: $exportScript"
 }
@@ -112,6 +136,23 @@ $readme = @(
   ""
 )
 Set-Content -Path $readmePath -Value $readme -Encoding UTF8
+
+$startupLines = @(
+  "## Investment Research OS Bridge",
+  "",
+  "- Read ``data/investment_research/bridge_status.json`` first.",
+  "- Human summary: ``data/investment_research/investment_research_context.md``.",
+  "- Machine state: ``data/investment_research/investment_research_context.json``.",
+  "- Manifest and commands: ``data/investment_research/openclaw_bridge_manifest.json``.",
+  "- Completion report: ``data/investment_research/openclaw_bridge_completion_report.md``.",
+  "- Safe refresh from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1``.",
+  "- Final strict refresh from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``.",
+  "- Completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``.",
+  "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
+  "- Treat the bridge as decision-support context only; do not place trades from it."
+)
+Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "MEMORY.md") -Lines $startupLines
+Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "HEARTBEAT.md") -Lines $startupLines
 
 Get-ChildItem -LiteralPath $targetDir |
   Select-Object Name, Length, LastWriteTime |

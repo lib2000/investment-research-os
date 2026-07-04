@@ -17667,8 +17667,15 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             self.assertTrue(any("commit mismatch" in error for error in errors))
             self.assertTrue(any("source_git_dirty" in error for error in errors))
 
-            (root / "MEMORY.md").write_text("read data/investment_research/bridge_status.json", encoding="utf-8")
-            (root / "HEARTBEAT.md").write_text("read data/investment_research/bridge_status.json", encoding="utf-8")
+            startup_note = (
+                "read data/investment_research/bridge_status.json\n"
+                "read data/investment_research/openclaw_bridge_manifest.json\n"
+                "read data/investment_research/openclaw_bridge_completion_report.md\n"
+                "run sync_openclaw_investment_context.ps1 -RequireCompletionAudit\n"
+                "run check_openclaw_bridge_completion.py --max-age-hours 24\n"
+            )
+            (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
+            (root / "HEARTBEAT.md").write_text(startup_note, encoding="utf-8")
             self.assertEqual([], tool.validate_openclaw_workspace(root))
 
     def test_completion_audit_writes_json_and_markdown_reports(self):

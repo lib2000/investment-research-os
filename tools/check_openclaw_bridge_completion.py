@@ -111,12 +111,20 @@ def validate_openclaw_workspace(workspace: Path) -> list[str]:
     errors: list[str] = []
     memory = workspace / "MEMORY.md"
     heartbeat = workspace / "HEARTBEAT.md"
+    required_items = [
+        "data/investment_research",
+        "bridge_status.json",
+        "openclaw_bridge_manifest.json",
+        "openclaw_bridge_completion_report.md",
+        "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
+        "check_openclaw_bridge_completion.py --max-age-hours 24",
+    ]
     for path in (memory, heartbeat):
         if not path.exists():
             errors.append(f"OpenClaw startup note missing: {path}")
             continue
         text = path.read_text(encoding="utf-8-sig")
-        for required in ["data/investment_research", "bridge_status.json"]:
+        for required in required_items:
             if required not in text:
                 errors.append(f"OpenClaw startup note missing {required}: {path}")
     return errors
