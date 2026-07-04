@@ -1254,6 +1254,7 @@ $contracts = @(
       'completion_report_sha256',
       'bridge status file_sha256 mismatch',
       'bridge status completion_report_sha256 mismatch',
+      'completion report hashes match completion report files',
       'source git must be synced with upstream',
       'openclaw_bridge_completion_report.md',
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',

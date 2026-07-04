@@ -17752,6 +17752,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             "completion_requirements": [
                 "source and OpenClaw bundles validate",
                 "OpenClaw bridge_status file hashes match copied files",
+                "OpenClaw completion report hashes match completion report files",
             ],
             "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
             "operational_commands": {
@@ -17781,6 +17782,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
         self.assertIn("- bridge max age hours: 1", markdown)
         self.assertIn("OpenClaw bridge_status file hashes match copied files", markdown)
+        self.assertIn("OpenClaw completion report hashes match completion report files", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("## File Hashes", markdown)
