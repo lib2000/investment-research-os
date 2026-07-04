@@ -654,6 +654,32 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(any("AI 데이터센터" in item for item in candidate["reasons"]))
         self.assertTrue(any("가스터빈 납기" in item for item in candidate["risk_notes"]))
 
+    def test_investment_direction_profile_scores_middle_east_reconstruction_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "028050", "삼성이앤에이")
+        candidate["evidence_sources"].append("중동 복구와 사우디 Jafurah Fadhili 가스처리 EPC 수주 레퍼런스 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "middle_east_reconstruction_epc")
+        self.assertEqual(profile["score_bonus"], 6)
+        self.assertTrue(any("중동 복구 EPC·인프라" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("계약 규모" in item or "마진" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("중동 복구 EPC" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_postbiotic_akkermansia_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "249420", "일동제약")
+        candidate["evidence_sources"].append("포스트바이오틱스 Akkermansia muciniphila MucT RCT와 RHT3201 원료 IP 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "postbiotic_akkermansia_metabolic_health")
+        self.assertEqual(profile["score_bonus"], 6)
+        self.assertTrue(any("포스트바이오틱스·Akkermansia 대사건강" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("후속 대형 임상" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("Akkermansia" in item for item in profile["watch_triggers"]))
+
     def test_investment_direction_profile_scores_repo_liquidity_candidate(self):
         candidate = ensure_daily_recommendation_candidate({}, "TLT", "Long Treasury ETF")
         candidate["evidence_sources"].append("SOFR-ON RRP와 SOFR-IORB, TGA, T-bill 순발행을 함께 확인")
