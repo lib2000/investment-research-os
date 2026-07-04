@@ -82,6 +82,14 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     defaults = firecrawl.get("safety_defaults") or {}
     if defaults.get("enabled_default") is not False or defaults.get("dry_run_default") is not True:
         raise AssertionError("Firecrawl safety defaults must remain enabled=false and dry_run=true")
+    usage = payload.get("openclaw_usage") or {}
+    if usage.get("status_file") != "bridge_status.json":
+        raise AssertionError("OpenClaw usage must point to bridge_status.json")
+    if usage.get("completion_report") != "openclaw_bridge_completion_report.md":
+        raise AssertionError("OpenClaw usage must point to completion report")
+    final_audit = str(usage.get("final_completion_audit_command") or "")
+    if "--require-report-hashes" not in final_audit:
+        raise AssertionError("OpenClaw usage must include final completion hash audit command")
     messages.append(
         f"generated_at={payload.get('generated_at')} latest={rec.get('latest_recommendation_date')} "
         f"rows={len(latest_rows)} telegram_saved={telegram.get('saved_count')}"

@@ -1233,6 +1233,9 @@ $contracts = @(
       'strict_refresh_command',
       'completion_audit_command',
       'final_completion_audit_command',
+      'status_file',
+      'completion_report',
+      'completion_report_sha256',
       'completion_report_file',
       'restricted_actions'
     )
@@ -1246,6 +1249,8 @@ $contracts = @(
       'raw token exclusion flag must be true',
       'KR/US recommendation counts are incomplete',
       'Firecrawl safety defaults must remain enabled=false and dry_run=true',
+      'OpenClaw usage must point to bridge_status.json',
+      'OpenClaw usage must include final completion hash audit command',
       'openclaw_bridge_manifest.json',
       'strict_refresh_command',
       'completion_audit_command',

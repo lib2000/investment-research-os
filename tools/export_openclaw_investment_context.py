@@ -291,9 +291,12 @@ def build_context(project_root: Path) -> dict:
             "firecrawl_monitoring": build_firecrawl_state(firecrawl_status),
         },
         "openclaw_usage": {
+            "status_file": "bridge_status.json",
             "read_this_first": "investment_research_context.md",
             "machine_readable": "investment_research_context.json",
-            "suggested_heartbeat_note": "투자리서치 상태 확인은 이 번들의 generated_at과 backend_health_url을 기준으로 판단합니다.",
+            "completion_report": "openclaw_bridge_completion_report.md",
+            "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
                 "최신 추천/관심종목/텔레그램 인기글 요약 조회",
                 "투자리서치 백엔드 health 확인",
@@ -348,6 +351,8 @@ def render_markdown(context: dict) -> str:
             "## 오픈클로 사용 규칙",
             "",
             "- 이 파일은 투자 판단 보조용 요약입니다. 실거래 주문 또는 계좌 인증 정보 공유에 사용하지 않습니다.",
+            "- 먼저 `bridge_status.json`에서 source git, 최신성, completion_report_sha256을 확인합니다.",
+            "- 완료 상태는 `openclaw_bridge_completion_report.md`와 `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",
             "- Firecrawl은 기본적으로 `enabled=false`, `dry_run=true` 안전 설정을 유지합니다.",
