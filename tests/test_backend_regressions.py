@@ -17917,8 +17917,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
         self.assertEqual("ok", summary["status"])
         self.assertEqual("abc1234", summary["source_git"]["commit"])
+        self.assertIsInstance(summary["context_age_hours"], float)
         self.assertEqual({"KR": 3, "US": 3}, summary["latest_market_counts"])
         self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
+        self.assertIn("context_age_hours:", rendered)
         self.assertIn('latest_market_counts: {"KR":3,"US":3}', rendered)
 
     def test_completion_audit_writes_json_and_markdown_reports(self):

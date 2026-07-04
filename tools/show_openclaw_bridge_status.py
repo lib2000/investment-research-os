@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -30,6 +31,18 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     rec = ((context.get("current_state") or {}).get("daily_recommendations") or {})
     telegram = (((context.get("current_state") or {}).get("news_and_telegram") or {}).get("telegram_favorite_posts") or {})
     read_order = status.get("read_order") or manifest.get("read_order") or []
+    context_generated_at = context.get("generated_at")
+    context_age_hours = None
+    if context_generated_at:
+        try:
+            parsed_generated_at = datetime.fromisoformat(str(context_generated_at))
+            if parsed_generated_at.tzinfo is not None:
+                context_age_hours = round(
+                    (datetime.now(timezone.utc) - parsed_generated_at.astimezone(timezone.utc)).total_seconds() / 3600,
+                    3,
+                )
+        except ValueError:
+            context_age_hours = None
     files_present = {str(name): (openclaw_dir / str(name)).exists() for name in read_order}
     errors: list[str] = []
     if status.get("status") != "ok":
@@ -39,9 +52,9 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     missing = [name for name, present in files_present.items() if not present]
     if missing:
         errors.append(f"read_order files missing: {', '.join(missing)}")
-    if manifest.get("context_generated_at") != context.get("generated_at"):
+    if manifest.get("context_generated_at") != context_generated_at:
         errors.append("manifest context_generated_at does not match context generated_at")
-    if status.get("context_generated_at") != context.get("generated_at"):
+    if status.get("context_generated_at") != context_generated_at:
         errors.append("bridge_status context_generated_at does not match context generated_at")
     return {
         "status": "ok" if not errors else "failure",
@@ -53,7 +66,8 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
             "dirty": status.get("source_git_dirty"),
         },
         "copied_at": status.get("copied_at"),
-        "context_generated_at": context.get("generated_at"),
+        "context_generated_at": context_generated_at,
+        "context_age_hours": context_age_hours,
         "latest_recommendation_date": rec.get("latest_recommendation_date"),
         "latest_market_counts": rec.get("latest_market_counts"),
         "telegram_saved_count": telegram.get("saved_count"),
@@ -74,6 +88,7 @@ def render_text(summary: dict) -> str:
         f"- source git: {git.get('branch')} {git.get('commit')} dirty={git.get('dirty')}",
         f"- copied_at: {summary.get('copied_at')}",
         f"- context_generated_at: {summary.get('context_generated_at')}",
+        f"- context_age_hours: {summary.get('context_age_hours')}",
         f"- latest_recommendation_date: {summary.get('latest_recommendation_date')}",
         f"- latest_market_counts: {market_counts}",
         f"- telegram_saved_count: {summary.get('telegram_saved_count')}",
