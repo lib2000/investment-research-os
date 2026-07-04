@@ -32,6 +32,19 @@ OpenClaw 워크스페이스 동기화 위치:
 
 OpenClaw 시작 노트(`MEMORY.md`, `HEARTBEAT.md`)에는 최신 source git 브랜치/커밋과 최종 완료 해시 감사 명령이 함께 기록된다. 완료 감사는 이 시작 노트가 현재 `bridge_status.json`의 source git과 같은 커밋을 가리키는지도 확인한다.
 
+## 첫 읽기 순서
+
+OpenClaw는 다음 순서로 읽는다.
+
+1. `data/investment_research/bridge_status.json`
+2. `data/investment_research/openclaw_bridge_manifest.json`
+3. `data/investment_research/investment_research_context.md`
+4. `data/investment_research/investment_research_context.json`
+5. `data/investment_research/openclaw_bridge_completion_report.md`
+6. `data/investment_research/openclaw_bridge_completion_report.json`
+
+시작 노트에는 같은 순서가 `Read order:` 한 줄로도 기록된다. 완료 감사는 이 문구와 각 파일명이 `MEMORY.md`, `HEARTBEAT.md`에 있는지 확인한다.
+
 ## 갱신
 
 OpenClaw까지 동기화:
