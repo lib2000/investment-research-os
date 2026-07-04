@@ -30,6 +30,8 @@ OpenClaw 워크스페이스 동기화 위치:
 
 `bridge_status.json`은 OpenClaw가 가장 먼저 읽는 런타임 상태 파일이다. 원본 커밋/브랜치/dirty 상태, 컨텍스트 생성 시각, 최신성 기준 시간, 최신 추천일, 한국/미국 추천 수, 텔레그램 반영 수, 민감정보 제외 확인, 완료 리포트 경로, 시작 안내 갱신 여부, 운영 명령 묶음, 핵심 파일 SHA256, 완료 리포트 SHA256을 포함한다.
 
+OpenClaw 시작 노트(`MEMORY.md`, `HEARTBEAT.md`)에는 최신 source git 브랜치/커밋과 최종 완료 해시 감사 명령이 함께 기록된다. 완료 감사는 이 시작 노트가 현재 `bridge_status.json`의 source git과 같은 커밋을 가리키는지도 확인한다.
+
 ## 갱신
 
 OpenClaw까지 동기화:
@@ -79,6 +81,7 @@ python tools\check_openclaw_bridge_completion.py --max-age-hours 1 --require-rep
 - `bridge_status.json`의 완료 리포트 SHA256이 실제 완료 리포트 파일과 일치하는지 여부
 - 원본 Git 브랜치가 `main`이고 upstream과 동기화되어 있으며 작업트리가 clean인지 여부
 - `bridge_status.json`의 원본 커밋/브랜치/dirty 상태가 현재 Git 상태와 일치하는지 여부
+- OpenClaw 시작 노트가 현재 source git 커밋과 최종 완료 해시 감사 명령을 포함하는지 여부
 - `openclaw_bridge_completion_report.md/json`에 최종 감사 결과가 저장되는지 여부
 - 최신 추천 한국 3개, 미국 3개 포함 여부
 - 텔레그램 인기글 반영 여부
