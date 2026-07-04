@@ -116,6 +116,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   let detailDisplay = "";
                   let detailGridColumnCount = 0;
                   let evidenceGridColumnCount = 0;
+                  let detailColumnCount = 0;
+                  let detailContentColumnCount = 0;
+                  let minDetailContentColumnWidth = 0;
                   let detailWidth = 0;
                   let detailHeight = 0;
                   let horizontalDetailLayout = false;
@@ -139,21 +142,32 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     detailFocusedRank = openedCard.dataset.dailyRecommendationRank || "";
                     detailTabActive = document.querySelector('button.tab[data-tab="memory"]')?.classList.contains("active") || false;
                     const openedDetail = openedCard.querySelector(".daily-recommendation-detail");
+                    const detailColumns = openedDetail?.querySelector(".daily-recommendation-detail-columns");
+                    const detailContentColumns = [...(openedDetail?.querySelectorAll(".daily-recommendation-detail-column") || [])];
                     const evidence = openedDetail?.querySelector(".daily-recommendation-evidence");
                     const detailStyle = openedDetail ? getComputedStyle(openedDetail) : null;
+                    const detailColumnsStyle = detailColumns ? getComputedStyle(detailColumns) : null;
                     const evidenceStyle = evidence ? getComputedStyle(evidence) : null;
                     const countGridColumns = (value) => {
                       const text = String(value || "").trim();
                       return !text || text === "none" ? 0 : text.split(/\\s+/).length;
                     };
                     const detailRect = openedDetail?.getBoundingClientRect();
+                    const detailContentColumnWidths = detailContentColumns.map((column) => Math.round(column.getBoundingClientRect().width || 0));
                     detailDisplay = detailStyle?.display || "";
                     detailGridColumnCount = countGridColumns(detailStyle?.gridTemplateColumns);
+                    detailColumnCount = countGridColumns(detailColumnsStyle?.gridTemplateColumns);
+                    detailContentColumnCount = detailContentColumns.length;
+                    minDetailContentColumnWidth = detailContentColumnWidths.length ? Math.min(...detailContentColumnWidths) : 0;
                     evidenceGridColumnCount = countGridColumns(evidenceStyle?.gridTemplateColumns);
                     detailWidth = Math.round(detailRect?.width || 0);
                     detailHeight = Math.round(detailRect?.height || 0);
-                    horizontalDetailLayout = detailDisplay === "grid" && detailGridColumnCount >= 3;
-                    horizontalEvidenceLayout = evidenceGridColumnCount >= 3;
+                    horizontalDetailLayout =
+                      detailDisplay === "grid" &&
+                      detailColumnCount >= 3 &&
+                      detailContentColumnCount >= 3 &&
+                      minDetailContentColumnWidth >= 240;
+                    horizontalEvidenceLayout = evidenceGridColumnCount >= 2;
                     readableDetailWidth = detailWidth >= Math.min(760, Math.max(0, window.innerWidth - 120));
                     cardsRoot.scrollIntoView({block: "start", inline: "nearest"});
                     await sleep(200);
@@ -175,6 +189,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     detailTabActive,
                     detailDisplay,
                     detailGridColumnCount,
+                    detailColumnCount,
+                    detailContentColumnCount,
+                    minDetailContentColumnWidth,
                     evidenceGridColumnCount,
                     detailWidth,
                     detailHeight,
