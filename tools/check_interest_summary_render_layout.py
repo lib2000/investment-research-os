@@ -125,6 +125,10 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       hasRecommendationPanel: Boolean(recommendationPanel),
                       recommendationMetricCount: details?.querySelectorAll(".interest-recommendation-metrics span").length || 0,
                       recommendationEvidenceCount: details?.querySelectorAll(".interest-recommendation-evidence span").length || 0,
+                      recommendationSignalGridCount: details?.querySelectorAll(".daily-recommendation-signal-grid").length || 0,
+                      recommendationQualityCount: details?.querySelectorAll(".daily-recommendation-quality").length || 0,
+                      recommendationScoreChipCount: details?.querySelectorAll(".daily-recommendation-score em").length || 0,
+                      recommendationSectionLabelCount: details?.querySelectorAll(".interest-recommendation-evidence b").length || 0,
                       recommendationPanelDisplay: panelDisplay,
                       recommendationPanelColumnCount: panelColumnCount,
                       recommendationPanelWidth: Math.round(panelRect?.width || 0),
@@ -250,7 +254,11 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     tickerRecommendationDetailReady:
                       tickerOpen.hasRecommendationPanel &&
                       tickerOpen.recommendationMetricCount >= 4 &&
-                      tickerOpen.recommendationEvidenceCount >= 6,
+                      tickerOpen.recommendationEvidenceCount >= 6 &&
+                      tickerOpen.recommendationSignalGridCount >= 1 &&
+                      tickerOpen.recommendationQualityCount >= 1 &&
+                      tickerOpen.recommendationScoreChipCount >= 4 &&
+                      tickerOpen.recommendationSectionLabelCount >= 3,
                     tickerRecommendationHorizontal:
                       (
                         tickerOpen.recommendationPanelDisplay === "grid" &&

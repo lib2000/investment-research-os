@@ -1558,9 +1558,7 @@ function interestRegionGroupTitle(value, count) {
   return `${interestRegionLabel(value)} ${count}개`;
 }
 
-function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
-  const panel = document.createElement("section");
-  panel.className = "interest-recommendation-panel";
+function buildInterestRecommendationRecord(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
   const priority = item.priority || "medium";
   const priorityLabel = interestPriorityLabel(priority);
   const verdict = interestPriorityVerdict(priority);
@@ -1569,29 +1567,208 @@ function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", c
   const notes = String(item.notes || "").trim();
   const tags = splitTags(item.tags);
   const verified = Boolean(item.verification?.verified);
-  const verificationLabel = verified ? "공식 티커 인증 완료" : "공식 티커 확인 필요";
-  const evidence = [
-    `${interestRegionLabel(region)} 시장 관심종목으로 분리 관리`,
-    `${priorityLabel} 우선순위 기준 ${verdict}`,
-    verificationLabel,
-    thesis ? `투자 논리: ${thesis}` : "투자 논리 메모 보강 필요",
-    tags.length ? `태그: ${tags.slice(0, 4).join(", ")}` : "섹터/테마 태그 보강 필요",
-    notes ? `추가 메모: ${notes}` : "저장 자료와 뉴스 스캔으로 근거 보강 가능",
+  const exchange = item.verification?.exchange || "";
+  const updatedAt = item.updated_at || item.created_at || new Date().toISOString();
+  const evidenceDocuments = [
+    {
+      title: thesis || `${companyName || tickerCode || "관심종목"} 투자 논리 메모`,
+      source_type: "interest_list",
+      report_type: "interest_thesis",
+      source_date: String(updatedAt).slice(0, 10),
+      citation_label: "관심종목 메모",
+      matched_claims: [thesis || `${priorityLabel} 우선순위로 추적`],
+      source_relative_path: "research_vault/_system/interest_list.json",
+    },
+    {
+      title: notes || `${companyName || tickerCode || "관심종목"} 추가 메모`,
+      source_type: "interest_list",
+      report_type: "interest_note",
+      source_date: String(updatedAt).slice(0, 10),
+      citation_label: "관심종목 노트",
+      matched_claims: [notes || "자료 검색과 뉴스 스캔으로 근거 보강 필요"],
+      source_relative_path: "research_vault/_system/interest_list.json",
+    },
+    {
+      title: verified ? `${companyName || tickerCode} 공식 티커 인증` : `${tickerCode || "티커"} 공식 인증 필요`,
+      source_type: "ticker_verification",
+      report_type: "official_registry",
+      source_date: String(updatedAt).slice(0, 10),
+      citation_label: item.verification?.verification_source || "티커 인증",
+      matched_claims: [item.verification?.message || (verified ? "공식 티커 인증 완료" : "공식 티커 확인 필요")],
+      source_relative_path: "research_vault/_system/ticker_registry_cache.json",
+    },
+    tags.length
+      ? {
+          title: `태그: ${tags.slice(0, 4).join(", ")}`,
+          source_type: "interest_list",
+          report_type: "theme_tags",
+          source_date: String(updatedAt).slice(0, 10),
+          citation_label: "관심 테마",
+          matched_claims: tags.slice(0, 4),
+          source_relative_path: "research_vault/_system/interest_list.json",
+        }
+      : null,
+  ].filter(Boolean);
+  const scoreComponents = [
+    { label: `${priorityLabel} 관심 우선순위`, points: priority === "high" ? 28 : priority === "low" ? 12 : 20 },
+    { label: verified ? "공식 티커 인증" : "티커 인증 대기", points: verified ? 18 : 4 },
+    { label: thesis ? "투자 논리 메모" : "투자 논리 보강 필요", points: thesis ? 18 : 6 },
+    { label: notes ? "추가 메모/조건" : "추가 조건 미입력", points: notes ? 10 : 3 },
+    { label: tags.length ? "섹터/테마 태그" : "테마 태그 보강", points: tags.length ? Math.min(12, tags.length * 3) : 2 },
+  ];
+  const qualityFlags = [
+    thesis ? "" : "투자 논리 메모 없음",
+    notes ? "" : "가격 조건/확인 메모 없음",
+    tags.length ? "" : "섹터/테마 태그 없음",
+  ].filter(Boolean);
+  return {
+    ticker: tickerCode,
+    company_name: companyName,
+    display_name: companyName || tickerCode || "관심종목",
+    score: trackingScore,
+    currency: region === "US" ? "USD" : "KRW",
+    recommendation_date: String(updatedAt).slice(0, 10),
+    reasons: [
+      `${interestRegionLabel(region)} 시장 관심종목으로 분리 관리`,
+      `${priorityLabel} 우선순위 기준 ${verdict}`,
+      thesis ? `투자 논리: ${thesis}` : "투자 논리 메모 보강 필요",
+      notes ? `추가 메모: ${notes}` : "가격 조건·확인 메모 보강 필요",
+    ],
+    evidence_sources: [
+      verified ? `공식 인증: ${companyName || tickerCode}${exchange ? ` · ${exchange}` : ""}` : "공식 티커 확인 필요",
+      tags.length ? `태그: ${tags.slice(0, 4).join(", ")}` : "태그 보강 필요",
+      "저장 자료·뉴스·공시 스캔으로 추천 근거 확장 가능",
+    ],
+    score_components: scoreComponents,
+    score_explanation: {
+      component_weights: scoreComponents.slice(0, 3).map((component) => ({
+        label: component.label,
+        weight_pct: component.points,
+      })),
+    },
+    quality_flags: qualityFlags,
+    score_penalties: qualityFlags,
+    evidence_documents: evidenceDocuments,
+    weekly_evidence_groups: [
+      {
+        key: "interest_context",
+        label: "관심종목 저장 정보",
+        count: evidenceDocuments.length,
+        visible_count: evidenceDocuments.length,
+        ticker_count: tickerCode ? 1 : 0,
+        quality_summary: {
+          recommendation_evidence_linked: evidenceDocuments.length,
+          latest_recommendation_evidence_linked: 0,
+        },
+      },
+    ],
+    portfolio_risk_connection: {
+      linked: true,
+      priority: priority === "high" ? "high" : "watch",
+      message: `${interestRegionLabel(region)} 관심종목 · ${priorityLabel} 우선순위 · ${verdict}`,
+    },
+    investment_direction_profile: {
+      themes: tags.slice(0, 3).map((tag) => ({ label: tag })),
+      watch_triggers: [
+        thesis || "투자 논리 원문 보강",
+        notes || "가격 조건과 확인할 이벤트 입력",
+      ].filter(Boolean),
+      score_bonus: tags.length ? Math.min(12, tags.length * 3) : 0,
+    },
+    signal_breakdown: [
+      {
+        key: "market",
+        label: "시장",
+        summary: `${interestRegionLabel(region)} 관심종목 · ${priorityLabel} 우선순위`,
+        count: 1,
+        score_applied: true,
+        tone: "ok",
+      },
+      {
+        key: "filing",
+        label: "공시",
+        summary: verified ? `${exchange || "공식 등록"} 티커 인증 완료` : "공식 공시/티커 확인 필요",
+        count: verified ? 1 : 0,
+        score_applied: verified,
+        tone: verified ? "ok" : "neutral",
+      },
+      {
+        key: "policy",
+        label: "정책",
+        summary: tags.length ? `정책·테마 연결 후보: ${tags.slice(0, 3).join(" · ")}` : "정책/테마 연결 보강 필요",
+        count: tags.length,
+        score_applied: false,
+        tone: tags.length ? "reference" : "neutral",
+      },
+      {
+        key: "news",
+        label: "뉴스",
+        summary: notes || thesis || "뉴스·리포트 스캔으로 근거 보강 필요",
+        count: notes || thesis ? 1 : 0,
+        score_applied: Boolean(notes || thesis),
+        tone: notes || thesis ? "ok" : "neutral",
+      },
+      {
+        key: "sentiment",
+        label: "심리",
+        summary: verdict,
+        count: 1,
+        score_applied: true,
+        tone: priority === "high" ? "ok" : "reference",
+      },
+    ],
+  };
+}
+
+function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
+  const panel = document.createElement("section");
+  panel.className = "interest-recommendation-panel";
+  const record = buildInterestRecommendationRecord(item, { tickerCode, companyName, region });
+  const priorityLabel = interestPriorityLabel(item.priority || "medium");
+  const verdict = interestPriorityVerdict(item.priority || "medium");
+  const scoreComponents = (record.score_components || []).slice(0, 5);
+  const evidenceRows = dailyRecommendationEvidenceRows(record);
+  const citationRows = dailyRecommendationCitationRows(record);
+  const quality = dailyRecommendationEvidenceQualitySummary(record);
+  const exposure = dailyRecommendationExposureSummary(record);
+  const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
+  const followups = [
+    "저장 자료 검색으로 최근 리포트/뉴스 확인",
+    region === "KR" ? "DART/KIND 공시와 키움 관심그룹 변경 확인" : "SEC/IR 자료와 USD 환율 영향 확인",
+    "가격 조건, 손절/추가매수 조건을 메모에 보강",
   ];
   panel.innerHTML = `
     <div class="interest-recommendation-head">
       <span>추천 판단</span>
       <strong>${escapeHtml(verdict)}</strong>
       <small>${escapeHtml(companyName || tickerCode || "관심종목")} · ${escapeHtml(tickerCode || "티커 미확인")}</small>
+      ${renderDailyRecommendationEvidenceQuality(record)}
+      <ul class="interest-recommendation-primary-reasons">
+        ${(record.reasons || []).slice(0, 4).map((line) => `<li>${escapeHtml(compactOutputText(line, 86))}</li>`).join("")}
+      </ul>
     </div>
-    <div class="interest-recommendation-metrics">
-      <span><b>${escapeHtml(String(trackingScore))}</b><small>관심 추적 점수</small></span>
+    <div class="interest-recommendation-signals">
+      <div class="interest-recommendation-metrics">
+      <span><b>${escapeHtml(String(record.score))}</b><small>관심 추적 점수</small></span>
       <span><b>${escapeHtml(priorityLabel)}</b><small>우선순위</small></span>
       <span><b>${escapeHtml(interestRegionLabel(region))}</b><small>시장</small></span>
-      <span><b>${escapeHtml(verified ? "완료" : "대기")}</b><small>티커 인증</small></span>
+      <span><b>${escapeHtml(item.verification?.verified ? "완료" : "대기")}</b><small>티커 인증</small></span>
+      </div>
+      ${exposure ? `<p class="interest-recommendation-callout">${escapeHtml(exposure)}</p>` : ""}
+      ${investmentProfile.hasProfile ? `<p class="interest-recommendation-callout profile">투자 방향 후보: ${escapeHtml(investmentProfile.labelText)}${investmentProfile.triggerText ? ` · ${escapeHtml(investmentProfile.triggerText)}` : ""}</p>` : ""}
+      ${renderDailyRecommendationSignalGrid(record, { compact: true })}
+      <div class="daily-recommendation-score">
+        ${scoreComponents.map((component) => `<em>${escapeHtml(component.label)} +${escapeHtml(formatNumber(component.points || 0))}</em>`).join("")}
+      </div>
+      <small>${escapeHtml(`근거 품질: ${quality.grade || "-"} · ${quality.label || "미평가"} · 보강 ${formatNumber(quality.needs_review_count || 0)}건`)}</small>
     </div>
     <div class="interest-recommendation-evidence">
-      ${evidence.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+      <b>주요 근거</b>
+      ${evidenceRows.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+      <b>근거 문서</b>
+      ${citationRows.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+      <b>후속 확인</b>
+      ${followups.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
     </div>
   `;
   return panel;

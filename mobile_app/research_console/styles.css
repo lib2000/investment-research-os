@@ -3894,7 +3894,7 @@ label {
 .interest-recommendation-head {
   display: grid;
   align-content: start;
-  gap: 5px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3917,6 +3917,13 @@ label {
   font-size: 12px;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.interest-recommendation-signals {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
 }
 
 .interest-recommendation-metrics {
@@ -3959,12 +3966,49 @@ label {
   min-width: 0;
 }
 
+.interest-recommendation-evidence b {
+  grid-column: 1 / -1;
+  color: #134e4a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
 .interest-recommendation-evidence span {
   color: #334155;
   font-size: 12px;
   font-weight: 760;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.interest-recommendation-callout,
+.interest-recommendation-primary-reasons {
+  min-width: 0;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid #99f6e4;
+  border-radius: 7px;
+  background: #ecfdf5;
+  color: #115e59;
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.interest-recommendation-callout.profile {
+  color: #3730a3;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.interest-recommendation-primary-reasons {
+  display: grid;
+  gap: 4px;
+  padding-left: 24px;
+  background: #ffffff;
+  border-color: #dbe4ef;
+  color: #0f172a;
 }
 
 .interest-detail-controls {
