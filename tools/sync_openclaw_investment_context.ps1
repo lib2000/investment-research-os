@@ -104,6 +104,11 @@ $operationalCommands = [ordered]@{
   validation = "python tools\check_openclaw_investment_context.py --max-age-hours 24"
   completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24"
 }
+$fileSha256 = [ordered]@{
+  context_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.json")).Hash.ToLowerInvariant()
+  context_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.md")).Hash.ToLowerInvariant()
+  bridge_manifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_bridge_manifest.json")).Hash.ToLowerInvariant()
+}
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
@@ -120,6 +125,7 @@ $status = [ordered]@{
   completion_report_markdown = (Join-Path $targetDir "openclaw_bridge_completion_report.md")
   startup_notes_updated = $true
   operational_commands = $operationalCommands
+  file_sha256 = $fileSha256
   context_generated_at = $context.generated_at
   latest_recommendation_date = $context.current_state.daily_recommendations.latest_recommendation_date
   latest_market_counts = $context.current_state.daily_recommendations.latest_market_counts

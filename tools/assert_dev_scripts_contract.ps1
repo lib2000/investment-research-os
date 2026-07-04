@@ -1234,6 +1234,8 @@ $contracts = @(
       'startup_notes_updated',
       'completion_report_markdown',
       'operational_commands',
+      'file_sha256',
+      'bridge status file_sha256 mismatch',
       'bridge status operational command mismatch',
       'secrets_excluded'
     )
@@ -1279,6 +1281,7 @@ $contracts = @(
       'startup_notes_updated',
       'completion_report_markdown',
       'operational_commands',
+      'file_sha256',
       'secrets_excluded',
       'Copy-Item -Force',
       '--write-report',

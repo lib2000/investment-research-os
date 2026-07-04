@@ -17583,6 +17583,11 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
                         },
+                        "file_sha256": {
+                            "context_json": check_tool.sha256_hex(output_dir / "investment_research_context.json"),
+                            "context_markdown": check_tool.sha256_hex(output_dir / "investment_research_context.md"),
+                            "bridge_manifest": check_tool.sha256_hex(output_dir / "openclaw_bridge_manifest.json"),
+                        },
                     },
                     ensure_ascii=False,
                 ),

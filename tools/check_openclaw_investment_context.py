@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
@@ -95,6 +96,10 @@ def validate_no_secret_like_content(path: Path) -> None:
             raise AssertionError(f"secret-like content found in {path}: {pattern.pattern}")
 
 
+def sha256_hex(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> list[str]:
     json_path = directory / "investment_research_context.json"
     md_path = directory / "investment_research_context.md"
@@ -161,6 +166,18 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
                 raise AssertionError(f"bridge status missing operational command: {command_key}")
             if commands.get(command_key) != manifest.get(manifest_key):
                 raise AssertionError(f"bridge status operational command mismatch: {command_key}")
+        expected_hashes = {
+            "context_json": json_path,
+            "context_markdown": md_path,
+            "bridge_manifest": manifest_path,
+        }
+        file_hashes = status.get("file_sha256") or {}
+        for hash_key, hash_path in expected_hashes.items():
+            recorded_hash = file_hashes.get(hash_key)
+            if not recorded_hash:
+                raise AssertionError(f"bridge status missing file_sha256: {hash_key}")
+            if recorded_hash.lower() != sha256_hex(hash_path):
+                raise AssertionError(f"bridge status file_sha256 mismatch: {hash_key}")
         readme_path = directory / "README.md"
         if not readme_path.exists():
             raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")
