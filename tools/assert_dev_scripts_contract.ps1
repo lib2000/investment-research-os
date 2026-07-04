@@ -1231,6 +1231,9 @@ $contracts = @(
       'bridge_status.json',
       'source_git_commit',
       'source_git_dirty',
+      'startup_notes_updated',
+      'completion_report_markdown',
+      'operational_commands',
       'secrets_excluded'
     )
   },
@@ -1272,6 +1275,9 @@ $contracts = @(
       'completion audit',
       'source_git_commit',
       'source_git_dirty',
+      'startup_notes_updated',
+      'completion_report_markdown',
+      'operational_commands',
       'secrets_excluded',
       'Copy-Item -Force',
       '--write-report',

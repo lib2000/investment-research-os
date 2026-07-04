@@ -98,6 +98,12 @@ try {
   $gitDirty = $null
 }
 $statusPath = Join-Path $targetDir "bridge_status.json"
+$operationalCommands = [ordered]@{
+  safe_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1"
+  strict_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"
+  validation = "python tools\check_openclaw_investment_context.py --max-age-hours 24"
+  completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24"
+}
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
@@ -110,6 +116,10 @@ $status = [ordered]@{
   source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
+  completion_report_json = (Join-Path $targetDir "openclaw_bridge_completion_report.json")
+  completion_report_markdown = (Join-Path $targetDir "openclaw_bridge_completion_report.md")
+  startup_notes_updated = $true
+  operational_commands = $operationalCommands
   context_generated_at = $context.generated_at
   latest_recommendation_date = $context.current_state.daily_recommendations.latest_recommendation_date
   latest_market_counts = $context.current_state.daily_recommendations.latest_market_counts

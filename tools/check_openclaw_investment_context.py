@@ -145,6 +145,14 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError("bridge status must include source git commit and branch")
         if status.get("source_git_dirty") not in (True, False):
             raise AssertionError("bridge status must include source_git_dirty boolean")
+        if status.get("startup_notes_updated") is not True:
+            raise AssertionError("bridge status must confirm startup_notes_updated=true")
+        if not str(status.get("completion_report_markdown") or "").endswith("openclaw_bridge_completion_report.md"):
+            raise AssertionError("bridge status completion_report_markdown mismatch")
+        commands = status.get("operational_commands") or {}
+        for command_key in ("safe_refresh", "strict_refresh", "validation", "completion_audit"):
+            if not commands.get(command_key):
+                raise AssertionError(f"bridge status missing operational command: {command_key}")
         readme_path = directory / "README.md"
         if not readme_path.exists():
             raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")
