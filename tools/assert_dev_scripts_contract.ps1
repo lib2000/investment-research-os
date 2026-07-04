@@ -1217,12 +1217,16 @@ $contracts = @(
     Path = "tools\sync_openclaw_investment_context.ps1"
     Snippets = @(
       'OpenClawWorkspace',
+      'MaxAgeHours',
+      'SkipValidation',
       'export_openclaw_investment_context.py',
+      'check_openclaw_investment_context.py',
       'investment_research_context.json',
       'investment_research_context.md',
       'bridge_status.json',
       'secrets_excluded',
       'Copy-Item -Force',
+      '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
     )
   },

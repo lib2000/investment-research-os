@@ -1,17 +1,23 @@
 param(
   [string]$OpenClawWorkspace = "$env:USERPROFILE\.openclaw\workspace",
-  [switch]$SkipCopy
+  [double]$MaxAgeHours = 24,
+  [switch]$SkipCopy,
+  [switch]$SkipValidation
 )
 
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
+$checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
 if (-not (Test-Path -LiteralPath $exportScript)) {
   throw "OpenClaw export script not found: $exportScript"
+}
+if (-not (Test-Path -LiteralPath $checkScript)) {
+  throw "OpenClaw check script not found: $checkScript"
 }
 
 python $exportScript --print-summary | Out-Host
@@ -26,6 +32,12 @@ if (-not (Test-Path -LiteralPath $markdownPath)) {
 }
 
 if ($SkipCopy) {
+  if (-not $SkipValidation.IsPresent) {
+    python $checkScript --source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw source context validation failed: $LASTEXITCODE"
+    }
+  }
   Write-Host "OpenClaw copy skipped. Generated context remains in $sourceDir"
   exit 0
 }
@@ -72,3 +84,10 @@ Set-Content -Path $readmePath -Value $readme -Encoding UTF8
 Get-ChildItem -LiteralPath $targetDir |
   Select-Object Name, Length, LastWriteTime |
   Format-Table -AutoSize
+
+if (-not $SkipValidation.IsPresent) {
+  python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
+  if ($LASTEXITCODE -ne 0) {
+    throw "OpenClaw context validation failed: $LASTEXITCODE"
+  }
+}

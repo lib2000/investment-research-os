@@ -605,6 +605,17 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("OpenClaw 투자리서치 브리지 동기화", script_source)
         self.assertIn("sync_openclaw_investment_context.ps1", script_source)
 
+    def test_openclaw_sync_script_validates_after_copy(self):
+        script_source = (PROJECT_ROOT / "tools" / "sync_openclaw_investment_context.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("[double]$MaxAgeHours = 24", script_source)
+        self.assertIn("[switch]$SkipValidation", script_source)
+        self.assertIn("check_openclaw_investment_context.py", script_source)
+        self.assertIn("--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours", script_source)
+        self.assertIn("--source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours", script_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
