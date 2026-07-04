@@ -17643,6 +17643,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+                            "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
                             "context_json": check_tool.sha256_hex(output_dir / "investment_research_context.json"),
@@ -17670,6 +17671,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
                 "- completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`\n"
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
+                "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
             )
@@ -17708,8 +17710,10 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
+        self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
+        self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 
@@ -17800,6 +17804,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run sync_openclaw_investment_context.ps1 -RequireCompletionAudit\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes\n"
+                "run check_offline_readiness.py --json\n"
             )
             (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
             (root / "HEARTBEAT.md").write_text(startup_note, encoding="utf-8")
@@ -17841,6 +17846,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                 "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
                 "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+                "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
 
@@ -17867,6 +17873,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)
+        self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
         self.assertIn("abc1234", markdown)

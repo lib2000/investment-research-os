@@ -164,6 +164,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "check_openclaw_bridge_completion.py --max-age-hours 24",
         "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+        "check_offline_readiness.py --json",
     ]
     source_git = ""
     if bridge_status:
@@ -206,6 +207,7 @@ def build_result(
             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
 
@@ -284,7 +286,14 @@ def render_markdown_report(result: dict) -> str:
         lines.append(f"- {item}")
     lines.extend(["", "## Operational Commands", ""])
     commands = result.get("operational_commands") or {}
-    for label in ("safe_refresh", "strict_refresh", "validation", "completion_audit", "final_completion_audit"):
+    for label in (
+        "safe_refresh",
+        "strict_refresh",
+        "validation",
+        "completion_audit",
+        "final_completion_audit",
+        "offline_readiness",
+    ):
         command = commands.get(label)
         if command:
             lines.append(f"- {label}: `{command}`")

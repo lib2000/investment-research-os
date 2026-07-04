@@ -92,6 +92,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     final_audit = str(usage.get("final_completion_audit_command") or "")
     if "--require-report-hashes" not in final_audit:
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
+    if usage.get("offline_readiness_command") != "python tools\\check_offline_readiness.py --json":
+        raise AssertionError("OpenClaw usage must include offline readiness command")
     messages.append(
         f"generated_at={payload.get('generated_at')} latest={rec.get('latest_recommendation_date')} "
         f"rows={len(latest_rows)} telegram_saved={telegram.get('saved_count')}"
@@ -138,6 +140,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "validation_command",
         "completion_audit_command",
         "final_completion_audit_command",
+        "offline_readiness_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
     if missing_commands:
@@ -175,6 +178,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "validation": "validation_command",
             "completion_audit": "completion_audit_command",
             "final_completion_audit": "final_completion_audit_command",
+            "offline_readiness": "offline_readiness_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
             if not commands.get(command_key):
