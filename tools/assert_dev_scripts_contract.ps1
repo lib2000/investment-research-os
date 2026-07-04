@@ -1245,6 +1245,7 @@ $contracts = @(
       'OpenClawWorkspace',
       'MaxAgeHours',
       'SkipValidation',
+      'RequireCompletionAudit',
       'export_openclaw_investment_context.py',
       'check_openclaw_investment_context.py',
       'check_openclaw_bridge_completion.py',
@@ -1258,6 +1259,7 @@ $contracts = @(
       'secrets_excluded',
       'Copy-Item -Force',
       '--write-report',
+      'OpenClaw completion audit skipped because source git worktree is dirty.',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
     )

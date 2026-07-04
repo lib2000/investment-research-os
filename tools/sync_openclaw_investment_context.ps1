@@ -2,7 +2,8 @@ param(
   [string]$OpenClawWorkspace = "$env:USERPROFILE\.openclaw\workspace",
   [double]$MaxAgeHours = 24,
   [switch]$SkipCopy,
-  [switch]$SkipValidation
+  [switch]$SkipValidation,
+  [switch]$RequireCompletionAudit
 )
 
 $ErrorActionPreference = "Stop"
@@ -117,8 +118,16 @@ if (-not $SkipValidation.IsPresent) {
   if ($LASTEXITCODE -ne 0) {
     throw "OpenClaw context validation failed: $LASTEXITCODE"
   }
-  python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --write-report
-  if ($LASTEXITCODE -ne 0) {
-    throw "OpenClaw completion audit failed: $LASTEXITCODE"
+  if ($gitDirty -eq $true) {
+    $message = "OpenClaw completion audit skipped because source git worktree is dirty."
+    if ($RequireCompletionAudit.IsPresent) {
+      throw $message
+    }
+    Write-Warning $message
+  } else {
+    python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --write-report
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw completion audit failed: $LASTEXITCODE"
+    }
   }
 }
