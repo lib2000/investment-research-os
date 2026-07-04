@@ -628,8 +628,8 @@ label {
 .daily-recommendation-top-rank {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
-  align-items: start;
-  min-height: 118px;
+  align-items: center;
+  min-height: 68px;
   cursor: pointer;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
@@ -674,7 +674,8 @@ label {
 
 .daily-recommendation-top-body {
   display: grid;
-  gap: 4px;
+  gap: 0;
+  align-content: center;
   min-width: 0;
 }
 
@@ -1037,7 +1038,7 @@ label {
 .daily-recommendation-top-empty strong,
 .daily-recommendation-top-rank strong {
   color: var(--text);
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.2;
 }
 

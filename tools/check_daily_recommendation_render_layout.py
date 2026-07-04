@@ -108,6 +108,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const topRankTicker = topRankCard?.dataset?.dailyRecommendationOpen || "";
                   const topRankMarket = topRankCard?.dataset?.dailyRecommendationMarket || "";
                   const topRankRank = topRankCard?.dataset?.dailyRecommendationRank || "";
+                  const topRankSignalGridCount = [...document.querySelectorAll(".daily-recommendation-top-rank .daily-recommendation-signal-grid")].filter(visible).length;
+                  const topRankExtraTextCount = [...document.querySelectorAll(".daily-recommendation-top-rank span, .daily-recommendation-top-rank small, .daily-recommendation-top-rank p")].filter(visible).length;
                   let detailOpenedAfterTopRankClick = false;
                   let detailFocusedTicker = "";
                   let detailFocusedMarket = "";
@@ -124,6 +126,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   let horizontalDetailLayout = false;
                   let horizontalEvidenceLayout = false;
                   let readableDetailWidth = false;
+                  let openedDetailSignalGridCount = 0;
                   if (topRankCard) {
                     topRankCard.click();
                     const openedCard = await waitFor(() => {
@@ -145,6 +148,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const detailColumns = openedDetail?.querySelector(".daily-recommendation-detail-columns");
                     const detailContentColumns = [...(openedDetail?.querySelectorAll(".daily-recommendation-detail-column") || [])];
                     const evidence = openedDetail?.querySelector(".daily-recommendation-evidence");
+                    openedDetailSignalGridCount = [...(openedDetail?.querySelectorAll(".daily-recommendation-signal-grid") || [])].filter(visible).length;
                     const detailStyle = openedDetail ? getComputedStyle(openedDetail) : null;
                     const detailColumnsStyle = detailColumns ? getComputedStyle(detailColumns) : null;
                     const evidenceStyle = evidence ? getComputedStyle(evidence) : null;
@@ -182,6 +186,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     topRankTicker,
                     topRankMarket,
                     topRankRank,
+                    topRankSignalGridCount,
+                    topRankExtraTextCount,
                     detailOpenedAfterTopRankClick,
                     detailFocusedTicker,
                     detailFocusedMarket,
@@ -195,6 +201,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     evidenceGridColumnCount,
                     detailWidth,
                     detailHeight,
+                    openedDetailSignalGridCount,
                     horizontalDetailLayout,
                     horizontalEvidenceLayout,
                     readableDetailWidth,
@@ -247,6 +254,10 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("추천 결과 스크린샷 대상이 카드 영역으로 스크롤되지 않았습니다.")
     if not result.get("topRankClickFound"):
         errors.append("상단 추천 후보 클릭 대상을 찾지 못했습니다.")
+    if int(result.get("topRankSignalGridCount") or 0) != 0:
+        errors.append("추천 첫 화면에 시장/공시/정책/뉴스/심리 신호 박스가 노출됩니다.")
+    if int(result.get("topRankExtraTextCount") or 0) != 0:
+        errors.append("추천 첫 화면에 순위와 종목명 외 요약 텍스트가 노출됩니다.")
     if not result.get("detailOpenedAfterTopRankClick"):
         errors.append("상단 추천 후보 클릭 후 추천 상세 카드가 열리지 않았습니다.")
     if not result.get("detailTabActive"):
@@ -257,6 +268,8 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("추천 상세 정보 패널 폭이 가로 읽기에 부족합니다.")
     if not result.get("horizontalEvidenceLayout"):
         errors.append("추천 근거 묶음이 가로 카드형으로 표시되지 않습니다.")
+    if int(result.get("openedDetailSignalGridCount") or 0) < 1:
+        errors.append("추천 상세 화면에 시장/공시/정책/뉴스/심리 신호가 표시되지 않습니다.")
     clipped = result.get("clippedTextElements") if isinstance(result.get("clippedTextElements"), list) else []
     if clipped:
         errors.append(f"추천 결과 텍스트 클리핑 {len(clipped)}개")

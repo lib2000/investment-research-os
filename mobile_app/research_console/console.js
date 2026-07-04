@@ -9375,31 +9375,11 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
               </article>
             `;
           }
-          const exposure = dailyRecommendationExposureSummary(record);
-          const reasonItems = Array.isArray(record.reasons) && record.reasons.length
-            ? record.reasons
-            : record.evidence_sources || [];
-          const topReason = compactOutputText(reasonItems[0] || "근거 요약 준비 중", rank === 1 ? 118 : 78);
-          const scoreComponents = (record.score_components || [])
-            .slice()
-            .sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
-          const investmentProfile = dailyRecommendationInvestmentProfileSummary(record);
-          const policySignal = dailyRecommendationPolicySignalSummary(record);
-          const keyDriver = investmentProfile.hasProfile
-            ? `투자 방향: ${investmentProfile.labelText}`
-            : policySignal
-              ? policySignal
-            : scoreComponents[0]?.label || exposure || "추천 근거 확인";
-          const price = formatSmartPrice(record.baseline_price, record.currency || "KRW", "기준가 미확인");
           return `
             <article class="daily-recommendation-top-rank rank-${escapeHtml(rank)} market-${escapeHtml(market.toLowerCase())}${rank === 1 ? " is-leader" : ""}" role="button" tabindex="0" data-daily-recommendation-open="${escapeHtml(record.ticker || "")}" data-daily-recommendation-rank="${escapeHtml(rank)}" data-daily-recommendation-market="${escapeHtml(market)}" aria-label="${escapeHtml(`${displayCompanyName(record)} 추천 상세 보기`)}">
               <div class="daily-recommendation-rank-badge">${escapeHtml(rank)}위</div>
               <div class="daily-recommendation-top-body">
                 <strong title="${escapeHtml(record.ticker || "")}">${escapeHtml(displayCompanyName(record))}</strong>
-                <span>점수 ${escapeHtml(record.score ?? "n/a")} · ${escapeHtml(price)}</span>
-                <small>${escapeHtml(keyDriver)}</small>
-                ${renderDailyRecommendationSignalGrid(record, { compact: true })}
-                <p>${escapeHtml(exposure || topReason)}</p>
               </div>
             </article>
           `;
