@@ -6,7 +6,7 @@ import copy
 import json
 import os
 import subprocess
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -195,6 +195,15 @@ def load_openclaw_context_check_tool():
 def load_openclaw_bridge_completion_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_bridge_completion.py"
     spec = spec_from_file_location("check_openclaw_bridge_completion", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_refresh_portfolio_prices_tool():
+    tool_path = PROJECT_ROOT / "tools" / "refresh_portfolio_prices.py"
+    spec = spec_from_file_location("refresh_portfolio_prices", tool_path)
     module = module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(module)
@@ -1218,6 +1227,40 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(enforced["status"], "warning")
         self.assertIn("비중 이탈", enforced["message"])
         self.assertLess(enforced["score"], 95.0)
+
+
+class RefreshPortfolioPricesToolTests(unittest.TestCase):
+    def test_refresh_timeout_reconciles_when_store_updated_after_start(self):
+        tool = load_refresh_portfolio_prices_tool()
+        started_at = datetime.now(timezone.utc)
+        updated_at = (started_at + timedelta(seconds=1)).astimezone().isoformat(timespec="seconds")
+
+        with TemporaryDirectory() as tmp:
+            store_path = Path(tmp) / "user_portfolios.json"
+            store_path.write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "family": {
+                                "portfolio_name": "가족 합산",
+                                "updated_at": updated_at,
+                                "holding_count": 24,
+                                "holdings": [{"ticker": "005930"}],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            reconciled = tool.reconciled_refresh(store_path, "가족 합산", started_at, TimeoutError("timed out"))
+
+        self.assertIsNotNone(reconciled)
+        self.assertEqual(reconciled["portfolio_name"], "가족 합산")
+        self.assertEqual(reconciled["holding_count"], 24)
+        self.assertIs(reconciled["reconciled_after_error"], True)
+        self.assertIn("timed out", reconciled["refresh_warning"])
 
 
 class InvestmentInsightHubCheckToolTests(unittest.TestCase):

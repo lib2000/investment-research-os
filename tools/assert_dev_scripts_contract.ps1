@@ -1068,6 +1068,17 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\refresh_portfolio_prices.py"
+    Snippets = @(
+      'reconciled_refresh',
+      'parse_timestamp',
+      'reconciled_after_error',
+      'refresh_warning',
+      'updated_at',
+      'persist_refresh=true'
+    )
+  },
+  @{
     Path = "tools\check_research_source_store.py"
     Snippets = @(
       'SYSTEM_DIR',

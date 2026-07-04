@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -30,6 +31,44 @@ def load_portfolio_names(store_path: Path) -> list[str]:
             continue
         names.append(str(item.get("portfolio_name") or key).strip())
     return [name for name in names if name]
+
+
+def parse_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def reconciled_refresh(store_path: Path, portfolio_name: str, started_at: datetime, error: Exception) -> dict | None:
+    try:
+        payload = json.loads(store_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    portfolios = payload.get("portfolios") if isinstance(payload, dict) else {}
+    for key, item in (portfolios or {}).items():
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("portfolio_name") or key).strip()
+        if name != portfolio_name:
+            continue
+        updated_at = parse_timestamp(item.get("updated_at"))
+        if updated_at is None or updated_at.astimezone(timezone.utc) < started_at.astimezone(timezone.utc):
+            return None
+        return {
+            "portfolio_name": name,
+            "holding_count": item.get("holding_count") or len(item.get("holdings") or []),
+            "updated_at": item.get("updated_at"),
+            "storage_path": str(store_path),
+            "reconciled_after_error": True,
+            "refresh_warning": str(error),
+        }
+    return None
 
 
 def refresh_portfolio(base_url: str, token: str, portfolio_name: str, timeout: float) -> dict:
@@ -92,10 +131,15 @@ def main() -> int:
     refreshed = []
     failures = []
     for name in portfolio_names:
+        started_at = datetime.now(timezone.utc)
         try:
             refreshed.append(refresh_portfolio(args.base_url, args.token, name, args.timeout))
         except Exception as exc:  # noqa: BLE001 - print all refresh failures for operations.
-            failures.append({"portfolio_name": name, "error": str(exc)})
+            reconciled = reconciled_refresh(store_path, name, started_at, exc)
+            if reconciled:
+                refreshed.append(reconciled)
+            else:
+                failures.append({"portfolio_name": name, "error": str(exc)})
 
     print(json.dumps({"status": "success" if not failures else "partial", "refreshed": refreshed, "failures": failures}, ensure_ascii=False, indent=2))
     if failures:
