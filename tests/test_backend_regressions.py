@@ -780,6 +780,8 @@ class OfflineReadinessToolTests(unittest.TestCase):
             checks["OpenClaw 완료 감사"],
             ["tools/check_openclaw_bridge_completion.py", "--max-age-hours", "24", "--require-report-hashes"],
         )
+        self.assertIn("OpenClaw 상태 요약", checks)
+        self.assertEqual(checks["OpenClaw 상태 요약"], ["tools/show_openclaw_bridge_status.py", "--json"])
 
     def test_offline_readiness_prints_nps_rebalance_plan(self):
         tool = load_offline_readiness_tool()

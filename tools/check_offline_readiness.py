@@ -74,6 +74,7 @@ CHECKS = [
     ("통합 투자 인사이트 허브", ["tools/check_investment_insight_hub.py", "--strict"]),
     ("OpenClaw 투자리서치 브리지", ["tools/check_openclaw_investment_context.py", "--max-age-hours", "24"]),
     ("OpenClaw 완료 감사", ["tools/check_openclaw_bridge_completion.py", "--max-age-hours", "24", "--require-report-hashes"]),
+    ("OpenClaw 상태 요약", ["tools/show_openclaw_bridge_status.py", "--json"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
     ("Firecrawl Monitor 변화 감지 payload", ["tools/check_firecrawl_monitor_collector.py"]),
