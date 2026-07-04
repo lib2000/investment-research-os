@@ -1240,6 +1240,16 @@ $contracts = @(
     )
   },
   @{
+    Path = "docs\openclaw-investment-research-bridge.md"
+    Snippets = @(
+      'openclaw_bridge_manifest.json',
+      'bridge_status.json',
+      '안전 갱신 명령',
+      '민감정보 제외',
+      '실거래 주문'
+    )
+  },
+  @{
     Path = "tools\show_dev_server_ports.ps1"
     Snippets = @(
       'Get-Command netstat',

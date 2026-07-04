@@ -14,12 +14,17 @@ Investment Research OS 내부 생성 위치:
 
 - `research_vault/_system/openclaw_integration/investment_research_context.json`
 - `research_vault/_system/openclaw_integration/investment_research_context.md`
+- `research_vault/_system/openclaw_integration/openclaw_bridge_manifest.json`
 
 OpenClaw 워크스페이스 동기화 위치:
 
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/investment_research_context.json`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/investment_research_context.md`
+- `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_manifest.json`
+- `%USERPROFILE%/.openclaw/workspace/data/investment_research/bridge_status.json`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/README.md`
+
+`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 안전 갱신 명령, 검증 명령, 민감정보 제외 범위를 포함한다.
 
 ## 갱신
 
@@ -44,6 +49,8 @@ python tools\check_openclaw_investment_context.py --max-age-hours 1
 검증 항목:
 
 - JSON/Markdown 번들 존재 여부
+- OpenClaw 브리지 매니페스트 존재 여부와 스키마/파일 지도 일치 여부
+- `bridge_status.json`의 복사 상태, 생성 시각, 민감정보 제외 확인 여부
 - 최신 추천 한국 3개, 미국 3개 포함 여부
 - 텔레그램 인기글 반영 여부
 - 국민연금 컨텍스트가 공개자료 기반으로 표시되는지 여부
@@ -52,7 +59,8 @@ python tools\check_openclaw_investment_context.py --max-age-hours 1
 
 ## OpenClaw 사용 규칙
 
-- OpenClaw는 먼저 `data/investment_research/investment_research_context.md`를 읽는다.
+- OpenClaw는 먼저 `data/investment_research/bridge_status.json`과 `data/investment_research/openclaw_bridge_manifest.json`을 읽어 최신성, 파일명, 갱신 명령을 확인한다.
+- 사람이 읽을 요약은 `data/investment_research/investment_research_context.md`를 사용한다.
 - 더 구조적인 처리가 필요하면 `data/investment_research/investment_research_context.json`을 읽는다.
 - 원본 상세 판단은 Investment Research OS 콘솔에서 확인한다.
 - 실거래 주문, 계좌 인증, API 키 요청에는 이 번들을 사용하지 않는다.
