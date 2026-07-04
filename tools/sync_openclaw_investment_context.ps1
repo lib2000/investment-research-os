@@ -154,10 +154,6 @@ $startupLines = @(
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "MEMORY.md") -Lines $startupLines
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "HEARTBEAT.md") -Lines $startupLines
 
-Get-ChildItem -LiteralPath $targetDir |
-  Select-Object Name, Length, LastWriteTime |
-  Format-Table -AutoSize
-
 if (-not $SkipValidation.IsPresent) {
   python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
   if ($LASTEXITCODE -ne 0) {
@@ -176,3 +172,7 @@ if (-not $SkipValidation.IsPresent) {
     }
   }
 }
+
+Get-ChildItem -LiteralPath $targetDir |
+  Select-Object Name, Length, LastWriteTime |
+  Format-Table -AutoSize
