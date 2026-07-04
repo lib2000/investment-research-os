@@ -6680,6 +6680,16 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("telegram_favorite", inbox["items"][0]["tags"])
         self.assertEqual(inbox["items"][0]["scope"], "MARKET")
 
+    def test_telegram_favorite_channel_parser_rejects_blank_username(self):
+        from research_os.telegram_favorite_posts import parse_telegram_favorite_channels_json
+
+        channels, warnings = parse_telegram_favorite_channels_json(
+            '[{"label":"AI MASTERS","username":""},{"username":"alpha","label":"Alpha"}]'
+        )
+
+        self.assertEqual([channel.username for channel in channels], ["alpha"])
+        self.assertTrue(any("username/url" in warning for warning in warnings))
+
     def test_telegram_market_close_refresh_marks_auto_source(self):
         import research_os_main as main
         from research_os.models import MarketCloseEntry, MarketCloseReviewResponse

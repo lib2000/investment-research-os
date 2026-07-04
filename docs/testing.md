@@ -144,6 +144,7 @@ Firecrawl Monitor env 템플릿은 `python tools\create_firecrawl_monitor_env_te
 실전 RPC 전환 전에는 ignored secret env 파일을 만든 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 `--require-rpc-ready`를 먼저 통과시키고, 실제 적재가 필요한 경우에만 `-Mode Submit`을 추가합니다.
 
 텔레그램 즐겨찾기 인기글 수집은 기본값이 꺼져 있습니다. 운영 전에는 `python tools\check_telegram_favorite_posts.py --sample --enabled`로 오프라인 계약을 확인합니다. 실전 전환은 `python tools\check_telegram_favorite_posts.py --write-env-template tmp\telegram-favorite-posts.local.env`로 ignored env 템플릿을 만든 뒤 채널명을 채우고, `python tools\check_telegram_favorite_posts.py --env-file tmp\telegram-favorite-posts.local.env --live-fetch`로 t.me/s preview 접근과 조회수 파싱을 확인합니다.
+스크린샷에서 추출한 채널 표시명 초안은 `docs\examples\telegram_favorite_channels.from_screenshot.json`에 보관합니다. 이 파일의 `username` 또는 `url`을 실제 공개 t.me 값으로 채운 뒤 `python tools\check_telegram_favorite_posts.py --channels-json-file docs\examples\telegram_favorite_channels.from_screenshot.json --live-fetch`로 검증합니다.
 
 개별 점검은 아래 명령을 사용합니다.
 

@@ -18,7 +18,6 @@ from research_os.settings import Settings
 from research_os.telegram_market_journal import (
     TelegramMarketPost,
     fetch_telegram_public_channel_posts,
-    normalize_telegram_channel_username,
     telegram_public_channel_url,
 )
 
@@ -67,6 +66,21 @@ def _compact_text(value: str, limit: int = 700) -> str:
     return text[:limit].rstrip() + "..."
 
 
+def favorite_channel_username_from_item(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("https://t.me/"):
+        text = text.removeprefix("https://t.me/").strip("/")
+    if text.startswith("@"):
+        text = text[1:]
+    if text.startswith("s/"):
+        text = text[2:]
+    if "/" in text:
+        text = text.split("/", 1)[0]
+    return text.strip("/")
+
+
 def parse_telegram_favorite_channels_json(raw_value: str | None) -> tuple[list[TelegramFavoriteChannel], list[str]]:
     warnings: list[str] = []
     text = str(raw_value or "").strip()
@@ -83,12 +97,15 @@ def parse_telegram_favorite_channels_json(raw_value: str | None) -> tuple[list[T
     seen: set[str] = set()
     for index, item in enumerate(raw_channels):
         if isinstance(item, str):
-            username = normalize_telegram_channel_username(item)
+            username = favorite_channel_username_from_item(item)
             url = telegram_public_channel_url(username, None)
             label = f"@{username}"
             max_posts = 30
         elif isinstance(item, dict):
-            username = normalize_telegram_channel_username(item.get("username") or item.get("url"))
+            username = favorite_channel_username_from_item(item.get("username") or item.get("url"))
+            if not username:
+                warnings.append(f"channels[{index}] username/url이 비어 있어 건너뜁니다.")
+                continue
             url = telegram_public_channel_url(username, str(item.get("url") or ""))
             label = str(item.get("label") or item.get("name") or f"@{username}").strip()
             try:

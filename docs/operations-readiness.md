@@ -106,6 +106,7 @@ python tools\check_telegram_brief_sender.py
 python tools\check_telegram_favorite_posts.py --sample --enabled
 python tools\check_telegram_favorite_posts.py --write-env-template tmp\telegram-favorite-posts.local.env
 python tools\check_telegram_favorite_posts.py --env-file tmp\telegram-favorite-posts.local.env --live-fetch
+python tools\check_telegram_favorite_posts.py --channels-json-file docs\examples\telegram_favorite_channels.from_screenshot.json --live-fetch
 python tools\check_telegram_favorite_posts.py --enabled --channels-json '[{"username":"example_channel","label":"Example","max_posts":30}]' --live-fetch
 python tools\check_earnings_transcript_collector.py
 python tools\check_portfolio_signal_score.py
