@@ -2711,6 +2711,33 @@ label {
   padding: 6px 8px;
 }
 
+.holding-detail-overview {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.holding-detail-overview span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 7px 8px;
+  background: #f8fbfd;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+}
+
+.holding-detail-overview b {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .holding-row label {
   display: flex;
   min-height: calc(var(--holding-control-height) + 16px);
@@ -5639,7 +5666,8 @@ pre {
 
   .holding-card-summary,
   .holding-summary-metrics,
-  .holding-detail-grid {
+  .holding-detail-grid,
+  .holding-detail-overview {
     grid-template-columns: 1fr;
   }
 

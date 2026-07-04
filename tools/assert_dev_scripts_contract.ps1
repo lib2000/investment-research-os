@@ -606,6 +606,8 @@ $contracts = @(
       '보유종목과 관심종목/섹터 요약 클릭 상세 열림',
       'holding-card-summary',
       'holdingDetailOpened',
+      'overviewChipCount',
+      'actionLabels',
       'interest-ticker-summary-row',
       'interest-sector-summary-row',
       'tickerNameOnlyCount',

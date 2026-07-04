@@ -125,6 +125,10 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       summaryText: text,
                       opened: Boolean(details?.open),
                       hasDetailGrid: Boolean(details?.querySelector(".holding-detail-grid")),
+                      overviewChipCount: details?.querySelectorAll(".holding-detail-overview span").length || 0,
+                      actionLabels: [...(details?.querySelectorAll("[data-holding-action]") || [])]
+                        .map((button) => (button.textContent || "").trim())
+                        .filter(Boolean),
                     };
                   };
 
@@ -216,6 +220,13 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("보유 종목 행이 렌더링되지 않았습니다.")
     if not result.get("holdingDetailOpened"):
         errors.append("보유 종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
+    holding_open = result.get("holdingOpen") if isinstance(result.get("holdingOpen"), dict) else {}
+    if int(holding_open.get("overviewChipCount") or 0) < 6:
+        errors.append("보유 종목 상세 판단 요약이 부족합니다.")
+    holding_actions = " ".join(holding_open.get("actionLabels") or [])
+    for label in ["저장", "분석", "차트", "자료", "리스크"]:
+        if label not in holding_actions:
+            errors.append(f"보유 종목 상세 액션 누락: {label}")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("sectorDetailOpened"):

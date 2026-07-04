@@ -1374,19 +1374,26 @@ function resetWorkflowDraftForm(form, fileInputName = "") {
 function createHoldingActionGroup() {
   const group = document.createElement("div");
   group.className = "holding-actions";
+  const makeButton = (label, action, title) => {
+    const button = document.createElement("button");
+    button.className = "secondary holding-action";
+    button.type = "button";
+    button.dataset.holdingAction = action;
+    button.textContent = label;
+    button.title = title;
+    return button;
+  };
   const saveButton = document.createElement("button");
   saveButton.className = "secondary holding-action";
   saveButton.type = "button";
   saveButton.dataset.holdingAction = "save";
   saveButton.textContent = "저장";
   saveButton.title = "수량, 평단, 현재가 등 현재 화면의 포트폴리오 입력값을 저장합니다.";
-  const dashboardButton = document.createElement("button");
-  dashboardButton.className = "secondary holding-action";
-  dashboardButton.type = "button";
-  dashboardButton.dataset.holdingAction = "dashboard";
-  dashboardButton.textContent = "분석";
-  dashboardButton.title = "이 보유 종목을 대시보드와 전체 분석 모듈에 연결합니다.";
-  group.append(saveButton, dashboardButton, createRemoveButton("삭제"));
+  const dashboardButton = makeButton("분석", "dashboard", "이 보유 종목을 대시보드와 전체 분석 모듈에 연결합니다.");
+  const chartButton = makeButton("차트", "chart", "이 보유 종목의 차트 분석 화면으로 이동합니다.");
+  const memoryButton = makeButton("자료", "memory", "이 보유 종목과 관련된 저장 자료를 검색합니다.");
+  const riskButton = makeButton("리스크", "risk", "현재 포트폴리오 기준 리스크 스캔을 실행합니다.");
+  group.append(saveButton, dashboardButton, chartButton, memoryButton, riskButton, createRemoveButton("삭제"));
   return group;
 }
 
@@ -1549,7 +1556,18 @@ function makePortfolioHoldingRow(holding = {}) {
   `;
   const detailBody = document.createElement("div");
   detailBody.className = "holding-detail-grid";
+  const detailOverview = document.createElement("div");
+  detailOverview.className = "holding-detail-overview";
+  detailOverview.innerHTML = `
+    <span><b>수량</b>${escapeHtml(formatNumber(holding.quantity ?? 0))}</span>
+    <span><b>평단</b>${escapeHtml(formatMoney(holding.average_cost, currency, "n/a"))}</span>
+    <span><b>현재가</b>${escapeHtml(formatMoney(holding.current_price, currency, "n/a"))}</span>
+    <span><b>평가금액</b>${escapeHtml(marketValue)}</span>
+    <span><b>수익</b>${escapeHtml(gain)}</span>
+    <span><b>수익률</b>${escapeHtml(returnRate)}</span>
+  `;
   detailBody.append(
+    detailOverview,
     createInput({
       name: "name",
       label: "회사명",
@@ -12759,15 +12777,43 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
       setError(new Error("분석할 보유 종목 티커를 먼저 입력하세요."));
       return;
     }
-    startOutputLoading(`${ticker} 보유 종목 분석 연결 중`, [
-      "공식 티커 인증",
-      "대시보드 입력값 동기화",
-      "저장 데이터와 최신 데이터 조회",
-    ]);
+    const action = actionButton.dataset.holdingAction;
     try {
-      const verification = await certifyTickerForWorkflow(ticker);
-      activateTab("dashboard", { keepOutput: true });
-      await loadTickerDashboard(verification.official_symbol);
+      if (action === "chart") {
+        await runChartAnalysisForTicker(ticker, { saveResult: true });
+      } else if (action === "memory") {
+        await runInterestRagAction({
+          query: buildInterestRagQuery(row, ticker, "ticker"),
+          key: ticker,
+          mode: "search",
+        });
+      } else if (action === "risk") {
+        startOutputLoading(`${ticker} 보유 종목 리스크 연결 중`, [
+          "현재 포트폴리오 입력값 수집",
+          "집중도와 테마 노출 계산",
+          "리스크 경고 저장",
+        ]);
+        const data = currentPortfolioPayload();
+        const result = await runPortfolioRiskScan(token(), {
+          portfolioName: data.portfolioName,
+          holdings: data.holdings,
+          portfolioValue: data.portfolioValue,
+          maxSinglePositionWeight: data.maxSinglePositionWeight,
+          maxSectorWeight: data.maxSectorWeight,
+          saveResult: true,
+        });
+        setOutput(result);
+        await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
+      } else {
+        startOutputLoading(`${ticker} 보유 종목 분석 연결 중`, [
+          "공식 티커 인증",
+          "대시보드 입력값 동기화",
+          "저장 데이터와 최신 데이터 조회",
+        ]);
+        const verification = await certifyTickerForWorkflow(ticker);
+        activateTab("dashboard", { keepOutput: true });
+        await loadTickerDashboard(verification.official_symbol);
+      }
     } catch (error) {
       await setTickerAwareError(error, ticker);
     }
