@@ -46,11 +46,19 @@ powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_co
 python tools\check_openclaw_investment_context.py --max-age-hours 1
 ```
 
+최종 완료 감사:
+
+```powershell
+python tools\check_openclaw_bridge_completion.py --max-age-hours 1
+```
+
 검증 항목:
 
 - JSON/Markdown 번들 존재 여부
 - OpenClaw 브리지 매니페스트 존재 여부와 스키마/파일 지도 일치 여부
 - `bridge_status.json`의 복사 상태, 생성 시각, 민감정보 제외 확인 여부
+- 원본 Git 브랜치가 `main`이고 upstream과 동기화되어 있으며 작업트리가 clean인지 여부
+- `bridge_status.json`의 원본 커밋/브랜치/dirty 상태가 현재 Git 상태와 일치하는지 여부
 - 최신 추천 한국 3개, 미국 3개 포함 여부
 - 텔레그램 인기글 반영 여부
 - 국민연금 컨텍스트가 공개자료 기반으로 표시되는지 여부

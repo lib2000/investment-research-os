@@ -485,6 +485,7 @@ $contracts = @(
       'check_llm_bridge_store.py',
       'check_rag_synthesis_store.py',
       'check_openclaw_investment_context.py',
+      'check_openclaw_bridge_completion.py',
       'check_daily_recommendations_store.py',
       'check_daily_recommendation_citations.py',
       'OpenClaw 투자리서치 브리지',
@@ -1221,6 +1222,18 @@ $contracts = @(
       'source_git_commit',
       'source_git_dirty',
       'secrets_excluded'
+    )
+  },
+  @{
+    Path = "tools\check_openclaw_bridge_completion.py"
+    Snippets = @(
+      'openclaw_bridge_completion',
+      'validate_bridge_status',
+      'source_git_commit',
+      'source_git_dirty',
+      'validate_openclaw_workspace',
+      'source git must be synced with upstream',
+      'OpenClaw startup notes point to bridge files'
     )
   },
   @{

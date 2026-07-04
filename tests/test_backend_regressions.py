@@ -192,6 +192,15 @@ def load_openclaw_context_check_tool():
     return module
 
 
+def load_openclaw_bridge_completion_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_bridge_completion.py"
+    spec = spec_from_file_location("check_openclaw_bridge_completion", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_render_layout_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -17566,6 +17575,66 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
+
+
+class OpenClawBridgeCompletionTests(unittest.TestCase):
+    def test_completion_audit_validates_bridge_git_state_and_startup_notes(self):
+        tool = load_openclaw_bridge_completion_tool()
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            openclaw_dir = root / "data" / "investment_research"
+            openclaw_dir.mkdir(parents=True)
+            copied_at = tool.datetime.now(tool.timezone.utc).isoformat()
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "copied_at": copied_at,
+                        "source_git_commit": "abc1234",
+                        "source_git_branch": "main",
+                        "source_git_dirty": False,
+                        "secrets_excluded": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            git_state = {
+                "branch": "main",
+                "commit": "abc1234",
+                "upstream": "origin/main",
+                "ahead": 0,
+                "behind": 0,
+                "dirty": False,
+                "status_short": "",
+            }
+
+            status, errors = tool.validate_bridge_status(openclaw_dir, git_state, max_age_hours=1)
+            self.assertEqual("abc1234", status["source_git_commit"])
+            self.assertEqual([], errors)
+
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "copied_at": copied_at,
+                        "source_git_commit": "old9999",
+                        "source_git_branch": "main",
+                        "source_git_dirty": True,
+                        "secrets_excluded": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            _, errors = tool.validate_bridge_status(openclaw_dir, git_state, max_age_hours=1)
+            self.assertTrue(any("commit mismatch" in error for error in errors))
+            self.assertTrue(any("source_git_dirty" in error for error in errors))
+
+            (root / "MEMORY.md").write_text("read data/investment_research/bridge_status.json", encoding="utf-8")
+            (root / "HEARTBEAT.md").write_text("read data/investment_research/bridge_status.json", encoding="utf-8")
+            self.assertEqual([], tool.validate_openclaw_workspace(root))
 
 
 if __name__ == "__main__":
