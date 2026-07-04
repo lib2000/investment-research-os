@@ -17817,7 +17817,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"
+                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
+                "read data/investment_research/investment_research_context.md\n"
+                "read data/investment_research/investment_research_context.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.md\n"
                 "read completion_report_sha256\n"

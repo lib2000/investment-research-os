@@ -176,6 +176,7 @@ $startupLines = @(
   "## Investment Research OS Bridge",
   "",
   "- Read ``data/investment_research/bridge_status.json`` first.",
+  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
   "- Human summary: ``data/investment_research/investment_research_context.md``.",
   "- Machine state: ``data/investment_research/investment_research_context.json``.",
   "- Manifest and commands: ``data/investment_research/openclaw_bridge_manifest.json``.",
