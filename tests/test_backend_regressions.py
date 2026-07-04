@@ -1167,6 +1167,8 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
             "holdingOpen": {"overviewChipCount": 2, "actionLabels": ["저장", "분석"]},
             "holdingActionFlows": [{"label": "분석", "ok": True}],
             "tickerDetailOpened": False,
+            "tickerRecommendationDetailReady": False,
+            "tickerRecommendationHorizontal": False,
             "sectorDetailOpened": False,
             "runtimeErrors": ["boom"],
         }
@@ -1186,6 +1188,8 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
         self.assertIn("보유 종목 상세 액션 흐름 실패: 자료", errors)
         self.assertIn("보유 종목 상세 액션 흐름 실패: 리스크", errors)
         self.assertIn("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
+        self.assertIn("관심종목 상세 추천 정보가 부족합니다.", errors)
+        self.assertIn("관심종목 상세 추천 정보가 가로 패널로 표시되지 않습니다.", errors)
         self.assertIn("관심섹터 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
         self.assertIn("브라우저 런타임 오류 1개", errors)
 

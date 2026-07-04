@@ -3729,6 +3729,10 @@ label {
   border-color: #99d5cb;
 }
 
+.interest-ticker-summary-row:has(.interest-card-details[open]) {
+  grid-column: 1 / -1;
+}
+
 .interest-card-details {
   width: 100%;
 }
@@ -3871,6 +3875,102 @@ label {
 
 .interest-sector-summary-row .interest-detail-grid {
   grid-template-columns: 1fr;
+}
+
+.interest-recommendation-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(300px, 1.2fr) minmax(320px, 1.35fr);
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
+  padding: 10px;
+  background: #f8fbfd;
+  border: 1px solid #c7e8e2;
+  border-left: 4px solid #0f766e;
+  border-radius: 7px;
+}
+
+.interest-recommendation-head {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.interest-recommendation-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.interest-recommendation-head strong {
+  color: #0f766e;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.interest-recommendation-head small {
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.interest-recommendation-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.interest-recommendation-metrics span,
+.interest-recommendation-evidence span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 7px 8px;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+}
+
+.interest-recommendation-metrics b {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.interest-recommendation-metrics small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.interest-recommendation-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.interest-recommendation-evidence span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.interest-detail-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(120px, 0.45fr) minmax(320px, 1.4fr);
+  gap: 10px;
+  min-width: 0;
 }
 
 .interest-card-actions {
@@ -5722,6 +5822,13 @@ pre {
   .holding-summary-metrics,
   .holding-detail-grid,
   .holding-detail-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .interest-recommendation-panel,
+  .interest-recommendation-metrics,
+  .interest-recommendation-evidence,
+  .interest-detail-controls {
     grid-template-columns: 1fr;
   }
 

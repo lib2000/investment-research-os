@@ -1519,8 +1519,82 @@ function interestRegionLabel(value) {
   return normalizeInterestRegion(value) === "US" ? "미국" : "한국";
 }
 
+function interestPriorityLabel(value) {
+  const map = {
+    high: "높음",
+    medium: "보통",
+    low: "낮음",
+  };
+  return map[String(value || "").trim().toLowerCase()] || "보통";
+}
+
+function interestPriorityVerdict(value) {
+  const priority = String(value || "").trim().toLowerCase();
+  if (priority === "high") {
+    return "우선 분석";
+  }
+  if (priority === "low") {
+    return "후순위 관찰";
+  }
+  return "관찰 유지";
+}
+
+function interestTrackingScore(item = {}) {
+  const priority = String(item.priority || "medium").trim().toLowerCase();
+  let score = priority === "high" ? 78 : priority === "low" ? 52 : 64;
+  if (item.verification?.verified) {
+    score += 8;
+  }
+  if (String(item.thesis || "").trim()) {
+    score += 6;
+  }
+  if (splitTags(item.tags).length) {
+    score += 4;
+  }
+  return Math.min(score, 96);
+}
+
 function interestRegionGroupTitle(value, count) {
   return `${interestRegionLabel(value)} ${count}개`;
+}
+
+function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
+  const panel = document.createElement("section");
+  panel.className = "interest-recommendation-panel";
+  const priority = item.priority || "medium";
+  const priorityLabel = interestPriorityLabel(priority);
+  const verdict = interestPriorityVerdict(priority);
+  const trackingScore = interestTrackingScore(item);
+  const thesis = String(item.thesis || "").trim();
+  const notes = String(item.notes || "").trim();
+  const tags = splitTags(item.tags);
+  const verified = Boolean(item.verification?.verified);
+  const verificationLabel = verified ? "공식 티커 인증 완료" : "공식 티커 확인 필요";
+  const evidence = [
+    `${interestRegionLabel(region)} 시장 관심종목으로 분리 관리`,
+    `${priorityLabel} 우선순위 기준 ${verdict}`,
+    verificationLabel,
+    thesis ? `투자 논리: ${thesis}` : "투자 논리 메모 보강 필요",
+    tags.length ? `태그: ${tags.slice(0, 4).join(", ")}` : "섹터/테마 태그 보강 필요",
+    notes ? `추가 메모: ${notes}` : "저장 자료와 뉴스 스캔으로 근거 보강 가능",
+  ];
+  panel.innerHTML = `
+    <div class="interest-recommendation-head">
+      <span>추천 판단</span>
+      <strong>${escapeHtml(verdict)}</strong>
+      <small>${escapeHtml(companyName || tickerCode || "관심종목")} · ${escapeHtml(tickerCode || "티커 미확인")}</small>
+    </div>
+    <div class="interest-recommendation-metrics">
+      <span><b>${escapeHtml(String(trackingScore))}</b><small>관심 추적 점수</small></span>
+      <span><b>${escapeHtml(priorityLabel)}</b><small>우선순위</small></span>
+      <span><b>${escapeHtml(interestRegionLabel(region))}</b><small>시장</small></span>
+      <span><b>${escapeHtml(verified ? "완료" : "대기")}</b><small>티커 인증</small></span>
+    </div>
+    <div class="interest-recommendation-evidence">
+      ${evidence.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+    </div>
+  `;
+  return panel;
 }
 
 function makePortfolioHoldingRow(holding = {}) {
@@ -1717,9 +1791,10 @@ function makeInterestTickerSummaryRow(item = {}) {
   `;
   const detailBody = document.createElement("div");
   detailBody.className = "interest-detail-grid";
-  detailBody.append(
-    createHiddenInput("ticker", tickerCode),
-    createHiddenInput("companyName", companyName),
+  const recommendationPanel = renderInterestTickerRecommendationPanel(item, { tickerCode, companyName, region });
+  const controlGrid = document.createElement("div");
+  controlGrid.className = "interest-detail-controls";
+  controlGrid.append(
     createSelect({
       name: "region",
       label: "시장",
@@ -1744,7 +1819,13 @@ function makeInterestTickerSummaryRow(item = {}) {
       label: "메모",
       value: item.thesis || "",
       placeholder: "추적 이유",
-    }),
+    })
+  );
+  detailBody.append(
+    recommendationPanel,
+    createHiddenInput("ticker", tickerCode),
+    createHiddenInput("companyName", companyName),
+    controlGrid,
     createHiddenInput("tags", tags),
     createHiddenInput("notes", item.notes || ""),
     createHiddenInput("verification", JSON.stringify(item.verification || {})),

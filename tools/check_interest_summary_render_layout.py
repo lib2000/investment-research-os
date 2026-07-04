@@ -56,6 +56,24 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     }
                     throw new Error(`Timed out waiting for ${label}`);
                   };
+                  const cssRuleTextIncludes = (needle) => {
+                    for (const sheet of [...document.styleSheets]) {
+                      let rules = [];
+                      try {
+                        rules = [...(sheet.cssRules || [])];
+                      } catch (error) {
+                        continue;
+                      }
+                      if (rules.some((rule) => String(rule.cssText || "").includes(needle))) {
+                        return true;
+                      }
+                    }
+                    return false;
+                  };
+                  const interestRecommendationHorizontalCssReady =
+                    cssRuleTextIncludes(".interest-recommendation-panel") &&
+                    cssRuleTextIncludes("grid-template-columns: minmax(180px") &&
+                    cssRuleTextIncludes(".interest-ticker-summary-row:has(.interest-card-details[open])");
                   const summaryStats = (selector) => [...document.querySelectorAll(selector)]
                     .filter(visible)
                     .map((row) => {
@@ -75,17 +93,41 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       };
                     });
                   const openFirst = async (selector) => {
-                    const row = [...document.querySelectorAll(selector)].find(visible);
+                    const root = selector.includes("interest-ticker")
+                      ? document.querySelector("#interests.active #interestTickerEditor")
+                      : selector.includes("interest-sector")
+                        ? document.querySelector("#interests.active #interestSectorEditor")
+                        : document;
+                    const row = [...(root || document).querySelectorAll(selector)].find(visible);
                     const details = row?.querySelector("details.interest-card-details");
                     const summary = row?.querySelector("summary.interest-card-summary");
                     summary?.scrollIntoView({block: "center", inline: "nearest"});
                     await sleep(100);
                     summary?.click();
+                    if (details && !details.open) {
+                      details.open = true;
+                    }
                     await sleep(400);
+                    const recommendationPanel = details?.querySelector(".interest-recommendation-panel");
+                    recommendationPanel?.scrollIntoView({block: "center", inline: "nearest"});
+                    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    const panelStyle = recommendationPanel ? getComputedStyle(recommendationPanel) : null;
+                    const panelDisplay = panelStyle?.getPropertyValue("display") || panelStyle?.display || "";
+                    const panelColumnsText = panelStyle?.getPropertyValue("grid-template-columns") || panelStyle?.gridTemplateColumns || "";
+                    const panelColumnCount = !panelColumnsText || panelColumnsText === "none"
+                      ? 0
+                      : panelColumnsText.trim().split(/\\s+/).length;
+                    const panelRect = recommendationPanel?.getBoundingClientRect();
                     return {
                       opened: Boolean(details?.open),
                       detailVisible: visible(details?.querySelector(".interest-detail-grid")),
                       hasDetailGrid: Boolean(details?.querySelector(".interest-detail-grid")),
+                      hasRecommendationPanel: Boolean(recommendationPanel),
+                      recommendationMetricCount: details?.querySelectorAll(".interest-recommendation-metrics span").length || 0,
+                      recommendationEvidenceCount: details?.querySelectorAll(".interest-recommendation-evidence span").length || 0,
+                      recommendationPanelDisplay: panelDisplay,
+                      recommendationPanelColumnCount: panelColumnCount,
+                      recommendationPanelWidth: Math.round(panelRect?.width || 0),
                       summaryText: (summary?.textContent || "").replace(/\\s+/g, " ").trim(),
                       rowVisible: visible(row),
                     };
@@ -205,6 +247,17 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     tickerNameOnlyCount: tickerBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     sectorNameOnlyCount: sectorBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     tickerDetailOpened: tickerOpen.opened && tickerOpen.hasDetailGrid,
+                    tickerRecommendationDetailReady:
+                      tickerOpen.hasRecommendationPanel &&
+                      tickerOpen.recommendationMetricCount >= 4 &&
+                      tickerOpen.recommendationEvidenceCount >= 6,
+                    tickerRecommendationHorizontal:
+                      (
+                        tickerOpen.recommendationPanelDisplay === "grid" &&
+                        tickerOpen.recommendationPanelColumnCount >= 3 &&
+                        tickerOpen.recommendationPanelWidth >= Math.min(760, Math.max(0, window.innerWidth - 160)
+                      )) ||
+                      (tickerOpen.hasRecommendationPanel && interestRecommendationHorizontalCssReady),
                     sectorDetailOpened: sectorOpen.opened && sectorOpen.hasDetailGrid,
                     tickerOpen,
                     sectorOpen,
@@ -272,6 +325,10 @@ def strict_errors(result: dict) -> list[str]:
             errors.append(f"보유 종목 상세 액션 흐름 실패: {label}")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
+    if not result.get("tickerRecommendationDetailReady"):
+        errors.append("관심종목 상세 추천 정보가 부족합니다.")
+    if not result.get("tickerRecommendationHorizontal"):
+        errors.append("관심종목 상세 추천 정보가 가로 패널로 표시되지 않습니다.")
     if not result.get("sectorDetailOpened"):
         errors.append("관심섹터 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     runtime_errors = result.get("runtimeErrors") if isinstance(result.get("runtimeErrors"), list) else []
