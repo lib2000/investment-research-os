@@ -89,6 +89,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must point to completion report")
     if usage.get("completion_report_json") != "openclaw_bridge_completion_report.json":
         raise AssertionError("OpenClaw usage must point to completion report JSON")
+    if usage.get("status_summary_command") != "python tools\\show_openclaw_bridge_status.py --json":
+        raise AssertionError("OpenClaw usage must include status summary command")
     final_audit = str(usage.get("final_completion_audit_command") or "")
     if "--require-report-hashes" not in final_audit:
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
@@ -150,6 +152,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "validation_command",
         "completion_audit_command",
         "final_completion_audit_command",
+        "status_summary_command",
         "offline_readiness_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
@@ -190,6 +193,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "validation": "validation_command",
             "completion_audit": "completion_audit_command",
             "final_completion_audit": "final_completion_audit_command",
+            "status_summary": "status_summary_command",
             "offline_readiness": "offline_readiness_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
@@ -239,6 +243,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "telegram favorite saved",
             "openclaw_bridge_completion_report.json",
             "openclaw_bridge_completion_report.md",
+            "show_openclaw_bridge_status.py --json",
             "bridge_status.json",
             "secrets",
             "account-auth material are excluded",

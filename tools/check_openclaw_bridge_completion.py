@@ -167,6 +167,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "check_openclaw_bridge_completion.py --max-age-hours 24",
         "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+        "show_openclaw_bridge_status.py --json",
         "check_offline_readiness.py --json",
     ]
     source_git = ""
@@ -251,7 +252,7 @@ def build_result(
         "OpenClaw bridge_status references current clean commit",
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw completion report hashes match completion report files",
-        "OpenClaw startup notes point to bridge files, final audit command, and current source git",
+        "OpenClaw startup notes point to bridge files, status summary, final audit command, and current source git",
     ]
     return {
         "status": "ok" if not errors else "failure",

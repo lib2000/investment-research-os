@@ -201,6 +201,15 @@ def load_openclaw_bridge_completion_tool():
     return module
 
 
+def load_openclaw_status_tool():
+    tool_path = PROJECT_ROOT / "tools" / "show_openclaw_bridge_status.py"
+    spec = spec_from_file_location("show_openclaw_bridge_status", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_refresh_portfolio_prices_tool():
     tool_path = PROJECT_ROOT / "tools" / "refresh_portfolio_prices.py"
     spec = spec_from_file_location("refresh_portfolio_prices", tool_path)
@@ -17651,6 +17660,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+                            "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -17683,6 +17693,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
                 "- completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`\n"
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
+                "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
@@ -17730,10 +17741,12 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
+        self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
+        self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
@@ -17828,11 +17841,80 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run sync_openclaw_investment_context.ps1 -RequireCompletionAudit\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes\n"
+                "run show_openclaw_bridge_status.py --json\n"
                 "run check_offline_readiness.py --json\n"
             )
             (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
             (root / "HEARTBEAT.md").write_text(startup_note, encoding="utf-8")
             self.assertEqual([], tool.validate_openclaw_workspace(root, status))
+
+    def test_openclaw_status_summary_reads_bridge_files(self):
+        tool = load_openclaw_status_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            read_order = [
+                "bridge_status.json",
+                "openclaw_bridge_manifest.json",
+                "investment_research_context.md",
+                "investment_research_context.json",
+                "openclaw_bridge_completion_report.md",
+                "openclaw_bridge_completion_report.json",
+            ]
+            (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_bridge_completion_report.md").write_text("# ok\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
+                json.dumps({"context_generated_at": "2026-07-05T07:00:00+09:00", "read_order": read_order}),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "investment_research_context.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-07-05T07:00:00+09:00",
+                        "current_state": {
+                            "daily_recommendations": {
+                                "latest_recommendation_date": "2026-07-04",
+                                "latest_market_counts": {"KR": 3, "US": 3},
+                            },
+                            "news_and_telegram": {"telegram_favorite_posts": {"saved_count": 10}},
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_completion_report.json").write_text(
+                json.dumps({"status": "ok"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "copied_at": "2026-07-05T07:00:01+09:00",
+                        "context_generated_at": "2026-07-05T07:00:00+09:00",
+                        "source_git_branch": "main",
+                        "source_git_commit": "abc1234",
+                        "source_git_dirty": False,
+                        "read_order": read_order,
+                        "completion_report_sha256": {},
+                        "operational_commands": {
+                            "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+                            "offline_readiness": "python tools\\check_offline_readiness.py --json",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            summary = tool.build_status_summary(openclaw_dir)
+            rendered = tool.render_text(summary)
+
+        self.assertEqual("ok", summary["status"])
+        self.assertEqual("abc1234", summary["source_git"]["commit"])
+        self.assertEqual({"KR": 3, "US": 3}, summary["latest_market_counts"])
+        self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
 
     def test_completion_audit_writes_json_and_markdown_reports(self):
         tool = load_openclaw_bridge_completion_tool()

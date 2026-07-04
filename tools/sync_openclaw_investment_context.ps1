@@ -104,6 +104,7 @@ $operationalCommands = [ordered]@{
   validation = "python tools\check_openclaw_investment_context.py --max-age-hours 24"
   completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24"
   final_completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"
+  status_summary = "python tools\show_openclaw_bridge_status.py --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
@@ -166,6 +167,7 @@ $readme = @(
   "- validation: ``python tools\check_openclaw_investment_context.py --max-age-hours 24``",
   "- completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``",
   "- final completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``",
+  "- status summary: ``python tools\show_openclaw_bridge_status.py --json``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
   ""
@@ -188,6 +190,7 @@ $startupLines = @(
   "- Final strict refresh from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``.",
   "- Completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``.",
   "- Final completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``.",
+  "- Status summary from ``$projectRoot``: ``python tools\show_openclaw_bridge_status.py --json``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
   "- Treat the bridge as decision-support context only; do not place trades from it."

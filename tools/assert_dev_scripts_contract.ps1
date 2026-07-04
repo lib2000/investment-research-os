@@ -1235,6 +1235,7 @@ $contracts = @(
       'strict_refresh_command',
       'completion_audit_command',
       'final_completion_audit_command',
+      'status_summary_command',
       'offline_readiness_command',
       'status_file',
       'completion_report',
@@ -1242,6 +1243,7 @@ $contracts = @(
       'completion_report_file',
       'completion_report_json_file',
       'completion_report_json',
+      'show_openclaw_bridge_status.py --json',
       'restricted_actions'
     )
   },
@@ -1256,16 +1258,19 @@ $contracts = @(
       'Firecrawl safety defaults must remain enabled=false and dry_run=true',
       'OpenClaw usage must point to bridge_status.json',
       'OpenClaw usage must include final completion hash audit command',
+      'OpenClaw usage must include status summary command',
       'OpenClaw usage must include offline readiness command',
       'openclaw_bridge_manifest.json',
       'strict_refresh_command',
       'completion_audit_command',
       'final_completion_audit_command',
+      'status_summary_command',
       'completion_report_file',
       'completion_report_json_file',
       'OpenClaw bridge manifest completion_report_json_file mismatch',
       'OpenClaw usage must point to completion report JSON',
       'offline_readiness_command',
+      'show_openclaw_bridge_status.py --json',
       'openclaw_bridge_completion_report.json',
       'OpenClaw bridge manifest schema mismatch',
       'OpenClaw bridge manifest read_order mismatch',
@@ -1314,8 +1319,9 @@ $contracts = @(
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',
       'check_openclaw_bridge_completion.py --max-age-hours 24',
       'check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes',
+      'show_openclaw_bridge_status.py --json',
       'check_offline_readiness.py --json',
-      'OpenClaw startup notes point to bridge files, final audit command, and current source git'
+      'OpenClaw startup notes point to bridge files, status summary, final audit command, and current source git'
     )
   },
   @{
@@ -1349,6 +1355,8 @@ $contracts = @(
       'completion audit',
       'final completion audit',
       'final_completion_audit',
+      'status summary',
+      'status_summary',
       'offline_readiness',
       'source_git_commit',
       'source_git_dirty',
@@ -1362,6 +1370,7 @@ $contracts = @(
       'OpenClaw completion audit skipped because source git worktree is dirty.',
       'OpenClaw final context validation failed',
       'OpenClaw final completion audit failed',
+      'show_openclaw_bridge_status.py --json',
       '--require-report-hashes',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
@@ -1387,11 +1396,29 @@ $contracts = @(
       'read_order',
       '컨텍스트 생성 시각',
       '전체 오프라인 준비도 명령',
+      '상태 요약 명령',
+      'show_openclaw_bridge_status.py --json',
       '시작 노트가 현재 source git 커밋',
       '최종 완료 해시 감사 명령',
       '매니페스트 명령과 일치',
       '민감정보 제외',
       '실거래 주문'
+    )
+  },
+  @{
+    Path = "tools\show_openclaw_bridge_status.py"
+    Snippets = @(
+      'show_openclaw_bridge_status',
+      'build_status_summary',
+      'bridge_status.json',
+      'openclaw_bridge_manifest.json',
+      'investment_research_context.json',
+      'openclaw_bridge_completion_report.json',
+      'read_order_files_present',
+      'latest_recommendation_date',
+      'telegram_saved_count',
+      'final_completion_audit',
+      '--json'
     )
   },
   @{
