@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -28,6 +29,15 @@ from research_os.telegram_market_journal import TelegramMarketPost  # noqa: E402
 
 
 SAMPLE_CHANNELS_JSON = '[{"username":"sample_channel","label":"Sample","max_posts":10}]'
+ENV_TEMPLATE = """# Telegram favorite-channel popular posts -> News Inbox.
+# Copy this to an ignored env file or backend\\.env and replace channel names.
+TELEGRAM_FAVORITE_POSTS_ENABLED=false
+TELEGRAM_FAVORITE_POSTS_TIME=22:00
+TELEGRAM_FAVORITE_CHANNELS_JSON=[{"username":"example_channel","label":"Example","max_posts":30}]
+TELEGRAM_FAVORITE_POSTS_TIMEOUT_SECONDS=10
+TELEGRAM_FAVORITE_POSTS_TOP_N=10
+TELEGRAM_FAVORITE_POSTS_MIN_VIEWS=0
+"""
 
 
 def sample_posts(**_kwargs):
@@ -65,7 +75,57 @@ def sample_posts(**_kwargs):
     )
 
 
-def build_runtime(settings: Settings, *, live_fetch: bool) -> TelegramFavoritePostsRuntime:
+def read_env_file(path: Path | None) -> dict[str, str]:
+    if not path:
+        return {}
+    if not path.exists():
+        raise SystemExit(f"env file not found: {path}")
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            values[key] = value
+    return values
+
+
+def env_bool(values: dict[str, str], name: str, default: bool = False) -> bool:
+    value = values.get(name, os.getenv(name))
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def env_int(values: dict[str, str], name: str, default: int) -> int:
+    value = values.get(name, os.getenv(name))
+    if value is None:
+        return default
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return default
+
+
+def env_float(values: dict[str, str], name: str, default: float) -> float:
+    value = values.get(name, os.getenv(name))
+    if value is None:
+        return default
+    try:
+        return float(str(value).strip())
+    except ValueError:
+        return default
+
+
+def env_str(values: dict[str, str], name: str, default: str = "") -> str:
+    value = values.get(name, os.getenv(name))
+    return str(value if value is not None else default).strip()
+
+
+def build_runtime(settings: Settings, *, live_fetch: bool, state_path: Path | None = None) -> TelegramFavoritePostsRuntime:
     if live_fetch:
         from research_os.telegram_market_journal import fetch_telegram_public_channel_posts
 
@@ -73,7 +133,7 @@ def build_runtime(settings: Settings, *, live_fetch: bool) -> TelegramFavoritePo
     else:
         fetch_posts = sample_posts
 
-    state_path = PROJECT_ROOT / "tmp" / "telegram_favorite_posts_check_state.json"
+    resolved_state_path = state_path or PROJECT_ROOT / "tmp" / "telegram_favorite_posts_check_state.json"
     return TelegramFavoritePostsRuntime(
         current_storage_date=lambda: date(2026, 7, 5),
         current_storage_timestamp=lambda: "2026-07-05T22:01:00+09:00",
@@ -84,25 +144,27 @@ def build_runtime(settings: Settings, *, live_fetch: bool) -> TelegramFavoritePo
         write_news_inbox=lambda local_settings, payload: write_json_store(news_inbox_path(local_settings), payload),
         content_fingerprint=content_fingerprint,
         provider_error_message=lambda exc, _settings: str(exc),
-        telegram_favorite_posts_state_path=lambda _settings: state_path,
+        telegram_favorite_posts_state_path=lambda _settings: resolved_state_path,
         fetch_telegram_public_channel_posts=fetch_posts,
     )
 
 
-def build_settings(args: argparse.Namespace) -> Settings:
+def build_settings(args: argparse.Namespace, env_values: dict[str, str]) -> Settings:
     channels_json = args.channels_json
     if args.channels_json_file:
         channels_json = args.channels_json_file.read_text(encoding="utf-8").strip()
+    if not channels_json and (args.use_env or args.env_file):
+        channels_json = env_str(env_values, "TELEGRAM_FAVORITE_CHANNELS_JSON", "")
     if not channels_json and args.sample:
         channels_json = SAMPLE_CHANNELS_JSON
     return Settings(
         research_vault_dir=str(PROJECT_ROOT / ".test-tmp" / "telegram-favorite-posts-check-vault"),
-        telegram_favorite_posts_enabled=args.enabled,
-        telegram_favorite_posts_time=args.time,
+        telegram_favorite_posts_enabled=args.enabled or env_bool(env_values, "TELEGRAM_FAVORITE_POSTS_ENABLED", False),
+        telegram_favorite_posts_time=args.time or env_str(env_values, "TELEGRAM_FAVORITE_POSTS_TIME", "22:00"),
         telegram_favorite_channels_json=channels_json or "",
-        telegram_favorite_posts_top_n=args.top_n,
-        telegram_favorite_posts_min_views=args.min_views,
-        telegram_favorite_posts_timeout_seconds=args.timeout_seconds,
+        telegram_favorite_posts_top_n=args.top_n if args.top_n is not None else env_int(env_values, "TELEGRAM_FAVORITE_POSTS_TOP_N", 10),
+        telegram_favorite_posts_min_views=args.min_views if args.min_views is not None else env_int(env_values, "TELEGRAM_FAVORITE_POSTS_MIN_VIEWS", 0),
+        telegram_favorite_posts_timeout_seconds=args.timeout_seconds if args.timeout_seconds is not None else env_float(env_values, "TELEGRAM_FAVORITE_POSTS_TIMEOUT_SECONDS", 10.0),
     )
 
 
@@ -112,18 +174,33 @@ def main() -> int:
     parser.add_argument("--sample", action="store_true", help="샘플 공개 채널 설정과 샘플 게시글로 점검합니다.")
     parser.add_argument("--channels-json", default="", help="TELEGRAM_FAVORITE_CHANNELS_JSON 값")
     parser.add_argument("--channels-json-file", type=Path, help="채널 JSON 파일")
+    parser.add_argument("--env-file", type=Path, help="backend\\.env 또는 별도 ignored env 파일")
+    parser.add_argument("--use-env", action="store_true", help="현재 프로세스 환경변수에서 Telegram 설정을 읽습니다.")
+    parser.add_argument("--write-env-template", type=Path, help="텔레그램 즐겨찾기 env 템플릿을 생성합니다.")
+    parser.add_argument("--state-file", type=Path, help="점검 상태 파일 경로. 생략하면 tmp 아래 기본 파일을 사용합니다.")
     parser.add_argument("--live-fetch", action="store_true", help="실제 t.me/s 공개 preview를 조회합니다.")
     parser.add_argument("--sync-news-inbox", action="store_true", help="임시 vault 뉴스 인박스에 dry-run 저장까지 확인합니다.")
-    parser.add_argument("--top-n", type=int, default=10)
-    parser.add_argument("--min-views", type=int, default=0)
-    parser.add_argument("--time", default="22:00")
-    parser.add_argument("--timeout-seconds", type=float, default=10.0)
+    parser.add_argument("--top-n", type=int, default=None)
+    parser.add_argument("--min-views", type=int, default=None)
+    parser.add_argument("--time", default=None)
+    parser.add_argument("--timeout-seconds", type=float, default=None)
     parser.add_argument("--output-json", type=Path, help="점검 결과 JSON 저장")
     parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
-    settings = build_settings(args)
-    runtime = build_runtime(settings, live_fetch=args.live_fetch)
+    if args.write_env_template:
+        output_path = args.write_env_template if args.write_env_template.is_absolute() else PROJECT_ROOT / args.write_env_template
+        if output_path.exists():
+            raise SystemExit(f"refusing to overwrite existing file: {output_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(ENV_TEMPLATE, encoding="utf-8")
+        print(f"created env template: {output_path}")
+        return 0
+
+    env_values = read_env_file(args.env_file)
+    settings = build_settings(args, env_values)
+    state_file = args.state_file if not args.state_file or args.state_file.is_absolute() else PROJECT_ROOT / args.state_file
+    runtime = build_runtime(settings, live_fetch=args.live_fetch, state_path=state_file)
     channels, parse_warnings = parse_telegram_favorite_channels_json(settings.telegram_favorite_channels_json)
     posts, collect_warnings = collect_telegram_favorite_popular_posts(runtime, settings) if channels else ([], [])
     status = build_telegram_favorite_posts_task_status(runtime, settings)
@@ -136,6 +213,7 @@ def main() -> int:
         "status": "success" if channels and (posts or not args.live_fetch) else "needs_configuration",
         "module": "telegram_favorite_posts_check",
         "enabled": settings.telegram_favorite_posts_enabled,
+        "env_file_loaded": bool(args.env_file),
         "daily_time": settings.telegram_favorite_posts_time,
         "channel_count": len(channels),
         "top_n": settings.telegram_favorite_posts_top_n,

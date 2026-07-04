@@ -3017,9 +3017,17 @@ class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
     def test_check_tool_sample_mode_returns_candidates(self):
         module = load_telegram_favorite_posts_check_tool()
 
-        with patch.object(sys, "argv", ["check_telegram_favorite_posts.py", "--sample", "--enabled", "--json"]):
-            with patch("builtins.print") as mock_print:
-                exit_code = module.main()
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            state_path = Path(temp_dir) / "state.json"
+            with patch.object(
+                sys,
+                "argv",
+                ["check_telegram_favorite_posts.py", "--sample", "--enabled", "--state-file", str(state_path), "--json"],
+            ):
+                with patch("builtins.print") as mock_print:
+                    exit_code = module.main()
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(mock_print.call_args.args[0])
@@ -3027,6 +3035,32 @@ class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
         self.assertEqual(payload["channel_count"], 1)
         self.assertGreaterEqual(payload["candidate_count"], 2)
         self.assertEqual(payload["task_status"]["status"], "due")
+
+    def test_check_tool_reads_ignored_env_file(self):
+        module = load_telegram_favorite_posts_check_tool()
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            env_path = Path(temp_dir) / "telegram.env"
+            env_path.write_text(
+                "TELEGRAM_FAVORITE_POSTS_ENABLED=true\n"
+                "TELEGRAM_FAVORITE_POSTS_TIME=22:00\n"
+                "TELEGRAM_FAVORITE_CHANNELS_JSON=[{\"username\":\"env_channel\",\"label\":\"Env Channel\",\"max_posts\":5}]\n"
+                "TELEGRAM_FAVORITE_POSTS_TOP_N=1\n"
+                "TELEGRAM_FAVORITE_POSTS_MIN_VIEWS=100\n",
+                encoding="utf-8",
+            )
+
+            with patch.object(sys, "argv", ["check_telegram_favorite_posts.py", "--env-file", str(env_path), "--json"]):
+                with patch("builtins.print") as mock_print:
+                    exit_code = module.main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertTrue(payload["enabled"])
+        self.assertTrue(payload["env_file_loaded"])
+        self.assertEqual(payload["channel_count"], 1)
+        self.assertEqual(payload["candidate_count"], 1)
 
 
 class EarningsTranscriptCollectorTests(unittest.TestCase):
