@@ -711,6 +711,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
 
+    def test_offline_readiness_checks_openclaw_investment_bridge(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("OpenClaw 투자리서치 브리지", checks)
+        self.assertEqual(
+            checks["OpenClaw 투자리서치 브리지"],
+            ["tools/check_openclaw_investment_context.py", "--max-age-hours", "24"],
+        )
+
     def test_offline_readiness_prints_nps_rebalance_plan(self):
         tool = load_offline_readiness_tool()
 

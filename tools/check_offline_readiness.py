@@ -72,6 +72,7 @@ CHECKS = [
     ("뉴스 인박스 우선 분류", ["tools/check_news_inbox_priority_queue.py", "--strict"]),
     ("최근 1주 자료/추천 근거", ["tools/check_recent_weekly_brief.py", "--strict"]),
     ("통합 투자 인사이트 허브", ["tools/check_investment_insight_hub.py", "--strict"]),
+    ("OpenClaw 투자리서치 브리지", ["tools/check_openclaw_investment_context.py", "--max-age-hours", "24"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
     ("Firecrawl Monitor 변화 감지 payload", ["tools/check_firecrawl_monitor_collector.py"]),
