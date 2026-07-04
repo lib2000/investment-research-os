@@ -174,6 +174,24 @@ def load_investment_insight_hub_check_tool():
     return module
 
 
+def load_openclaw_context_export_tool():
+    tool_path = PROJECT_ROOT / "tools" / "export_openclaw_investment_context.py"
+    spec = spec_from_file_location("export_openclaw_investment_context", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_openclaw_context_check_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_investment_context.py"
+    spec = spec_from_file_location("check_openclaw_investment_context", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_daily_recommendation_render_layout_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -17358,6 +17376,119 @@ class InvestmentInsightHubTests(unittest.TestCase):
         self.assertTrue(any(item["source_family"] == "policy_law_news" for item in payload["insights"]))
         self.assertTrue(any(item["source_family"] == "official_filings" for item in payload["insights"]))
         self.assertTrue(any(item["source_family"] == "telegram_market_sentiment" for item in payload["insights"]))
+
+
+class OpenClawInvestmentContextTests(unittest.TestCase):
+    def test_openclaw_context_export_and_validation_exclude_sensitive_raw_state(self):
+        export_tool = load_openclaw_context_export_tool()
+        check_tool = load_openclaw_context_check_tool()
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            system_dir = root / "research_vault" / "_system"
+            system_dir.mkdir(parents=True)
+            records = []
+            for market, names in {
+                "KR": [("001", "한국1"), ("002", "한국2"), ("003", "한국3")],
+                "US": [("AAA", "미국1"), ("BBB", "미국2"), ("CCC", "미국3")],
+            }.items():
+                for rank, (ticker, name) in enumerate(names, start=1):
+                    records.append(
+                        {
+                            "recommendation_date": "2026-07-05",
+                            "market": market,
+                            "market_label": "한국" if market == "KR" else "미국",
+                            "rank": rank,
+                            "ticker": ticker,
+                            "company_name": name,
+                            "score": 100 - rank,
+                            "currency": "KRW" if market == "KR" else "USD",
+                            "baseline_price": 1000 + rank,
+                            "investment_direction_profile": {
+                                "themes": [{"label": "AI 반도체 2차 병목"}],
+                            },
+                            "reasons": ["시장 데이터 반영"],
+                            "signal_breakdown": [{"key": "market", "label": "시장", "summary": "반영", "score_applied": True}],
+                        }
+                    )
+            (system_dir / "daily_recommendations.json").write_text(
+                json.dumps(
+                    {
+                        "records": records,
+                        "latest_recommendation_date": "2026-07-05",
+                        "updated_at": "2026-07-05T09:00:00+09:00",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "interest_list.json").write_text(
+                json.dumps(
+                    {
+                        "tickers": [{"ticker": "001", "region": "KR", "verification": {"company_name": "한국1"}}],
+                        "sectors": [{"name": "AI", "region": "US"}],
+                        "kiwoom_buy_group_prune": {"enabled": True, "kept_count": 90, "removed_count": 3},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "user_portfolios.json").write_text(
+                json.dumps(
+                    {"portfolios": {"main": {"portfolio_name": "테스트", "holdings": [{"ticker": "001", "name": "한국1", "currency": "KRW"}]}}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "news_inbox.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-05T09:00:00+09:00",
+                        "items": [{"scope": "MARKET", "scope_reason": "telegram_favorite_popular_post", "tags": ["telegram_favorite"]}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "telegram_favorite_posts_state.json").write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "last_run_at": "2026-07-05T09:00:00+09:00",
+                        "candidate_count": 1,
+                        "saved_count": 1,
+                        "top_posts": [{"channel_label": "테스트", "title": "인기글", "view_count": 1000}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "nps_portfolio_change_snapshot.json").write_text(
+                json.dumps(
+                    {
+                        "status": "warning",
+                        "as_of": "2026-07-01",
+                        "public_rebalancing_context": {"status": "public_sources_only"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "firecrawl_monitor_webhook_status.json").write_text(
+                json.dumps({"webhook_ready": False, "last_webhook_status": "rejected"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            context = export_tool.build_context(root)
+            output_dir = root / "out"
+            export_tool.write_context(context, output_dir)
+            messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
+            exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
+
+        self.assertTrue(messages)
+        self.assertIn('"raw_tokens_excluded": true', exported_text)
+        self.assertNotIn('"access_token":', exported_text)
+        self.assertIn("AI 반도체 2차 병목", exported_text)
 
 
 if __name__ == "__main__":
