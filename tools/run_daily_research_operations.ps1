@@ -4,9 +4,11 @@
   [string]$DevUserToken = "dev-local-token",
   [int]$PortfolioRefreshTimeoutSeconds = 120,
   [int]$RecommendationRunTimeoutSeconds = 600,
+  [int]$ResearchAutomationTimeoutSeconds = 300,
   [switch]$SkipPortfolioRefresh,
   [switch]$SkipRecommendationRun,
   [switch]$SkipRecommendationPreview,
+  [switch]$SkipResearchAutomationRefresh,
   [switch]$SkipOpenClawSync,
   [switch]$SkipVerification
 )
@@ -105,6 +107,48 @@ if (-not $SkipRecommendationPreview.IsPresent) {
       --require-hold-warning `
       --expected-held-ticker 112610 `
       --output-json tmp\daily_recommendation_candidate_policy_preview.json
+  }
+}
+
+if (-not $SkipResearchAutomationRefresh.IsPresent) {
+  Invoke-DailyResearchStep "리서치 중복/Dossier 상태 갱신" {
+    $headers = @{
+      Authorization = "Bearer $DevUserToken"
+      "Content-Type" = "application/json"
+    }
+    $base = $BaseUrl.TrimEnd("/")
+    try {
+      $reviewUri = "$base/api/v1/research-automation/dedupes/review?limit=80" + [char]38 + "save_result=true"
+      $review = Invoke-RestMethod -Method Post -Uri $reviewUri -Headers $headers -TimeoutSec $ResearchAutomationTimeoutSeconds
+      $reviewGroupCount = $review.duplicate_group_count
+      if ($null -eq $reviewGroupCount) {
+        $reviewGroupCount = $review.group_count
+      }
+      Write-Host (
+        "중복 리뷰 상태={0}; 그룹={1}; 갱신={2}" -f
+        $review.status,
+        $reviewGroupCount,
+        $review.as_of
+      )
+      $refreshUri = "$base/api/v1/research-automation/dedupes/refresh-dossiers?limit=8" + [char]38 + "save_result=true"
+      $refresh = Invoke-RestMethod -Method Post -Uri $refreshUri -Headers $headers -TimeoutSec $ResearchAutomationTimeoutSeconds
+      Write-Host (
+        "Dossier 큐 상태={0}; 후보={1}; 갱신={2}; 실패={3}; 기준={4}" -f
+        $refresh.status,
+        $refresh.candidate_count,
+        $refresh.refreshed_count,
+        $refresh.failed_count,
+        $refresh.as_of
+      )
+    } catch {
+      Write-Warning "리서치 중복/Dossier 상태 갱신 응답 실패/타임아웃: $($_.Exception.Message)"
+      python tools\check_research_source_store.py --strict
+      if ($LASTEXITCODE -eq 0) {
+        Write-Warning "리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다."
+        return
+      }
+      throw
+    }
   }
 }
 

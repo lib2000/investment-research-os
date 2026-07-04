@@ -646,6 +646,19 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--max-latest-age-days 0", script_source)
         self.assertIn("오늘 추천 저장 검증이 통과해 운영 루틴을 계속합니다.", script_source)
 
+    def test_daily_research_operations_refreshes_research_automation_freshness(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipResearchAutomationRefresh", script_source)
+        self.assertIn("리서치 중복/Dossier 상태 갱신", script_source)
+        self.assertIn("/api/v1/research-automation/dedupes/review?limit=80", script_source)
+        self.assertIn("/api/v1/research-automation/dedupes/refresh-dossiers?limit=8", script_source)
+        self.assertIn("duplicate_group_count", script_source)
+        self.assertIn("check_research_source_store.py --strict", script_source)
+        self.assertIn("리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다.", script_source)
+
     def test_openclaw_sync_script_validates_after_copy(self):
         script_source = (PROJECT_ROOT / "tools" / "sync_openclaw_investment_context.ps1").read_text(
             encoding="utf-8"
