@@ -317,6 +317,8 @@ let lastPortfolioTeamReportQueue = null;
 let lastInterestList = null;
 let lastInterestAutomationBoard = null;
 let lastKiwoomInterestGroups = null;
+const openInterestTickerKeys = new Set();
+const openInterestSectorKeys = new Set();
 let lastTodayResearchUpdate = null;
 let latestDailyRecommendations = null;
 let activeMemoryPreviewFile = null;
@@ -1948,13 +1950,20 @@ function makeInterestTickerSummaryRow(item = {}) {
   const tickerCode = String(item.ticker || "").trim();
   const region = normalizeInterestRegion(item.region || item.verification?.country || "");
   const identityLabel = companyName || (tickerCode ? "회사명 확인 필요" : "");
+  const interestKey = normalizeTickerDraft(tickerCode || companyName || identityLabel);
   const tags = joinTags(item.tags);
+  row.dataset.interestKey = interestKey;
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
+  detail.open = openInterestTickerKeys.has(interestKey);
+  row.classList.toggle("is-detail-open", detail.open);
   const summary = document.createElement("summary");
   summary.className = "interest-card-summary";
   summary.title = identityLabel;
   summary.setAttribute("aria-label", `${identityLabel} 상세 정보 열기`);
+  summary.addEventListener("click", (event) => {
+    toggleInterestCardDetailsFromEvent(event, elements.interestTickerEditor);
+  });
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong title="${escapeHtml(identityLabel)}">${escapeHtml(companyName)}</strong>
@@ -2059,13 +2068,20 @@ function makeInterestSectorSummaryRow(item = {}) {
   row.className =
     "interest-summary-row interest-sector-summary-row interest-sector-row interest-compact-card-row";
   const region = normalizeInterestRegion(item.region || "KR");
+  const interestKey = String(item.name || "").trim().toLowerCase();
   const tags = joinTags(item.tags);
+  row.dataset.interestKey = interestKey;
   const detail = document.createElement("details");
   detail.className = "interest-card-details";
+  detail.open = openInterestSectorKeys.has(interestKey);
+  row.classList.toggle("is-detail-open", detail.open);
   const summary = document.createElement("summary");
   summary.className = "interest-card-summary";
   summary.title = item.name || "관심섹터";
   summary.setAttribute("aria-label", `${item.name || "관심섹터"} 상세 정보 열기`);
+  summary.addEventListener("click", (event) => {
+    toggleInterestCardDetailsFromEvent(event, elements.interestSectorEditor);
+  });
   summary.innerHTML = `
     <span class="interest-summary-main">
       <strong>${escapeHtml(item.name || "관심섹터")}</strong>
@@ -2113,6 +2129,60 @@ function makeInterestSectorSummaryRow(item = {}) {
   detail.append(summary, detailBody);
   row.append(detail);
   return row;
+}
+
+function toggleInterestCardDetailsFromEvent(event, editor) {
+  if (event.target.closest("[data-interest-action], [data-editor-remove], input, textarea, select, button, a, label")) {
+    return false;
+  }
+  const summary = event.target.closest(".interest-card-summary");
+  const row = event.target.closest(".interest-summary-row");
+  if (!summary && !row) {
+    return false;
+  }
+  if (row && editor && !editor.contains(row)) {
+    return false;
+  }
+  const details = (summary || row)?.closest(".interest-card-details") || row?.querySelector(".interest-card-details");
+  if (!details) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  details.open = !details.open;
+  const summaryRow = details.closest(".interest-summary-row");
+  summaryRow?.classList.toggle("is-detail-open", details.open);
+  const key = summaryRow?.dataset?.interestKey || "";
+  const openSet = editor === elements.interestSectorEditor ? openInterestSectorKeys : openInterestTickerKeys;
+  if (key) {
+    if (details.open) {
+      openSet.add(key);
+    } else {
+      openSet.delete(key);
+    }
+  }
+  if (details.open) {
+    requestAnimationFrame(() => {
+      summaryRow?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+  }
+  return true;
+}
+
+function syncInterestDetailsOpenState(editor) {
+  editor?.querySelectorAll(".interest-summary-row").forEach((row) => {
+    const details = row.querySelector(".interest-card-details");
+    row.classList.toggle("is-detail-open", Boolean(details?.open));
+    const key = row.dataset?.interestKey || "";
+    const openSet = editor === elements.interestSectorEditor ? openInterestSectorKeys : openInterestTickerKeys;
+    if (key) {
+      if (details?.open) {
+        openSet.add(key);
+      } else {
+        openSet.delete(key);
+      }
+    }
+  });
 }
 
 function renderEditorRows(container, rows, rowFactory, emptyFactory) {
@@ -13445,6 +13515,9 @@ elements.interestSectorDraft?.addEventListener("keydown", (event) => {
 });
 
 elements.interestTickerEditor.addEventListener("click", (event) => {
+  if (toggleInterestCardDetailsFromEvent(event, elements.interestTickerEditor)) {
+    return;
+  }
   const actionButton = event.target.closest("[data-interest-action]");
   if (actionButton) {
     const ticker = actionButton.dataset.interestTicker;
@@ -13489,6 +13562,7 @@ elements.interestTickerEditor.addEventListener("input", (event) => {
 
 elements.interestTickerEditor.addEventListener("change", (event) => {
   clearEditorInputWarning(event);
+  syncInterestDetailsOpenState(elements.interestTickerEditor);
   updateInterestsSummary();
   saveCurrentInterestList({ quiet: true }).catch(setError);
 });
@@ -13497,6 +13571,9 @@ elements.interestTickerDraft.addEventListener("input", clearEditorInputWarning);
 elements.interestTickerDraft.addEventListener("change", clearEditorInputWarning);
 
 elements.interestSectorEditor.addEventListener("click", (event) => {
+  if (toggleInterestCardDetailsFromEvent(event, elements.interestSectorEditor)) {
+    return;
+  }
   const actionButton = event.target.closest("[data-interest-action]");
   if (actionButton) {
     const sector = actionButton.dataset.interestSector;
@@ -13536,6 +13613,7 @@ elements.interestSectorEditor.addEventListener("input", (event) => {
 
 elements.interestSectorEditor.addEventListener("change", (event) => {
   clearEditorInputWarning(event);
+  syncInterestDetailsOpenState(elements.interestSectorEditor);
   updateInterestsSummary();
   saveCurrentInterestList({ quiet: true }).catch(setError);
 });

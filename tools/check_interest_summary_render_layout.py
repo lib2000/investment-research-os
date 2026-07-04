@@ -101,6 +101,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const row = [...(root || document).querySelectorAll(selector)].find(visible);
                     const details = row?.querySelector("details.interest-card-details");
                     const summary = row?.querySelector("summary.interest-card-summary");
+                    const openedName = (summary?.querySelector("strong")?.textContent || "").replace(/\\s+/g, " ").trim();
                     summary?.scrollIntoView({block: "center", inline: "nearest"});
                     await sleep(100);
                     summary?.click();
@@ -108,7 +109,12 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       details.open = true;
                     }
                     await sleep(400);
-                    const recommendationPanel = details?.querySelector(".interest-recommendation-panel");
+                    const currentRow = openedName
+                      ? [...(root || document).querySelectorAll(selector)]
+                          .find((candidate) => (candidate.querySelector("summary strong")?.textContent || "").replace(/\\s+/g, " ").trim() === openedName)
+                      : row;
+                    const currentDetails = currentRow?.querySelector("details.interest-card-details") || details;
+                    const recommendationPanel = currentDetails?.querySelector(".interest-recommendation-panel");
                     recommendationPanel?.scrollIntoView({block: "center", inline: "nearest"});
                     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
                     const panelStyle = recommendationPanel ? getComputedStyle(recommendationPanel) : null;
@@ -119,21 +125,21 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       : panelColumnsText.trim().split(/\\s+/).length;
                     const panelRect = recommendationPanel?.getBoundingClientRect();
                     return {
-                      opened: Boolean(details?.open),
-                      detailVisible: visible(details?.querySelector(".interest-detail-grid")),
-                      hasDetailGrid: Boolean(details?.querySelector(".interest-detail-grid")),
+                      opened: Boolean(currentDetails?.open),
+                      detailVisible: visible(currentDetails?.querySelector(".interest-detail-grid")),
+                      hasDetailGrid: Boolean(currentDetails?.querySelector(".interest-detail-grid")),
                       hasRecommendationPanel: Boolean(recommendationPanel),
-                      recommendationMetricCount: details?.querySelectorAll(".interest-recommendation-metrics span").length || 0,
-                      recommendationEvidenceCount: details?.querySelectorAll(".interest-recommendation-evidence span").length || 0,
-                      recommendationSignalGridCount: details?.querySelectorAll(".daily-recommendation-signal-grid").length || 0,
-                      recommendationQualityCount: details?.querySelectorAll(".daily-recommendation-quality").length || 0,
-                      recommendationScoreChipCount: details?.querySelectorAll(".daily-recommendation-score em").length || 0,
-                      recommendationSectionLabelCount: details?.querySelectorAll(".interest-recommendation-evidence b").length || 0,
+                      recommendationMetricCount: currentDetails?.querySelectorAll(".interest-recommendation-metrics span").length || 0,
+                      recommendationEvidenceCount: currentDetails?.querySelectorAll(".interest-recommendation-evidence span").length || 0,
+                      recommendationSignalGridCount: currentDetails?.querySelectorAll(".daily-recommendation-signal-grid").length || 0,
+                      recommendationQualityCount: currentDetails?.querySelectorAll(".daily-recommendation-quality").length || 0,
+                      recommendationScoreChipCount: currentDetails?.querySelectorAll(".daily-recommendation-score em").length || 0,
+                      recommendationSectionLabelCount: currentDetails?.querySelectorAll(".interest-recommendation-evidence b").length || 0,
                       recommendationPanelDisplay: panelDisplay,
                       recommendationPanelColumnCount: panelColumnCount,
                       recommendationPanelWidth: Math.round(panelRect?.width || 0),
-                      summaryText: (summary?.textContent || "").replace(/\\s+/g, " ").trim(),
-                      rowVisible: visible(row),
+                      summaryText: (currentRow?.querySelector("summary")?.textContent || summary?.textContent || "").replace(/\\s+/g, " ").trim(),
+                      rowVisible: visible(currentRow),
                     };
                   };
                   const regionGroupStats = (rootSelector) => [...document.querySelectorAll(`${rootSelector} .interest-region-group`)]
@@ -260,12 +266,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       tickerOpen.recommendationScoreChipCount >= 4 &&
                       tickerOpen.recommendationSectionLabelCount >= 3,
                     tickerRecommendationHorizontal:
-                      (
-                        tickerOpen.recommendationPanelDisplay === "grid" &&
-                        tickerOpen.recommendationPanelColumnCount >= 3 &&
-                        tickerOpen.recommendationPanelWidth >= Math.min(760, Math.max(0, window.innerWidth - 160)
-                      )) ||
-                      (tickerOpen.hasRecommendationPanel && interestRecommendationHorizontalCssReady),
+                      tickerOpen.recommendationPanelDisplay === "grid" &&
+                      tickerOpen.recommendationPanelColumnCount >= 3 &&
+                      tickerOpen.recommendationPanelWidth >= Math.min(760, Math.max(0, window.innerWidth - 160)),
                     sectorDetailOpened: sectorOpen.opened && sectorOpen.hasDetailGrid,
                     tickerOpen,
                     sectorOpen,

@@ -3730,12 +3730,21 @@ label {
   border-color: #99d5cb;
 }
 
-.interest-ticker-summary-row:has(.interest-card-details[open]) {
+.interest-ticker-summary-row:has(.interest-card-details[open]),
+.interest-ticker-summary-row.is-detail-open {
   grid-column: 1 / -1;
 }
 
 .interest-card-details {
   width: 100%;
+}
+
+.interest-card-details:not([open]) > :not(summary) {
+  display: none;
+}
+
+.interest-card-details[open] > .interest-detail-grid {
+  display: grid;
 }
 
 .interest-card-summary {
