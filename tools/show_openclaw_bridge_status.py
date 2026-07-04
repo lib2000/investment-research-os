@@ -67,6 +67,7 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
 def render_text(summary: dict) -> str:
     git = summary.get("source_git") or {}
     commands = summary.get("operational_commands") or {}
+    market_counts = json.dumps(summary.get("latest_market_counts") or {}, ensure_ascii=False, separators=(",", ":"))
     lines = [
         f"OpenClaw bridge status: {summary.get('status')}",
         f"- dir: {summary.get('openclaw_dir')}",
@@ -74,7 +75,7 @@ def render_text(summary: dict) -> str:
         f"- copied_at: {summary.get('copied_at')}",
         f"- context_generated_at: {summary.get('context_generated_at')}",
         f"- latest_recommendation_date: {summary.get('latest_recommendation_date')}",
-        f"- latest_market_counts: {summary.get('latest_market_counts')}",
+        f"- latest_market_counts: {market_counts}",
         f"- telegram_saved_count: {summary.get('telegram_saved_count')}",
         "- read_order:",
     ]
