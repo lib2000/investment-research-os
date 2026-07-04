@@ -98,12 +98,27 @@ def validate_no_secret_like_content(path: Path) -> None:
 def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> list[str]:
     json_path = directory / "investment_research_context.json"
     md_path = directory / "investment_research_context.md"
+    manifest_path = directory / "openclaw_bridge_manifest.json"
     if not md_path.exists():
         raise AssertionError(f"context Markdown not found: {md_path}")
+    if not manifest_path.exists():
+        raise AssertionError(f"OpenClaw bridge manifest not found: {manifest_path}")
     validate_no_secret_like_content(json_path)
     validate_no_secret_like_content(md_path)
+    validate_no_secret_like_content(manifest_path)
     payload = load_context(json_path)
     messages = validate_context(payload, max_age_hours=max_age_hours)
+    manifest = load_context(manifest_path)
+    if manifest.get("schema") != "investment_research_openclaw_bridge_v1":
+        raise AssertionError("OpenClaw bridge manifest schema mismatch")
+    if manifest.get("context_generated_at") != payload.get("generated_at"):
+        raise AssertionError("OpenClaw bridge manifest generated_at does not match context")
+    if manifest.get("context_file") != "investment_research_context.json":
+        raise AssertionError("OpenClaw bridge manifest context_file mismatch")
+    if manifest.get("markdown_file") != "investment_research_context.md":
+        raise AssertionError("OpenClaw bridge manifest markdown_file mismatch")
+    if not manifest.get("safe_refresh_command") or not manifest.get("validation_command"):
+        raise AssertionError("OpenClaw bridge manifest must include refresh and validation commands")
     markdown = md_path.read_text(encoding="utf-8-sig")
     for required in ["오늘 추천 최신일", "민감정보", "오픈클로 사용 규칙", "KR 1위", "US 1위"]:
         if required not in markdown:
@@ -125,6 +140,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         for required in [
             "investment_research_context.md",
             "investment_research_context.json",
+            "openclaw_bridge_manifest.json",
             "bridge_status.json",
             "secrets",
             "account-auth material are excluded",

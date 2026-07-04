@@ -24,11 +24,15 @@ python $exportScript --print-summary | Out-Host
 
 $jsonPath = Join-Path $sourceDir "investment_research_context.json"
 $markdownPath = Join-Path $sourceDir "investment_research_context.md"
+$manifestPath = Join-Path $sourceDir "openclaw_bridge_manifest.json"
 if (-not (Test-Path -LiteralPath $jsonPath)) {
   throw "Generated JSON context not found: $jsonPath"
 }
 if (-not (Test-Path -LiteralPath $markdownPath)) {
   throw "Generated Markdown context not found: $markdownPath"
+}
+if (-not (Test-Path -LiteralPath $manifestPath)) {
+  throw "Generated bridge manifest not found: $manifestPath"
 }
 
 if ($SkipCopy) {
@@ -49,6 +53,7 @@ if (-not (Test-Path -LiteralPath $OpenClawWorkspace)) {
 New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 Copy-Item -Force -LiteralPath $jsonPath -Destination (Join-Path $targetDir "investment_research_context.json")
 Copy-Item -Force -LiteralPath $markdownPath -Destination (Join-Path $targetDir "investment_research_context.md")
+Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
 $context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $statusPath = Join-Path $targetDir "bridge_status.json"
@@ -58,6 +63,7 @@ $status = [ordered]@{
   source_project = $projectRoot
   source_context_json = $jsonPath
   source_context_markdown = $markdownPath
+  source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
   context_generated_at = $context.generated_at
@@ -74,6 +80,7 @@ $readme = @(
   "",
   "- ``investment_research_context.md``: human-readable sanitized summary",
   "- ``investment_research_context.json``: machine-readable sanitized summary",
+  "- ``openclaw_bridge_manifest.json``: machine-readable file map and refresh/check commands",
   "- source generator: ``$exportScript``",
   "- ``bridge_status.json``: last copy status and source/target paths",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",

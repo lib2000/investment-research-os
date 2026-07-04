@@ -17548,16 +17548,19 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "# Investment Research OS Bridge\n\n"
                 "- `investment_research_context.md`: human-readable sanitized summary\n"
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
+                "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `bridge_status.json`: last copy status and source/target paths\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
             )
             bridge_messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
             exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
+            manifest_text = (output_dir / "openclaw_bridge_manifest.json").read_text(encoding="utf-8")
 
         self.assertTrue(messages)
         self.assertTrue(bridge_messages)
         self.assertIn('"raw_tokens_excluded": true', exported_text)
+        self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 

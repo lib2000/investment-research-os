@@ -362,13 +362,32 @@ def render_markdown(context: dict) -> str:
     return "\n".join(lines)
 
 
+def build_bridge_manifest(context: dict) -> dict:
+    return {
+        "schema": "investment_research_openclaw_bridge_v1",
+        "generated_at": datetime.now(tz=KST).isoformat(timespec="seconds"),
+        "context_generated_at": context.get("generated_at"),
+        "source_project": context.get("source_project"),
+        "context_file": "investment_research_context.json",
+        "markdown_file": "investment_research_context.md",
+        "status_file": "bridge_status.json",
+        "readme_file": "README.md",
+        "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+        "validation_command": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
+        "sanitization": context.get("sanitization"),
+        "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),
+    }
+
+
 def write_context(context: dict, output_dir: Path) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "investment_research_context.json"
     md_path = output_dir / "investment_research_context.md"
+    manifest_path = output_dir / "openclaw_bridge_manifest.json"
     json_path.write_text(json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(render_markdown(context), encoding="utf-8")
-    return {"json_path": str(json_path), "markdown_path": str(md_path)}
+    manifest_path.write_text(json.dumps(build_bridge_manifest(context), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"json_path": str(json_path), "markdown_path": str(md_path), "manifest_path": str(manifest_path)}
 
 
 def main() -> int:

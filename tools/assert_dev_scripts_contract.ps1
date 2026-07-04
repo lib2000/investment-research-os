@@ -1195,6 +1195,8 @@ $contracts = @(
       'raw_tokens_excluded',
       'investment_research_context.json',
       'investment_research_context.md',
+      'openclaw_bridge_manifest.json',
+      'investment_research_openclaw_bridge_v1',
       'build_recommendation_state',
       'build_news_state',
       'build_nps_state',
@@ -1213,6 +1215,8 @@ $contracts = @(
       'raw token exclusion flag must be true',
       'KR/US recommendation counts are incomplete',
       'Firecrawl safety defaults must remain enabled=false and dry_run=true',
+      'openclaw_bridge_manifest.json',
+      'OpenClaw bridge manifest schema mismatch',
       'bridge_status.json',
       'secrets_excluded'
     )
@@ -1227,6 +1231,7 @@ $contracts = @(
       'check_openclaw_investment_context.py',
       'investment_research_context.json',
       'investment_research_context.md',
+      'openclaw_bridge_manifest.json',
       'bridge_status.json',
       'secrets_excluded',
       'Copy-Item -Force',
