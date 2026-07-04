@@ -17916,6 +17916,26 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                             "daily_recommendations": {
                                 "latest_recommendation_date": "2026-07-04",
                                 "latest_market_counts": {"KR": 3, "US": 3},
+                                "latest_rows": [
+                                    {
+                                        "market": "KR",
+                                        "rank": 1,
+                                        "ticker": "001",
+                                        "company_name": "한국1",
+                                        "score": 99,
+                                        "baseline_price": 1001,
+                                        "currency": "KRW",
+                                    },
+                                    {
+                                        "market": "US",
+                                        "rank": 1,
+                                        "ticker": "AAA",
+                                        "company_name": "미국1",
+                                        "score": 98,
+                                        "baseline_price": 10.5,
+                                        "currency": "USD",
+                                    },
+                                ],
                             },
                             "news_and_telegram": {"telegram_favorite_posts": {"saved_count": 10}},
                         },
@@ -17956,9 +17976,13 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertEqual("abc1234", summary["source_git"]["commit"])
         self.assertIsInstance(summary["context_age_hours"], float)
         self.assertEqual({"KR": 3, "US": 3}, summary["latest_market_counts"])
+        self.assertEqual("한국1", summary["latest_recommendations"][0]["company_name"])
+        self.assertEqual("미국1", summary["latest_recommendations"][1]["company_name"])
         self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
         self.assertIn("context_age_hours:", rendered)
         self.assertIn('latest_market_counts: {"KR":3,"US":3}', rendered)
+        self.assertIn("KR#1 001 한국1 score=99", rendered)
+        self.assertIn("US#1 AAA 미국1 score=98", rendered)
 
     def test_completion_audit_writes_json_and_markdown_reports(self):
         tool = load_openclaw_bridge_completion_tool()

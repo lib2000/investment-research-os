@@ -10,6 +10,28 @@ DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "inves
 MODULE_NAME = "show_openclaw_bridge_status"
 
 
+def summarize_latest_recommendations(rows: list[dict]) -> list[dict]:
+    summarized: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        summarized.append(
+            {
+                "market": row.get("market"),
+                "rank": row.get("rank"),
+                "ticker": row.get("ticker"),
+                "company_name": row.get("company_name"),
+                "score": row.get("score"),
+                "baseline_price": row.get("baseline_price"),
+                "currency": row.get("currency"),
+            }
+        )
+    return sorted(
+        summarized,
+        key=lambda item: (str(item.get("market") or ""), int(item.get("rank") or 999)),
+    )
+
+
 def load_json(path: Path) -> dict:
     if not path.exists():
         raise AssertionError(f"required file missing: {path}")
@@ -70,6 +92,7 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
         "context_age_hours": context_age_hours,
         "latest_recommendation_date": rec.get("latest_recommendation_date"),
         "latest_market_counts": rec.get("latest_market_counts"),
+        "latest_recommendations": summarize_latest_recommendations(rec.get("latest_rows") or []),
         "telegram_saved_count": telegram.get("saved_count"),
         "read_order": read_order,
         "read_order_files_present": files_present,
@@ -92,8 +115,23 @@ def render_text(summary: dict) -> str:
         f"- latest_recommendation_date: {summary.get('latest_recommendation_date')}",
         f"- latest_market_counts: {market_counts}",
         f"- telegram_saved_count: {summary.get('telegram_saved_count')}",
-        "- read_order:",
+        "- latest_recommendations:",
     ]
+    for item in summary.get("latest_recommendations") or []:
+        lines.append(
+            "  {market}#{rank} {ticker} {name} score={score} baseline={baseline} {currency}".format(
+                market=item.get("market"),
+                rank=item.get("rank"),
+                ticker=item.get("ticker"),
+                name=item.get("company_name"),
+                score=item.get("score"),
+                baseline=item.get("baseline_price"),
+                currency=item.get("currency"),
+            )
+        )
+    lines.extend([
+        "- read_order:",
+    ])
     for index, item in enumerate(summary.get("read_order") or [], start=1):
         present = (summary.get("read_order_files_present") or {}).get(str(item))
         lines.append(f"  {index}. {item} present={present}")

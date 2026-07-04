@@ -1427,6 +1427,8 @@ $contracts = @(
       'openclaw_bridge_completion_report.json',
       'read_order_files_present',
       'latest_recommendation_date',
+      'latest_recommendations',
+      'summarize_latest_recommendations',
       'telegram_saved_count',
       'final_completion_audit',
       '--json'
