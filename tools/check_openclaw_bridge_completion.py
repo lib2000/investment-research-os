@@ -284,6 +284,13 @@ def render_markdown_report(result: dict) -> str:
     ]
     for item in result.get("completion_requirements") or []:
         lines.append(f"- {item}")
+    lines.extend(["", "## Read Order", ""])
+    read_order = bridge_status.get("read_order") or []
+    if read_order:
+        for index, item in enumerate(read_order, start=1):
+            lines.append(f"{index}. `{item}`")
+    else:
+        lines.append("- none")
     lines.extend(["", "## Operational Commands", ""])
     commands = result.get("operational_commands") or {}
     for label in (

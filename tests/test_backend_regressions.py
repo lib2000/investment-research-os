@@ -17837,6 +17837,14 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "latest_market_counts": {"KR": 3, "US": 3},
                 "telegram_saved_count": 10,
                 "secrets_excluded": True,
+                "read_order": [
+                    "bridge_status.json",
+                    "openclaw_bridge_manifest.json",
+                    "investment_research_context.md",
+                    "investment_research_context.json",
+                    "openclaw_bridge_completion_report.md",
+                    "openclaw_bridge_completion_report.json",
+                ],
                 "file_sha256": {
                     "context_json": "a" * 64,
                     "context_markdown": "b" * 64,
@@ -17879,6 +17887,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- bridge max age hours: 1", markdown)
         self.assertIn("OpenClaw bridge_status file hashes match copied files", markdown)
         self.assertIn("OpenClaw completion report hashes match completion report files", markdown)
+        self.assertIn("## Read Order", markdown)
+        self.assertIn("1. `bridge_status.json`", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)

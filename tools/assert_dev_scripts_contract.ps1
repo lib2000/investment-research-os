@@ -1297,6 +1297,7 @@ $contracts = @(
       'operational_commands',
       'final_completion_audit',
       'Operational Commands',
+      'Read Order',
       'file_sha256',
       'completion_report_sha256',
       'require_report_hashes',
