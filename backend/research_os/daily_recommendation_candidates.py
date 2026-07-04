@@ -34,6 +34,69 @@ def _signal_item(
     }
 
 
+def _has_score_component(candidate: dict[str, Any], label: str) -> bool:
+    return any(
+        isinstance(component, dict)
+        and str(component.get("label") or "").strip() == label
+        for component in candidate.get("score_components", [])
+    )
+
+
+def _promote_or_insert_text(items: list[str], marker: str, fallback: str) -> list[str]:
+    selected = next((item for item in items if marker in item), "")
+    promoted = selected or fallback
+    return [promoted, *[item for item in items if item != selected and item != promoted]]
+
+
+def _preserve_scored_public_ir_sec_context(candidate: dict[str, Any]) -> None:
+    if _has_score_component(candidate, "최근 핵심 리포트 반영"):
+        evidence_sources = daily_recommendation_evidence.unique_text_items(
+            candidate.get("evidence_sources"),
+            12,
+        )
+        evidence_sources = _promote_or_insert_text(
+            evidence_sources,
+            "최근 1주 핵심 리포트",
+            "최근 1주 핵심 리포트 확인",
+        )
+        candidate["evidence_sources"] = daily_recommendation_evidence.unique_text_items(
+            evidence_sources,
+            8,
+        )
+
+    if _has_score_component(candidate, "최근 공개 IR/SEC 반영"):
+        evidence_sources = daily_recommendation_evidence.unique_text_items(
+            candidate.get("evidence_sources"),
+            12,
+        )
+        evidence_sources = _promote_or_insert_text(
+            evidence_sources,
+            "최근 1주 공개 IR/SEC",
+            "최근 1주 공개 IR/SEC 자료 확인",
+        )
+        candidate["evidence_sources"] = daily_recommendation_evidence.unique_text_items(
+            evidence_sources,
+            8,
+        )
+
+    quality_flags = [
+        str(item).strip()
+        for item in candidate.get("quality_flags", [])
+        if str(item or "").strip()
+    ]
+    if any("공개 IR/SEC 본문 보강 필요" in item for item in quality_flags):
+        risk_notes = daily_recommendation_evidence.unique_text_items(
+            candidate.get("risk_notes"),
+            8,
+        )
+        if not any("본문 보강" in item and "공개 IR/SEC" in item for item in risk_notes):
+            risk_notes.insert(0, "공개 IR/SEC 본문 보강 필요: URL-only 자료는 원문 확인 후 추천 근거로 사용하세요.")
+        candidate["risk_notes"] = daily_recommendation_evidence.unique_text_items(
+            risk_notes,
+            5,
+        )
+
+
 def build_recommendation_signal_breakdown(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     components = [
         item
@@ -512,6 +575,7 @@ def finalize_daily_recommendation_candidate(candidate: dict[str, Any]) -> dict[s
     candidate["risk_notes"] = daily_recommendation_evidence.unique_text_items(candidate.get("risk_notes"), 5)
     candidate["score_penalties"] = daily_recommendation_evidence.unique_text_items(candidate.get("score_penalties"), 6)
     candidate["quality_flags"] = daily_recommendation_evidence.unique_text_items(candidate.get("quality_flags"), 6)
+    _preserve_scored_public_ir_sec_context(candidate)
     score_components = [
         component
         for component in candidate.get("score_components", [])

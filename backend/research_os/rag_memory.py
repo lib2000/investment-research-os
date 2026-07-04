@@ -71,9 +71,14 @@ def _document_quality(payload: dict[str, Any]) -> dict[str, Any]:
 def _connect(vault_dir: Path) -> sqlite3.Connection:
     path = rag_db_path(vault_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(path, timeout=30)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA busy_timeout = 30000")
     return connection
+
+
+def _is_sqlite_locked(exc: sqlite3.Error) -> bool:
+    return "database is locked" in str(exc).lower()
 
 
 @contextmanager
@@ -684,9 +689,15 @@ def count_research_memory_documents_by_ticker(
     vault_dir: Path,
     tickers: list[str],
     include_low_quality: bool = False,
+    refresh_index: bool = True,
 ) -> dict[str, int]:
     initialize_rag_db(vault_dir)
-    backfill_research_memory_documents_from_manifest(vault_dir)
+    if refresh_index:
+        try:
+            backfill_research_memory_documents_from_manifest(vault_dir)
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_locked(exc):
+                raise
     normalized_tickers = sorted({ticker.strip().upper() for ticker in tickers if ticker.strip()})
     if not normalized_tickers:
         return {}

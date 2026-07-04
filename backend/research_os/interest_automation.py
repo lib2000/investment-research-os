@@ -263,6 +263,7 @@ def build_interest_automation_board(runtime: InterestAutomationRuntime, settings
     rag_counts = runtime.count_research_memory_documents_by_ticker(
         vault_dir,
         [runtime.normalize_ticker(str(item.get("ticker") or "")) for item in merged_ticker_items],
+        refresh_index=False,
     )
     ticker_targets = [
         interest_ticker_target(

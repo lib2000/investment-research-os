@@ -647,7 +647,7 @@ class DailyRecommendationsTests(unittest.TestCase):
 
         self.assertIs(updated, candidate)
         profile = candidate["investment_direction_profile"]
-        self.assertEqual(profile["source_id"], "user-pasted-research-2026-06-14")
+        self.assertEqual(profile["source_id"], "user-investment-direction-2026-07-04")
         self.assertEqual(profile["score_bonus"], 8)
         self.assertEqual(profile["themes"][0]["key"], "ai_power_bottleneck")
         self.assertIn("첨부 투자 방향: AI 전력 병목", [item["label"] for item in candidate["score_components"]])
@@ -679,6 +679,58 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertTrue(any("엔터프라이즈 AI 데이터 클라우드" in item["label"] for item in candidate["score_components"]))
         self.assertTrue(any("AWS lock-in" in item for item in candidate["risk_notes"]))
         self.assertTrue(any("RPO" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_ai_component_bottleneck_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "009150", "삼성전기")
+        candidate["evidence_sources"].append("AI 서버용 MLCC와 ABF substrate, 테스트 장비 리드타임 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "ai_component_substrate_test_bottleneck")
+        self.assertEqual(profile["score_bonus"], 8)
+        self.assertTrue(any("AI 부품·기판·테스트 병목" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("가격 전가력" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("MLCC" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_agentic_software_factory_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "MSFT", "Microsoft")
+        candidate["evidence_sources"].append("Agent 365와 Copilot, AI Factory 기반 보안 자동화와 observability 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "agentic_software_factory")
+        self.assertEqual(profile["score_bonus"], 7)
+        self.assertTrue(any("에이전트형 소프트웨어 공장" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("유료 전환" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("에이전트 SW" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_bci_medical_ai_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "BCI", "Neurotech Medical AI")
+        candidate["evidence_sources"].append("뇌파 BCI와 재활로봇, 생체신호 의료AI 임상 검증 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "bci_medical_ai_sensor_rehab")
+        self.assertEqual(profile["score_bonus"], 5)
+        self.assertTrue(any("BCI 의료AI·센서·재활" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("뇌 데이터" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("BCI·의료AI" in item for item in profile["watch_triggers"]))
+
+    def test_investment_direction_profile_scores_korea_rnd_candidate(self):
+        candidate = ensure_daily_recommendation_candidate({}, "042660", "한화오션")
+        candidate["evidence_sources"].append("정부 R&D 실증과 사업화, 공공조달 전환 가능성 점검")
+
+        apply_investment_direction_profile(candidate)
+
+        profile = candidate["investment_direction_profile"]
+        self.assertEqual(profile["themes"][0]["key"], "korea_commercialization_rnd")
+        self.assertEqual(profile["score_bonus"], 5)
+        self.assertTrue(any("국가 R&D 실증·사업화" in item["label"] for item in candidate["score_components"]))
+        self.assertTrue(any("수주·실증·매출 전환" in item for item in candidate["risk_notes"]))
+        self.assertTrue(any("정부 R&D" in item for item in profile["watch_triggers"]))
 
     def test_investment_direction_profile_score_bonus_matches_component_sum(self):
         candidate = ensure_daily_recommendation_candidate({}, "SNOW", "Snowflake")

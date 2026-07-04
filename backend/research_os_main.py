@@ -11739,7 +11739,11 @@ def _nps_rebalance_evidence_context(
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     nps_pressure_index = build_nps_rebalancing_pressure_index(read_nps_portfolio_change_snapshot(settings))
     try:
-        rag_counts = count_research_memory_documents_by_ticker(vault_dir, tickers)
+        rag_counts = count_research_memory_documents_by_ticker(
+            vault_dir,
+            tickers,
+            refresh_index=False,
+        )
     except Exception:
         rag_counts = {}
 
@@ -13764,7 +13768,11 @@ def check_portfolio_connectivity(
                 record["market_value"] = holding.market_value
 
     items = []
-    rag_document_counts = count_research_memory_documents_by_ticker(vault_dir, list(by_ticker.keys()))
+    rag_document_counts = count_research_memory_documents_by_ticker(
+        vault_dir,
+        list(by_ticker.keys()),
+        refresh_index=False,
+    )
     for ticker, record in sorted(by_ticker.items()):
         verification = verify_ticker_symbol(ticker, settings)
         profile = official_ticker_profile(verification.official_symbol, settings) if verification.verified else {}
@@ -14700,7 +14708,11 @@ def build_portfolio_intelligent_table(
         for holding in portfolio.holdings
         if normalize_ticker(holding.ticker) and normalize_ticker(holding.ticker) != "CASH"
     ]
-    rag_document_counts = count_research_memory_documents_by_ticker(vault_dir, portfolio_tickers)
+    rag_document_counts = count_research_memory_documents_by_ticker(
+        vault_dir,
+        portfolio_tickers,
+        refresh_index=False,
+    )
     manifest_entries = read_manifest(vault_dir)
     dart_cache = read_dart_filing_cache(settings)
     rows: list[dict] = []

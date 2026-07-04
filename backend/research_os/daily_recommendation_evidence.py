@@ -137,8 +137,9 @@ def build_daily_recommendation_evidence_documents(
     if not db_path.exists():
         return []
     try:
-        with sqlite3.connect(db_path) as connection:
+        with sqlite3.connect(db_path, timeout=30) as connection:
             connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA busy_timeout = 30000")
             rows = connection.execute(
                 """
                 SELECT ticker, report_type, title, summary, content_excerpt, source_type,

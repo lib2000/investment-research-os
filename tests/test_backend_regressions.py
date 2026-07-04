@@ -3576,6 +3576,59 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertTrue(payload["latest_entries"][0]["rag_connected"])
         self.assertEqual(payload["latest_entries"][0]["display_label"], "섹터/산업 자료")
 
+    def test_rag_document_count_can_skip_manifest_backfill(self):
+        from research_os import rag_memory
+        from research_os.rag_memory import connect_rag_db, initialize_rag_db
+
+        with TemporaryDirectory() as tmp:
+            vault_dir = Path(tmp) / "research_vault"
+            vault_dir.mkdir(parents=True)
+            initialize_rag_db(vault_dir)
+            with connect_rag_db(vault_dir) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO research_memory_documents (
+                        document_id,
+                        ticker,
+                        scope,
+                        report_type,
+                        title,
+                        summary,
+                        content_excerpt,
+                        confidence,
+                        tags_json,
+                        metadata_json,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "doc-005930",
+                        "005930",
+                        "ticker",
+                        "research-capture",
+                        "Samsung note",
+                        "summary",
+                        "content",
+                        0.9,
+                        "[]",
+                        "{}",
+                        "2026-07-04T09:00:00+09:00",
+                    ),
+                )
+
+            with patch.object(
+                rag_memory,
+                "backfill_research_memory_documents_from_manifest",
+                side_effect=AssertionError("backfill should not run"),
+            ):
+                counts = rag_memory.count_research_memory_documents_by_ticker(
+                    vault_dir,
+                    ["005930"],
+                    refresh_index=False,
+                )
+
+        self.assertEqual(counts, {"005930": 1})
+
     def test_research_manifest_reader_ignores_corrupt_trailing_bytes(self):
         from research_os.research_memory import read_manifest
 
@@ -8235,6 +8288,46 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertTrue(breakdown["news"]["score_applied"])
         self.assertIn("AI 반도체", breakdown["sentiment"]["summary"])
 
+    def test_daily_recommendation_candidate_preserves_scored_news_context(self):
+        from research_os import daily_recommendation_candidates
+
+        candidate = {
+            "ticker": "OTLY",
+            "company_name": "Oatly Group AB",
+            "score": 10,
+            "reasons": ["본문 추출이 확인된 공개 IR/SEC 자료가 최근 1주 브리프와 RAG 근거에 연결됨"],
+            "evidence_sources": [
+                "정책 신호 시장 참고 3건",
+                "저장 품질",
+                "목표가/리포트 근거 11건",
+                "최근 근거 파일",
+                "대상 범위",
+                "RAG 연결 문서 39건",
+                "최신 투자 논거 스냅샷 연결",
+                "최근 1주 핵심 리포트 6건",
+                "최근 1주 공개 IR/SEC 자료 2건",
+            ],
+            "risk_notes": [
+                "Dossier 갱신 필요",
+                "시장 전반 규제성 정책자료 참고",
+                "최근 추천 추적 성과 재검증",
+                "체크포인트 A",
+                "체크포인트 B",
+                "공개 IR/SEC URL-only 자료 1건은 본문 보강 전 추천 점수 가산에서 제외",
+            ],
+            "quality_flags": ["공개 IR/SEC 본문 보강 필요"],
+            "score_components": [
+                {"label": "최근 핵심 리포트 반영", "points": 12},
+                {"label": "최근 공개 IR/SEC 반영", "points": 8},
+            ],
+        }
+
+        finalized = daily_recommendation_candidates.finalize_daily_recommendation_candidate(candidate)
+
+        self.assertTrue(any("최근 1주 핵심 리포트" in item for item in finalized["evidence_sources"]))
+        self.assertTrue(any("최근 1주 공개 IR/SEC" in item for item in finalized["evidence_sources"]))
+        self.assertTrue(any("본문 보강" in item and "공개 IR/SEC" in item for item in finalized["risk_notes"]))
+
     def test_nps_rebalancing_pressure_penalizes_domestic_recommendation_candidate(self):
         from research_os.nps_portfolio_changes import (
             apply_nps_rebalancing_pressure_to_recommendation,
@@ -11271,7 +11364,9 @@ class InterestAutomationModuleTests(unittest.TestCase):
             )
 
         runtime = SimpleNamespace(
-            count_research_memory_documents_by_ticker=lambda _vault, tickers: {ticker: 2 for ticker in tickers},
+            count_research_memory_documents_by_ticker=lambda _vault, tickers, **_kwargs: {
+                ticker: 2 for ticker in tickers
+            },
             current_storage_timestamp=lambda: "2026-06-13T09:00:00+09:00",
             dedupe_manifest_entries_by_similarity=lambda entries, _vault, limit=20: (entries[:limit], []),
             interest_collection_targets_path=lambda _settings: Path("interest_targets.json"),
