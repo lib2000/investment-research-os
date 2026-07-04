@@ -211,6 +211,7 @@ def build_result(
             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
@@ -303,6 +304,7 @@ def render_markdown_report(result: dict) -> str:
         "validation",
         "completion_audit",
         "final_completion_audit",
+        "status_summary",
         "offline_readiness",
     ):
         command = commands.get(label)

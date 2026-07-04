@@ -17960,6 +17960,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                 "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
                 "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+                "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -17977,6 +17978,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
         self.assertEqual("ok", json_payload["status"])
         self.assertIn("strict_refresh", json_payload["operational_commands"])
+        self.assertIn("status_summary", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -17989,6 +17991,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)
+        self.assertIn("- status_summary: `python tools\\show_openclaw_bridge_status.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
