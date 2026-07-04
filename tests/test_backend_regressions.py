@@ -632,6 +632,20 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("OpenClaw 투자리서치 브리지 동기화", script_source)
         self.assertIn("sync_openclaw_investment_context.ps1", script_source)
 
+    def test_daily_research_operations_continues_after_saved_state_timeouts(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("포트폴리오 가격 갱신 응답은 실패했지만 저장 상태 검증을 시도합니다.", script_source)
+        self.assertIn("tools\\check_portfolio_store.py", script_source)
+        self.assertIn("tools\\check_all_portfolio_store.py", script_source)
+        self.assertIn("포트폴리오 저장 상태 검증이 통과해 운영 루틴을 계속합니다.", script_source)
+        self.assertIn("오늘 추천 API 응답 실패/타임아웃", script_source)
+        self.assertIn("tools\\check_daily_recommendations_store.py", script_source)
+        self.assertIn("--max-latest-age-days 0", script_source)
+        self.assertIn("오늘 추천 저장 검증이 통과해 운영 루틴을 계속합니다.", script_source)
+
     def test_openclaw_sync_script_validates_after_copy(self):
         script_source = (PROJECT_ROOT / "tools" / "sync_openclaw_investment_context.ps1").read_text(
             encoding="utf-8"

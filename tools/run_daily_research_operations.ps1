@@ -41,6 +41,27 @@ if (-not $SkipPortfolioRefresh.IsPresent) {
       --base-url $BaseUrl `
       --token $DevUserToken `
       --timeout $PortfolioRefreshTimeoutSeconds
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "포트폴리오 가격 갱신 응답은 실패했지만 저장 상태 검증을 시도합니다."
+      python tools\check_portfolio_store.py `
+        --portfolio "이형주" `
+        --min-holdings 17 `
+        --expected-holdings-count 17 `
+        --forbid-zero `
+        --max-price-age-hours 24 `
+        --max-portfolio-age-hours 24
+      if ($LASTEXITCODE -ne 0) {
+        return
+      }
+      python tools\check_all_portfolio_store.py `
+        --min-holdings 1 `
+        --forbid-zero `
+        --max-price-age-hours 24 `
+        --max-sync-age-hours 168
+      if ($LASTEXITCODE -eq 0) {
+        Write-Warning "포트폴리오 저장 상태 검증이 통과해 운영 루틴을 계속합니다."
+      }
+    }
   }
 }
 
@@ -52,7 +73,21 @@ if (-not $SkipRecommendationRun.IsPresent) {
     }
     $query = "force=true" + [char]38 + "save_result=true"
     $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/daily-recommendations/run?$query"
-    $result = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -TimeoutSec $RecommendationRunTimeoutSeconds
+    try {
+      $result = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -TimeoutSec $RecommendationRunTimeoutSeconds
+    } catch {
+      Write-Warning "오늘 추천 API 응답 실패/타임아웃: $($_.Exception.Message)"
+      python tools\check_daily_recommendations_store.py `
+        --require-milestones `
+        --require-quality `
+        --expected-latest-count 6 `
+        --max-latest-age-days 0
+      if ($LASTEXITCODE -eq 0) {
+        Write-Warning "오늘 추천 저장 검증이 통과해 운영 루틴을 계속합니다."
+        return
+      }
+      throw
+    }
     Write-Host (
       "상태={0}; 추천일={1}; 최신추천일={2}; 전체기록={3}; 저장={4}" -f
       $result.status,
