@@ -114,6 +114,14 @@ $fileSha256 = [ordered]@{
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
+  read_order = @(
+    "bridge_status.json",
+    "openclaw_bridge_manifest.json",
+    "investment_research_context.md",
+    "investment_research_context.json",
+    "openclaw_bridge_completion_report.md",
+    "openclaw_bridge_completion_report.json"
+  )
   source_project = $projectRoot
   source_git_commit = $gitCommit
   source_git_branch = $gitBranch
@@ -147,7 +155,7 @@ $readme = @(
   "- ``openclaw_bridge_completion_report.json``: machine-readable completion audit report",
   "- ``openclaw_bridge_completion_report.md``: latest completion audit report",
   "- source generator: ``$exportScript``",
-  "- ``bridge_status.json``: first-read runtime status, source git state, completion report paths, operational commands, core file SHA256 hashes, and ``completion_report_sha256``",
+  "- ``bridge_status.json``: first-read runtime status, read_order, source git state, completion report paths, operational commands, core file SHA256 hashes, and ``completion_report_sha256``",
   "- source git: ``$gitBranch $gitCommit``",
   "- safe refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1``",
   "- final strict refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``",

@@ -17634,6 +17634,14 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                         "source_git_commit": "abc1234",
                         "source_git_branch": "main",
                         "source_git_dirty": False,
+                        "read_order": [
+                            "bridge_status.json",
+                            "openclaw_bridge_manifest.json",
+                            "investment_research_context.md",
+                            "investment_research_context.json",
+                            "openclaw_bridge_completion_report.md",
+                            "openclaw_bridge_completion_report.json",
+                        ],
                         "secrets_excluded": True,
                         "startup_notes_updated": True,
                         "completion_report_markdown": str(output_dir / "openclaw_bridge_completion_report.md"),
@@ -17664,7 +17672,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `openclaw_bridge_completion_report.json`: machine-readable completion audit report\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
-                "- `bridge_status.json`: first-read runtime status, source git state, completion report paths, operational commands, core file SHA256 hashes, and `completion_report_sha256`\n"
+                "- `bridge_status.json`: first-read runtime status, read_order, source git state, completion report paths, operational commands, core file SHA256 hashes, and `completion_report_sha256`\n"
                 "- source git: `main abc1234`\n"
                 "- safe refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1`\n"
                 "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
@@ -17703,6 +17711,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"raw_tokens_excluded": true', exported_text)
         self.assertIn('"backend_health_url": "http://127.0.0.1:8001/api/v1/system/health"', exported_text)
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
+        self.assertIn('"read_order"', manifest_text)
         self.assertIn('"strict_refresh_command"', manifest_text)
         self.assertIn('"completion_audit_command"', manifest_text)
         self.assertIn('"final_completion_audit_command"', manifest_text)

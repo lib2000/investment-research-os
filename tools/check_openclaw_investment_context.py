@@ -134,6 +134,16 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError("OpenClaw bridge manifest context_file mismatch")
     if manifest.get("markdown_file") != "investment_research_context.md":
         raise AssertionError("OpenClaw bridge manifest markdown_file mismatch")
+    expected_read_order = [
+        "bridge_status.json",
+        "openclaw_bridge_manifest.json",
+        "investment_research_context.md",
+        "investment_research_context.json",
+        "openclaw_bridge_completion_report.md",
+        "openclaw_bridge_completion_report.json",
+    ]
+    if manifest.get("read_order") != expected_read_order:
+        raise AssertionError("OpenClaw bridge manifest read_order mismatch")
     command_fields = [
         "safe_refresh_command",
         "strict_refresh_command",
@@ -171,6 +181,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError("bridge status must confirm startup_notes_updated=true")
         if not str(status.get("completion_report_markdown") or "").endswith("openclaw_bridge_completion_report.md"):
             raise AssertionError("bridge status completion_report_markdown mismatch")
+        if status.get("read_order") != expected_read_order:
+            raise AssertionError("bridge status read_order mismatch")
         commands = status.get("operational_commands") or {}
         command_manifest_map = {
             "safe_refresh": "safe_refresh_command",
@@ -220,6 +232,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "investment_research_context.md",
             "investment_research_context.json",
             "openclaw_bridge_manifest.json",
+            "read_order",
             "openclaw_bridge_completion_report.json",
             "openclaw_bridge_completion_report.md",
             "bridge_status.json",
