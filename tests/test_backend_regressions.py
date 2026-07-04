@@ -258,6 +258,18 @@ def load_telegram_brief_check_tool():
     return module
 
 
+def load_telegram_favorite_posts_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_favorite_posts.py"
+    spec = spec_from_file_location("check_telegram_favorite_posts", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_write_actions_smoke_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -2999,6 +3011,22 @@ class TelegramBriefSenderTests(unittest.TestCase):
 
         self.assertGreater(payload["message_count"], 1)
         self.assertTrue(all(len(message["text"]) <= 500 for message in payload["messages"]))
+
+
+class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
+    def test_check_tool_sample_mode_returns_candidates(self):
+        module = load_telegram_favorite_posts_check_tool()
+
+        with patch.object(sys, "argv", ["check_telegram_favorite_posts.py", "--sample", "--enabled", "--json"]):
+            with patch("builtins.print") as mock_print:
+                exit_code = module.main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["channel_count"], 1)
+        self.assertGreaterEqual(payload["candidate_count"], 2)
+        self.assertEqual(payload["task_status"]["status"], "due")
 
 
 class EarningsTranscriptCollectorTests(unittest.TestCase):

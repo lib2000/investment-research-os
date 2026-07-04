@@ -87,6 +87,7 @@ CHECKS = [
     ("DeepSeek IR 분석 payload", ["tools/check_deepseek_ir_analysis.py"]),
     ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
     ("Telegram Portfolio Brief dry-run", ["tools/check_telegram_brief_sender.py"]),
+    ("Telegram 즐겨찾기 인기글 dry-run", ["tools/check_telegram_favorite_posts.py", "--sample", "--enabled"]),
     ("Earnings Transcript payload", ["tools/check_earnings_transcript_collector.py"]),
     ("Portfolio Signal 통합 점수", ["tools/check_portfolio_signal_score.py"]),
     ("Portfolio Brief payload", ["tools/check_portfolio_brief_contract.py"]),

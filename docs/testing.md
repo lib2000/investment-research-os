@@ -143,6 +143,8 @@ Firecrawl Monitor 운영 전환은 `python tools\check_firecrawl_monitor_operati
 Firecrawl Monitor env 템플릿은 `python tools\create_firecrawl_monitor_env_template.py --output tmp\firecrawl-monitor.local.env`로 생성합니다. 테스트는 신규 생성, 기존 파일 덮어쓰기 방지, placeholder 기반 출력이 실제 secret을 포함하지 않는지를 확인합니다.
 실전 RPC 전환 전에는 ignored secret env 파일을 만든 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 `--require-rpc-ready`를 먼저 통과시키고, 실제 적재가 필요한 경우에만 `-Mode Submit`을 추가합니다.
 
+텔레그램 즐겨찾기 인기글 수집은 기본값이 꺼져 있습니다. 운영 전에는 `python tools\check_telegram_favorite_posts.py --sample --enabled`로 오프라인 계약을 확인하고, 공개 채널 목록을 넣은 뒤 `--live-fetch`로 t.me/s preview 접근과 조회수 파싱을 확인합니다.
+
 개별 점검은 아래 명령을 사용합니다.
 
 ```powershell
