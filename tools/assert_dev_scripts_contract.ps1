@@ -1180,6 +1180,48 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\export_openclaw_investment_context.py"
+    Snippets = @(
+      'openclaw_investment_research_context',
+      'raw_tokens_excluded',
+      'investment_research_context.json',
+      'investment_research_context.md',
+      'build_recommendation_state',
+      'build_news_state',
+      'build_nps_state',
+      'build_firecrawl_state',
+      'enabled_default',
+      'dry_run_default',
+      'restricted_actions'
+    )
+  },
+  @{
+    Path = "tools\check_openclaw_investment_context.py"
+    Snippets = @(
+      'DEFAULT_OPENCLAW_DIR',
+      'SECRET_PATTERNS',
+      'validate_bundle',
+      'raw token exclusion flag must be true',
+      'KR/US recommendation counts are incomplete',
+      'Firecrawl safety defaults must remain enabled=false and dry_run=true',
+      'bridge_status.json',
+      'secrets_excluded'
+    )
+  },
+  @{
+    Path = "tools\sync_openclaw_investment_context.ps1"
+    Snippets = @(
+      'OpenClawWorkspace',
+      'export_openclaw_investment_context.py',
+      'investment_research_context.json',
+      'investment_research_context.md',
+      'bridge_status.json',
+      'secrets_excluded',
+      'Copy-Item -Force',
+      'account-auth material are excluded'
+    )
+  },
+  @{
     Path = "tools\show_dev_server_ports.ps1"
     Snippets = @(
       'Get-Command netstat',
