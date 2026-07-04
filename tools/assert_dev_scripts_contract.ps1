@@ -1234,6 +1234,7 @@ $contracts = @(
       'startup_notes_updated',
       'completion_report_markdown',
       'operational_commands',
+      'bridge status operational command mismatch',
       'secrets_excluded'
     )
   },

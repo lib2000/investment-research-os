@@ -150,9 +150,17 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         if not str(status.get("completion_report_markdown") or "").endswith("openclaw_bridge_completion_report.md"):
             raise AssertionError("bridge status completion_report_markdown mismatch")
         commands = status.get("operational_commands") or {}
-        for command_key in ("safe_refresh", "strict_refresh", "validation", "completion_audit"):
+        command_manifest_map = {
+            "safe_refresh": "safe_refresh_command",
+            "strict_refresh": "strict_refresh_command",
+            "validation": "validation_command",
+            "completion_audit": "completion_audit_command",
+        }
+        for command_key, manifest_key in command_manifest_map.items():
             if not commands.get(command_key):
                 raise AssertionError(f"bridge status missing operational command: {command_key}")
+            if commands.get(command_key) != manifest.get(manifest_key):
+                raise AssertionError(f"bridge status operational command mismatch: {command_key}")
         readme_path = directory / "README.md"
         if not readme_path.exists():
             raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")
