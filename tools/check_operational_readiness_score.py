@@ -485,6 +485,36 @@ def openclaw_completion_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def openclaw_status_summary_signal(root: Path) -> dict[str, Any]:
+    tools_dir = root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from show_openclaw_bridge_status import build_status_summary
+
+    summary = build_status_summary()
+    if summary.get("status") != "ok":
+        errors = summary.get("errors") or []
+        message = "; ".join(str(error) for error in errors[:3]) or "상태 요약 실패"
+        return signal(
+            "openclaw_status_summary",
+            "OpenClaw 상태 요약",
+            0.0,
+            message,
+            "python tools\\show_openclaw_bridge_status.py --json",
+        )
+    source_git = summary.get("source_git") or {}
+    return signal(
+        "openclaw_status_summary",
+        "OpenClaw 상태 요약",
+        100.0,
+        (
+            f"{source_git.get('branch')} {source_git.get('commit')} / "
+            f"age {summary.get('context_age_hours')}h / latest {summary.get('latest_recommendation_date')}"
+        ),
+        "python tools\\show_openclaw_bridge_status.py --json",
+    )
+
+
 def build_result(
     root: Path,
     *,
@@ -508,6 +538,7 @@ def build_result(
         investment_insight_hub_signal(root),
         openclaw_bridge_signal(root),
         openclaw_completion_signal(root),
+        openclaw_status_summary_signal(root),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]
