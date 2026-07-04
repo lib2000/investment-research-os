@@ -125,6 +125,12 @@ def env_str(values: dict[str, str], name: str, default: str = "") -> str:
     return str(value if value is not None else default).strip()
 
 
+def console_print(value: object) -> None:
+    text = str(value)
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    print(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+
+
 def build_runtime(settings: Settings, *, live_fetch: bool, state_path: Path | None = None) -> TelegramFavoritePostsRuntime:
     if live_fetch:
         from research_os.telegram_market_journal import fetch_telegram_public_channel_posts
@@ -238,19 +244,19 @@ def main() -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        console_print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["status"] == "success" else 1
 
-    print(f"[{result['status']}] telegram_favorite_posts_check")
-    print(f"- enabled: {result['enabled']}")
-    print(f"- daily_time: {result['daily_time']}")
-    print(f"- channel_count: {result['channel_count']}")
-    print(f"- candidate_count: {result['candidate_count']}")
-    print(f"- task_status: {status.get('status')}")
+    console_print(f"[{result['status']}] telegram_favorite_posts_check")
+    console_print(f"- enabled: {result['enabled']}")
+    console_print(f"- daily_time: {result['daily_time']}")
+    console_print(f"- channel_count: {result['channel_count']}")
+    console_print(f"- candidate_count: {result['candidate_count']}")
+    console_print(f"- task_status: {status.get('status')}")
     for post in result["top_posts"][:5]:
-        print(f"- top: {post['channel_label']} | {post['view_count']} views | {post['title']}")
+        console_print(f"- top: {post['channel_label']} | {post['view_count']} views | {post['title']}")
     for warning in result["warnings"][:5]:
-        print(f"- warning: {warning}")
+        console_print(f"- warning: {warning}")
     return 0 if result["status"] == "success" else 1
 
 
