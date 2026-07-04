@@ -17713,6 +17713,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             "project_root": "C:/project",
             "source_dir": "C:/project/research_vault/_system/openclaw_integration",
             "openclaw_dir": "C:/Users/test/.openclaw/workspace/data/investment_research",
+            "audit_generated_at": "2026-07-05T05:45:00+09:00",
             "git": {"branch": "main", "commit": "abc1234", "upstream": "origin/main", "ahead": 0, "behind": 0, "dirty": False},
             "bridge_status": {
                 "copied_at": "2026-07-05T04:46:33+09:00",
@@ -17745,6 +17746,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertEqual("ok", json_payload["status"])
         self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
+        self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("## File Hashes", markdown)

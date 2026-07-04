@@ -165,6 +165,7 @@ def build_result(
         "source_dir": str(source_dir),
         "openclaw_workspace": str(openclaw_workspace),
         "openclaw_dir": str(openclaw_dir),
+        "audit_generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "max_age_hours": max_age_hours,
         "operational_commands": {
             "safe_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
@@ -228,6 +229,7 @@ def render_markdown_report(result: dict) -> str:
         f"- project: `{result.get('project_root')}`",
         f"- source dir: `{result.get('source_dir')}`",
         f"- OpenClaw dir: `{result.get('openclaw_dir')}`",
+        f"- audit generated: {result.get('audit_generated_at')}",
         f"- git: {git_state.get('branch')} {git_state.get('commit')} / upstream {git_state.get('upstream')}",
         f"- git synced: ahead={git_state.get('ahead')} behind={git_state.get('behind')} dirty={git_state.get('dirty')}",
         f"- bridge copied: {bridge_status.get('copied_at')}",
