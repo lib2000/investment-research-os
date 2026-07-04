@@ -15298,10 +15298,15 @@ def telegram_sentiment_evidence_from_news_inbox(news_inbox_payload: dict, *, lim
     for item in selected:
         popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
         channel = compact_news_safe_text(
-            popularity.get("channel_title") or item.get("source_name") or item.get("source") or "텔레그램",
+            popularity.get("channel_label")
+            or popularity.get("channel_title")
+            or item.get("source_name")
+            or item.get("source")
+            or "텔레그램",
             max_length=28,
         )
-        title = compact_news_safe_text(item.get("title") or item.get("summary") or item.get("body") or "", max_length=54)
+        raw_title = str(item.get("title") or item.get("summary") or item.get("body") or "")
+        title = compact_news_safe_text(sub(r"^Telegram\s+인기글\s*:\s*", "", raw_title).strip(), max_length=54)
         try:
             view_count = int(float(popularity.get("view_count") or popularity.get("views") or 0))
         except (TypeError, ValueError):

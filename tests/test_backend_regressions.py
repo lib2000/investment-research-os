@@ -8531,11 +8531,11 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
             {
                 "items": [
                     {
-                        "title": "AI 데이터센터 전력 병목",
+                        "title": "Telegram 인기글: AI 데이터센터 전력 병목",
                         "source_name": "AI MASTERS",
                         "tags": ["telegram_favorite"],
                         "telegram_popularity": {
-                            "channel_title": "AI MASTERS",
+                            "channel_label": "AI MASTERS",
                             "view_count": 28800,
                             "popularity_score": 28800,
                         },
@@ -8551,7 +8551,7 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
                         "source_name": "카이에 de market",
                         "scope_reason": "telegram_favorite_popular_post",
                         "telegram_popularity": {
-                            "channel_title": "카이에 de market",
+                            "channel_label": "카이에 de market",
                             "view_count": 14200,
                             "popularity_score": 14200,
                         },
@@ -8568,6 +8568,7 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertIn("조회 28,800", evidence[0])
         self.assertIn("카이에 de market", evidence[0])
         self.assertNotIn("정책 일반 뉴스", evidence[0])
+        self.assertNotIn("Telegram 인기글:", evidence[0])
 
     def test_daily_recommendation_candidate_preserves_scored_news_context(self):
         from research_os import daily_recommendation_candidates
