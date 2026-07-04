@@ -4288,13 +4288,12 @@ label {
 
 .daily-recommendation-rank-trigger strong {
   min-width: 0;
-  overflow: hidden;
   color: var(--text);
   font-size: 18px;
   font-weight: 950;
   line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .daily-recommendation-rank-trigger em {
