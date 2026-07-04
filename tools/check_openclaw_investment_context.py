@@ -248,6 +248,19 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         source_git = f"{status.get('source_git_branch')} {status.get('source_git_commit')}"
         if source_git not in readme:
             raise AssertionError(f"OpenClaw bridge README is missing source git: {source_git}")
+        state = payload.get("current_state") or {}
+        rec_state = state.get("daily_recommendations") or {}
+        telegram_state = ((state.get("news_and_telegram") or {}).get("telegram_favorite_posts") or {})
+        readme_status_values = {
+            "context generated at": payload.get("generated_at"),
+            "latest recommendation date": rec_state.get("latest_recommendation_date"),
+            "latest market counts": json.dumps(rec_state.get("latest_market_counts") or {}, ensure_ascii=False, separators=(",", ":")),
+            "telegram favorite saved": str(telegram_state.get("saved_count")),
+        }
+        for label, value in readme_status_values.items():
+            expected = f"{label}: `{value}`"
+            if expected not in readme:
+                raise AssertionError(f"OpenClaw bridge README status summary mismatch: {label}")
         for manifest_key in command_manifest_map.values():
             command = str(manifest.get(manifest_key) or "")
             if command and command not in readme:

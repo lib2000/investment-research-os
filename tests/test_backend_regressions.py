@@ -17674,7 +17674,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
                 "- `bridge_status.json`: first-read runtime status, read_order, source git state, completion report paths, operational commands, core file SHA256 hashes, and `completion_report_sha256`\n"
                 "- source git: `main abc1234`\n"
-                "- context generated at: `2026-07-05T09:00:00+09:00`\n"
+                f"- context generated at: `{context['generated_at']}`\n"
                 "- latest recommendation date: `2026-07-05`\n"
                 "- latest market counts: `{\"KR\":3,\"US\":3}`\n"
                 "- telegram favorite saved: `1`\n"
@@ -17707,6 +17707,14 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 encoding="utf-8",
             )
             bridge_messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
+            readme_text = (output_dir / "README.md").read_text(encoding="utf-8")
+            (output_dir / "README.md").write_text(
+                readme_text.replace("- telegram favorite saved: `1`", "- telegram favorite saved: `0`"),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "README status summary mismatch"):
+                check_tool.validate_bundle(output_dir, max_age_hours=1)
+            (output_dir / "README.md").write_text(readme_text, encoding="utf-8")
             exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
             manifest_text = (output_dir / "openclaw_bridge_manifest.json").read_text(encoding="utf-8")
 
