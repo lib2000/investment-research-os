@@ -356,6 +356,7 @@ def render_markdown(context: dict) -> str:
             "- 이 파일은 투자 판단 보조용 요약입니다. 실거래 주문 또는 계좌 인증 정보 공유에 사용하지 않습니다.",
             "- 먼저 `bridge_status.json`에서 source git, 최신성, completion_report_sha256을 확인합니다.",
             "- 완료 상태는 `openclaw_bridge_completion_report.md`, `openclaw_bridge_completion_report.json`, `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`로 확인합니다.",
+            "- 빠른 상태 요약은 `python tools\\show_openclaw_bridge_status.py --json`으로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",

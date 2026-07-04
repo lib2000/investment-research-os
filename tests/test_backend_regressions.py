@@ -17729,6 +17729,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 check_tool.validate_bundle(output_dir, max_age_hours=1)
             (output_dir / "README.md").write_text(readme_text, encoding="utf-8")
             exported_text = (output_dir / "investment_research_context.json").read_text(encoding="utf-8")
+            markdown_text = (output_dir / "investment_research_context.md").read_text(encoding="utf-8")
             manifest_text = (output_dir / "openclaw_bridge_manifest.json").read_text(encoding="utf-8")
 
         self.assertTrue(messages)
@@ -17751,6 +17752,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
+        self.assertIn("show_openclaw_bridge_status.py --json", markdown_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 
 

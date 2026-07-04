@@ -163,7 +163,14 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
     if manifest.get("completion_report_json_file") != "openclaw_bridge_completion_report.json":
         raise AssertionError("OpenClaw bridge manifest completion_report_json_file mismatch")
     markdown = md_path.read_text(encoding="utf-8-sig")
-    for required in ["오늘 추천 최신일", "민감정보", "오픈클로 사용 규칙", "KR 1위", "US 1위"]:
+    for required in [
+        "오늘 추천 최신일",
+        "민감정보",
+        "오픈클로 사용 규칙",
+        "show_openclaw_bridge_status.py --json",
+        "KR 1위",
+        "US 1위",
+    ]:
         if required not in markdown:
             raise AssertionError(f"Markdown context is missing required text: {required}")
     status_path = directory / "bridge_status.json"
