@@ -1347,6 +1347,7 @@ $contracts = @(
       'export_openclaw_investment_context.py',
       'check_openclaw_investment_context.py',
       'check_openclaw_bridge_completion.py',
+      'show_openclaw_bridge_status.py',
       'investment_research_context.json',
       'investment_research_context.md',
       'openclaw_bridge_manifest.json',
@@ -1381,7 +1382,9 @@ $contracts = @(
       'OpenClaw completion audit skipped because source git worktree is dirty.',
       'OpenClaw final context validation failed',
       'OpenClaw final completion audit failed',
+      'OpenClaw status summary failed',
       'show_openclaw_bridge_status.py --json',
+      '--openclaw-dir $targetDir --json',
       '--require-report-hashes',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'

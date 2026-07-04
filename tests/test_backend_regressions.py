@@ -656,12 +656,15 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("[switch]$RequireCompletionAudit", script_source)
         self.assertIn("check_openclaw_investment_context.py", script_source)
         self.assertIn("check_openclaw_bridge_completion.py", script_source)
+        self.assertIn("show_openclaw_bridge_status.py", script_source)
         self.assertIn("OpenClaw completion audit skipped because source git worktree is dirty.", script_source)
         self.assertIn("$RequireCompletionAudit.IsPresent", script_source)
         self.assertIn("--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours", script_source)
         self.assertIn("OpenClaw final context validation failed", script_source)
         self.assertIn("--require-report-hashes", script_source)
         self.assertIn("OpenClaw final completion audit failed", script_source)
+        self.assertIn("--openclaw-dir $targetDir --json", script_source)
+        self.assertIn("OpenClaw status summary failed", script_source)
         self.assertIn("--source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours", script_source)
 
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):

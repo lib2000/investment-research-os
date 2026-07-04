@@ -12,6 +12,7 @@ $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
 $checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.py"
 $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completion.py"
+$statusSummaryScript = Join-Path $projectRoot "tools\show_openclaw_bridge_status.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
@@ -47,6 +48,9 @@ if (-not (Test-Path -LiteralPath $checkScript)) {
 }
 if (-not (Test-Path -LiteralPath $completionScript)) {
   throw "OpenClaw completion check script not found: $completionScript"
+}
+if (-not (Test-Path -LiteralPath $statusSummaryScript)) {
+  throw "OpenClaw status summary script not found: $statusSummaryScript"
 }
 
 python $exportScript --print-summary | Out-Host
@@ -221,6 +225,10 @@ if (-not $SkipValidation.IsPresent) {
     python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --require-report-hashes
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw final completion audit failed: $LASTEXITCODE"
+    }
+    python $statusSummaryScript --openclaw-dir $targetDir --json
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw status summary failed: $LASTEXITCODE"
     }
   }
 }
