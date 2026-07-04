@@ -234,6 +234,7 @@ def render_markdown_report(result: dict) -> str:
         f"- git: {git_state.get('branch')} {git_state.get('commit')} / upstream {git_state.get('upstream')}",
         f"- git synced: ahead={git_state.get('ahead')} behind={git_state.get('behind')} dirty={git_state.get('dirty')}",
         f"- bridge copied: {bridge_status.get('copied_at')}",
+        f"- bridge max age hours: {bridge_status.get('max_age_hours', result.get('max_age_hours'))}",
         f"- context generated: {bridge_status.get('context_generated_at')}",
         f"- latest recommendation date: {bridge_status.get('latest_recommendation_date')}",
         f"- market counts: {bridge_status.get('latest_market_counts')}",

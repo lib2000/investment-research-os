@@ -121,6 +121,7 @@ $status = [ordered]@{
   source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
+  max_age_hours = $MaxAgeHours
   completion_report_json = (Join-Path $targetDir "openclaw_bridge_completion_report.json")
   completion_report_markdown = (Join-Path $targetDir "openclaw_bridge_completion_report.md")
   startup_notes_updated = $true

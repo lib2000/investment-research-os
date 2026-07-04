@@ -17571,6 +17571,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                     {
                         "status": "ok",
                         "context_generated_at": context["generated_at"],
+                        "max_age_hours": 1,
                         "source_git_commit": "abc1234",
                         "source_git_branch": "main",
                         "source_git_dirty": False,
@@ -17717,6 +17718,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             "git": {"branch": "main", "commit": "abc1234", "upstream": "origin/main", "ahead": 0, "behind": 0, "dirty": False},
             "bridge_status": {
                 "copied_at": "2026-07-05T04:46:33+09:00",
+                "max_age_hours": 1,
                 "context_generated_at": "2026-07-05T04:46:32+09:00",
                 "latest_recommendation_date": "2026-07-04",
                 "latest_market_counts": {"KR": 3, "US": 3},
@@ -17750,6 +17752,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
         self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
+        self.assertIn("- bridge max age hours: 1", markdown)
         self.assertIn("OpenClaw bridge_status file hashes match copied files", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
