@@ -209,6 +209,7 @@ def build_result(
         "source git branch is main",
         "source git is clean and synced with upstream",
         "OpenClaw bridge_status references current clean commit",
+        "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw startup notes point to bridge files",
     ]
     return {

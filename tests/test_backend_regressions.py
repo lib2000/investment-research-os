@@ -17728,7 +17728,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "bridge_manifest": "c" * 64,
                 },
             },
-            "completion_requirements": ["source and OpenClaw bundles validate"],
+            "completion_requirements": [
+                "source and OpenClaw bundles validate",
+                "OpenClaw bridge_status file hashes match copied files",
+            ],
             "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
             "operational_commands": {
                 "safe_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
@@ -17747,6 +17750,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
         self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
+        self.assertIn("OpenClaw bridge_status file hashes match copied files", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("## File Hashes", markdown)
