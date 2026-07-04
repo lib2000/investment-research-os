@@ -1201,6 +1201,7 @@ $contracts = @(
       'investment_research_context.md',
       'openclaw_bridge_manifest.json',
       'investment_research_openclaw_bridge_v1',
+      '/api/v1/system/health',
       'build_recommendation_state',
       'build_news_state',
       'build_nps_state',

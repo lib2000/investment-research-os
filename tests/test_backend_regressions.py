@@ -17603,6 +17603,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertTrue(messages)
         self.assertTrue(bridge_messages)
         self.assertIn('"raw_tokens_excluded": true', exported_text)
+        self.assertIn('"backend_health_url": "http://127.0.0.1:8001/api/v1/system/health"', exported_text)
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
         self.assertIn('"strict_refresh_command"', manifest_text)
         self.assertIn('"completion_audit_command"', manifest_text)

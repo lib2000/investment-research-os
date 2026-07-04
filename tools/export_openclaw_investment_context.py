@@ -258,7 +258,7 @@ def build_context(project_root: Path) -> dict:
         "source_project": {
             "name": "InvestmentJournalApp / investment-research-os",
             "root": str(project_root),
-            "backend_health_url": "http://127.0.0.1:8001/api/v1/health",
+            "backend_health_url": "http://127.0.0.1:8001/api/v1/system/health",
             "research_console_url": "http://127.0.0.1:8001/console/index.html",
         },
         "sanitization": {
