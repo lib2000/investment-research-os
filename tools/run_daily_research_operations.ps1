@@ -7,6 +7,7 @@
   [switch]$SkipPortfolioRefresh,
   [switch]$SkipRecommendationRun,
   [switch]$SkipRecommendationPreview,
+  [switch]$SkipOpenClawSync,
   [switch]$SkipVerification
 )
 
@@ -69,6 +70,12 @@ if (-not $SkipRecommendationPreview.IsPresent) {
       --require-hold-warning `
       --expected-held-ticker 112610 `
       --output-json tmp\daily_recommendation_candidate_policy_preview.json
+  }
+}
+
+if (-not $SkipOpenClawSync.IsPresent) {
+  Invoke-DailyResearchStep "OpenClaw 투자리서치 브리지 동기화" {
+    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1")
   }
 }
 

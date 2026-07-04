@@ -596,6 +596,15 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--output-json", script_source)
         self.assertIn("tmp\\daily_recommendation_candidate_policy_preview.json", script_source)
 
+    def test_daily_research_operations_syncs_openclaw_bridge(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipOpenClawSync", script_source)
+        self.assertIn("OpenClaw 투자리서치 브리지 동기화", script_source)
+        self.assertIn("sync_openclaw_investment_context.ps1", script_source)
+
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
 
