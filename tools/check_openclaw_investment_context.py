@@ -219,6 +219,13 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         ]:
             if required not in readme:
                 raise AssertionError(f"OpenClaw bridge README is missing required text: {required}")
+        source_git = f"{status.get('source_git_branch')} {status.get('source_git_commit')}"
+        if source_git not in readme:
+            raise AssertionError(f"OpenClaw bridge README is missing source git: {source_git}")
+        for manifest_key in command_manifest_map.values():
+            command = str(manifest.get(manifest_key) or "")
+            if command and command not in readme:
+                raise AssertionError(f"OpenClaw bridge README is missing manifest command: {manifest_key}")
     return messages
 
 

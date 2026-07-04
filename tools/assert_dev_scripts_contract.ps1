@@ -1269,6 +1269,8 @@ $contracts = @(
       'bridge status file_sha256 mismatch',
       'bridge status operational command mismatch',
       'OpenClaw completion report hash target missing',
+      'OpenClaw bridge README is missing source git',
+      'OpenClaw bridge README is missing manifest command',
       'secrets_excluded'
     )
   },
