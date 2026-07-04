@@ -8524,6 +8524,51 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertIn("AI 반도체", breakdown["sentiment"]["summary"])
         self.assertIn("텔레그램 인기글", breakdown["sentiment"]["summary"])
 
+    def test_daily_recommendation_candidates_summarize_telegram_sentiment_evidence(self):
+        import research_os_main
+
+        evidence = research_os_main.telegram_sentiment_evidence_from_news_inbox(
+            {
+                "items": [
+                    {
+                        "title": "AI 데이터센터 전력 병목",
+                        "source_name": "AI MASTERS",
+                        "tags": ["telegram_favorite"],
+                        "telegram_popularity": {
+                            "channel_title": "AI MASTERS",
+                            "view_count": 28800,
+                            "popularity_score": 28800,
+                        },
+                        "published_at": "2026-07-05T09:00:00+09:00",
+                    },
+                    {
+                        "title": "정책 일반 뉴스",
+                        "source_name": "정책 브리프",
+                        "tags": ["policy"],
+                    },
+                    {
+                        "title": "반도체 장비 수급 코멘트",
+                        "source_name": "카이에 de market",
+                        "scope_reason": "telegram_favorite_popular_post",
+                        "telegram_popularity": {
+                            "channel_title": "카이에 de market",
+                            "view_count": 14200,
+                            "popularity_score": 14200,
+                        },
+                        "published_at": "2026-07-05T08:30:00+09:00",
+                    },
+                ]
+            },
+            limit=2,
+        )
+
+        self.assertEqual(len(evidence), 1)
+        self.assertTrue(evidence[0].startswith("텔레그램 인기글 심리 신호 2건"))
+        self.assertIn("AI MASTERS", evidence[0])
+        self.assertIn("조회 28,800", evidence[0])
+        self.assertIn("카이에 de market", evidence[0])
+        self.assertNotIn("정책 일반 뉴스", evidence[0])
+
     def test_daily_recommendation_candidate_preserves_scored_news_context(self):
         from research_os import daily_recommendation_candidates
 

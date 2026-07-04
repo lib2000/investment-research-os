@@ -15261,6 +15261,60 @@ def _daily_recommendation_price_lookup(settings: Settings):
 
 
 
+def telegram_sentiment_evidence_from_news_inbox(news_inbox_payload: dict, *, limit: int = 3) -> list[str]:
+    """Summarize popular Telegram favorite posts as market sentiment evidence."""
+    if not isinstance(news_inbox_payload, dict) or limit <= 0:
+        return []
+    items = [item for item in news_inbox_payload.get("items", []) if isinstance(item, dict)]
+    telegram_items: list[tuple[float, str, dict]] = []
+    for item in items:
+        tags = {str(tag).strip().lower() for tag in (item.get("tags") or [])}
+        scope_reason = str(item.get("scope_reason") or "").strip().lower()
+        source = str(item.get("source") or item.get("source_name") or "").strip().lower()
+        popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+        is_telegram = (
+            "telegram_favorite" in tags
+            or scope_reason == "telegram_favorite_popular_post"
+            or "telegram" in source
+            or bool(popularity)
+        )
+        if not is_telegram:
+            continue
+        try:
+            popularity_score = float(popularity.get("popularity_score") or 0)
+        except (TypeError, ValueError):
+            popularity_score = 0.0
+        try:
+            view_count = float(popularity.get("view_count") or popularity.get("views") or 0)
+        except (TypeError, ValueError):
+            view_count = 0.0
+        published_at = str(item.get("published_at") or item.get("created_at") or "")
+        telegram_items.append((max(popularity_score, view_count), published_at, item))
+    if not telegram_items:
+        return []
+    telegram_items.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
+    selected = [entry[2] for entry in telegram_items[:limit]]
+    snippets: list[str] = []
+    for item in selected:
+        popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+        channel = compact_news_safe_text(
+            popularity.get("channel_title") or item.get("source_name") or item.get("source") or "텔레그램",
+            max_length=28,
+        )
+        title = compact_news_safe_text(item.get("title") or item.get("summary") or item.get("body") or "", max_length=54)
+        try:
+            view_count = int(float(popularity.get("view_count") or popularity.get("views") or 0))
+        except (TypeError, ValueError):
+            view_count = 0
+        view_label = f"조회 {view_count:,}" if view_count > 0 else "조회수 미확인"
+        snippet = " · ".join(part for part in [channel, title, view_label] if part)
+        if snippet:
+            snippets.append(snippet)
+    if not snippets:
+        return []
+    return [f"텔레그램 인기글 심리 신호 {len(telegram_items)}건: " + " / ".join(snippets)]
+
+
 def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3) -> dict:
     """Rank daily review candidates from portfolio, interest, RAG, filings, and consensus data."""
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
@@ -15286,9 +15340,12 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
     except Exception:
         policy_watch = read_policy_sources_watch(settings)
     try:
-        policy_signal_index = _build_policy_signal_index(policy_watch, read_news_inbox(settings))
+        news_inbox_payload = read_news_inbox(settings)
+        policy_signal_index = _build_policy_signal_index(policy_watch, news_inbox_payload)
     except Exception:
+        news_inbox_payload = {}
         policy_signal_index = {}
+    telegram_sentiment_evidence = telegram_sentiment_evidence_from_news_inbox(news_inbox_payload, limit=3)
     nps_pressure_index = build_nps_rebalancing_pressure_index(read_nps_portfolio_change_snapshot(settings))
     consensus_scan = build_target_consensus_scan(
         settings,
@@ -15388,6 +15445,9 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             candidate.get("reasons") or [],
         )
         _apply_daily_recommendation_evidence_documents(candidate, rag_evidence_documents)
+        for evidence in telegram_sentiment_evidence:
+            if evidence not in candidate.get("evidence_sources", []):
+                candidate.setdefault("evidence_sources", []).append(evidence)
         _finalize_daily_recommendation_candidate(candidate)
 
     return _finalize_daily_recommendation_ranking(
