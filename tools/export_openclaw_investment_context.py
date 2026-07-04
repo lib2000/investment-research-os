@@ -377,6 +377,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "validation_command": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
         "completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+        "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
         "sanitization": context.get("sanitization"),
         "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),
     }

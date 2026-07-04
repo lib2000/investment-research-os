@@ -17586,6 +17586,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
                             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+                            "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                         },
                         "file_sha256": {
                             "context_json": check_tool.sha256_hex(output_dir / "investment_research_context.json"),
@@ -17610,6 +17611,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
                 "- completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`\n"
+                "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
             )
@@ -17643,6 +17645,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
         self.assertIn('"strict_refresh_command"', manifest_text)
         self.assertIn('"completion_audit_command"', manifest_text)
+        self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
@@ -17770,6 +17773,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
                 "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                 "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+                "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             },
         }
 
@@ -17795,6 +17799,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("OpenClaw completion report hashes match completion report files", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
+        self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
         self.assertIn("abc1234", markdown)

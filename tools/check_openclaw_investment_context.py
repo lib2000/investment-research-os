@@ -127,6 +127,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "strict_refresh_command",
         "validation_command",
         "completion_audit_command",
+        "final_completion_audit_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
     if missing_commands:
@@ -160,6 +161,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "strict_refresh": "strict_refresh_command",
             "validation": "validation_command",
             "completion_audit": "completion_audit_command",
+            "final_completion_audit": "final_completion_audit_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
             if not commands.get(command_key):
