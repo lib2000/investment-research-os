@@ -104,6 +104,10 @@ $readme = @(
   "- ``openclaw_bridge_completion_report.md``: latest completion audit report",
   "- source generator: ``$exportScript``",
   "- ``bridge_status.json``: last copy status and source/target paths",
+  "- safe refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1``",
+  "- final strict refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``",
+  "- validation: ``python tools\check_openclaw_investment_context.py --max-age-hours 24``",
+  "- completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
   ""
 )

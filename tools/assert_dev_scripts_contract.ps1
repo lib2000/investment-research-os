@@ -1207,6 +1207,9 @@ $contracts = @(
       'build_firecrawl_state',
       'enabled_default',
       'dry_run_default',
+      'strict_refresh_command',
+      'completion_audit_command',
+      'completion_report_file',
       'restricted_actions'
     )
   },
@@ -1220,6 +1223,9 @@ $contracts = @(
       'KR/US recommendation counts are incomplete',
       'Firecrawl safety defaults must remain enabled=false and dry_run=true',
       'openclaw_bridge_manifest.json',
+      'strict_refresh_command',
+      'completion_audit_command',
+      'completion_report_file',
       'OpenClaw bridge manifest schema mismatch',
       'bridge_status.json',
       'source_git_commit',
@@ -1254,6 +1260,8 @@ $contracts = @(
       'openclaw_bridge_manifest.json',
       'openclaw_bridge_completion_report.md',
       'bridge_status.json',
+      'final strict refresh',
+      'completion audit',
       'source_git_commit',
       'source_git_dirty',
       'secrets_excluded',
@@ -1270,6 +1278,8 @@ $contracts = @(
       'openclaw_bridge_manifest.json',
       'bridge_status.json',
       '안전 갱신 명령',
+      '최종 엄격 갱신 명령',
+      '완료 감사 명령',
       '민감정보 제외',
       '실거래 주문'
     )

@@ -17587,7 +17587,12 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `investment_research_context.md`: human-readable sanitized summary\n"
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
+                "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
                 "- `bridge_status.json`: last copy status and source/target paths\n"
+                "- safe refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1`\n"
+                "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
+                "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
+                "- completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
             )
@@ -17599,6 +17604,9 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertTrue(bridge_messages)
         self.assertIn('"raw_tokens_excluded": true', exported_text)
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
+        self.assertIn('"strict_refresh_command"', manifest_text)
+        self.assertIn('"completion_audit_command"', manifest_text)
+        self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 

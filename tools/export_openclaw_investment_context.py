@@ -372,8 +372,11 @@ def build_bridge_manifest(context: dict) -> dict:
         "markdown_file": "investment_research_context.md",
         "status_file": "bridge_status.json",
         "readme_file": "README.md",
+        "completion_report_file": "openclaw_bridge_completion_report.md",
         "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+        "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "validation_command": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
+        "completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
         "sanitization": context.get("sanitization"),
         "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),
     }

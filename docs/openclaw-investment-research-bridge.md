@@ -26,7 +26,7 @@ OpenClaw 워크스페이스 동기화 위치:
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_completion_report.md`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/README.md`
 
-`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 안전 갱신 명령, 검증 명령, 민감정보 제외 범위를 포함한다.
+`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 완료 리포트 파일명, 안전 갱신 명령, 최종 엄격 갱신 명령, 검증 명령, 완료 감사 명령, 민감정보 제외 범위를 포함한다.
 
 ## 갱신
 
@@ -34,6 +34,12 @@ OpenClaw까지 동기화:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1
+```
+
+최종 완료용 엄격 동기화:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit
 ```
 
 Investment Research OS 내부 번들만 생성:
