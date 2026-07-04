@@ -17658,6 +17658,36 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             (root / "HEARTBEAT.md").write_text("read data/investment_research/bridge_status.json", encoding="utf-8")
             self.assertEqual([], tool.validate_openclaw_workspace(root))
 
+    def test_completion_audit_writes_json_and_markdown_reports(self):
+        tool = load_openclaw_bridge_completion_tool()
+        result = {
+            "status": "ok",
+            "errors": [],
+            "project_root": "C:/project",
+            "source_dir": "C:/project/research_vault/_system/openclaw_integration",
+            "openclaw_dir": "C:/Users/test/.openclaw/workspace/data/investment_research",
+            "git": {"branch": "main", "commit": "abc1234", "upstream": "origin/main", "ahead": 0, "behind": 0, "dirty": False},
+            "bridge_status": {
+                "copied_at": "2026-07-05T04:46:33+09:00",
+                "context_generated_at": "2026-07-05T04:46:32+09:00",
+                "latest_recommendation_date": "2026-07-04",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "telegram_saved_count": 10,
+                "secrets_excluded": True,
+            },
+            "completion_requirements": ["source and OpenClaw bundles validate"],
+            "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
+        }
+
+        with TemporaryDirectory() as tmp:
+            paths = tool.write_completion_report(result, Path(tmp))
+            json_payload = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
+            markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+
+        self.assertEqual("ok", json_payload["status"])
+        self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
+        self.assertIn("abc1234", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

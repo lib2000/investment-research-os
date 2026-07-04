@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
 $checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.py"
+$completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completion.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
@@ -18,6 +19,9 @@ if (-not (Test-Path -LiteralPath $exportScript)) {
 }
 if (-not (Test-Path -LiteralPath $checkScript)) {
   throw "OpenClaw check script not found: $checkScript"
+}
+if (-not (Test-Path -LiteralPath $completionScript)) {
+  throw "OpenClaw completion check script not found: $completionScript"
 }
 
 python $exportScript --print-summary | Out-Host
@@ -96,6 +100,7 @@ $readme = @(
   "- ``investment_research_context.md``: human-readable sanitized summary",
   "- ``investment_research_context.json``: machine-readable sanitized summary",
   "- ``openclaw_bridge_manifest.json``: machine-readable file map and refresh/check commands",
+  "- ``openclaw_bridge_completion_report.md``: latest completion audit report",
   "- source generator: ``$exportScript``",
   "- ``bridge_status.json``: last copy status and source/target paths",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
@@ -111,5 +116,9 @@ if (-not $SkipValidation.IsPresent) {
   python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
   if ($LASTEXITCODE -ne 0) {
     throw "OpenClaw context validation failed: $LASTEXITCODE"
+  }
+  python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --write-report
+  if ($LASTEXITCODE -ne 0) {
+    throw "OpenClaw completion audit failed: $LASTEXITCODE"
   }
 }

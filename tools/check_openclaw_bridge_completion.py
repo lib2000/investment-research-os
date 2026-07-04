@@ -182,6 +182,56 @@ def build_result(
     }
 
 
+def render_markdown_report(result: dict) -> str:
+    git_state = result.get("git") or {}
+    bridge_status = result.get("bridge_status") or {}
+    errors = result.get("errors") or []
+    lines = [
+        "# OpenClaw Investment Research Bridge Completion Report",
+        "",
+        f"- status: {result.get('status')}",
+        f"- project: `{result.get('project_root')}`",
+        f"- source dir: `{result.get('source_dir')}`",
+        f"- OpenClaw dir: `{result.get('openclaw_dir')}`",
+        f"- git: {git_state.get('branch')} {git_state.get('commit')} / upstream {git_state.get('upstream')}",
+        f"- git synced: ahead={git_state.get('ahead')} behind={git_state.get('behind')} dirty={git_state.get('dirty')}",
+        f"- bridge copied: {bridge_status.get('copied_at')}",
+        f"- context generated: {bridge_status.get('context_generated_at')}",
+        f"- latest recommendation date: {bridge_status.get('latest_recommendation_date')}",
+        f"- market counts: {bridge_status.get('latest_market_counts')}",
+        f"- telegram saved: {bridge_status.get('telegram_saved_count')}",
+        f"- secrets excluded: {bridge_status.get('secrets_excluded')}",
+        "",
+        "## Completion Requirements",
+        "",
+    ]
+    for item in result.get("completion_requirements") or []:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Bundle Checks", ""])
+    bundle_checks = result.get("bundle_checks") or {}
+    for label in ("source", "openclaw"):
+        messages = bundle_checks.get(label) or []
+        for message in messages:
+            lines.append(f"- {label}: {message}")
+    lines.extend(["", "## Errors", ""])
+    if errors:
+        for error in errors:
+            lines.append(f"- {error}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_completion_report(result: dict, output_dir: Path) -> dict:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "openclaw_bridge_completion_report.json"
+    markdown_path = output_dir / "openclaw_bridge_completion_report.md"
+    json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    markdown_path.write_text(render_markdown_report(result), encoding="utf-8")
+    return {"json_path": str(json_path), "markdown_path": str(markdown_path)}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit final Investment Research OS to OpenClaw bridge completion.")
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
@@ -190,6 +240,7 @@ def main() -> int:
     parser.add_argument("--openclaw-dir", type=Path, default=DEFAULT_OPENCLAW_DIR)
     parser.add_argument("--max-age-hours", type=float, default=1.0)
     parser.add_argument("--json", action="store_true", help="감사 결과를 JSON으로 출력합니다.")
+    parser.add_argument("--write-report", action="store_true", help="OpenClaw 브리지 폴더에 완료 감사 리포트를 저장합니다.")
     args = parser.parse_args()
 
     result = build_result(
@@ -199,10 +250,16 @@ def main() -> int:
         openclaw_dir=args.openclaw_dir.resolve(),
         max_age_hours=args.max_age_hours,
     )
+    report_paths = None
+    if args.write_report:
+        report_paths = write_completion_report(result, args.openclaw_dir.resolve())
+        result["report_paths"] = report_paths
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"[{result['status']}] openclaw_bridge_completion")
+        if report_paths:
+            print(f"- report: {report_paths['markdown_path']}")
         if result["errors"]:
             for error in result["errors"]:
                 print(f"- {error}")

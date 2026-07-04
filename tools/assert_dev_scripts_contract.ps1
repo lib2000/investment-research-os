@@ -1247,14 +1247,17 @@ $contracts = @(
       'SkipValidation',
       'export_openclaw_investment_context.py',
       'check_openclaw_investment_context.py',
+      'check_openclaw_bridge_completion.py',
       'investment_research_context.json',
       'investment_research_context.md',
       'openclaw_bridge_manifest.json',
+      'openclaw_bridge_completion_report.md',
       'bridge_status.json',
       'source_git_commit',
       'source_git_dirty',
       'secrets_excluded',
       'Copy-Item -Force',
+      '--write-report',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
     )
