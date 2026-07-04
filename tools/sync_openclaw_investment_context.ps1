@@ -7,6 +7,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
