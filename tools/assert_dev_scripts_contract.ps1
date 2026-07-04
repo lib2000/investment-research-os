@@ -1241,8 +1241,10 @@ $contracts = @(
       'completion_audit_command',
       'final_completion_audit_command',
       'completion_report_file',
+      'openclaw_bridge_completion_report.json',
       'OpenClaw bridge manifest schema mismatch',
       'bridge_status.json',
+      'validate_no_secret_like_content(status_path)',
       'source_git_commit',
       'source_git_dirty',
       'startup_notes_updated',
@@ -1251,6 +1253,7 @@ $contracts = @(
       'file_sha256',
       'bridge status file_sha256 mismatch',
       'bridge status operational command mismatch',
+      'OpenClaw completion report hash target missing',
       'secrets_excluded'
     )
   },

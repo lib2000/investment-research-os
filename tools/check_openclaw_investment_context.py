@@ -140,6 +140,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError(f"Markdown context is missing required text: {required}")
     status_path = directory / "bridge_status.json"
     if status_path.exists():
+        validate_no_secret_like_content(status_path)
         status = load_context(status_path)
         if status.get("status") != "ok":
             raise AssertionError(f"bridge status is not ok: {status.get('status')}")
@@ -191,6 +192,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
                 continue
             if not hash_path.exists():
                 raise AssertionError(f"OpenClaw completion report hash target missing: {hash_path}")
+            validate_no_secret_like_content(hash_path)
             if recorded_hash.lower() != sha256_hex(hash_path):
                 raise AssertionError(f"bridge status completion_report_sha256 mismatch: {hash_key}")
         readme_path = directory / "README.md"
