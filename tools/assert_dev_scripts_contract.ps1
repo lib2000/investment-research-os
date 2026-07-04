@@ -1242,6 +1242,8 @@ $contracts = @(
       'source_git_commit',
       'source_git_dirty',
       'validate_openclaw_workspace',
+      'operational_commands',
+      'Operational Commands',
       'source git must be synced with upstream',
       'openclaw_bridge_completion_report.md',
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',

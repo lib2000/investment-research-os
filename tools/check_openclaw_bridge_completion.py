@@ -145,6 +145,12 @@ def build_result(
         "openclaw_workspace": str(openclaw_workspace),
         "openclaw_dir": str(openclaw_dir),
         "max_age_hours": max_age_hours,
+        "operational_commands": {
+            "safe_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+            "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
+            "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
+            "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+        },
     }
 
     checker = load_context_checker()
@@ -215,6 +221,12 @@ def render_markdown_report(result: dict) -> str:
     ]
     for item in result.get("completion_requirements") or []:
         lines.append(f"- {item}")
+    lines.extend(["", "## Operational Commands", ""])
+    commands = result.get("operational_commands") or {}
+    for label in ("safe_refresh", "strict_refresh", "validation", "completion_audit"):
+        command = commands.get(label)
+        if command:
+            lines.append(f"- {label}: `{command}`")
     lines.extend(["", "## Bundle Checks", ""])
     bundle_checks = result.get("bundle_checks") or {}
     for label in ("source", "openclaw"):

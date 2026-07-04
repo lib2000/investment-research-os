@@ -17697,6 +17697,12 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             },
             "completion_requirements": ["source and OpenClaw bundles validate"],
             "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
+            "operational_commands": {
+                "safe_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+                "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
+                "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
+                "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+            },
         }
 
         with TemporaryDirectory() as tmp:
@@ -17705,7 +17711,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
 
         self.assertEqual("ok", json_payload["status"])
+        self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
+        self.assertIn("## Operational Commands", markdown)
+        self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("abc1234", markdown)
 
 
