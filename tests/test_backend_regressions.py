@@ -1133,6 +1133,9 @@ class DailyRecommendationRenderLayoutCheckToolTests(unittest.TestCase):
             "marketLabels": ["한국 추천 1~3위"],
             "pageHasHorizontalOverflow": True,
             "scrolledToDailyRecommendationCards": False,
+            "horizontalDetailLayout": False,
+            "horizontalEvidenceLayout": False,
+            "readableDetailWidth": False,
             "clippedTextElements": [{"text": "long clipped text"}],
         }
 
@@ -1143,6 +1146,9 @@ class DailyRecommendationRenderLayoutCheckToolTests(unittest.TestCase):
         self.assertIn("시장 섹션 라벨에 한국/미국이 모두 보이지 않습니다.", errors)
         self.assertIn("페이지 전체에 가로 스크롤 오버플로가 있습니다.", errors)
         self.assertIn("추천 결과 스크린샷 대상이 카드 영역으로 스크롤되지 않았습니다.", errors)
+        self.assertIn("추천 상세 정보가 가로 그리드로 표시되지 않습니다.", errors)
+        self.assertIn("추천 상세 정보 패널 폭이 가로 읽기에 부족합니다.", errors)
+        self.assertIn("추천 근거 묶음이 가로 카드형으로 표시되지 않습니다.", errors)
         self.assertIn("추천 결과 텍스트 클리핑 1개", errors)
 
 

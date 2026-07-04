@@ -113,6 +113,14 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   let detailFocusedMarket = "";
                   let detailFocusedRank = "";
                   let detailTabActive = false;
+                  let detailDisplay = "";
+                  let detailGridColumnCount = 0;
+                  let evidenceGridColumnCount = 0;
+                  let detailWidth = 0;
+                  let detailHeight = 0;
+                  let horizontalDetailLayout = false;
+                  let horizontalEvidenceLayout = false;
+                  let readableDetailWidth = false;
                   if (topRankCard) {
                     topRankCard.click();
                     const openedCard = await waitFor(() => {
@@ -130,6 +138,23 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     detailFocusedMarket = openedCard.dataset.dailyRecommendationMarket || "";
                     detailFocusedRank = openedCard.dataset.dailyRecommendationRank || "";
                     detailTabActive = document.querySelector('button.tab[data-tab="memory"]')?.classList.contains("active") || false;
+                    const openedDetail = openedCard.querySelector(".daily-recommendation-detail");
+                    const evidence = openedDetail?.querySelector(".daily-recommendation-evidence");
+                    const detailStyle = openedDetail ? getComputedStyle(openedDetail) : null;
+                    const evidenceStyle = evidence ? getComputedStyle(evidence) : null;
+                    const countGridColumns = (value) => {
+                      const text = String(value || "").trim();
+                      return !text || text === "none" ? 0 : text.split(/\\s+/).length;
+                    };
+                    const detailRect = openedDetail?.getBoundingClientRect();
+                    detailDisplay = detailStyle?.display || "";
+                    detailGridColumnCount = countGridColumns(detailStyle?.gridTemplateColumns);
+                    evidenceGridColumnCount = countGridColumns(evidenceStyle?.gridTemplateColumns);
+                    detailWidth = Math.round(detailRect?.width || 0);
+                    detailHeight = Math.round(detailRect?.height || 0);
+                    horizontalDetailLayout = detailDisplay === "grid" && detailGridColumnCount >= 3;
+                    horizontalEvidenceLayout = evidenceGridColumnCount >= 3;
+                    readableDetailWidth = detailWidth >= Math.min(760, Math.max(0, window.innerWidth - 120));
                     cardsRoot.scrollIntoView({block: "start", inline: "nearest"});
                     await sleep(200);
                   }
@@ -148,6 +173,14 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     detailFocusedMarket,
                     detailFocusedRank,
                     detailTabActive,
+                    detailDisplay,
+                    detailGridColumnCount,
+                    evidenceGridColumnCount,
+                    detailWidth,
+                    detailHeight,
+                    horizontalDetailLayout,
+                    horizontalEvidenceLayout,
+                    readableDetailWidth,
                     scrolledToDailyRecommendationCards: cardsTop >= 0 && cardsTop < Math.round(window.innerHeight * 0.35),
                     dailyRecommendationCardsTop: cardsTop,
                     scrollY: Math.round(window.scrollY),
@@ -201,6 +234,12 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("상단 추천 후보 클릭 후 추천 상세 카드가 열리지 않았습니다.")
     if not result.get("detailTabActive"):
         errors.append("상단 추천 후보 클릭 후 추천 상세 탭으로 이동하지 않았습니다.")
+    if not result.get("horizontalDetailLayout"):
+        errors.append("추천 상세 정보가 가로 그리드로 표시되지 않습니다.")
+    if not result.get("readableDetailWidth"):
+        errors.append("추천 상세 정보 패널 폭이 가로 읽기에 부족합니다.")
+    if not result.get("horizontalEvidenceLayout"):
+        errors.append("추천 근거 묶음이 가로 카드형으로 표시되지 않습니다.")
     clipped = result.get("clippedTextElements") if isinstance(result.get("clippedTextElements"), list) else []
     if clipped:
         errors.append(f"추천 결과 텍스트 클리핑 {len(clipped)}개")

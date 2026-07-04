@@ -4146,6 +4146,7 @@ label {
 }
 
 .daily-recommendation-rank-card.is-detail-open {
+  grid-column: 1 / -1;
   transform: translateY(-1px);
 }
 
@@ -4457,6 +4458,10 @@ label {
 }
 
 .daily-recommendation-detail[open] {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(260px, 1.15fr) minmax(300px, 1.35fr);
+  gap: 8px;
+  align-items: start;
   border-color: #99d5cb;
   box-shadow: 0 8px 22px rgba(15, 118, 110, 0.08);
 }
@@ -4469,20 +4474,57 @@ label {
   margin-top: 8px;
 }
 
+.daily-recommendation-detail[open] > summary {
+  grid-column: 1 / -1;
+}
+
+.daily-recommendation-detail[open] .daily-recommendation-rank-head,
+.daily-recommendation-detail[open] .daily-recommendation-badges,
+.daily-recommendation-detail[open] .daily-recommendation-rank-metrics,
+.daily-recommendation-detail[open] .daily-recommendation-score-summary,
+.daily-recommendation-detail[open] .daily-recommendation-primary-reasons,
+.daily-recommendation-detail[open] .daily-recommendation-exposure,
+.daily-recommendation-detail[open] .daily-recommendation-investment-profile,
+.daily-recommendation-detail[open] .daily-recommendation-signal-grid,
+.daily-recommendation-detail[open] .daily-recommendation-score,
+.daily-recommendation-detail[open] > small,
+.daily-recommendation-detail[open] .daily-recommendation-warning,
+.daily-recommendation-detail[open] .daily-recommendation-fx,
+.daily-recommendation-detail[open] .daily-recommendation-portfolio,
+.daily-recommendation-detail[open] .daily-recommendation-milestones {
+  min-width: 0;
+}
+
+.daily-recommendation-detail[open] .daily-recommendation-primary-reasons,
+.daily-recommendation-detail[open] .daily-recommendation-signal-grid,
+.daily-recommendation-detail[open] .daily-recommendation-evidence {
+  grid-column: span 2;
+}
+
 .daily-recommendation-evidence {
   display: grid;
-  gap: 5px;
-  padding: 8px 0 8px 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #c7e8e2;
   border-left: 3px solid #99d5cb;
+  border-radius: 7px;
+  background: #fbfefd;
 }
 
 .daily-recommendation-evidence b {
+  grid-row: span 2;
   color: #134e4a;
   font-size: 12px;
 }
 
 .daily-recommendation-evidence span {
+  min-width: 0;
+  padding: 5px 6px;
   color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -5616,6 +5658,18 @@ pre {
 
   .daily-recommendation-rank-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .daily-recommendation-detail[open],
+  .daily-recommendation-evidence {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-recommendation-detail[open] > summary,
+  .daily-recommendation-detail[open] .daily-recommendation-primary-reasons,
+  .daily-recommendation-detail[open] .daily-recommendation-signal-grid,
+  .daily-recommendation-detail[open] .daily-recommendation-evidence {
+    grid-column: 1;
   }
 
   .daily-recommendation-signal-grid.compact {
