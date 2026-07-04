@@ -8492,7 +8492,7 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         candidate = {
             "score": 31,
             "reasons": ["시장일지 연결"],
-            "evidence_sources": ["시장일지 연결", "최근 1주 핵심 리포트 2건"],
+            "evidence_sources": ["시장일지 연결", "최근 1주 핵심 리포트 2건", "텔레그램 인기글 심리 신호 3건"],
             "score_components": [
                 {"label": "시장일지 연결", "points": 10},
                 {"label": "최근 중요 공시 반영", "points": 5},
@@ -8520,7 +8520,9 @@ class DailyRecommendationCandidateModuleTests(unittest.TestCase):
         self.assertEqual(breakdown["policy"]["summary"], "테마 1건 · 참고만")
         self.assertFalse(breakdown["policy"]["score_applied"])
         self.assertTrue(breakdown["news"]["score_applied"])
+        self.assertGreaterEqual(breakdown["news"]["count"], 2)
         self.assertIn("AI 반도체", breakdown["sentiment"]["summary"])
+        self.assertIn("텔레그램 인기글", breakdown["sentiment"]["summary"])
 
     def test_daily_recommendation_candidate_preserves_scored_news_context(self):
         from research_os import daily_recommendation_candidates

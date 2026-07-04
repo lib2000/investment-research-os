@@ -139,7 +139,7 @@ def build_recommendation_signal_breakdown(candidate: dict[str, Any]) -> list[dic
     news_sources = [
         item
         for item in evidence_sources
-        if _contains_any(item, ("뉴스", "리포트", "자료 묶음", "공개 IR", "SEC", "RAG"))
+        if _contains_any(item, ("뉴스", "리포트", "자료 묶음", "공개 IR", "SEC", "RAG", "텔레그램", "인기글"))
     ]
     profile = candidate.get("investment_direction_profile") if isinstance(candidate.get("investment_direction_profile"), dict) else {}
     profile_labels: list[str] = []
@@ -150,8 +150,16 @@ def build_recommendation_signal_breakdown(candidate: dict[str, Any]) -> list[dic
             if label_text:
                 profile_labels.append(label_text)
     sentiment_sources = [
-        *[label for label in component_labels if _contains_any(label, ("투자 방향", "심리", "센티먼트", "추세"))],
-        *[item for item in evidence_sources if _contains_any(item, ("시장일지", "심리", "센티먼트", "투자 방향"))],
+        *[
+            label
+            for label in component_labels
+            if _contains_any(label, ("투자 방향", "심리", "센티먼트", "추세", "텔레그램", "인기글", "market_sentiment"))
+        ],
+        *[
+            item
+            for item in evidence_sources
+            if _contains_any(item, ("시장일지", "심리", "센티먼트", "투자 방향", "텔레그램", "인기글", "market_sentiment"))
+        ],
         *profile_labels,
     ]
     market_summary = (
