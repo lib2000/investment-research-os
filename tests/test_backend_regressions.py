@@ -17601,7 +17601,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
-                "- `bridge_status.json`: last copy status and source/target paths\n"
+                "- `bridge_status.json`: first-read runtime status, source git state, completion report paths, operational commands, and core file SHA256 hashes\n"
                 "- safe refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1`\n"
                 "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"

@@ -1276,6 +1276,7 @@ $contracts = @(
       'openclaw_bridge_manifest.json',
       'openclaw_bridge_completion_report.md',
       'bridge_status.json',
+      'core file SHA256 hashes',
       'final strict refresh',
       'completion audit',
       'source_git_commit',
