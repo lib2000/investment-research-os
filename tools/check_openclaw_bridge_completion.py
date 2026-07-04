@@ -150,7 +150,7 @@ def validate_bridge_status(
     return status, errors
 
 
-def validate_openclaw_workspace(workspace: Path) -> list[str]:
+def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = None) -> list[str]:
     errors: list[str] = []
     memory = workspace / "MEMORY.md"
     heartbeat = workspace / "HEARTBEAT.md"
@@ -159,9 +159,16 @@ def validate_openclaw_workspace(workspace: Path) -> list[str]:
         "bridge_status.json",
         "openclaw_bridge_manifest.json",
         "openclaw_bridge_completion_report.md",
+        "completion_report_sha256",
         "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "check_openclaw_bridge_completion.py --max-age-hours 24",
+        "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
     ]
+    source_git = ""
+    if bridge_status:
+        source_git = f"{bridge_status.get('source_git_branch')} {bridge_status.get('source_git_commit')}"
+        if "None" in source_git:
+            source_git = ""
     for path in (memory, heartbeat):
         if not path.exists():
             errors.append(f"OpenClaw startup note missing: {path}")
@@ -170,6 +177,8 @@ def validate_openclaw_workspace(workspace: Path) -> list[str]:
         for required in required_items:
             if required not in text:
                 errors.append(f"OpenClaw startup note missing {required}: {path}")
+        if source_git and source_git not in text:
+            errors.append(f"OpenClaw startup note missing source git {source_git}: {path}")
     return errors
 
 
@@ -228,7 +237,7 @@ def build_result(
         except AssertionError as exc:
             errors.append(str(exc))
 
-    errors.extend(validate_openclaw_workspace(openclaw_workspace))
+    errors.extend(validate_openclaw_workspace(openclaw_workspace, details.get("bridge_status")))
     details["completion_requirements"] = [
         "source and OpenClaw bundles validate",
         "source git branch is main",
@@ -236,7 +245,7 @@ def build_result(
         "OpenClaw bridge_status references current clean commit",
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw completion report hashes match completion report files",
-        "OpenClaw startup notes point to bridge files",
+        "OpenClaw startup notes point to bridge files, final audit command, and current source git",
     ]
     return {
         "status": "ok" if not errors else "failure",

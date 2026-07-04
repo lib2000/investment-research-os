@@ -17615,6 +17615,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
                 "- `bridge_status.json`: first-read runtime status, source git state, completion report paths, operational commands, core file SHA256 hashes, and `completion_report_sha256`\n"
+                "- source git: `main abc1234`\n"
                 "- safe refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1`\n"
                 "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
@@ -17739,12 +17740,15 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "read data/investment_research/bridge_status.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.md\n"
+                "read completion_report_sha256\n"
+                "source git main abc1234\n"
                 "run sync_openclaw_investment_context.ps1 -RequireCompletionAudit\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24\n"
+                "run check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes\n"
             )
             (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
             (root / "HEARTBEAT.md").write_text(startup_note, encoding="utf-8")
-            self.assertEqual([], tool.validate_openclaw_workspace(root))
+            self.assertEqual([], tool.validate_openclaw_workspace(root, status))
 
     def test_completion_audit_writes_json_and_markdown_reports(self):
         tool = load_openclaw_bridge_completion_tool()

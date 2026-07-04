@@ -1266,7 +1266,8 @@ $contracts = @(
       'openclaw_bridge_completion_report.md',
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',
       'check_openclaw_bridge_completion.py --max-age-hours 24',
-      'OpenClaw startup notes point to bridge files'
+      'check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes',
+      'OpenClaw startup notes point to bridge files, final audit command, and current source git'
     )
   },
   @{
