@@ -631,6 +631,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("[switch]$SkipOpenClawSync", script_source)
         self.assertIn("OpenClaw 투자리서치 브리지 동기화", script_source)
         self.assertIn("sync_openclaw_investment_context.ps1", script_source)
+        self.assertIn("-RequireCompletionAudit", script_source)
 
     def test_daily_research_operations_continues_after_saved_state_timeouts(self):
         script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(

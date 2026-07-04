@@ -383,6 +383,7 @@ $contracts = @(
       '리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다.',
       'sync_openclaw_investment_context.ps1',
       'OpenClaw 투자리서치 브리지 동기화',
+      '-RequireCompletionAudit',
       '포트폴리오 가격 갱신 응답은 실패했지만 저장 상태 검증을 시도합니다.',
       'check_all_portfolio_store.py',
       '오늘 추천 API 응답 실패/타임아웃',

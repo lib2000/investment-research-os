@@ -154,7 +154,7 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
 
 if (-not $SkipOpenClawSync.IsPresent) {
   Invoke-DailyResearchStep "OpenClaw 투자리서치 브리지 동기화" {
-    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1")
+    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1") -RequireCompletionAudit
   }
 }
 
