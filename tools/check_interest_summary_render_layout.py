@@ -131,6 +131,37 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                         .filter(Boolean),
                     };
                   };
+                  const clickHoldingAction = async (label, expected) => {
+                    document.querySelector('button.tab[data-tab="portfolio"]')?.click();
+                    await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio action tab active");
+                    const row = [...document.querySelectorAll("#holdingsEditor .holding-row")].find(visible);
+                    const details = row?.querySelector("details.holding-card-details");
+                    if (details) details.open = true;
+                    const button = [...(details?.querySelectorAll("[data-holding-action]") || [])]
+                      .find((item) => (item.textContent || "").trim() === label);
+                    button?.scrollIntoView({block: "center", inline: "nearest"});
+                    await sleep(100);
+                    button?.click();
+                    const matched = await waitFor(() => {
+                      const activeTab = document.querySelector(".tab.active")?.dataset?.tab || "";
+                      const outputText = document.querySelector("#output")?.innerText || "";
+                      const memoryActive = document.querySelector("#memory")?.classList.contains("active") || false;
+                      const chartActive = document.querySelector("#chart")?.classList.contains("active") || false;
+                      const dashboardActive = document.querySelector("#dashboard")?.classList.contains("active") || false;
+                      const portfolioActive = document.querySelector("#portfolio")?.classList.contains("active") || false;
+                      if (expected === "dashboard" && dashboardActive) return true;
+                      if (expected === "chart" && (chartActive || /차트 분석|국내 종목이 아닙니다/.test(outputText))) return true;
+                      if (expected === "memory" && (memoryActive || /저장 데이터 검색|RAG|저장 데이터/.test(outputText))) return true;
+                      if (expected === "risk" && (portfolioActive || /리스크/.test(outputText))) return true;
+                      return false;
+                    }, 20000, `${label} action`);
+                    return {
+                      label,
+                      ok: Boolean(button && matched),
+                      activeTab: document.querySelector(".tab.active")?.dataset?.tab || "",
+                      outputPreview: (document.querySelector("#output")?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 160),
+                    };
+                  };
 
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#statusButton") && document.querySelector("#interestsLoadButton"), 15000, "console controls");
@@ -151,6 +182,12 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const tickerOpen = await openFirst(".interest-ticker-summary-row");
                   const sectorOpen = await openFirst(".interest-sector-summary-row");
                   const holdingOpen = await openFirstHolding();
+                  const holdingActionFlows = [
+                    await clickHoldingAction("분석", "dashboard"),
+                    await clickHoldingAction("차트", "chart"),
+                    await clickHoldingAction("자료", "memory"),
+                    await clickHoldingAction("리스크", "risk"),
+                  ];
 
                   return {
                     status: "success",
@@ -158,6 +195,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     holdingSummaryText: holdingOpen.summaryText,
                     holdingDetailOpened: holdingOpen.opened && holdingOpen.hasDetailGrid,
                     holdingOpen,
+                    holdingActionFlows,
                     tickerSummaryCount: tickerBefore.length,
                     sectorSummaryCount: sectorBefore.length,
                     tickerSummarySamples: tickerBefore.slice(0, 5),
@@ -227,6 +265,11 @@ def strict_errors(result: dict) -> list[str]:
     for label in ["저장", "분석", "차트", "자료", "리스크"]:
         if label not in holding_actions:
             errors.append(f"보유 종목 상세 액션 누락: {label}")
+    holding_action_flows = result.get("holdingActionFlows") if isinstance(result.get("holdingActionFlows"), list) else []
+    for label in ["분석", "차트", "자료", "리스크"]:
+        flow = next((item for item in holding_action_flows if item.get("label") == label), None)
+        if not flow or not flow.get("ok"):
+            errors.append(f"보유 종목 상세 액션 흐름 실패: {label}")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("sectorDetailOpened"):

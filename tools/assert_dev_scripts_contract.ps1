@@ -608,6 +608,8 @@ $contracts = @(
       'holdingDetailOpened',
       'overviewChipCount',
       'actionLabels',
+      'holdingActionFlows',
+      '보유 종목 상세 액션 흐름 실패',
       'interest-ticker-summary-row',
       'interest-sector-summary-row',
       'tickerNameOnlyCount',

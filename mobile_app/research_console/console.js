@@ -12780,7 +12780,7 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
     const action = actionButton.dataset.holdingAction;
     try {
       if (action === "chart") {
-        await runChartAnalysisForTicker(ticker, { saveResult: true });
+        await runChartAnalysisForTicker(ticker, { saveResult: !isClickSmokeMode() });
       } else if (action === "memory") {
         await runInterestRagAction({
           query: buildInterestRagQuery(row, ticker, "ticker"),
@@ -12800,7 +12800,7 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
           portfolioValue: data.portfolioValue,
           maxSinglePositionWeight: data.maxSinglePositionWeight,
           maxSectorWeight: data.maxSectorWeight,
-          saveResult: true,
+          saveResult: !isClickSmokeMode(),
         });
         setOutput(result);
         await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
