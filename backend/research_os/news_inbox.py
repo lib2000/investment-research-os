@@ -114,6 +114,17 @@ POLICY_LAW_KEYWORDS = {
 }
 
 
+def remove_news_storage_policy_boilerplate(text: str) -> str:
+    cleaned_lines: list[str] = []
+    for line in str(text or "").splitlines():
+        line = sub(r"(저장 정책|본문 저장 정책|저작권 정책):.*", "", line)
+        normalized = line.strip()
+        if normalized.startswith(("저장 정책:", "본문 저장 정책:", "저작권 정책:")):
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
+
+
 def infer_news_policy_law_classification(item_or_text: object) -> dict:
     if isinstance(item_or_text, dict):
         text = " ".join(
@@ -128,9 +139,10 @@ def infer_news_policy_law_classification(item_or_text: object) -> dict:
                 "review_status",
             ]
         )
+        text = remove_news_storage_policy_boilerplate(text)
         text += " " + " ".join(str(tag) for tag in (item_or_text.get("tags") or []))
     else:
-        text = str(item_or_text or "")
+        text = remove_news_storage_policy_boilerplate(str(item_or_text or ""))
     normalized = sub(r"\s+", " ", text).strip().lower()
     matched: dict[str, list[str]] = {}
     for category, keywords in POLICY_LAW_KEYWORDS.items():
@@ -325,6 +337,8 @@ def is_actionable_unpromoted_news(item: dict) -> bool:
         relevance_score = 0.0
     if relevance_score >= 30:
         return True
+    if is_telegram_favorite_popular_news(item):
+        return True
     return bool(item.get("market_journal_candidate"))
 
 
@@ -335,10 +349,43 @@ def _news_relevance_score(item: dict) -> float:
         return 0.0
 
 
+def _telegram_popularity_score(item: dict) -> float:
+    telegram_popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+    for key in ["popularity_score", "view_count"]:
+        try:
+            value = float(telegram_popularity.get(key) or 0)
+        except (TypeError, ValueError):
+            value = 0.0
+        if value > 0:
+            return value
+    return 0.0
+
+
+def is_telegram_favorite_popular_news(item: dict) -> bool:
+    tags = {str(tag).lower() for tag in (item.get("tags") or [])}
+    if "telegram_favorite" not in tags and str(item.get("scope_reason") or "") != "telegram_favorite_popular_post":
+        return False
+    return _telegram_popularity_score(item) >= 1000
+
+
+def telegram_priority_bonus(item: dict) -> float:
+    if not is_telegram_favorite_popular_news(item):
+        return 0.0
+    popularity = _telegram_popularity_score(item)
+    if popularity >= 20000:
+        return 1.0
+    if popularity >= 10000:
+        return 0.8
+    if popularity >= 5000:
+        return 0.65
+    return 0.45
+
+
 def news_priority_sort_key(item: dict) -> tuple[float, float, str]:
     target_bonus = 1.0 if isinstance(item.get("target_matches"), list) and item.get("target_matches") else 0.0
     policy_bonus = 0.5 if item.get("is_policy_law") or item.get("scope") == "POLICY" else 0.0
-    return (target_bonus + policy_bonus, _news_relevance_score(item), str(item.get("created_at") or ""))
+    telegram_bonus = telegram_priority_bonus(item)
+    return (target_bonus + policy_bonus + telegram_bonus, _news_relevance_score(item), str(item.get("created_at") or ""))
 
 
 def canonical_news_url(value: object) -> str:

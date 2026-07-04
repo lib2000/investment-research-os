@@ -3334,6 +3334,31 @@ label {
   font-size: 16px;
 }
 
+.news-inbox-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 7px;
+}
+
+.news-inbox-meta-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid #d8e1ec;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #415166;
+  line-height: 1.2;
+}
+
+.news-inbox-meta-row .news-inbox-badge {
+  border-color: #99d5cb;
+  background: #e6fffb;
+  color: #0f766e;
+}
+
 .news-inbox-card p {
   margin: 0 0 6px;
   color: var(--text);

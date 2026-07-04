@@ -15237,11 +15237,24 @@ function renderNewsInboxCards(payload) {
       const sourceUrl = item.source_url
         ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">원문</a>`
         : "";
+      const telegramPopularity = item.telegram_popularity || {};
+      const isTelegramFavorite = Array.isArray(item.tags) && item.tags.includes("telegram_favorite");
+      const telegramMeta = isTelegramFavorite
+        ? `
+          <div class="news-inbox-meta-row">
+            <span class="news-inbox-badge">텔레그램 인기글</span>
+            <span>${escapeHtml(telegramPopularity.channel_label || telegramPopularity.channel_username || "채널 미확인")}</span>
+            <span>조회 ${escapeHtml(formatNumber(telegramPopularity.view_count || telegramPopularity.popularity_score || 0))}</span>
+            ${telegramPopularity.published_at ? `<span>${escapeHtml(formatDateTime(telegramPopularity.published_at))}</span>` : ""}
+          </div>
+        `
+        : "";
       return `
         <article class="news-inbox-card ${escapeHtml(tone)}" data-news-id="${escapeHtml(item.id || "")}">
           <div>
             <span>${escapeHtml(status)} · ${escapeHtml(item.scope_label || item.scope || "일반 뉴스")}</span>
             <strong>${escapeHtml(item.title || "제목 없음")}</strong>
+            ${telegramMeta}
             <p>${escapeHtml(compactOutputText(item.summary || item.input_preview || "", 240))}</p>
             <small>품질 ${escapeHtml(quality.status || "미확인")} · 저장 메모 ${escapeHtml(formatNumber(quality.text_length || 0))}자 · 신뢰도 ${escapeHtml(toPercent(item.confidence))} ${sourceUrl}</small>
             <em>${escapeHtml(policy)}</em>

@@ -6244,6 +6244,65 @@ class NewsInboxPolicyTests(unittest.TestCase):
         self.assertEqual(payload["filter_counts"]["url_only"], 1)
         self.assertEqual(payload["filter_counts"]["unpromoted"], 1)
 
+    def test_telegram_popular_posts_are_actionable_news_priority(self):
+        from types import SimpleNamespace
+
+        from research_os import news_inbox
+
+        settings = SimpleNamespace()
+        items = [
+            {
+                "id": "generic",
+                "title": "일반 산업 뉴스",
+                "scope": "MARKET",
+                "relevance_score": 20,
+                "created_at": "2026-07-05T21:00:00+09:00",
+                "promoted": False,
+                "tags": [],
+            },
+            {
+                "id": "telegram",
+                "title": "Telegram 인기글: AI 전력망",
+                "scope": "MARKET",
+                "scope_reason": "telegram_favorite_popular_post",
+                "relevance_score": 0,
+                "created_at": "2026-07-05T20:00:00+09:00",
+                "promoted": False,
+                "tags": ["telegram_favorite", "market_sentiment", "url_only"],
+                "telegram_popularity": {"view_count": 28800, "popularity_score": 28800},
+            },
+        ]
+        runtime = SimpleNamespace(
+            read_json_store=lambda _path, _default=None: {"items": items, "updated_at": "now"},
+            news_inbox_path=lambda _settings: "news_inbox",
+            storage_quality_entry_is_policy_url_only=lambda _item: False,
+        )
+
+        payload = news_inbox.build_news_inbox_payload(runtime, settings, limit=5)
+
+        self.assertEqual(payload["actionable_unpromoted_count"], 1)
+        self.assertEqual(payload["priority_news_preview"][0]["id"], "telegram")
+        self.assertEqual(payload["priority_news_preview"][0]["scope"], "MARKET")
+        self.assertNotIn("policy_law", payload["priority_news_preview"][0]["tags"])
+        self.assertIn("telegram_favorite", payload["priority_news_preview"][0]["tags"])
+
+    def test_news_policy_classification_ignores_storage_policy_boilerplate(self):
+        from research_os import news_inbox
+
+        classification = news_inbox.infer_news_policy_law_classification(
+            {
+                "title": "Telegram 인기글: AI 전력망",
+                "raw_content": (
+                    "텔레그램 즐겨찾기 채널: Sample\n"
+                    "짧은 메모: AI 인프라 수요 점검\n"
+                    "저장 정책: 텔레그램 원문 전체를 장기 보관하지 않습니다."
+                ),
+                "tags": ["telegram_favorite", "market_sentiment"],
+            }
+        )
+
+        self.assertFalse(classification["is_policy_law"])
+
 
 class NaverResearchIngestTests(unittest.TestCase):
     def test_naver_pdf_signal_extraction_keeps_full_text_out(self):
@@ -12173,6 +12232,44 @@ class NewsInboxPriorityQueueCheckToolTests(unittest.TestCase):
         self.assertIn('"display_count": len(queue)', tool_source)
         self.assertIn('"errors": errors', tool_source)
         self.assertIn("json.dumps(result", tool_source)
+
+    def test_news_inbox_priority_queue_counts_telegram_popular_posts(self):
+        tool = load_news_inbox_priority_queue_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "backend").mkdir()
+            (root / "backend" / "research_os_main.py").write_text("", encoding="utf-8")
+            store_dir = root / "research_vault" / "_system"
+            store_dir.mkdir(parents=True)
+            (store_dir / "news_inbox.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-05T22:00:00+09:00",
+                        "items": [
+                            {
+                                "id": "tg1",
+                                "title": "Telegram 인기글: AI 전력망",
+                                "source_url": "https://t.me/sample/1",
+                                "scope": "MARKET",
+                                "scope_reason": "telegram_favorite_popular_post",
+                                "tags": ["telegram_favorite", "market_sentiment"],
+                                "telegram_popularity": {"view_count": 28800, "popularity_score": 28800},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.build_priority_queue_status(root, limit=7)
+
+        self.assertEqual(status["telegram_total_count"], 1)
+        self.assertEqual(status["telegram_priority_count"], 1)
+        self.assertTrue(status["queue"][0]["is_telegram_favorite"])
+        self.assertIn("텔레그램 인기글 조회 28800", status["queue"][0]["reason"])
+        self.assertEqual(tool.strict_errors(status), [])
 
     def test_news_inbox_priority_queue_groups_duplicate_priority_urls(self):
         from research_os import news_inbox

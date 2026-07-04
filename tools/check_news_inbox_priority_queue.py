@@ -66,6 +66,14 @@ def _number(value: Any) -> float:
         return 0.0
 
 
+def console_print(value: str = "") -> None:
+    try:
+        print(value, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        print(value.encode(encoding, errors="replace").decode(encoding, errors="replace"), flush=True)
+
+
 def priority_reason(item: dict[str, Any]) -> str:
     reasons: list[str] = []
     target_matches = item.get("target_matches")
@@ -83,6 +91,11 @@ def priority_reason(item: dict[str, Any]) -> str:
         reasons.append("시장일지 후보")
     if item.get("is_policy_law") or item.get("scope") == "POLICY":
         reasons.append("정책/법령/규제")
+    tags = {str(tag).lower() for tag in (item.get("tags") or [])}
+    telegram_popularity = item.get("telegram_popularity") if isinstance(item.get("telegram_popularity"), dict) else {}
+    telegram_views = _number(telegram_popularity.get("view_count") or telegram_popularity.get("popularity_score"))
+    if "telegram_favorite" in tags or str(item.get("scope_reason") or "") == "telegram_favorite_popular_post":
+        reasons.append(f"텔레그램 인기글 조회 {telegram_views:g}")
     return ", ".join(reasons) or "우선 분류 기준 충족"
 
 
@@ -103,6 +116,18 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
     target_matched_count = sum(
         1 for item in priority_items if isinstance(item.get("target_matches"), list) and item.get("target_matches")
     )
+    telegram_total_count = sum(
+        1
+        for item in items
+        if "telegram_favorite" in {str(tag).lower() for tag in (item.get("tags") or [])}
+        or str(item.get("scope_reason") or "") == "telegram_favorite_popular_post"
+    )
+    telegram_priority_count = sum(
+        1
+        for item in priority_items
+        if "telegram_favorite" in {str(tag).lower() for tag in (item.get("tags") or [])}
+        or str(item.get("scope_reason") or "") == "telegram_favorite_popular_post"
+    )
     quality_issue_count = counts.get("quality_issue", 0)
     duplicate_groups = news_inbox.duplicate_priority_news_groups(priority_items)
     queue = [
@@ -117,6 +142,8 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
             "target_match_count": len(item.get("target_matches") or []) if isinstance(item.get("target_matches"), list) else 0,
             "is_policy_law": bool(item.get("is_policy_law") or item.get("scope") == "POLICY"),
             "market_journal_candidate": bool(item.get("market_journal_candidate")),
+            "is_telegram_favorite": "telegram_favorite" in {str(tag).lower() for tag in (item.get("tags") or [])}
+            or str(item.get("scope_reason") or "") == "telegram_favorite_popular_post",
             "reason": priority_reason(item),
         }
         for index, item in enumerate(priority_items[: max(1, min(int(limit or 7), 30))], start=1)
@@ -129,6 +156,8 @@ def build_priority_queue_status(root: Path, limit: int = 7) -> dict[str, Any]:
         "display_count": len(queue),
         "policy_priority_count": policy_priority_count,
         "target_matched_count": target_matched_count,
+        "telegram_total_count": telegram_total_count,
+        "telegram_priority_count": telegram_priority_count,
         "quality_issue_count": quality_issue_count,
         "duplicate_priority_group_count": len(duplicate_groups),
         "duplicate_priority_entry_count": sum(int(group["count"]) for group in duplicate_groups),
@@ -144,6 +173,8 @@ def strict_errors(status: dict[str, Any]) -> list[str]:
     counts = status.get("filter_counts") if isinstance(status.get("filter_counts"), dict) else {}
     if status.get("priority_count", 0) != counts.get("actionable", 0):
         errors.append("우선 분류 개수와 필터 카운트가 일치하지 않습니다.")
+    if status.get("telegram_total_count", 0) > 0 and status.get("telegram_priority_count", 0) <= 0:
+        errors.append("텔레그램 인기글이 뉴스 우선 분류에 반영되지 않았습니다.")
     for item in status.get("queue") or []:
         title = str(item.get("title") or "").strip()
         source_url = str(item.get("source_url") or "").strip()
@@ -170,37 +201,35 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
     else:
-        print(
+        console_print(
             "뉴스 인박스 우선 분류: "
             f"전체 {status['total_count']}개, "
             f"미승격 {status['filter_counts'].get('unpromoted', 0)}개, "
             f"우선 {status['priority_count']}개, "
             f"정책/법령 우선 {status['policy_priority_count']}개, "
             f"타깃 매칭 {status['target_matched_count']}개, "
+            f"텔레그램 우선 {status['telegram_priority_count']}/{status['telegram_total_count']}개, "
             f"품질 확인 {status['quality_issue_count']}개, "
             f"우선 중복 후보 {status['duplicate_priority_group_count']}묶음",
-            flush=True,
         )
         if status.get("updated_at"):
-            print(f"업데이트: {status['updated_at']}", flush=True)
+            console_print(f"업데이트: {status['updated_at']}")
         for item in status["queue"]:
-            print(
+            console_print(
                 f"- {item['rank']}위 [{item['scope_label']}] {item['title']} "
                 f"| 점수 {item['relevance_score']:g} | {item['reason']} | {item['source_url']}",
-                flush=True,
             )
         for group in status["duplicate_priority_groups"]:
             ids = ", ".join(str(item).strip() for item in group.get("ids", []) if str(item or "").strip())
             id_note = f" | ids {ids}" if ids else ""
-            print(
+            console_print(
                 f"중복 후보: {group['count']}개 | {group['canonical_url']} | "
                 f"{' / '.join(group['titles'])}{id_note}",
-                flush=True,
             )
     if errors and not args.json:
-        print("점검 오류:", flush=True)
+        console_print("점검 오류:")
         for error in errors:
-            print(f"- {error}", flush=True)
+            console_print(f"- {error}")
     if args.strict and errors:
         return 1
     return 0
