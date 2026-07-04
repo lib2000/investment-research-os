@@ -248,6 +248,15 @@ def render_markdown_report(result: dict) -> str:
         command = commands.get(label)
         if command:
             lines.append(f"- {label}: `{command}`")
+    lines.extend(["", "## File Hashes", ""])
+    file_hashes = bridge_status.get("file_sha256") or {}
+    if file_hashes:
+        for label in ("context_json", "context_markdown", "bridge_manifest"):
+            file_hash = file_hashes.get(label)
+            if file_hash:
+                lines.append(f"- {label}: `{file_hash}`")
+    else:
+        lines.append("- none")
     lines.extend(["", "## Bundle Checks", ""])
     bundle_checks = result.get("bundle_checks") or {}
     for label in ("source", "openclaw"):

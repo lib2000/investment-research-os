@@ -17721,6 +17721,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "latest_market_counts": {"KR": 3, "US": 3},
                 "telegram_saved_count": 10,
                 "secrets_excluded": True,
+                "file_sha256": {
+                    "context_json": "a" * 64,
+                    "context_markdown": "b" * 64,
+                    "bridge_manifest": "c" * 64,
+                },
             },
             "completion_requirements": ["source and OpenClaw bundles validate"],
             "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
@@ -17742,6 +17747,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
         self.assertIn("## Operational Commands", markdown)
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
+        self.assertIn("## File Hashes", markdown)
+        self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
         self.assertIn("abc1234", markdown)
 
 
