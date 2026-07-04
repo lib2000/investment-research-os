@@ -593,6 +593,7 @@ $contracts = @(
       'openclaw_completion_signal',
       'openclaw_completion_audit',
       'check_openclaw_bridge_completion.py',
+      '--require-report-hashes',
       'OpenClaw 투자리서치 브리지',
       'check_openclaw_investment_context.py',
       '운영 완성도 점검 정상'

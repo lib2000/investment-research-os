@@ -1161,13 +1161,19 @@ class OperationalReadinessToolTests(unittest.TestCase):
 
     def test_openclaw_completion_audit_is_part_of_operational_readiness(self):
         tool = load_operational_readiness_tool()
-        fake_module = SimpleNamespace(
-            build_result=lambda **_kwargs: {
+        observed_kwargs = {}
+
+        def fake_build_result(**kwargs):
+            observed_kwargs.update(kwargs)
+            return {
                 "status": "ok",
                 "errors": [],
                 "git": {"branch": "main", "commit": "abc1234"},
                 "bridge_status": {"context_generated_at": "2026-07-05T04:46:32+09:00"},
             }
+
+        fake_module = SimpleNamespace(
+            build_result=fake_build_result
         )
 
         with patch.dict(sys.modules, {"check_openclaw_bridge_completion": fake_module}):
@@ -1178,6 +1184,8 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(result["score"], 100.0)
         self.assertIn("OpenClaw 완료 감사", result["label"])
         self.assertIn("check_openclaw_bridge_completion.py", result["next_action"])
+        self.assertIn("--require-report-hashes", result["next_action"])
+        self.assertIs(observed_kwargs["require_report_hashes"], True)
 
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()

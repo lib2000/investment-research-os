@@ -459,7 +459,11 @@ def openclaw_completion_signal(root: Path) -> dict[str, Any]:
         sys.path.insert(0, str(tools_dir))
     from check_openclaw_bridge_completion import build_result as build_openclaw_completion_result
 
-    result = build_openclaw_completion_result(project_root=root, max_age_hours=24.0)
+    result = build_openclaw_completion_result(
+        project_root=root,
+        max_age_hours=24.0,
+        require_report_hashes=True,
+    )
     if result.get("status") != "ok":
         errors = result.get("errors") or []
         message = "; ".join(str(error) for error in errors[:3]) or "완료 감사 실패"
@@ -468,7 +472,7 @@ def openclaw_completion_signal(root: Path) -> dict[str, Any]:
             "OpenClaw 완료 감사",
             0.0,
             message,
-            "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+            "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
         )
     git_state = result.get("git") or {}
     bridge_status = result.get("bridge_status") or {}
@@ -477,7 +481,7 @@ def openclaw_completion_signal(root: Path) -> dict[str, Any]:
         "OpenClaw 완료 감사",
         100.0,
         f"{git_state.get('branch')} {git_state.get('commit')} synced / bridge {bridge_status.get('context_generated_at')}",
-        "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+        "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
     )
 
 
