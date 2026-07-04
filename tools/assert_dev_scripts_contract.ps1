@@ -1294,6 +1294,7 @@ $contracts = @(
       'Copy-Item -Force',
       '--write-report',
       'OpenClaw completion audit skipped because source git worktree is dirty.',
+      'OpenClaw final context validation failed',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',
       'account-auth material are excluded'
     )

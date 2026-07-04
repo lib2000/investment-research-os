@@ -188,6 +188,10 @@ if (-not $SkipValidation.IsPresent) {
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw completion audit failed: $LASTEXITCODE"
     }
+    python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw final context validation failed: $LASTEXITCODE"
+    }
   }
 }
 
