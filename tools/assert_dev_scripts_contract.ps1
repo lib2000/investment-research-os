@@ -1218,6 +1218,8 @@ $contracts = @(
       'openclaw_bridge_manifest.json',
       'OpenClaw bridge manifest schema mismatch',
       'bridge_status.json',
+      'source_git_commit',
+      'source_git_dirty',
       'secrets_excluded'
     )
   },
@@ -1233,6 +1235,8 @@ $contracts = @(
       'investment_research_context.md',
       'openclaw_bridge_manifest.json',
       'bridge_status.json',
+      'source_git_commit',
+      'source_git_dirty',
       'secrets_excluded',
       'Copy-Item -Force',
       '--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours',

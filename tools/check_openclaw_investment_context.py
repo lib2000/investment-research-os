@@ -132,6 +132,10 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError("bridge status generated_at does not match context")
         if status.get("secrets_excluded") is not True:
             raise AssertionError("bridge status must confirm secrets_excluded=true")
+        if not status.get("source_git_commit") or not status.get("source_git_branch"):
+            raise AssertionError("bridge status must include source git commit and branch")
+        if status.get("source_git_dirty") not in (True, False):
+            raise AssertionError("bridge status must include source_git_dirty boolean")
         readme_path = directory / "README.md"
         if not readme_path.exists():
             raise AssertionError(f"OpenClaw bridge README not found: {readme_path}")

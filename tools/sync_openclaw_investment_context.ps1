@@ -56,11 +56,26 @@ Copy-Item -Force -LiteralPath $markdownPath -Destination (Join-Path $targetDir "
 Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
 $context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$gitCommit = $null
+$gitBranch = $null
+$gitDirty = $null
+try {
+  $gitCommit = (git -C $projectRoot rev-parse --short HEAD 2>$null)
+  $gitBranch = (git -C $projectRoot rev-parse --abbrev-ref HEAD 2>$null)
+  $gitDirty = -not [string]::IsNullOrWhiteSpace((git -C $projectRoot status --short 2>$null))
+} catch {
+  $gitCommit = $null
+  $gitBranch = $null
+  $gitDirty = $null
+}
 $statusPath = Join-Path $targetDir "bridge_status.json"
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
   source_project = $projectRoot
+  source_git_commit = $gitCommit
+  source_git_branch = $gitBranch
+  source_git_dirty = $gitDirty
   source_context_json = $jsonPath
   source_context_markdown = $markdownPath
   source_bridge_manifest = $manifestPath

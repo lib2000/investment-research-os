@@ -17536,6 +17536,9 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                     {
                         "status": "ok",
                         "context_generated_at": context["generated_at"],
+                        "source_git_commit": "abc1234",
+                        "source_git_branch": "main",
+                        "source_git_dirty": False,
                         "secrets_excluded": True,
                     },
                     ensure_ascii=False,
