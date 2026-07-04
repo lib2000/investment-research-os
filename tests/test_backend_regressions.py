@@ -1124,6 +1124,23 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertIn("시장일지·심리 1", result["message"])
         self.assertIn("정책·법령 1", result["message"])
 
+    def test_openclaw_bridge_is_part_of_operational_readiness(self):
+        tool = load_operational_readiness_tool()
+        fake_module = SimpleNamespace(
+            DEFAULT_OPENCLAW_DIR=Path("C:/tmp/openclaw"),
+            DEFAULT_SOURCE_DIR=Path("C:/tmp/source"),
+            validate_bundle=lambda *args, **kwargs: ["generated_at=2026-07-05 latest=2026-07-04"],
+        )
+
+        with patch.dict(sys.modules, {"check_openclaw_investment_context": fake_module}):
+            result = tool.openclaw_bridge_signal(PROJECT_ROOT)
+
+        self.assertEqual(result["id"], "openclaw_investment_bridge")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["score"], 100.0)
+        self.assertIn("OpenClaw 투자리서치 브리지", result["label"])
+        self.assertIn("check_openclaw_investment_context.py", result["next_action"])
+
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
         with TemporaryDirectory() as tmp:

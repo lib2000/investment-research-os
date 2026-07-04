@@ -426,6 +426,33 @@ def investment_insight_hub_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def openclaw_bridge_signal(root: Path) -> dict[str, Any]:
+    tools_dir = root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from check_openclaw_investment_context import DEFAULT_OPENCLAW_DIR, DEFAULT_SOURCE_DIR, validate_bundle
+
+    try:
+        source_messages = validate_bundle(DEFAULT_SOURCE_DIR, max_age_hours=24.0)
+        openclaw_messages = validate_bundle(DEFAULT_OPENCLAW_DIR, max_age_hours=24.0)
+    except AssertionError as exc:
+        return signal(
+            "openclaw_investment_bridge",
+            "OpenClaw 투자리서치 브리지",
+            0.0,
+            f"검증 실패: {exc}",
+            "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+        )
+    message = " / ".join((source_messages + openclaw_messages)[:2])
+    return signal(
+        "openclaw_investment_bridge",
+        "OpenClaw 투자리서치 브리지",
+        100.0,
+        message or "source/openclaw 번들 검증 정상",
+        "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
+    )
+
+
 def build_result(
     root: Path,
     *,
@@ -447,6 +474,7 @@ def build_result(
         portfolio_signal(system_dir),
         nps_allocation_signal(root, system_dir, enforce=enforce_nps_allocation),
         investment_insight_hub_signal(root),
+        openclaw_bridge_signal(root),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]

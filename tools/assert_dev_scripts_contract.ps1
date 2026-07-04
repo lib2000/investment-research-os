@@ -587,6 +587,10 @@ $contracts = @(
       'recommendation_citations_signal',
       '저장/RAG 실패 진단',
       'rag_diagnostics_signal',
+      'openclaw_bridge_signal',
+      'openclaw_investment_bridge',
+      'OpenClaw 투자리서치 브리지',
+      'check_openclaw_investment_context.py',
       '운영 완성도 점검 정상'
     )
   },
