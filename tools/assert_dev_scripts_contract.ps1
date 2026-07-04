@@ -1079,6 +1079,16 @@ $contracts = @(
     )
   },
   @{
+    Path = "tools\refresh_portfolio_prices.ps1"
+    Snippets = @(
+      'Find-ReconciledRefresh',
+      'reconciled_after_error',
+      'refresh_warning',
+      '[datetimeoffset]::UtcNow',
+      'persist_refresh=true'
+    )
+  },
+  @{
     Path = "tools\check_research_source_store.py"
     Snippets = @(
       'SYSTEM_DIR',

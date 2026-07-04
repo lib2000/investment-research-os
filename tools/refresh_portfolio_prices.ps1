@@ -24,6 +24,37 @@ if (-not $PortfolioNames -or $PortfolioNames.Count -eq 0) {
   )
 }
 
+function Find-ReconciledRefresh {
+  param(
+    [string]$PortfolioName,
+    [datetimeoffset]$StartedAt,
+    [string]$ErrorMessage
+  )
+
+  try {
+    $store = Get-Content $storePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($property in $store.portfolios.PSObject.Properties) {
+      $item = $property.Value
+      $name = if ($item.portfolio_name) { [string]$item.portfolio_name } else { [string]$property.Name }
+      if ($name -ne $PortfolioName) { continue }
+      if (-not $item.updated_at) { return $null }
+      $updatedAt = [datetimeoffset]::Parse([string]$item.updated_at)
+      if ($updatedAt -lt $StartedAt) { return $null }
+      return [pscustomobject]@{
+        portfolio_name = $name
+        holding_count = if ($item.holding_count) { $item.holding_count } else { @($item.holdings).Count }
+        updated_at = $item.updated_at
+        storage_path = $storePath
+        reconciled_after_error = $true
+        refresh_warning = $ErrorMessage
+      }
+    }
+  } catch {
+    return $null
+  }
+  return $null
+}
+
 $headers = @{ Authorization = "Bearer $DevUserToken" }
 $refreshed = @()
 $failed = @()
@@ -31,6 +62,7 @@ $failed = @()
 foreach ($portfolioName in $PortfolioNames) {
   $encodedName = [uri]::EscapeDataString($portfolioName)
   $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/portfolios/${encodedName}?refresh_prices=true&persist_refresh=true"
+  $startedAt = [datetimeoffset]::UtcNow
   try {
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
     $active = $response.active_portfolio
@@ -41,9 +73,14 @@ foreach ($portfolioName in $PortfolioNames) {
       storage_path = $response.storage_path
     }
   } catch {
-    $failed += [pscustomobject]@{
-      portfolio_name = $portfolioName
-      error = $_.Exception.Message
+    $reconciled = Find-ReconciledRefresh -PortfolioName $portfolioName -StartedAt $startedAt -ErrorMessage $_.Exception.Message
+    if ($null -ne $reconciled) {
+      $refreshed += $reconciled
+    } else {
+      $failed += [pscustomobject]@{
+        portfolio_name = $portfolioName
+        error = $_.Exception.Message
+      }
     }
   }
 }
