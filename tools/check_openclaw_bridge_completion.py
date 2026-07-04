@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -44,6 +45,10 @@ def load_json(path: Path) -> dict:
     if not isinstance(payload, dict):
         raise AssertionError(f"JSON root must be object: {path}")
     return payload
+
+
+def sha256_hex(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def parse_datetime(value: object) -> datetime:
@@ -104,6 +109,22 @@ def validate_bridge_status(openclaw_dir: Path, git_state: dict, *, max_age_hours
         errors.append("bridge source_git_dirty must be false after final sync")
     if status.get("secrets_excluded") is not True:
         errors.append("bridge status must confirm secrets_excluded=true")
+    expected_hashes = {
+        "context_json": openclaw_dir / "investment_research_context.json",
+        "context_markdown": openclaw_dir / "investment_research_context.md",
+        "bridge_manifest": openclaw_dir / "openclaw_bridge_manifest.json",
+    }
+    file_hashes = status.get("file_sha256") or {}
+    for hash_key, hash_path in expected_hashes.items():
+        recorded_hash = file_hashes.get(hash_key)
+        if not recorded_hash:
+            errors.append(f"bridge status missing file_sha256: {hash_key}")
+            continue
+        if not hash_path.exists():
+            errors.append(f"OpenClaw bridge hash target missing: {hash_path}")
+            continue
+        if recorded_hash.lower() != sha256_hex(hash_path):
+            errors.append(f"bridge status file_sha256 mismatch: {hash_key}")
     return status, errors
 
 

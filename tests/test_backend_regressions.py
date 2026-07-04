@@ -17633,6 +17633,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             root = Path(tmp)
             openclaw_dir = root / "data" / "investment_research"
             openclaw_dir.mkdir(parents=True)
+            (openclaw_dir / "investment_research_context.json").write_text('{"ok": true}', encoding="utf-8")
+            (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_bridge_manifest.json").write_text('{"schema": "ok"}', encoding="utf-8")
             copied_at = tool.datetime.now(tool.timezone.utc).isoformat()
             (openclaw_dir / "bridge_status.json").write_text(
                 json.dumps(
@@ -17643,6 +17646,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_branch": "main",
                         "source_git_dirty": False,
                         "secrets_excluded": True,
+                        "file_sha256": {
+                            "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
+                            "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
+                        },
                     },
                     ensure_ascii=False,
                 ),
@@ -17671,6 +17679,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_branch": "main",
                         "source_git_dirty": True,
                         "secrets_excluded": True,
+                        "file_sha256": {
+                            "context_json": "bad",
+                            "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
+                        },
                     },
                     ensure_ascii=False,
                 ),
@@ -17679,6 +17692,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             _, errors = tool.validate_bridge_status(openclaw_dir, git_state, max_age_hours=1)
             self.assertTrue(any("commit mismatch" in error for error in errors))
             self.assertTrue(any("source_git_dirty" in error for error in errors))
+            self.assertTrue(any("file_sha256 mismatch" in error for error in errors))
 
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"

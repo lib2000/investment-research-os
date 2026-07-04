@@ -1250,6 +1250,8 @@ $contracts = @(
       'validate_openclaw_workspace',
       'operational_commands',
       'Operational Commands',
+      'file_sha256',
+      'bridge status file_sha256 mismatch',
       'source git must be synced with upstream',
       'openclaw_bridge_completion_report.md',
       'sync_openclaw_investment_context.ps1 -RequireCompletionAudit',
