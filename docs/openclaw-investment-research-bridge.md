@@ -14,12 +14,16 @@ Investment Research OS 내부 생성 위치:
 
 - `research_vault/_system/openclaw_integration/investment_research_context.json`
 - `research_vault/_system/openclaw_integration/investment_research_context.md`
+- `research_vault/_system/openclaw_integration/openclaw_first_read.json`
+- `research_vault/_system/openclaw_integration/openclaw_first_read.md`
 - `research_vault/_system/openclaw_integration/openclaw_bridge_manifest.json`
 
 OpenClaw 워크스페이스 동기화 위치:
 
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/investment_research_context.json`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/investment_research_context.md`
+- `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_first_read.json`
+- `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_first_read.md`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_manifest.json`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/bridge_status.json`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_completion_report.json`
@@ -30,6 +34,8 @@ OpenClaw 워크스페이스 동기화 위치:
 
 `bridge_status.json`은 OpenClaw가 가장 먼저 읽는 런타임 상태 파일이다. 첫 읽기 순서, 원본 커밋/브랜치/dirty 상태, 컨텍스트 생성 시각, 최신성 기준 시간, 최신 추천일, 한국/미국 추천 수, 최신 추천 1~3위 요약, 텔레그램 반영 수, 민감정보 제외 확인, 완료 리포트 경로, 시작 안내 갱신 여부, 운영 명령 묶음, 핵심 파일 SHA256, 완료 리포트 SHA256을 포함한다. `README.md`에도 컨텍스트 생성 시각, 최신 추천일, 시장별 추천 수, 텔레그램 반영 수를 요약해 둔다.
 
+`openclaw_first_read.md/json`은 큰 컨텍스트를 읽기 전에 OpenClaw가 먼저 확인하는 compact packet이다. 최신 추천일, KR/US 추천 수, 오늘 추천 6개, 텔레그램 반영 수, 안전 제한, 핵심 파일명, 운영 명령, 최적화 메모를 담는다. 상태 요약과 완료 감사 리포트는 first-read 스키마, 생성 시각, read_order, 추천 행 수가 큰 컨텍스트와 일치하는지 확인한다.
+
 OpenClaw 시작 노트(`MEMORY.md`, `HEARTBEAT.md`)에는 최신 source git 브랜치/커밋과 최종 완료 해시 감사 명령이 함께 기록된다. 완료 감사는 이 시작 노트가 현재 `bridge_status.json`의 source git과 같은 커밋을 가리키는지도 확인한다.
 
 ## 첫 읽기 순서
@@ -37,11 +43,20 @@ OpenClaw 시작 노트(`MEMORY.md`, `HEARTBEAT.md`)에는 최신 source git 브�
 OpenClaw는 다음 순서로 읽는다.
 
 1. `data/investment_research/bridge_status.json`
-2. `data/investment_research/openclaw_bridge_manifest.json`
-3. `data/investment_research/investment_research_context.md`
-4. `data/investment_research/investment_research_context.json`
-5. `data/investment_research/openclaw_bridge_completion_report.md`
-6. `data/investment_research/openclaw_bridge_completion_report.json`
+2. `data/investment_research/openclaw_first_read.md`
+3. `data/investment_research/openclaw_first_read.json`
+4. `data/investment_research/openclaw_bridge_manifest.json`
+5. `data/investment_research/investment_research_context.md`
+6. `data/investment_research/investment_research_context.json`
+7. `data/investment_research/openclaw_knowledge_graph_blueprint.md`
+8. `data/investment_research/openclaw_knowledge_graph_blueprint.json`
+9. `data/investment_research/openclaw_knowledge_graph_nodes.json`
+10. `data/investment_research/openclaw_knowledge_graph_edges.json`
+11. `data/investment_research/openclaw_knowledge_graph_master_index.md`
+12. `data/investment_research/openclaw_knowledge_graph_glossary.md`
+13. `data/investment_research/openclaw_knowledge_graph_marginalia_queue.md`
+14. `data/investment_research/openclaw_bridge_completion_report.md`
+15. `data/investment_research/openclaw_bridge_completion_report.json`
 
 시작 노트에는 같은 순서가 `Read order:` 한 줄로도 기록된다. 완료 감사는 이 문구와 각 파일명이 `MEMORY.md`, `HEARTBEAT.md`에 있는지 확인한다.
 
@@ -92,6 +107,7 @@ python tools\show_openclaw_bridge_status.py --json
 검증 항목:
 
 - JSON/Markdown 번들 존재 여부
+- `openclaw_first_read.md/json` 존재 여부, 스키마, 생성 시각, 추천 행 수, read_order 일치 여부
 - OpenClaw 브리지 매니페스트 존재 여부와 스키마/파일 지도 일치 여부
 - OpenClaw 브리지 매니페스트와 `bridge_status.json`의 `read_order` 일치 여부
 - `bridge_status.json`의 복사 상태, 생성 시각, 민감정보 제외 확인 여부
@@ -112,7 +128,8 @@ python tools\show_openclaw_bridge_status.py --json
 
 ## OpenClaw 사용 규칙
 
-- OpenClaw는 먼저 `data/investment_research/bridge_status.json`과 `data/investment_research/openclaw_bridge_manifest.json`을 읽어 최신성, 파일명, 갱신 명령, 완료 리포트 Markdown/JSON 위치를 확인한다.
+- OpenClaw는 먼저 `data/investment_research/bridge_status.json`으로 최신성/해시/source git을 확인하고, 이어 `data/investment_research/openclaw_first_read.md/json`으로 compact 상태를 읽은 뒤 큰 컨텍스트로 넘어간다.
+- 파일 지도와 갱신 명령은 `data/investment_research/openclaw_bridge_manifest.json`에서 확인한다.
 - 사람이 읽을 요약은 `data/investment_research/investment_research_context.md`를 사용한다.
 - 더 구조적인 처리가 필요하면 `data/investment_research/investment_research_context.json`을 읽는다.
 - 전체 운영 준비도는 원본 프로젝트에서 `python tools\check_offline_readiness.py --json`을 실행해 확인한다.

@@ -2588,6 +2588,8 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "리서치 중복/Dossier 상태를 갱신",
             "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "bridge_status.json",
+            "openclaw_first_read.md/json",
+            "first-read packet이 컨텍스트와 일치",
             "openclaw_bridge_completion_report.md/json",
             "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "-SkipResearchAutomationRefresh",
