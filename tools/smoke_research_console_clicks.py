@@ -1720,7 +1720,7 @@ def run_click_smoke(
                           ? text
                           : "";
                       }},
-                      90000,
+                      30000,
                       "code knowledge graph button"
                     );
                   }} catch (error) {{
@@ -1741,7 +1741,7 @@ def run_click_smoke(
                           ? text
                           : "";
                       }},
-                      60000,
+                      15000,
                       "naver research status"
                     );
                   }} catch (error) {{
@@ -1769,7 +1769,7 @@ def run_click_smoke(
                           ? combined
                           : "";
                       }},
-                      180000,
+                      20000,
                       "naver research repair"
                     );
                   }} catch (error) {{
@@ -1968,7 +1968,7 @@ def run_click_smoke(
                         const stillLoading = combined.includes("dry-run 실행 중");
                         return hasDryRun && hasModule && hasTasks && !stillLoading ? combined : "";
                       }},
-                      90000,
+                      20000,
                       "daily recommendation repair queue button"
                     );
                   }} catch (error) {{
