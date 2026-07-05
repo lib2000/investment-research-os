@@ -271,6 +271,9 @@ $operationalCommands = [ordered]@{
   wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
   wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
   wsl_fresh_bootstrap = "python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"
+  backend_watchdog_status = "python tools\check_research_backend_watchdog_task_status.py --json"
+  backend_watchdog_ensure = "powershell.exe -ExecutionPolicy Bypass -File .\scripts\ensure-research-backend.ps1"
+  backend_watchdog_register = "powershell.exe -ExecutionPolicy Bypass -File .\tools\register_research_backend_watchdog_task.ps1"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
@@ -409,6 +412,9 @@ $readme = @(
   "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
   "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
   "- WSL PA fresh bootstrap: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``",
+  "- backend watchdog status: ``python tools\check_research_backend_watchdog_task_status.py --json``",
+  "- backend watchdog ensure: ``powershell.exe -ExecutionPolicy Bypass -File .\scripts\ensure-research-backend.ps1``",
+  "- backend watchdog register: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_research_backend_watchdog_task.ps1``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
