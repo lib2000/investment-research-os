@@ -3823,6 +3823,21 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertEqual(plan["status"], "failure")
         self.assertIn("TELEGRAM_BOT_TOKEN", plan["errors"][0])
 
+    def test_telegram_brief_delivery_classifies_portfolio_report_postrun_separately(self):
+        from research_os.telegram_brief_delivery import classify_telegram_message
+
+        postrun = classify_telegram_message(
+            {"text": "보유 종목 리포트 알림 사후점검 (Portfolio Report Alert Post-run Check)\n상태: error"}
+        )
+        alert = classify_telegram_message(
+            {"text": "보유 종목 리포트 알림 (Portfolio Report Alert)\n1. ABSI"}
+        )
+
+        self.assertEqual(postrun["priority"], "must_keep")
+        self.assertEqual(postrun["category"], "portfolio_report_alert_postrun")
+        self.assertEqual(alert["priority"], "must_keep")
+        self.assertEqual(alert["category"], "portfolio_report_alert")
+
     def test_telegram_brief_delivery_check_tool_is_safe_by_default(self):
         tool = load_telegram_brief_delivery_check_tool()
 

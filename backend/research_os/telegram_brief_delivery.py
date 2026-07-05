@@ -40,6 +40,8 @@ def classify_telegram_message(message: dict[str, Any]) -> dict[str, Any]:
     explicit_category = _safe_text(message.get("category"))
     if explicit_priority == "must_keep":
         return {"priority": "must_keep", "category": explicit_category or "explicit_keep"}
+    if "Portfolio Report Alert Post-run Check" in text:
+        return {"priority": "must_keep", "category": "portfolio_report_alert_postrun"}
     if "Portfolio Report Alert" in text:
         return {"priority": "must_keep", "category": "portfolio_report_alert"}
     if any(marker in text for marker in KEEP_MARKERS):
