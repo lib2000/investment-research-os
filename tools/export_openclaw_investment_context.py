@@ -494,12 +494,48 @@ def build_today_work_report(project_root: Path) -> dict:
 
 def build_next_schedule() -> list[dict]:
     return [
-        {"time": "07:00", "task": "OpenClaw 보유 종목 신규 리포트 알림", "status": "scheduled/live submit, first run pending", "command": "tools\\check_portfolio_report_alert_task_status.py --json"},
-        {"time": "07:10", "task": "보유 종목 리포트 알림 사후점검", "status": "scheduled", "command": "tools\\check_portfolio_report_alert_task_status.py --task-name 'InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun' --json"},
-        {"time": "07:20", "task": "미국 시장 일지 자동 반영", "status": "enabled", "command": "tools\\run_telegram_us_market_close_journal.ps1"},
-        {"time": "08:00", "task": "한국/미국 오늘 추천 1~3위 생성/저장", "status": "enabled", "command": "tools\\check_daily_recommendations_store.py --require-milestones --require-quality"},
-        {"time": "22:00", "task": "텔레그램 즐겨찾기 채널 인기글 수집 및 뉴스/심리 반영", "status": "enabled", "command": "tools\\check_telegram_favorite_posts.py --sample --enabled"},
-        {"time": "on demand", "task": "OpenClaw 최신 컨텍스트 동기화 및 완료 감사", "status": "manual/safe", "command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"},
+        {
+            "time": "07:00",
+            "task": "OpenClaw 보유 종목 신규 리포트 알림",
+            "status": "scheduled/live submit, first run pending",
+            "scheduler": "windows_task",
+            "command": "tools\\check_portfolio_report_alert_task_status.py --json",
+        },
+        {
+            "time": "07:10",
+            "task": "보유 종목 리포트 알림 사후점검",
+            "status": "scheduled",
+            "scheduler": "windows_task",
+            "command": "tools\\check_portfolio_report_alert_task_status.py --task-name 'InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun' --json",
+        },
+        {
+            "time": "07:20",
+            "task": "미국 시장 일지 자동 반영",
+            "status": "enabled; verify runtime status with operational_schedule_status",
+            "scheduler": "backend_daily_gate",
+            "command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
+        },
+        {
+            "time": "08:00",
+            "task": "한국/미국 오늘 추천 1~3위 생성/저장",
+            "status": "enabled; verify runtime status with operational_schedule_status",
+            "scheduler": "backend_daily_gate",
+            "command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
+        },
+        {
+            "time": "22:00",
+            "task": "텔레그램 즐겨찾기 채널 인기글 수집 및 뉴스/심리 반영",
+            "status": "enabled; verify runtime status with operational_schedule_status",
+            "scheduler": "backend_daily_gate",
+            "command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
+        },
+        {
+            "time": "on demand",
+            "task": "OpenClaw 최신 컨텍스트 동기화 및 완료 감사",
+            "status": "manual/safe",
+            "scheduler": "manual",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
+        },
     ]
 
 def build_context(project_root: Path) -> dict:
