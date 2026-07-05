@@ -20773,6 +20773,10 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
                     "source_git_dirty": False,
                     "completion_report_markdown": str(openclaw_dir / "openclaw_bridge_completion_report.md"),
                     "file_sha256": {"context_json": "a" * 64},
+                    "completion_report_sha256": {
+                        "completion_report_json": "b" * 64,
+                        "completion_report_markdown": "c" * 64,
+                    },
                 }
             )
             (openclaw_dir / "bridge_status.json").write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
@@ -20801,6 +20805,7 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
         self.assertIn("recommendations_priority: ok", rendered)
         self.assertTrue(any("오늘 구현 작업 보고" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("오늘 추천 종목" in sample["answer_preview"] for sample in result["samples"]))
+        self.assertTrue(any("hash status: checked 3 files" in sample["answer_preview"] for sample in result["samples"]))
 
     def test_answer_samples_rejects_stale_sample_claims(self):
         tool = load_openclaw_answer_samples_tool()

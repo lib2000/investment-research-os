@@ -90,12 +90,15 @@ def build_priority_answer(first_read: dict[str, Any]) -> str:
 
 def build_completion_answer(bridge_status: dict[str, Any], manifest: dict[str, Any]) -> str:
     commands = bridge_status.get("operational_commands") or {}
+    file_hash_count = len(bridge_status.get("file_sha256") or {})
+    completion_hash_count = len(bridge_status.get("completion_report_sha256") or {})
+    hash_checked_count = bridge_status.get("hash_checked_count") or file_hash_count + completion_hash_count
     return "\n".join(
         [
             "OpenClaw 연동 상태",
             "- 기준: bridge_status.json, openclaw_bridge_completion_report.json, openclaw_bridge_manifest.json",
             f"- source git: {bridge_status.get('source_git_branch')} {bridge_status.get('source_git_commit')}",
-            f"- hash status: checked {len(bridge_status.get('file_sha256') or {})} files",
+            f"- hash status: checked {hash_checked_count} files",
             f"- completion report: {bridge_status.get('completion_report_markdown')}",
             f"- final audit: {commands.get('final_completion_audit') or manifest.get('final_completion_audit_command')}",
         ]
