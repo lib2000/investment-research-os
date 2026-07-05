@@ -73,6 +73,8 @@ function Set-OpenClawDailyInvestmentMemory {
     "- openclaw_first_read.json today_work_report.has_implementation_today=true이면 '오늘 구현 작업 없음' 또는 '특별히 새로 구현된 작업 기록 없음'이라고 답하면 안 된다.",
     "- 현재 source git: $GitBranch $GitCommit.",
     "- 검증 명령: python tools\check_openclaw_today_answer_readiness.py --json",
+    "- 질문별 read-order 검증: python tools\check_openclaw_question_read_order.py --json",
+    "- 질문별 답변 샘플 검증: python tools\check_openclaw_answer_samples.py --json",
     "",
     "## Required Read Order",
     "1. data/investment_research/bridge_status.json",

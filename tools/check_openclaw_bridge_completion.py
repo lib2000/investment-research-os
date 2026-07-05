@@ -247,6 +247,8 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "오늘 구현 작업 없음",
         "특별히 새로 구현된 작업 기록 없음",
         "check_openclaw_today_answer_readiness.py --json",
+        "check_openclaw_question_read_order.py --json",
+        "check_openclaw_answer_samples.py --json",
         "data/investment_research/bridge_status.json",
         "data/investment_research/openclaw_first_read.json",
     ]

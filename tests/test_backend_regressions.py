@@ -19486,6 +19486,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "today_work_report answer_correction next_schedule\\n"
                 "오늘 시스템에서 구현한 작업 / 오늘 구현 작업 없음 / 특별히 새로 구현된 작업 기록 없음\\n"
                 "check_openclaw_today_answer_readiness.py --json\\n"
+                "check_openclaw_question_read_order.py --json\\n"
+                "check_openclaw_answer_samples.py --json\\n"
                 "data/investment_research/bridge_status.json\\n"
                 "data/investment_research/openclaw_first_read.json\\n"
                 "source git main abc1234\\n",
@@ -20553,6 +20555,8 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
             "workspace": "/home/lib2000/.openclaw/workspace",
             "errors": [],
             "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
+            "question_read_order": {"status": "ok", "route_count": 4},
+            "answer_samples": {"status": "ok", "sample_count": 4},
             "sessions": {
                 "items": {
                     "agent:pa:main": {"systemSent": False, "hasSystemPromptReport": False},
@@ -20567,6 +20571,8 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
 
         self.assertEqual("ok", result["status"])
         self.assertIn("today commits: 120", rendered)
+        self.assertIn("question read-order: ok", rendered)
+        self.assertIn("answer samples: ok", rendered)
         self.assertIn("agent:pa:main2: systemSent=False hasSystemPromptReport=False", rendered)
 
     def test_wsl_answer_context_fails_when_pa_session_keeps_system_prompt(self):
@@ -20576,6 +20582,8 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
             "workspace": "/home/lib2000/.openclaw/workspace",
             "errors": ["session agent:pa:main2 systemPromptReport must be absent"],
             "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
+            "question_read_order": {"status": "ok", "route_count": 4},
+            "answer_samples": {"status": "ok", "sample_count": 4},
             "sessions": {
                 "items": {
                     "agent:pa:main2": {"systemSent": True, "hasSystemPromptReport": True},

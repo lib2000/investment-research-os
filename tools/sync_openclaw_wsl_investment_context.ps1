@@ -49,13 +49,20 @@ if [ -f "$wslStartupRoot/memory/$(Get-Date -Format 'yyyy-MM-dd').md" ]; then
   cp -f "$wslStartupRoot/memory/$(Get-Date -Format 'yyyy-MM-dd').md" "`$workspace/memory/$(Get-Date -Format 'yyyy-MM-dd').md"
 fi
 python3 "$wslProjectRoot/tools/check_openclaw_today_answer_readiness.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_today_answer_readiness.json
+python3 "$wslProjectRoot/tools/check_openclaw_question_read_order.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_question_read_order.json
+python3 "$wslProjectRoot/tools/check_openclaw_answer_samples.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_answer_samples.json
 python3 - <<'PY'
 import json, pathlib
-p = pathlib.Path('/tmp/openclaw_wsl_today_answer_readiness.json')
-print(p.read_text())
-data = json.loads(p.read_text())
-if data.get('status') != 'ok':
-    raise SystemExit(1)
+for path in [
+    '/tmp/openclaw_wsl_today_answer_readiness.json',
+    '/tmp/openclaw_wsl_question_read_order.json',
+    '/tmp/openclaw_wsl_answer_samples.json',
+]:
+    p = pathlib.Path(path)
+    print(p.read_text())
+    data = json.loads(p.read_text())
+    if data.get('status') != 'ok':
+        raise SystemExit(1)
 PY
 "@
 
