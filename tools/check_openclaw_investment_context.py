@@ -247,6 +247,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "context generated at",
             "latest recommendation date",
             "latest market counts",
+            "latest recommendations",
             "telegram favorite saved",
             "openclaw_bridge_completion_report.json",
             "openclaw_bridge_completion_report.md",
@@ -273,6 +274,10 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             expected = f"{label}: `{value}`"
             if expected not in readme:
                 raise AssertionError(f"OpenClaw bridge README status summary mismatch: {label}")
+        for row in rec_state.get("latest_rows") or []:
+            expected = f"{row.get('market')}#{row.get('rank')} `{row.get('ticker')}` {row.get('company_name')}"
+            if expected not in readme:
+                raise AssertionError(f"OpenClaw bridge README is missing latest recommendation: {expected}")
         for manifest_key in command_manifest_map.values():
             command = str(manifest.get(manifest_key) or "")
             if command and command not in readme:

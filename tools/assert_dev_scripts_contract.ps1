@@ -1307,6 +1307,7 @@ $contracts = @(
       'OpenClaw completion report hash target missing',
       'OpenClaw bridge README is missing source git',
       'OpenClaw bridge README status summary mismatch',
+      'OpenClaw bridge README is missing latest recommendation',
       'OpenClaw bridge README is missing manifest command',
       'secrets_excluded'
     )
