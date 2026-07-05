@@ -15,6 +15,7 @@ CHECK_MODULES = {
     "context_bundle": PROJECT_ROOT / "tools" / "check_openclaw_investment_context.py",
     "completion_audit": PROJECT_ROOT / "tools" / "check_openclaw_bridge_completion.py",
     "consumer_smoke": PROJECT_ROOT / "tools" / "check_openclaw_consumer_smoke.py",
+    "today_answer": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py",
 }
 
 
@@ -112,6 +113,23 @@ def check_consumer_smoke(
     }
 
 
+def check_today_answer(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_today_answer_readiness", CHECK_MODULES["today_answer"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "today_answer", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "today_answer",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "today_commit_count": result.get("today_commit_count"),
+            "next_schedule_count": result.get("next_schedule_count"),
+            "today_categories": result.get("today_categories"),
+        },
+    }
+
 def build_result(
     *,
     project_root: Path = PROJECT_ROOT,
@@ -130,6 +148,7 @@ def build_result(
             max_age_hours=max_age_hours,
             expected_latest_count=expected_latest_count,
         ),
+        lambda: check_today_answer(openclaw_dir),
     ):
         try:
             result = check()

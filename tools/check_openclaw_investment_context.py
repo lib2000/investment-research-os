@@ -106,6 +106,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include status summary command")
     if usage.get("quick_health_command") != "python tools\\check_openclaw_quick_health.py --json":
         raise AssertionError("OpenClaw usage must include quick health command")
+    if usage.get("today_answer_readiness_command") != "python tools\\check_openclaw_today_answer_readiness.py --json":
+        raise AssertionError("OpenClaw usage must include today answer readiness command")
     if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":
         raise AssertionError("OpenClaw usage must include safe refresh command")
     if usage.get("strict_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit":

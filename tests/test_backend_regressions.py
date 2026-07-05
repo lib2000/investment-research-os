@@ -252,6 +252,14 @@ def load_openclaw_quick_health_tool():
     return module
 
 
+
+def load_openclaw_today_answer_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py"
+    spec = spec_from_file_location("check_openclaw_today_answer_readiness", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
 def load_openclaw_knowledge_graph_check_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
     spec = spec_from_file_location("check_openclaw_knowledge_graph", tool_path)
@@ -1032,6 +1040,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 소비자 smoke"],
             ["tools/check_openclaw_consumer_smoke.py", "--max-age-hours", "24", "--json"],
+        )
+        self.assertIn("OpenClaw 오늘 작업 답변 준비", checks)
+        self.assertEqual(
+            checks["OpenClaw 오늘 작업 답변 준비"],
+            ["tools/check_openclaw_today_answer_readiness.py", "--json"],
         )
 
     def test_offline_readiness_prints_nps_rebalance_plan(self):
@@ -19986,6 +19999,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("status_summary", json_payload["operational_commands"])
         self.assertIn("quick_health", json_payload["operational_commands"])
+        self.assertIn("today_answer_readiness", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20020,6 +20034,79 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("abc1234", markdown)
 
 
+
+class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
+    def test_today_answer_readiness_requires_today_report_and_schedule(self):
+        tool = load_openclaw_today_answer_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-05T18:00:00+09:00",
+                "today_work_report": {
+                    "has_implementation_today": True,
+                    "commit_count": 12,
+                    "implemented_categories": [
+                        {"id": "openclaw_bridge", "title": "OpenClaw bridge"},
+                        {"id": "telegram_pipeline", "title": "Telegram pipeline"},
+                        {"id": "local_ai_agent_foundation", "title": "Local AI foundation"},
+                    ],
+                    "latest_commits": [{"hash": "abc1234", "subject": "Add OpenClaw daily context"}],
+                },
+                "next_schedule": [
+                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:20", "title": "US market journal"},
+                    {"time": "08:00", "title": "daily recommendations"},
+                    {"time": "22:00", "title": "Telegram favorite posts"},
+                ],
+                "answer_correction": {
+                    "wrong_claim": "오늘 구현 작업 없음",
+                    "required_reply": "오늘 구현 작업 없음이라고 답하면 안 됩니다",
+                    "correct_basis": "openclaw_first_read.json today_work_report를 우선 확인해야 합니다.",
+                },
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# First Read\n\n## Answer Correction\n"
+                "- wrong claim to avoid: 오늘 구현 작업 없음\n"
+                "- correct basis: openclaw_first_read.json today_work_report\n\n"
+                "## Today Implementation Report\n"
+                "오늘 구현 작업 없음이라고 답하면 안 됩니다\n"
+                "## Latest Today Commits\n- abc1234\n"
+                "## Next Schedule\n- 07:00\n",
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(12, result["today_commit_count"])
+        self.assertEqual(4, result["next_schedule_count"])
+        self.assertIn("openclaw_bridge", result["today_categories"])
+
+    def test_today_answer_readiness_rejects_no_work_claim_context(self):
+        tool = load_openclaw_today_answer_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "today_work_report": {"has_implementation_today": False, "commit_count": 0},
+                "next_schedule": [],
+                "answer_correction": {"wrong_claim": "오늘 구현 작업 없음", "required_reply": ""},
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text("# First Read\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(AssertionError, "has_implementation_today=true"):
+                tool.build_result(openclaw_dir)
 class OpenClawQuickHealthTests(unittest.TestCase):
     def test_quick_health_combines_openclaw_specific_checks(self):
         tool = load_openclaw_quick_health_tool()
@@ -20072,11 +20159,20 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             }
 
         fake_consumer = SimpleNamespace(build_result=fake_consumer_build_result)
+        fake_today_answer = SimpleNamespace(
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "today_commit_count": 12,
+                "next_schedule_count": 6,
+                "today_categories": ["openclaw_bridge", "telegram_pipeline", "local_ai_agent_foundation"],
+            }
+        )
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
             "check_openclaw_bridge_completion": fake_completion,
             "check_openclaw_consumer_smoke": fake_consumer,
+            "check_openclaw_today_answer_readiness": fake_today_answer,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
@@ -20089,7 +20185,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(4, len(result["checks"]))
+        self.assertEqual(5, len(result["checks"]))
         self.assertEqual("ok", result["hash_status"])
         self.assertEqual(14, result["hash_checked_count"])
         self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
@@ -20100,6 +20196,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("OpenClaw quick health: ok", rendered)
         self.assertIn("status_summary: ok", rendered)
         self.assertIn("consumer_smoke: ok", rendered)
+        self.assertIn("today_answer: ok", rendered)
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
         tool = load_openclaw_quick_health_tool()
@@ -20115,11 +20212,13 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         fake_context = SimpleNamespace(validate_bundle=lambda *args, **kwargs: ["ok"])
         fake_completion = SimpleNamespace(build_result=lambda **kwargs: {"status": "ok", "errors": []})
         fake_consumer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
+        fake_today_answer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
             "check_openclaw_bridge_completion": fake_completion,
             "check_openclaw_consumer_smoke": fake_consumer,
+            "check_openclaw_today_answer_readiness": fake_today_answer,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):

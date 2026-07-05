@@ -568,6 +568,7 @@ def build_context(project_root: Path) -> dict:
             "completion_report_json": "openclaw_bridge_completion_report.json",
             "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
             "quick_health_command": "python tools\\check_openclaw_quick_health.py --json",
+            "today_answer_readiness_command": "python tools\\check_openclaw_today_answer_readiness.py --json",
             "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
             "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
@@ -674,6 +675,7 @@ def render_markdown(context: dict) -> str:
             "- 완료 상태는 `openclaw_bridge_completion_report.md`, `openclaw_bridge_completion_report.json`, `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`로 확인합니다.",
             "- 빠른 상태 요약은 `python tools\\show_openclaw_bridge_status.py --json`으로 확인합니다.",
             "- OpenClaw 전용 빠른 헬스체크는 `python tools\\check_openclaw_quick_health.py --json`으로 확인합니다.",
+            "- 오늘 작업/다음 스케줄 답변 준비도는 `python tools\\check_openclaw_today_answer_readiness.py --json`으로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",
@@ -1105,6 +1107,7 @@ def build_first_read_packet(context: dict) -> dict:
         "operational_commands": {
             "status_summary": openclaw_usage.get("status_summary_command"),
             "quick_health": openclaw_usage.get("quick_health_command"),
+            "today_answer_readiness": openclaw_usage.get("today_answer_readiness_command"),
             "safe_refresh": openclaw_usage.get("safe_refresh_command"),
             "strict_refresh": openclaw_usage.get("strict_refresh_command"),
             "final_completion_audit": openclaw_usage.get("final_completion_audit_command"),
