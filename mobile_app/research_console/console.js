@@ -2,6 +2,7 @@
   setApiBaseUrl,
   fetchDataProviderStatus,
   fetchCodeKnowledgeGraph,
+  fetchOpenClawStatus,
   fetchOcrStatus,
   fetchDartFilingWatchStatus,
   refreshDartFilingWatch,
@@ -103,7 +104,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1da8f1a9e22a";
+} from "./api.js?v=94c699dbc4a9";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -111,6 +112,7 @@ const elements = {
   backendStatus: document.querySelector("#backendStatus"),
   providerStatus: document.querySelector("#providerStatus"),
   manifestStatus: document.querySelector("#manifestStatus"),
+  openClawStatus: document.querySelector("#openClawStatus"),
   output: document.querySelector("#output"),
   outputPanel: document.querySelector(".output-panel"),
   outputStatus: document.querySelector("#outputStatus"),
@@ -302,6 +304,7 @@ const KOREAN_TICKER_DISPLAY_NAMES = {
 };
 let activeTicker = DEFAULT_TICKER;
 let lastDashboard = null;
+let lastOpenClawStatus = null;
 let lastConfirmedTicker = DEFAULT_TICKER;
 let lastTickerVerification = null;
 let lastTickerProfile = null;
@@ -931,9 +934,66 @@ function setDashboardCards(html) {
   elements.dashboardCards.innerHTML = html;
 }
 
+function openClawStatusTone(status) {
+  if (!status) {
+    return "warning";
+  }
+  return status.status === "ok" && status.consumer_smoke_status === "ok" ? "ok" : "warning";
+}
+
+function openClawStatusLabel(status) {
+  if (!status) {
+    return "확인 실패";
+  }
+  if (status.status === "ok" && status.consumer_smoke_status === "ok") {
+    return "정상";
+  }
+  if (status.status === "warning") {
+    return "확인 필요";
+  }
+  return "오류";
+}
+
+function renderOpenClawStatusCard(status = lastOpenClawStatus) {
+  const tone = openClawStatusTone(status);
+  if (!status) {
+    return `
+      <article class="dashboard-card warning openclaw-status-card">
+        <span>OpenClaw 연동</span>
+        <strong>상태 미확인</strong>
+        <p>상태 확인을 누르면 최신 번들, 완료 감사, 소비자 smoke 결과를 불러옵니다.</p>
+      </article>
+    `;
+  }
+  const git = status.source_git || {};
+  const counts = status.latest_market_counts || {};
+  const errors = Array.isArray(status.consumer_smoke_errors) ? status.consumer_smoke_errors : [];
+  const hashCount = Object.keys(status.completion_report_sha256 || {}).length;
+  const warningText = errors.length
+    ? errors.slice(0, 3).join(" · ")
+    : "read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
+  return `
+    <article class="dashboard-card ${escapeHtml(tone)} openclaw-status-card">
+      <span>OpenClaw 연동</span>
+      <strong>${escapeHtml(openClawStatusLabel(status))}</strong>
+      <p>동기화 ${escapeHtml(status.context_generated_at || status.copied_at || "미확인")} · ${escapeHtml(git.branch || "branch?")} ${escapeHtml(git.commit || "commit?")}</p>
+      <div class="openclaw-status-metrics" aria-label="OpenClaw 연동 세부 상태">
+        <b>추천 ${escapeHtml(formatNumber(status.latest_recommendation_count || 0))}개</b>
+        <b>KR ${escapeHtml(formatNumber(counts.KR || 0))} / US ${escapeHtml(formatNumber(counts.US || 0))}</b>
+        <b>Smoke ${escapeHtml(status.consumer_smoke_status || "미확인")}</b>
+        <b>감사 ${escapeHtml(status.completion_status || "미확인")}</b>
+        <b>해시 ${escapeHtml(formatNumber(hashCount))}개</b>
+        <b>민감정보 ${status.secrets_excluded ? "제외" : "확인 필요"}</b>
+      </div>
+      <p>${escapeHtml(warningText)}</p>
+    </article>
+  `;
+}
+
 function renderDashboardEmptyState() {
   setDashboardCards(`
     ${renderDailyRecommendationHomeTopPanel()}
+    ${renderOpenClawStatusCard()}
     <div class="dashboard-actions">
       <button data-workflow-action="portfolio" type="button">포트폴리오</button>
       <button data-workflow-action="capture" type="button">정보 입력</button>
@@ -950,6 +1010,7 @@ function activePanelId() {
 function renderDashboardTickerPending(ticker) {
   const safeTicker = escapeHtml(ticker || "새 티커");
   setDashboardCards(`
+    ${renderOpenClawStatusCard()}
     <div class="dashboard-empty-note">
       <strong>${safeTicker}</strong>
       <p>대시보드 조회, 최신 데이터 조회, 리포트 실행 중 필요한 작업을 선택하세요.</p>
@@ -5744,6 +5805,7 @@ async function refreshStatus(updateOutput = true) {
   elements.backendStatus.textContent = "확인 중";
   elements.providerStatus.textContent = "확인 중";
   elements.manifestStatus.textContent = "확인 중";
+  elements.openClawStatus.textContent = "확인 중";
 
   try {
     const root = await rawRequest("/");
@@ -5753,6 +5815,7 @@ async function refreshStatus(updateOutput = true) {
     elements.backendStatus.textContent = "오류";
     elements.providerStatus.textContent = "연결 끊김";
     elements.manifestStatus.textContent = "확인 실패";
+    elements.openClawStatus.textContent = "확인 실패";
     lastBackendHealthState = "down";
     setError(error);
     await notifyBackendHealthWarning(error, { source: "root_health_check" });
@@ -5769,6 +5832,10 @@ async function refreshStatus(updateOutput = true) {
     });
   }
 
+  const openclaw = await fetchOpenClawStatus(token());
+  lastOpenClawStatus = openclaw;
+  elements.openClawStatus.textContent = openclaw ? openClawStatusLabel(openclaw) : "오류";
+
   const manifest = await fetchResearchManifest(token());
   if (!manifest) {
     elements.manifestStatus.textContent = "오류";
@@ -5780,7 +5847,14 @@ async function refreshStatus(updateOutput = true) {
   }
 
   if (updateOutput) {
-    setOutput({ provider, manifest_count: manifest?.length || 0 });
+    setOutput({ provider, manifest_count: manifest?.length || 0, openclaw });
+  }
+  if (activePanelId() === "dashboard") {
+    if (lastDashboard) {
+      renderDashboardCards(lastDashboard);
+    } else {
+      renderDashboardEmptyState();
+    }
   }
 }
 async function loadTickerDashboard(ticker = activeTicker, options = {}) {
@@ -7896,6 +7970,7 @@ function renderDashboardCards(dashboard) {
   setDashboardCards(`
     <section class="dashboard-clean-layout" aria-label="대시보드 요약">
       ${renderDailyRecommendationHomeTopPanel()}
+      ${renderOpenClawStatusCard()}
       <section class="dashboard-clean-hero ${escapeHtml(decisionTone)}">
         <div class="dashboard-clean-title">
           <span>현재 조회</span>

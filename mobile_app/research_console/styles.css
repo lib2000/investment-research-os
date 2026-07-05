@@ -260,7 +260,7 @@ label {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -1393,6 +1393,28 @@ label {
   color: #0f172a;
   font-size: 13px;
   font-weight: 750;
+}
+
+.openclaw-status-card {
+  grid-column: 1 / -1;
+}
+
+.openclaw-status-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.openclaw-status-metrics b {
+  min-height: 34px;
+  padding: 7px 9px;
+  color: #0f3f3a;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .dashboard-operations {

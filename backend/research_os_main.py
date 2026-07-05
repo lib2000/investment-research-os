@@ -11458,6 +11458,134 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
 
 
+def _read_openclaw_json(path: Path) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON root must be object: {path}")
+    return payload
+
+
+def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
+    bridge_dir = openclaw_dir or (Path.home() / ".openclaw" / "workspace" / "data" / "investment_research")
+    result: dict[str, Any] = {
+        "status": "error",
+        "module": "openclaw_console_status",
+        "openclaw_dir": str(bridge_dir),
+        "errors": [],
+        "warnings": [],
+    }
+    expected_read_order = [
+        "bridge_status.json",
+        "openclaw_bridge_manifest.json",
+        "investment_research_context.md",
+        "investment_research_context.json",
+        "openclaw_bridge_completion_report.md",
+        "openclaw_bridge_completion_report.json",
+    ]
+    try:
+        bridge_status = _read_openclaw_json(bridge_dir / "bridge_status.json")
+        manifest = _read_openclaw_json(bridge_dir / "openclaw_bridge_manifest.json")
+        context = _read_openclaw_json(bridge_dir / "investment_research_context.json")
+        completion = _read_openclaw_json(bridge_dir / "openclaw_bridge_completion_report.json")
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        result["errors"].append(str(exc))
+        return result
+
+    read_order = bridge_status.get("read_order") if isinstance(bridge_status.get("read_order"), list) else []
+    files_present = {name: (bridge_dir / name).exists() for name in (read_order or expected_read_order)}
+    current_state = context.get("current_state") if isinstance(context.get("current_state"), dict) else {}
+    recommendations = current_state.get("daily_recommendations") if isinstance(current_state.get("daily_recommendations"), dict) else {}
+    telegram = current_state.get("news_and_telegram") if isinstance(current_state.get("news_and_telegram"), dict) else {}
+    telegram_posts = (
+        telegram.get("telegram_favorite_posts")
+        if isinstance(telegram.get("telegram_favorite_posts"), dict)
+        else {}
+    )
+    latest_rows = recommendations.get("latest_rows") if isinstance(recommendations.get("latest_rows"), list) else []
+    latest_market_counts = (
+        recommendations.get("latest_market_counts")
+        if isinstance(recommendations.get("latest_market_counts"), dict)
+        else {}
+    )
+    latest_recommendations = [
+        {
+            "market": row.get("market"),
+            "rank": row.get("rank"),
+            "ticker": row.get("ticker"),
+            "company_name": row.get("company_name"),
+            "score": row.get("score"),
+            "baseline_price": row.get("baseline_price"),
+            "currency": row.get("currency"),
+        }
+        for row in latest_rows
+        if isinstance(row, dict)
+    ]
+    expected_count = sum(int(value or 0) for value in latest_market_counts.values()) if latest_market_counts else 6
+    consumer_smoke_errors: list[str] = []
+    if bridge_status.get("status") != "ok":
+        consumer_smoke_errors.append(f"bridge_status={bridge_status.get('status')}")
+    if completion.get("status") != "ok":
+        consumer_smoke_errors.append(f"completion={completion.get('status')}")
+    if bridge_status.get("source_git_dirty") is not False:
+        consumer_smoke_errors.append("source_git_dirty")
+    if bridge_status.get("secrets_excluded") is not True:
+        consumer_smoke_errors.append("secrets_excluded=false")
+    if read_order != expected_read_order or manifest.get("read_order") != expected_read_order:
+        consumer_smoke_errors.append("read_order mismatch")
+    if any(not present for present in files_present.values()):
+        consumer_smoke_errors.append("read_order file missing")
+    if len(latest_recommendations) != expected_count:
+        consumer_smoke_errors.append(f"latest rows {len(latest_recommendations)} != {expected_count}")
+    if bridge_status.get("context_generated_at") != context.get("generated_at"):
+        consumer_smoke_errors.append("context_generated_at mismatch")
+
+    copied_at = bridge_status.get("copied_at")
+    age_hours = None
+    if copied_at:
+        try:
+            copied_dt = datetime.fromisoformat(str(copied_at))
+            if copied_dt.tzinfo is not None:
+                age_hours = round((datetime.now(timezone.utc) - copied_dt.astimezone(timezone.utc)).total_seconds() / 3600, 3)
+        except ValueError:
+            consumer_smoke_errors.append("copied_at invalid")
+
+    result.update(
+        {
+            "status": "ok" if not consumer_smoke_errors else "warning",
+            "bridge_status": bridge_status.get("status"),
+            "completion_status": completion.get("status"),
+            "consumer_smoke_status": "ok" if not consumer_smoke_errors else "warning",
+            "consumer_smoke_errors": consumer_smoke_errors,
+            "source_git": {
+                "branch": bridge_status.get("source_git_branch"),
+                "commit": bridge_status.get("source_git_commit"),
+                "dirty": bridge_status.get("source_git_dirty"),
+            },
+            "copied_at": copied_at,
+            "bridge_age_hours": age_hours,
+            "context_generated_at": context.get("generated_at"),
+            "latest_recommendation_date": recommendations.get("latest_recommendation_date"),
+            "latest_market_counts": latest_market_counts,
+            "latest_recommendation_count": len(latest_recommendations),
+            "latest_recommendations": latest_recommendations,
+            "telegram_saved_count": telegram_posts.get("saved_count"),
+            "read_order": read_order,
+            "read_order_files_present": files_present,
+            "completion_report_sha256": bridge_status.get("completion_report_sha256") or {},
+            "secrets_excluded": bridge_status.get("secrets_excluded") is True,
+            "operational_commands": bridge_status.get("operational_commands") or {},
+        }
+    )
+    return result
+
+
+@app.get("/api/v1/openclaw/status")
+def read_openclaw_status(settings: Settings = Depends(get_settings)) -> dict:
+    return build_openclaw_console_status()
+
+
 @app.get("/health")
 @app.get("/api/v1/health")
 def read_system_health_alias(settings: Settings = Depends(get_settings)) -> dict:

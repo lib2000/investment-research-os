@@ -188,6 +188,18 @@ export async function fetchCodeKnowledgeGraph(accessToken) {
   });
 }
 
+export async function fetchOpenClawStatus(accessToken) {
+  try {
+    return request("/api/v1/openclaw/status", {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("OpenClaw 연동 상태를 불러오는 중 오류 발생:", error);
+    return null;
+  }
+}
+
 /**
  * 이미지/PDF OCR 런타임 연결 상태를 확인합니다.
  *
