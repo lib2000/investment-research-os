@@ -1,6 +1,6 @@
 # 투자 리서치 OS 운영 점검 노트
 
-최종 갱신: 2026-07-02
+최종 갱신: 2026-07-05
 
 ## 매일 한국/미국 추천 1~3위
 
@@ -24,6 +24,7 @@
 - 저장/RAG 실패 진단: `python tools\check_rag_failure_diagnostics.py --strict`로 활성 리서치 문서의 저장 파일, RAG 색인, 검색 가능 본문 길이, 자동 분류 근거를 한 번에 확인한다.
 - 국민연금 국내주식 14%: 기본 운영 점검과 전체 오프라인 readiness는 현재 비중과 리밸런싱 후보를 출력한다. 초과/미달을 운영 게이트 실패로 막아야 할 때는 `python tools\check_operational_readiness_score.py --strict --min-score 95 --enforce-nps-allocation` 또는 `python tools\check_nps_domestic_equity_allocation.py --fail-on-breach`를 사용한다.
 - 통합 투자 인사이트 허브: `python tools\check_investment_insight_hub.py --strict`는 저장된 포트폴리오, 시장일지/투자심리, DART 공시, 뉴스 인박스, 정책·법령·규제 자료를 합성해 투자 판단용 인사이트가 실제로 생성되는지 확인한다. 운영 완성도 점수와 전체 오프라인 readiness에 포함되어, 어느 한 소스 패밀리가 비면 실패로 처리한다.
+- OpenClaw 브리지: `.\tools\run_daily_research_operations.ps1`의 기본 흐름은 리서치 중복/Dossier 상태를 갱신한 뒤 `.\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`까지 실행한다. 이 단계는 `bridge_status.json`, `openclaw_bridge_manifest.json`, `investment_research_context.md/json`, `openclaw_bridge_completion_report.md/json`을 `%USERPROFILE%\.openclaw\workspace\data\investment_research`에 동기화하고, source git이 `main`에서 원격과 동기화되어 있으며 작업트리가 clean인지, 완료 리포트 SHA256이 실제 파일과 맞는지 확인한다.
 
 - UI 회귀 가드: `python tools\check_console_static_contract.py --strict`는 추천 결과 화면의 `오늘의 추천 결과`, `일자별 추천 목록`, `경과 그래프` 렌더링 계약과 관련 CSS 클래스를 확인한다.
 
@@ -121,6 +122,10 @@ python tools\check_news_inbox_priority_queue.py --strict
 python tools\build_code_knowledge_graph.py --print-summary
 python tools\check_code_knowledge_graph.py --strict
 python tools\check_operational_readiness_score.py --strict --min-score 95
+python tools\show_openclaw_bridge_status.py --json
+python tools\check_openclaw_investment_context.py --max-age-hours 24
+python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes
+powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit
 python tools\check_portfolio_analysis_coverage.py --all-portfolios --min-average-completion 0.95 --write-backlog --strict
 python tools\analyze_code_diff_impact.py --refresh --strict
 ```
@@ -146,7 +151,7 @@ python tools\check_daily_recommendation_render_layout.py --strict --output-scree
 python tools\check_nps_domestic_equity_allocation.py --rebalance-plan
 ```
 
-`run_daily_research_operations.ps1`는 포트폴리오 가격을 갱신하고, 오늘 추천을 `force=true`로 재분석한 뒤, 포트폴리오 저장/NPS 14%/일일 추천 저장/통합 투자 인사이트 허브 검증을 이어서 실행한다. 백엔드가 이미 `127.0.0.1:8001`에서 실행 중일 때 쓰는 일일 운영 래퍼이며, 필요하면 `-SkipPortfolioRefresh`, `-SkipRecommendationRun`, `-SkipVerification`로 일부 단계를 건너뛴다.
+`run_daily_research_operations.ps1`는 포트폴리오 가격을 갱신하고, 오늘 추천을 `force=true`로 재분석하고, 리서치 중복/Dossier 상태를 갱신한 뒤, OpenClaw 투자리서치 브리지를 `-RequireCompletionAudit`로 엄격 동기화한다. 마지막으로 포트폴리오 저장/NPS 14%/일일 추천 저장/통합 투자 인사이트 허브/오프라인 readiness 검증을 이어서 실행한다. 백엔드가 이미 `127.0.0.1:8001`에서 실행 중일 때 쓰는 일일 운영 래퍼이며, 필요하면 `-SkipPortfolioRefresh`, `-SkipRecommendationRun`, `-SkipResearchAutomationRefresh`, `-SkipOpenClawSync`, `-SkipVerification`로 일부 단계를 건너뛴다. 포트폴리오 갱신이나 추천 API가 시간 초과되더라도 저장 원본 검증이 통과하면 운영 흐름은 복구 경로로 계속 진행한다.
 
 Firecrawl IR RPC 실전 전환은 `docs\examples\firecrawl_ir_rpc.env.example`을 ignored secret env 파일로 복사해 값을 채운 뒤 `.\tools\run_firecrawl_ir_rpc_preflight.ps1 -EnvFile path\to\firecrawl-rpc.env`로 먼저 `--require-env-registry --require-rpc-ready`를 통과해야 한다. 이 단계는 secret 원문을 출력하지 않고 output JSON에는 configured 여부와 readiness error만 남긴다. 실제 적재는 같은 파일로 `-Mode Submit`을 붙였을 때만 실행하며, 전부 `skipped`/`failed`인 batch는 성공으로 보지 않는다.
 

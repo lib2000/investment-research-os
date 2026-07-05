@@ -2513,6 +2513,22 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         ]:
             self.assertIn(expected, operations_doc)
 
+    def test_operations_docs_describe_daily_openclaw_completion_flow(self):
+        operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
+
+        for expected in [
+            "최종 갱신: 2026-07-05",
+            "리서치 중복/Dossier 상태를 갱신",
+            "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
+            "bridge_status.json",
+            "openclaw_bridge_completion_report.md/json",
+            "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "-SkipResearchAutomationRefresh",
+            "-SkipOpenClawSync",
+            "저장 원본 검증이 통과하면 운영 흐름은 복구 경로로 계속 진행",
+        ]:
+            self.assertIn(expected, operations_doc)
+
     def test_firecrawl_ir_registry_inputs_support_items_wrappers(self):
         from research_os.firecrawl_ir_collector import normalize_firecrawl_ir_inputs
 
