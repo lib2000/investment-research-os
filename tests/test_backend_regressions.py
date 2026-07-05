@@ -2004,8 +2004,10 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         self.assertEqual(status["operational_preflight"]["monitor_webhook_count"], 0)
         self.assertIn("FIRECRAWL_MONITOR_SOURCES_JSON", json.dumps(status["operational_preflight"]))
         self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET", json.dumps(status["operational_preflight"]))
+        self.assertIn("webhook URL", json.dumps(status["operational_preflight"]))
         self.assertFalse(status["create_ready"])
         self.assertIn("--require-create-ready", status["operations"]["preflight_commands"]["create_ready_required"])
+        self.assertIn("--require-monitor-webhook", status["operations"]["preflight_commands"]["create_ready_required"])
         self.assertIn("create_firecrawl_monitor_env_template.py", status["operations"]["env_template_command"])
         self.assertNotIn("fc-secret", json.dumps(status))
 
@@ -5535,6 +5537,42 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertIn("monitor_webhook_configured: False (0)", result.stdout)
         self.assertIn("reject=401 accept=200 saved=1", result.stdout)
 
+    def test_firecrawl_monitor_operational_preflight_requires_monitor_webhook(self):
+        import subprocess
+
+        with TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / "firecrawl-monitor.env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "FIRECRAWL_MONITOR_ENABLED=false",
+                        "FIRECRAWL_MONITOR_DRY_RUN=true",
+                        "FIRECRAWL_MONITOR_WEBHOOK_SECRET=expected-preflight-secret",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\"}]}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "tools" / "check_firecrawl_monitor_operational_preflight.py"),
+                    "--env-file",
+                    str(env_file),
+                    "--env-override",
+                    "--require-env-registry",
+                    "--require-webhook-secret",
+                    "--require-monitor-webhook",
+                ],
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("At least one Firecrawl monitor webhook URL", result.stdout)
+
     def test_firecrawl_monitor_operational_preflight_rejects_placeholder_secret(self):
         import subprocess
 
@@ -5583,7 +5621,7 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                         "FIRECRAWL_MONITOR_DRY_RUN=false",
                         "FIRECRAWL_API_KEY=fc-test-create-ready-key",
                         "FIRECRAWL_MONITOR_WEBHOOK_SECRET=expected-preflight-secret",
-                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\",\"schedule\":\"daily at 8am\"}]}",
+                        "FIRECRAWL_MONITOR_SOURCES_JSON={\"monitors\":[{\"name\":\"SEC monitor\",\"url\":\"https://www.sec.gov/newsroom/press-releases\",\"schedule\":\"daily at 8am\",\"webhook\":{\"url\":\"https://example.com/firecrawl/webhook\"}}]}",
                     ]
                 ),
                 encoding="utf-8",
@@ -5597,6 +5635,7 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
                     "--env-override",
                     "--require-env-registry",
                     "--require-webhook-secret",
+                    "--require-monitor-webhook",
                     "--require-create-ready",
                     "--readiness-report",
                     str(report_file),
@@ -5615,8 +5654,8 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertTrue(report["conditions"]["monitor_dry_run_false"])
         self.assertEqual(report["monitor_plan"][0]["name"], "SEC monitor")
         self.assertEqual(report["monitor_plan"][0]["target_count"], 1)
-        self.assertFalse(report["monitor_webhook_configured"])
-        self.assertEqual(report["monitor_webhook_count"], 0)
+        self.assertTrue(report["monitor_webhook_configured"])
+        self.assertEqual(report["monitor_webhook_count"], 1)
         self.assertIn("payload_hash_prefix", report["monitor_plan"][0])
         self.assertNotIn("fc-test-create-ready-key", json.dumps(report))
         self.assertNotIn("expected-preflight-secret", json.dumps(report))

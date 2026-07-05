@@ -212,7 +212,11 @@ def _firecrawl_monitor_sources(settings: Any) -> tuple[list[dict[str, Any]], str
         return [], f"FIRECRAWL_MONITOR_SOURCES_JSON parse failed: {exc}"
 
 
-def _monitor_create_readiness_errors(settings: Any) -> list[str]:
+def _monitor_create_readiness_errors(
+    settings: Any,
+    sources: list[dict[str, Any]] | None = None,
+    parse_error: str | None = None,
+) -> list[str]:
     errors: list[str] = []
     if not _settings_bool(settings, "firecrawl_monitor_enabled"):
         errors.append("FIRECRAWL_MONITOR_ENABLED must be true for monitor create")
@@ -221,6 +225,16 @@ def _monitor_create_readiness_errors(settings: Any) -> list[str]:
     api_key = _settings_str(settings, "firecrawl_api_key")
     if not api_key or _looks_like_placeholder(api_key):
         errors.append("FIRECRAWL_API_KEY must be configured with a non-placeholder value for monitor create")
+    if parse_error:
+        errors.append(parse_error)
+    if sources is None:
+        sources, parse_error = _firecrawl_monitor_sources(settings)
+        if parse_error:
+            errors.append(parse_error)
+    if not sources:
+        errors.append("FIRECRAWL_MONITOR_SOURCES_JSON did not produce monitor sources")
+    elif not any(isinstance(item, dict) and item.get("webhook") for item in sources):
+        errors.append("At least one Firecrawl monitor webhook URL must be configured before monitor create")
     return errors
 
 
@@ -233,7 +247,7 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
     webhook_secret = _settings_str(settings, "firecrawl_monitor_webhook_secret")
     webhook_secret_configured = bool(webhook_secret) and not _looks_like_placeholder(webhook_secret)
     sources, parse_error = _firecrawl_monitor_sources(settings)
-    create_errors = _monitor_create_readiness_errors(settings)
+    create_errors = _monitor_create_readiness_errors(settings, sources, parse_error)
     sample = sources[0] if sources else None
     monitor_webhook_count = sum(1 for item in sources if isinstance(item, dict) and item.get("webhook"))
     warnings = [parse_error] if parse_error else []
@@ -244,6 +258,8 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
         operational_errors.append("FIRECRAWL_MONITOR_SOURCES_JSON must be configured for operational preflight")
     if not webhook_secret_configured:
         operational_errors.append("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured for webhook preflight")
+    if sources and monitor_webhook_count == 0:
+        operational_errors.append("At least one Firecrawl monitor webhook URL must be configured in FIRECRAWL_MONITOR_SOURCES_JSON")
     if parse_error:
         operational_errors.append(parse_error)
     if not enabled:
@@ -268,12 +284,13 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
         ),
         "operational_preflight": (
             "python tools\\check_firecrawl_monitor_operational_preflight.py "
-            "--env-file backend\\.env.firecrawl-monitor --require-env-registry --require-webhook-secret --json"
+            "--env-file backend\\.env.firecrawl-monitor --require-env-registry --require-webhook-secret "
+            "--require-monitor-webhook --json"
         ),
         "create_ready_required": (
             "python tools\\check_firecrawl_monitor_operational_preflight.py "
             "--env-file backend\\.env.firecrawl-monitor --require-env-registry --require-webhook-secret "
-            "--require-create-ready --json"
+            "--require-monitor-webhook --require-create-ready --json"
         ),
     }
     return {
@@ -314,7 +331,7 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
             "command": preflight_commands["operational_preflight"],
             "create_ready_command": preflight_commands["create_ready_required"],
         },
-        "create_ready": not create_errors and not parse_error,
+        "create_ready": not create_errors,
         "create_readiness_errors": create_errors,
         "operations": {
             "local_secret_env": "backend\\.env.firecrawl-monitor",
@@ -326,6 +343,7 @@ def build_firecrawl_monitor_readiness_status(settings: Any) -> dict[str, Any]:
                 "FIRECRAWL_MONITOR_DRY_RUN=false",
                 "FIRECRAWL_MONITOR_SOURCES_JSON configured",
                 "FIRECRAWL_MONITOR_WEBHOOK_SECRET configured",
+                "at least one monitor webhook.url configured",
                 "final preflight: --require-create-ready before creating monitors",
             ],
         },
@@ -345,6 +363,7 @@ def build_firecrawl_monitor_dry_run_result(settings: Any) -> dict[str, Any]:
             "message": parse_error,
             "source_registry": {"item_count": 0, "input_source": "env_registry", "parse_error": parse_error},
         }
+    readiness = build_firecrawl_monitor_readiness_status(settings)
     return {
         "status": "dry_run",
         "module": "firecrawl_monitor_dry_run",
@@ -354,8 +373,11 @@ def build_firecrawl_monitor_dry_run_result(settings: Any) -> dict[str, Any]:
             "input_source": "env_registry" if _settings_str(settings, "firecrawl_monitor_sources_json") else "sample",
             "parse_error": None,
         },
-        "create_ready": not _monitor_create_readiness_errors(settings),
-        "create_readiness_errors": _monitor_create_readiness_errors(settings),
+        "readiness_status": readiness.get("status"),
+        "operational_preflight": readiness.get("operational_preflight") or {},
+        "create_ready": bool(readiness.get("create_ready")),
+        "create_readiness_errors": readiness.get("create_readiness_errors") or [],
+        "production_checklist": ((readiness.get("operations") or {}).get("production_checklist") or []),
         "monitors": [
             {
                 "name": item.get("name"),

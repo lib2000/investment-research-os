@@ -27,6 +27,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-json", type=Path, help="Optional Firecrawl monitor source JSON.")
     parser.add_argument("--use-env-registry", action="store_true", help="Read FIRECRAWL_MONITOR_SOURCES_JSON.")
     parser.add_argument("--require-env-registry", action="store_true", help="Require FIRECRAWL_MONITOR_SOURCES_JSON.")
+    parser.add_argument("--require-webhook-secret", action="store_true", help="Require FIRECRAWL_MONITOR_WEBHOOK_SECRET.")
+    parser.add_argument("--require-monitor-webhook", action="store_true", help="Require at least one monitor webhook URL.")
     parser.add_argument("--require-create-ready", action="store_true", help="Require settings that permit real monitor creation.")
     parser.add_argument("--env-file", type=Path, help="Load a local secret env file before checks. Values are not printed.")
     parser.add_argument("--env-override", action="store_true", help="Allow --env-file values to replace current env values.")
@@ -92,6 +94,10 @@ def _payload_hash_prefix(item: dict) -> str:
     return sha256(json.dumps(item, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
 
+def _monitor_webhook_count(items: list[dict]) -> int:
+    return sum(1 for item in items if isinstance(item, dict) and item.get("webhook"))
+
+
 def _looks_like_placeholder(value: str) -> bool:
     lowered = str(value or "").strip().lower()
     return not lowered or lowered.startswith("replace-with-") or lowered in {"changeme", "todo", "placeholder"}
@@ -138,17 +144,29 @@ def main() -> int:
         else build_firecrawl_monitor_dry_run_result(settings)
     )
     errors = list(registry_errors)
+    operational_preflight = readiness.get("operational_preflight") if isinstance(readiness, dict) else {}
+    registry_monitor_count = len(registry_items) if input_source != "sample" else int((dry_run.get("source_registry") or {}).get("item_count") or 0)
+    registry_monitor_webhook_count = (
+        _monitor_webhook_count(registry_items)
+        if input_source != "sample"
+        else int((operational_preflight or {}).get("monitor_webhook_count") or 0)
+    )
     if args.require_env_registry and input_source != "env_registry":
         errors.append("FIRECRAWL_MONITOR_SOURCES_JSON must be used for --require-env-registry")
     if args.require_env_registry and not registry_items:
         errors.append("FIRECRAWL_MONITOR_SOURCES_JSON did not produce monitor sources")
+    if args.require_webhook_secret and not bool((operational_preflight or {}).get("webhook_secret_configured")):
+        errors.append("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured")
+    if args.require_monitor_webhook and registry_monitor_webhook_count <= 0:
+        errors.append("At least one Firecrawl monitor webhook URL must be configured in FIRECRAWL_MONITOR_SOURCES_JSON")
     if args.require_create_ready and not readiness.get("create_ready"):
         errors.extend(readiness.get("create_readiness_errors") or ["Firecrawl monitor create is not ready"])
     result = {
         "status": "failed" if errors else "success",
         "design": DESIGN_NAME,
         "input_source": input_source,
-        "item_count": len(registry_items) if input_source != "sample" else int((dry_run.get("source_registry") or {}).get("item_count") or 0),
+        "item_count": registry_monitor_count,
+        "registry_monitor_webhook_count": registry_monitor_webhook_count,
         "firecrawl_monitor_enabled": bool(getattr(settings, "firecrawl_monitor_enabled", False)),
         "firecrawl_monitor_dry_run": bool(getattr(settings, "firecrawl_monitor_dry_run", True)),
         "firecrawl_api_key_configured": bool(str(getattr(settings, "firecrawl_api_key", "") or "").strip())
@@ -159,6 +177,8 @@ def main() -> int:
         "readiness": readiness,
         "dry_run": dry_run,
         "require_env_registry": args.require_env_registry,
+        "require_webhook_secret": args.require_webhook_secret,
+        "require_monitor_webhook": args.require_monitor_webhook,
         "require_create_ready": args.require_create_ready,
         "env_file_loaded": bool(env_file_result),
         "env_file_loaded_count": int((env_file_result or {}).get("loaded_count") or 0),
@@ -171,10 +191,11 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
-        preflight = readiness.get("operational_preflight") if isinstance(readiness, dict) else {}
+        preflight = operational_preflight
         print(f"[{result['status']}] {DESIGN_NAME}")
         print(f"- input_source: {input_source}")
         print(f"- item_count: {result['item_count']}")
+        print(f"- registry_monitor_webhook_count: {registry_monitor_webhook_count}")
         print(f"- firecrawl_monitor_enabled: {result['firecrawl_monitor_enabled']}")
         print(f"- firecrawl_monitor_dry_run: {result['firecrawl_monitor_dry_run']}")
         print(f"- firecrawl_api_key_configured: {result['firecrawl_api_key_configured']}")

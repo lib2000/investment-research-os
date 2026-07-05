@@ -34,6 +34,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-override", action="store_true", help="Allow env-file values to override process env.")
     parser.add_argument("--require-env-registry", action="store_true", help="Require FIRECRAWL_MONITOR_SOURCES_JSON.")
     parser.add_argument("--require-webhook-secret", action="store_true", help="Require FIRECRAWL_MONITOR_WEBHOOK_SECRET.")
+    parser.add_argument("--require-monitor-webhook", action="store_true", help="Require at least one monitor webhook URL.")
     parser.add_argument("--require-create-ready", action="store_true", help="Require live monitor create readiness.")
     parser.add_argument("--use-live-vault", action="store_true", help="Write webhook test event to configured research vault.")
     parser.add_argument(
@@ -236,6 +237,9 @@ def main() -> int:
             errors.append("FIRECRAWL_MONITOR_SOURCES_JSON did not produce monitor sources")
         if args.require_webhook_secret and not masked["firecrawl_monitor_webhook_secret_configured"]:
             errors.append("FIRECRAWL_MONITOR_WEBHOOK_SECRET must be configured")
+        monitor_webhook_configured = bool((readiness.get("operational_preflight") or {}).get("monitor_webhook_configured"))
+        if args.require_monitor_webhook and not monitor_webhook_configured:
+            errors.append("At least one Firecrawl monitor webhook URL must be configured in FIRECRAWL_MONITOR_SOURCES_JSON")
         if args.require_create_ready and not masked["firecrawl_api_key_configured"]:
             errors.append("FIRECRAWL_API_KEY must be configured with a non-placeholder value")
         if args.require_create_ready and not readiness.get("create_ready"):
@@ -258,8 +262,9 @@ def main() -> int:
             "source_registry": dry_run.get("source_registry") or {},
             "create_ready": bool(readiness.get("create_ready")),
             "create_readiness_errors": readiness.get("create_readiness_errors") or [],
-            "monitor_webhook_configured": bool((readiness.get("operational_preflight") or {}).get("monitor_webhook_configured")),
+            "monitor_webhook_configured": monitor_webhook_configured,
             "monitor_webhook_count": int((readiness.get("operational_preflight") or {}).get("monitor_webhook_count") or 0),
+            "require_monitor_webhook": bool(args.require_monitor_webhook),
             "webhook_flow": webhook_flow,
             "uses_live_vault": bool(args.use_live_vault),
             "env_file_loaded": bool(env_result),

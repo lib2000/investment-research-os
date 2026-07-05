@@ -17917,18 +17917,25 @@ function formatKoreanResult(value) {
   if (value.module === "firecrawl_monitor_dry_run") {
     const registry = value.source_registry || {};
     const monitors = Array.isArray(value.monitors) ? value.monitors : [];
+    const preflight = value.operational_preflight || {};
+    const checklist = Array.isArray(value.production_checklist) ? value.production_checklist : [];
     const lines = monitors.slice(0, 8).map((item, index) =>
       `${index + 1}. ${item.name || "이름 없음"} · ${(item.target_types || []).join(", ") || "유형 미확인"} · 대상 ${formatNumber(item.target_count || 0)}개 · webhook=${item.webhook_configured ? "true" : "false"} · ${item.payload_hash_prefix || "hash 없음"}`
     );
     return [
       `### Firecrawl Monitor Dry-run`,
-      `상태: ${value.status || "미확인"}`,
+      `상태: ${value.status || "미확인"} · readiness=${value.readiness_status || "미확인"}`,
       `Registry: ${registry.input_source || "sample"} · ${formatNumber(registry.item_count || 0)}건`,
       `Create ready: ${value.create_ready ? "true" : "false"}`,
+      `운영 프리플라이트: ready=${preflight.ready ? "true" : "false"} · registry=${preflight.registry_configured ? "true" : "false"} · webhook_secret=${preflight.webhook_secret_configured ? "true" : "false"} · monitor_webhook=${preflight.monitor_webhook_configured ? "true" : "false"} (${formatNumber(preflight.monitor_webhook_count || 0)}/${formatNumber(preflight.monitor_count || 0)})`,
       ...(value.create_readiness_errors || []).map((item) => `준비 필요: ${item}`),
+      ...(Array.isArray(preflight.errors) ? preflight.errors.slice(0, 5).map((item) => `운영 차단: ${item}`) : []),
       ``,
       `모니터 후보`,
       ...(lines.length ? lines : ["모니터 후보 없음"]),
+      checklist.length ? `` : "",
+      checklist.length ? `실전 전환 체크리스트` : "",
+      ...checklist.map((item) => `- ${item}`),
       value.next_action ? `다음 조치: ${value.next_action}` : "",
     ].filter(Boolean).join("\n");
   }
