@@ -370,6 +370,11 @@ def render_markdown_report(result: dict) -> str:
             )
     else:
         lines.append("- none")
+    lines.extend(["", "## Status Summary Health", ""])
+    lines.append("- command: `python tools\\show_openclaw_bridge_status.py --json`")
+    lines.append("- expected hash_status: `ok`")
+    lines.append("- expected hash_checked_count: `14`")
+    lines.append("- expected hash_mismatches: `[]`")
     lines.extend(["", "## Operational Commands", ""])
     commands = result.get("operational_commands") or {}
     for label in (
