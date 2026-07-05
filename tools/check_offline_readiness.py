@@ -74,6 +74,7 @@ CHECKS = [
     ("통합 투자 인사이트 허브", ["tools/check_investment_insight_hub.py", "--strict"]),
     ("OpenClaw 투자리서치 브리지", ["tools/check_openclaw_investment_context.py", "--max-age-hours", "24"]),
     ("OpenClaw 완료 감사", ["tools/check_openclaw_bridge_completion.py", "--max-age-hours", "24", "--require-report-hashes"]),
+    ("OpenClaw 지식 그래프", ["tools/check_openclaw_knowledge_graph.py", "--max-age-hours", "24"]),
     ("OpenClaw 상태 요약", ["tools/show_openclaw_bridge_status.py", "--json"]),
     ("OpenClaw 소비자 smoke", ["tools/check_openclaw_consumer_smoke.py", "--max-age-hours", "24", "--json"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),

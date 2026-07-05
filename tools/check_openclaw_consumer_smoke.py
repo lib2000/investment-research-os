@@ -16,6 +16,11 @@ EXPECTED_READ_ORDER = [
     "investment_research_context.json",
     "openclaw_knowledge_graph_blueprint.md",
     "openclaw_knowledge_graph_blueprint.json",
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
+    "openclaw_knowledge_graph_master_index.md",
+    "openclaw_knowledge_graph_glossary.md",
+    "openclaw_knowledge_graph_marginalia_queue.md",
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json",
 ]
@@ -24,7 +29,13 @@ JSON_FILES = {
     "openclaw_bridge_manifest.json",
     "investment_research_context.json",
     "openclaw_knowledge_graph_blueprint.json",
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
     "openclaw_bridge_completion_report.json",
+}
+JSON_LIST_FILES = {
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
 }
 SENSITIVE_MARKERS = [
     f'"access_{"token"}":',
@@ -54,6 +65,17 @@ def load_json_file(path: Path) -> dict[str, Any]:
         raise AssertionError(f"OpenClaw consumer JSON parse failed: {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise AssertionError(f"OpenClaw consumer JSON root must be object: {path}")
+    return payload
+
+
+def load_json_list_file(path: Path) -> list[Any]:
+    text = load_text(path)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"OpenClaw consumer JSON parse failed: {path}: {exc}") from exc
+    if not isinstance(payload, list):
+        raise AssertionError(f"OpenClaw consumer JSON root must be list: {path}")
     return payload
 
 
@@ -98,6 +120,11 @@ def validate_hashes(openclaw_dir: Path, status: dict[str, Any], errors: list[str
         "context_markdown": "investment_research_context.md",
         "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
         "knowledge_graph_blueprint_markdown": "openclaw_knowledge_graph_blueprint.md",
+        "knowledge_graph_nodes": "openclaw_knowledge_graph_nodes.json",
+        "knowledge_graph_edges": "openclaw_knowledge_graph_edges.json",
+        "knowledge_graph_master_index": "openclaw_knowledge_graph_master_index.md",
+        "knowledge_graph_glossary": "openclaw_knowledge_graph_glossary.md",
+        "knowledge_graph_marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
         "bridge_manifest": "openclaw_bridge_manifest.json",
     }
     file_hashes = status.get("file_sha256") if isinstance(status.get("file_sha256"), dict) else {}
@@ -130,7 +157,7 @@ def build_result(
     expected_latest_count: int = 6,
 ) -> dict[str, Any]:
     errors: list[str] = []
-    loaded_files: dict[str, dict[str, Any] | str] = {}
+    loaded_files: dict[str, dict[str, Any] | list[Any] | str] = {}
     loaded_file_names: list[str] = []
 
     try:
@@ -151,7 +178,10 @@ def build_result(
         path = openclaw_dir / str(filename)
         try:
             if str(filename) in JSON_FILES:
-                loaded_files[str(filename)] = load_json_file(path)
+                if str(filename) in JSON_LIST_FILES:
+                    loaded_files[str(filename)] = load_json_list_file(path)
+                else:
+                    loaded_files[str(filename)] = load_json_file(path)
             else:
                 loaded_files[str(filename)] = load_text(path)
             loaded_file_names.append(str(filename))
@@ -161,9 +191,14 @@ def build_result(
     manifest = loaded_files.get("openclaw_bridge_manifest.json")
     context = loaded_files.get("investment_research_context.json")
     knowledge_graph_blueprint = loaded_files.get("openclaw_knowledge_graph_blueprint.json")
+    knowledge_graph_nodes = loaded_files.get("openclaw_knowledge_graph_nodes.json")
+    knowledge_graph_edges = loaded_files.get("openclaw_knowledge_graph_edges.json")
     completion = loaded_files.get("openclaw_bridge_completion_report.json")
     context_markdown = str(loaded_files.get("investment_research_context.md") or "")
     knowledge_graph_markdown = str(loaded_files.get("openclaw_knowledge_graph_blueprint.md") or "")
+    knowledge_graph_master_index = str(loaded_files.get("openclaw_knowledge_graph_master_index.md") or "")
+    knowledge_graph_glossary = str(loaded_files.get("openclaw_knowledge_graph_glossary.md") or "")
+    knowledge_graph_marginalia = str(loaded_files.get("openclaw_knowledge_graph_marginalia_queue.md") or "")
     completion_markdown = str(loaded_files.get("openclaw_bridge_completion_report.md") or "")
 
     if status.get("status") != "ok":
@@ -184,6 +219,16 @@ def build_result(
             errors.append("OpenClaw consumer manifest missing knowledge graph blueprint markdown")
         if manifest.get("knowledge_graph_blueprint_json_file") != "openclaw_knowledge_graph_blueprint.json":
             errors.append("OpenClaw consumer manifest missing knowledge graph blueprint JSON")
+        graph_files = manifest.get("knowledge_graph_files") if isinstance(manifest.get("knowledge_graph_files"), dict) else {}
+        for key, expected in {
+            "nodes": "openclaw_knowledge_graph_nodes.json",
+            "edges": "openclaw_knowledge_graph_edges.json",
+            "master_index": "openclaw_knowledge_graph_master_index.md",
+            "glossary": "openclaw_knowledge_graph_glossary.md",
+            "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+        }.items():
+            if graph_files.get(key) != expected:
+                errors.append(f"OpenClaw consumer manifest missing knowledge graph file: {key}")
     else:
         errors.append("OpenClaw consumer manifest did not load")
 
@@ -223,6 +268,24 @@ def build_result(
     else:
         errors.append("OpenClaw consumer knowledge graph blueprint did not load")
 
+    if isinstance(knowledge_graph_nodes, list):
+        graph_node_ids = {
+            str(item.get("id") or "")
+            for item in knowledge_graph_nodes
+            if isinstance(item, dict)
+        }
+        for required_seed in (
+            "concept.relu",
+            "topic.graph_rendering_8000_nodes",
+            "note.graph_rendering_lod_experiment",
+        ):
+            if required_seed not in graph_node_ids:
+                errors.append(f"OpenClaw consumer knowledge graph nodes missing seed: {required_seed}")
+    else:
+        errors.append("OpenClaw consumer knowledge graph nodes did not load")
+    if not isinstance(knowledge_graph_edges, list) or not knowledge_graph_edges:
+        errors.append("OpenClaw consumer knowledge graph edges did not load")
+
     if isinstance(completion, dict):
         if completion.get("status") != "ok":
             errors.append(f"OpenClaw consumer completion report is not ok: {completion.get('status')}")
@@ -247,6 +310,12 @@ def build_result(
         errors.append("OpenClaw consumer markdown missing sensitive-data exclusion note")
     if "Master Index" not in knowledge_graph_markdown or "concept.relu" not in knowledge_graph_markdown:
         errors.append("OpenClaw consumer knowledge graph markdown missing expected blueprint content")
+    if "topic.graph_rendering_8000_nodes" not in knowledge_graph_master_index:
+        errors.append("OpenClaw consumer knowledge graph master index missing topic node")
+    if "concept.relu" not in knowledge_graph_glossary or "definition:" not in knowledge_graph_glossary:
+        errors.append("OpenClaw consumer knowledge graph glossary missing concept definition")
+    if "note.graph_rendering_lod_experiment" not in knowledge_graph_marginalia:
+        errors.append("OpenClaw consumer knowledge graph marginalia missing note")
     if "completion_report_sha256" not in completion_markdown and "File Hashes" not in completion_markdown:
         errors.append("OpenClaw consumer completion markdown missing completion hashes")
 
@@ -283,6 +352,11 @@ def build_result(
             "file_sha256.context_markdown",
             "file_sha256.knowledge_graph_blueprint_json",
             "file_sha256.knowledge_graph_blueprint_markdown",
+            "file_sha256.knowledge_graph_nodes",
+            "file_sha256.knowledge_graph_edges",
+            "file_sha256.knowledge_graph_master_index",
+            "file_sha256.knowledge_graph_glossary",
+            "file_sha256.knowledge_graph_marginalia",
             "file_sha256.bridge_manifest",
             "completion_report_sha256.completion_report_json",
             "completion_report_sha256.completion_report_markdown",

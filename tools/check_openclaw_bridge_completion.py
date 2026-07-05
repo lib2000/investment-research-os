@@ -14,6 +14,7 @@ DEFAULT_SOURCE_DIR = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_int
 DEFAULT_OPENCLAW_WORKSPACE = Path.home() / ".openclaw" / "workspace"
 DEFAULT_OPENCLAW_DIR = DEFAULT_OPENCLAW_WORKSPACE / "data" / "investment_research"
 CHECK_CONTEXT_SCRIPT = PROJECT_ROOT / "tools" / "check_openclaw_investment_context.py"
+CHECK_KNOWLEDGE_GRAPH_SCRIPT = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
 
 
 def load_context_checker():
@@ -21,6 +22,15 @@ def load_context_checker():
     module = importlib.util.module_from_spec(spec)
     if spec is None or spec.loader is None:
         raise AssertionError(f"cannot load context checker: {CHECK_CONTEXT_SCRIPT}")
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_knowledge_graph_checker():
+    spec = importlib.util.spec_from_file_location("check_openclaw_knowledge_graph", CHECK_KNOWLEDGE_GRAPH_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"cannot load knowledge graph checker: {CHECK_KNOWLEDGE_GRAPH_SCRIPT}")
     spec.loader.exec_module(module)
     return module
 
@@ -120,6 +130,11 @@ def validate_bridge_status(
         "context_markdown": openclaw_dir / "investment_research_context.md",
         "knowledge_graph_blueprint_json": openclaw_dir / "openclaw_knowledge_graph_blueprint.json",
         "knowledge_graph_blueprint_markdown": openclaw_dir / "openclaw_knowledge_graph_blueprint.md",
+        "knowledge_graph_nodes": openclaw_dir / "openclaw_knowledge_graph_nodes.json",
+        "knowledge_graph_edges": openclaw_dir / "openclaw_knowledge_graph_edges.json",
+        "knowledge_graph_master_index": openclaw_dir / "openclaw_knowledge_graph_master_index.md",
+        "knowledge_graph_glossary": openclaw_dir / "openclaw_knowledge_graph_glossary.md",
+        "knowledge_graph_marginalia": openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md",
         "bridge_manifest": openclaw_dir / "openclaw_bridge_manifest.json",
     }
     file_hashes = status.get("file_sha256") or {}
@@ -165,12 +180,18 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "investment_research_context.json",
         "openclaw_knowledge_graph_blueprint.md",
         "openclaw_knowledge_graph_blueprint.json",
+        "openclaw_knowledge_graph_nodes.json",
+        "openclaw_knowledge_graph_edges.json",
+        "openclaw_knowledge_graph_master_index.md",
+        "openclaw_knowledge_graph_glossary.md",
+        "openclaw_knowledge_graph_marginalia_queue.md",
         "openclaw_bridge_completion_report.json",
         "openclaw_bridge_completion_report.md",
         "completion_report_sha256",
         "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "check_openclaw_bridge_completion.py --max-age-hours 24",
         "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+        "check_openclaw_knowledge_graph.py --max-age-hours 24",
         "show_openclaw_bridge_status.py --json",
         "check_offline_readiness.py --json",
     ]
@@ -214,6 +235,7 @@ def build_result(
             "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+            "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -225,6 +247,14 @@ def build_result(
         source_messages = checker.validate_bundle(source_dir, max_age_hours=max_age_hours)
         openclaw_messages = checker.validate_bundle(openclaw_dir, max_age_hours=max_age_hours)
         details["bundle_checks"] = {"source": source_messages, "openclaw": openclaw_messages}
+    except AssertionError as exc:
+        errors.append(str(exc))
+
+    kg_checker = load_knowledge_graph_checker()
+    try:
+        kg_source_messages = kg_checker.validate_graph_bundle(source_dir, max_age_hours=max_age_hours)
+        kg_openclaw_messages = kg_checker.validate_graph_bundle(openclaw_dir, max_age_hours=max_age_hours)
+        details["knowledge_graph_checks"] = {"source": kg_source_messages, "openclaw": kg_openclaw_messages}
     except AssertionError as exc:
         errors.append(str(exc))
 
@@ -256,6 +286,7 @@ def build_result(
         "source git is clean and synced with upstream",
         "OpenClaw bridge_status references current clean commit",
         "OpenClaw bridge_status file hashes match copied files",
+        "OpenClaw personal knowledge graph artifacts validate",
         "OpenClaw completion report hashes match completion report files",
         "OpenClaw startup notes point to bridge files, status summary, final audit command, and current source git",
     ]
@@ -324,6 +355,7 @@ def render_markdown_report(result: dict) -> str:
         "strict_refresh",
         "validation",
         "completion_audit",
+        "knowledge_graph_validation",
         "final_completion_audit",
         "status_summary",
         "offline_readiness",
@@ -339,6 +371,11 @@ def render_markdown_report(result: dict) -> str:
             "context_markdown",
             "knowledge_graph_blueprint_json",
             "knowledge_graph_blueprint_markdown",
+            "knowledge_graph_nodes",
+            "knowledge_graph_edges",
+            "knowledge_graph_master_index",
+            "knowledge_graph_glossary",
+            "knowledge_graph_marginalia",
             "bridge_manifest",
         ):
             file_hash = file_hashes.get(label)
@@ -350,6 +387,12 @@ def render_markdown_report(result: dict) -> str:
     bundle_checks = result.get("bundle_checks") or {}
     for label in ("source", "openclaw"):
         messages = bundle_checks.get(label) or []
+        for message in messages:
+            lines.append(f"- {label}: {message}")
+    lines.extend(["", "## Knowledge Graph Checks", ""])
+    kg_checks = result.get("knowledge_graph_checks") or {}
+    for label in ("source", "openclaw"):
+        messages = kg_checks.get(label) or []
         for message in messages:
             lines.append(f"- {label}: {message}")
     lines.extend(["", "## Errors", ""])

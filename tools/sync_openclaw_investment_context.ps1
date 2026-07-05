@@ -15,6 +15,7 @@ $env:PYTHONUTF8 = "1"
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
 $checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.py"
+$knowledgeGraphCheckScript = Join-Path $projectRoot "tools\check_openclaw_knowledge_graph.py"
 $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completion.py"
 $statusSummaryScript = Join-Path $projectRoot "tools\show_openclaw_bridge_status.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
@@ -50,6 +51,9 @@ if (-not (Test-Path -LiteralPath $exportScript)) {
 if (-not (Test-Path -LiteralPath $checkScript)) {
   throw "OpenClaw check script not found: $checkScript"
 }
+if (-not (Test-Path -LiteralPath $knowledgeGraphCheckScript)) {
+  throw "OpenClaw knowledge graph check script not found: $knowledgeGraphCheckScript"
+}
 if (-not (Test-Path -LiteralPath $completionScript)) {
   throw "OpenClaw completion check script not found: $completionScript"
 }
@@ -63,6 +67,11 @@ $jsonPath = Join-Path $sourceDir "investment_research_context.json"
 $markdownPath = Join-Path $sourceDir "investment_research_context.md"
 $knowledgeGraphJsonPath = Join-Path $sourceDir "openclaw_knowledge_graph_blueprint.json"
 $knowledgeGraphMarkdownPath = Join-Path $sourceDir "openclaw_knowledge_graph_blueprint.md"
+$knowledgeGraphNodesPath = Join-Path $sourceDir "openclaw_knowledge_graph_nodes.json"
+$knowledgeGraphEdgesPath = Join-Path $sourceDir "openclaw_knowledge_graph_edges.json"
+$knowledgeGraphMasterIndexPath = Join-Path $sourceDir "openclaw_knowledge_graph_master_index.md"
+$knowledgeGraphGlossaryPath = Join-Path $sourceDir "openclaw_knowledge_graph_glossary.md"
+$knowledgeGraphMarginaliaPath = Join-Path $sourceDir "openclaw_knowledge_graph_marginalia_queue.md"
 $manifestPath = Join-Path $sourceDir "openclaw_bridge_manifest.json"
 if (-not (Test-Path -LiteralPath $jsonPath)) {
   throw "Generated JSON context not found: $jsonPath"
@@ -76,6 +85,11 @@ if (-not (Test-Path -LiteralPath $knowledgeGraphJsonPath)) {
 if (-not (Test-Path -LiteralPath $knowledgeGraphMarkdownPath)) {
   throw "Generated OpenClaw knowledge graph blueprint Markdown not found: $knowledgeGraphMarkdownPath"
 }
+foreach ($graphPath in @($knowledgeGraphNodesPath, $knowledgeGraphEdgesPath, $knowledgeGraphMasterIndexPath, $knowledgeGraphGlossaryPath, $knowledgeGraphMarginaliaPath)) {
+  if (-not (Test-Path -LiteralPath $graphPath)) {
+    throw "Generated OpenClaw knowledge graph artifact not found: $graphPath"
+  }
+}
 if (-not (Test-Path -LiteralPath $manifestPath)) {
   throw "Generated bridge manifest not found: $manifestPath"
 }
@@ -85,6 +99,10 @@ if ($SkipCopy) {
     python $checkScript --source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw source context validation failed: $LASTEXITCODE"
+    }
+    python $knowledgeGraphCheckScript --source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw source knowledge graph validation failed: $LASTEXITCODE"
     }
   }
   Write-Host "OpenClaw copy skipped. Generated context remains in $sourceDir"
@@ -100,6 +118,11 @@ Copy-Item -Force -LiteralPath $jsonPath -Destination (Join-Path $targetDir "inve
 Copy-Item -Force -LiteralPath $markdownPath -Destination (Join-Path $targetDir "investment_research_context.md")
 Copy-Item -Force -LiteralPath $knowledgeGraphJsonPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.json")
 Copy-Item -Force -LiteralPath $knowledgeGraphMarkdownPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.md")
+Copy-Item -Force -LiteralPath $knowledgeGraphNodesPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_nodes.json")
+Copy-Item -Force -LiteralPath $knowledgeGraphEdgesPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_edges.json")
+Copy-Item -Force -LiteralPath $knowledgeGraphMasterIndexPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_master_index.md")
+Copy-Item -Force -LiteralPath $knowledgeGraphGlossaryPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_glossary.md")
+Copy-Item -Force -LiteralPath $knowledgeGraphMarginaliaPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_marginalia_queue.md")
 Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
 $context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -121,6 +144,7 @@ $operationalCommands = [ordered]@{
   strict_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"
   validation = "python tools\check_openclaw_investment_context.py --max-age-hours 24"
   completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24"
+  knowledge_graph_validation = "python tools\check_openclaw_knowledge_graph.py --max-age-hours 24"
   final_completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"
   status_summary = "python tools\show_openclaw_bridge_status.py --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
@@ -130,6 +154,11 @@ $fileSha256 = [ordered]@{
   context_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.md")).Hash.ToLowerInvariant()
   knowledge_graph_blueprint_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.json")).Hash.ToLowerInvariant()
   knowledge_graph_blueprint_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.md")).Hash.ToLowerInvariant()
+  knowledge_graph_nodes = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_nodes.json")).Hash.ToLowerInvariant()
+  knowledge_graph_edges = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_edges.json")).Hash.ToLowerInvariant()
+  knowledge_graph_master_index = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_master_index.md")).Hash.ToLowerInvariant()
+  knowledge_graph_glossary = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_glossary.md")).Hash.ToLowerInvariant()
+  knowledge_graph_marginalia = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_marginalia_queue.md")).Hash.ToLowerInvariant()
   bridge_manifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_bridge_manifest.json")).Hash.ToLowerInvariant()
 }
 $latestRecommendations = @()
@@ -161,6 +190,11 @@ $status = [ordered]@{
     "investment_research_context.json",
     "openclaw_knowledge_graph_blueprint.md",
     "openclaw_knowledge_graph_blueprint.json",
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
+    "openclaw_knowledge_graph_master_index.md",
+    "openclaw_knowledge_graph_glossary.md",
+    "openclaw_knowledge_graph_marginalia_queue.md",
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json"
   )
@@ -172,6 +206,11 @@ $status = [ordered]@{
   source_context_markdown = $markdownPath
   source_knowledge_graph_blueprint_json = $knowledgeGraphJsonPath
   source_knowledge_graph_blueprint_markdown = $knowledgeGraphMarkdownPath
+  source_knowledge_graph_nodes = $knowledgeGraphNodesPath
+  source_knowledge_graph_edges = $knowledgeGraphEdgesPath
+  source_knowledge_graph_master_index = $knowledgeGraphMasterIndexPath
+  source_knowledge_graph_glossary = $knowledgeGraphGlossaryPath
+  source_knowledge_graph_marginalia = $knowledgeGraphMarginaliaPath
   source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
@@ -198,6 +237,8 @@ $readme = @(
   "- ``investment_research_context.json``: machine-readable sanitized summary",
   "- ``openclaw_knowledge_graph_blueprint.md``: human-readable personal knowledge graph blueprint from ``투자.txt``",
   "- ``openclaw_knowledge_graph_blueprint.json``: machine-readable personal knowledge graph blueprint",
+  "- ``openclaw_knowledge_graph_nodes.json`` and ``openclaw_knowledge_graph_edges.json``: consumable graph layer",
+  "- ``openclaw_knowledge_graph_master_index.md`` / ``openclaw_knowledge_graph_glossary.md`` / ``openclaw_knowledge_graph_marginalia_queue.md``: human-readable graph views",
   "- ``openclaw_bridge_manifest.json``: machine-readable file map and refresh/check commands",
   "- ``openclaw_bridge_completion_report.json``: machine-readable completion audit report",
   "- ``openclaw_bridge_completion_report.md``: latest completion audit report",
@@ -215,6 +256,7 @@ $readme = @(
   "- final strict refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``",
   "- validation: ``python tools\check_openclaw_investment_context.py --max-age-hours 24``",
   "- completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``",
+  "- knowledge graph validation: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``",
   "- final completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``",
   "- status summary: ``python tools\show_openclaw_bridge_status.py --json``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
@@ -227,10 +269,11 @@ $startupLines = @(
   "## Investment Research OS Bridge",
   "",
   "- Read ``data/investment_research/bridge_status.json`` first.",
-  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
+  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_knowledge_graph_nodes.json`` -> ``openclaw_knowledge_graph_edges.json`` -> ``openclaw_knowledge_graph_master_index.md`` -> ``openclaw_knowledge_graph_glossary.md`` -> ``openclaw_knowledge_graph_marginalia_queue.md`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
   "- Human summary: ``data/investment_research/investment_research_context.md``.",
   "- Machine state: ``data/investment_research/investment_research_context.json``.",
   "- Knowledge graph blueprint: ``data/investment_research/openclaw_knowledge_graph_blueprint.md`` and ``data/investment_research/openclaw_knowledge_graph_blueprint.json``.",
+  "- Knowledge graph layer: ``data/investment_research/openclaw_knowledge_graph_nodes.json``, ``openclaw_knowledge_graph_edges.json``, ``openclaw_knowledge_graph_master_index.md``, ``openclaw_knowledge_graph_glossary.md``, ``openclaw_knowledge_graph_marginalia_queue.md``.",
   "- Manifest and commands: ``data/investment_research/openclaw_bridge_manifest.json``.",
   "- Machine completion report: ``data/investment_research/openclaw_bridge_completion_report.json``.",
   "- Human completion report: ``data/investment_research/openclaw_bridge_completion_report.md``.",
@@ -239,6 +282,7 @@ $startupLines = @(
   "- Safe refresh from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1``.",
   "- Final strict refresh from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``.",
   "- Completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24``.",
+  "- Knowledge graph validation from ``$projectRoot``: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``.",
   "- Final completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``.",
   "- Status summary from ``$projectRoot``: ``python tools\show_openclaw_bridge_status.py --json``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
@@ -252,6 +296,10 @@ if (-not $SkipValidation.IsPresent) {
   python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
   if ($LASTEXITCODE -ne 0) {
     throw "OpenClaw context validation failed: $LASTEXITCODE"
+  }
+  python $knowledgeGraphCheckScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
+  if ($LASTEXITCODE -ne 0) {
+    throw "OpenClaw knowledge graph validation failed: $LASTEXITCODE"
   }
   if ($gitDirty -eq $true) {
     $message = "OpenClaw completion audit skipped because source git worktree is dirty."

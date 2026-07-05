@@ -219,6 +219,15 @@ def load_openclaw_consumer_smoke_tool():
     return module
 
 
+def load_openclaw_knowledge_graph_check_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
+    spec = spec_from_file_location("check_openclaw_knowledge_graph", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_refresh_portfolio_prices_tool():
     tool_path = PROJECT_ROOT / "tools" / "refresh_portfolio_prices.py"
     spec = spec_from_file_location("refresh_portfolio_prices", tool_path)
@@ -681,12 +690,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn('PYTHONIOENCODING = "utf-8"', script_source)
         self.assertIn('PYTHONUTF8 = "1"', script_source)
         self.assertIn("check_openclaw_investment_context.py", script_source)
+        self.assertIn("check_openclaw_knowledge_graph.py", script_source)
         self.assertIn("check_openclaw_bridge_completion.py", script_source)
         self.assertIn("show_openclaw_bridge_status.py", script_source)
         self.assertIn("OpenClaw completion audit skipped because source git worktree is dirty.", script_source)
         self.assertIn("$RequireCompletionAudit.IsPresent", script_source)
         self.assertIn("--source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours", script_source)
         self.assertIn("OpenClaw final context validation failed", script_source)
+        self.assertIn("OpenClaw knowledge graph validation failed", script_source)
         self.assertIn("--require-report-hashes", script_source)
         self.assertIn("OpenClaw final completion audit failed", script_source)
         self.assertIn("--openclaw-dir $targetDir --json", script_source)
@@ -825,6 +836,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 완료 감사"],
             ["tools/check_openclaw_bridge_completion.py", "--max-age-hours", "24", "--require-report-hashes"],
+        )
+        self.assertIn("OpenClaw 지식 그래프", checks)
+        self.assertEqual(
+            checks["OpenClaw 지식 그래프"],
+            ["tools/check_openclaw_knowledge_graph.py", "--max-age-hours", "24"],
         )
         self.assertIn("OpenClaw 상태 요약", checks)
         self.assertEqual(checks["OpenClaw 상태 요약"], ["tools/show_openclaw_bridge_status.py", "--json"])
@@ -17667,6 +17683,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
     def test_openclaw_context_export_and_validation_exclude_sensitive_raw_state(self):
         export_tool = load_openclaw_context_export_tool()
         check_tool = load_openclaw_context_check_tool()
+        graph_check_tool = load_openclaw_knowledge_graph_check_tool()
 
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -17768,6 +17785,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
             output_dir = root / "out"
             export_tool.write_context(context, output_dir)
             messages = check_tool.validate_bundle(output_dir, max_age_hours=1)
+            graph_messages = graph_check_tool.validate_graph_bundle(output_dir, max_age_hours=1)
             (output_dir / "bridge_status.json").write_text(
                 json.dumps(
                     {
@@ -17784,6 +17802,11 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "investment_research_context.json",
                             "openclaw_knowledge_graph_blueprint.md",
                             "openclaw_knowledge_graph_blueprint.json",
+                            "openclaw_knowledge_graph_nodes.json",
+                            "openclaw_knowledge_graph_edges.json",
+                            "openclaw_knowledge_graph_master_index.md",
+                            "openclaw_knowledge_graph_glossary.md",
+                            "openclaw_knowledge_graph_marginalia_queue.md",
                             "openclaw_bridge_completion_report.md",
                             "openclaw_bridge_completion_report.json",
                         ],
@@ -17795,6 +17818,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
                             "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                             "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+                            "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -17804,6 +17828,11 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "context_markdown": check_tool.sha256_hex(output_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_blueprint.json"),
                             "knowledge_graph_blueprint_markdown": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_blueprint.md"),
+                            "knowledge_graph_nodes": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_nodes.json"),
+                            "knowledge_graph_edges": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_edges.json"),
+                            "knowledge_graph_master_index": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_master_index.md"),
+                            "knowledge_graph_glossary": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_glossary.md"),
+                            "knowledge_graph_marginalia": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_marginalia_queue.md"),
                             "bridge_manifest": check_tool.sha256_hex(output_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17819,6 +17848,11 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
                 "- `openclaw_knowledge_graph_blueprint.md`: human-readable personal knowledge graph blueprint from `투자.txt`\n"
                 "- `openclaw_knowledge_graph_blueprint.json`: machine-readable personal knowledge graph blueprint\n"
+                "- `openclaw_knowledge_graph_nodes.json`: machine-readable graph nodes\n"
+                "- `openclaw_knowledge_graph_edges.json`: machine-readable graph edges\n"
+                "- `openclaw_knowledge_graph_master_index.md`: human-readable graph master index\n"
+                "- `openclaw_knowledge_graph_glossary.md`: human-readable graph glossary\n"
+                "- `openclaw_knowledge_graph_marginalia_queue.md`: human-readable graph marginalia queue\n"
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `openclaw_bridge_completion_report.json`: machine-readable completion audit report\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
@@ -17841,6 +17875,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- final strict refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit`\n"
                 "- validation: `python tools\\check_openclaw_investment_context.py --max-age-hours 24`\n"
                 "- completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`\n"
+                "- knowledge graph validation: `python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24`\n"
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
@@ -17880,6 +17915,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
             manifest_text = (output_dir / "openclaw_bridge_manifest.json").read_text(encoding="utf-8")
 
         self.assertTrue(messages)
+        self.assertTrue(graph_messages)
         self.assertTrue(bridge_messages)
         self.assertIn('"raw_tokens_excluded": true', exported_text)
         self.assertIn('"backend_health_url": "http://127.0.0.1:8001/api/v1/system/health"', exported_text)
@@ -17887,6 +17923,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"read_order"', manifest_text)
         self.assertIn('"strict_refresh_command"', manifest_text)
         self.assertIn('"completion_audit_command"', manifest_text)
+        self.assertIn('"knowledge_graph_validation_command"', manifest_text)
         self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
@@ -17898,6 +17935,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
         self.assertIn('"knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md"', manifest_text)
         self.assertIn('"knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json"', manifest_text)
+        self.assertIn('"knowledge_graph_files"', manifest_text)
+        self.assertIn('"nodes": "openclaw_knowledge_graph_nodes.json"', manifest_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
@@ -17924,6 +17963,33 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text("# Master Index\nconcept.relu\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_nodes.json").write_text(
+                json.dumps(
+                    [
+                        {"id": "concept.relu", "type": "concept", "term": "ReLU", "definition": "activation"},
+                        {"id": "topic.graph_rendering_8000_nodes", "type": "topic", "title": "Graph", "status": "active_research"},
+                        {"id": "note.graph_rendering_lod_experiment", "type": "note", "parent": "topic.graph_rendering_8000_nodes"},
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_edges.json").write_text(
+                json.dumps([{"from": "concept.relu", "to": "concept.activation_function", "type": "is_a"}], ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_master_index.md").write_text(
+                "# Master Index\ntopic.graph_rendering_8000_nodes\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_glossary.md").write_text(
+                "# Glossary\nconcept.relu\n- definition: activation\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md").write_text(
+                "# Marginalia\nnote.graph_rendering_lod_experiment\nunverified\n",
+                encoding="utf-8",
+            )
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text('{"schema": "ok"}', encoding="utf-8")
             copied_at = tool.datetime.now(tool.timezone.utc).isoformat()
             (openclaw_dir / "bridge_status.json").write_text(
@@ -17940,6 +18006,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
                             "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
+                            "knowledge_graph_nodes": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_nodes.json"),
+                            "knowledge_graph_edges": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_edges.json"),
+                            "knowledge_graph_master_index": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_master_index.md"),
+                            "knowledge_graph_glossary": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_glossary.md"),
+                            "knowledge_graph_marginalia": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17982,6 +18053,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
                             "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
+                            "knowledge_graph_nodes": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_nodes.json"),
+                            "knowledge_graph_edges": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_edges.json"),
+                            "knowledge_graph_master_index": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_master_index.md"),
+                            "knowledge_graph_glossary": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_glossary.md"),
+                            "knowledge_graph_marginalia": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17996,12 +18072,17 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"
-                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
+                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_knowledge_graph_nodes.json -> openclaw_knowledge_graph_edges.json -> openclaw_knowledge_graph_master_index.md -> openclaw_knowledge_graph_glossary.md -> openclaw_knowledge_graph_marginalia_queue.md -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
                 "read data/investment_research/investment_research_context.md\n"
                 "read data/investment_research/investment_research_context.json\n"
                 "read data/investment_research/openclaw_knowledge_graph_blueprint.md\n"
                 "read data/investment_research/openclaw_knowledge_graph_blueprint.json\n"
+                "read data/investment_research/openclaw_knowledge_graph_nodes.json\n"
+                "read data/investment_research/openclaw_knowledge_graph_edges.json\n"
+                "read data/investment_research/openclaw_knowledge_graph_master_index.md\n"
+                "read data/investment_research/openclaw_knowledge_graph_glossary.md\n"
+                "read data/investment_research/openclaw_knowledge_graph_marginalia_queue.md\n"
                 "read data/investment_research/openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.md\n"
                 "read completion_report_sha256\n"
@@ -18009,6 +18090,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run sync_openclaw_investment_context.ps1 -RequireCompletionAudit\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24\n"
                 "run check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes\n"
+                "run check_openclaw_knowledge_graph.py --max-age-hours 24\n"
                 "run show_openclaw_bridge_status.py --json\n"
                 "run check_offline_readiness.py --json\n"
             )
@@ -18028,6 +18110,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "investment_research_context.json",
                 "openclaw_knowledge_graph_blueprint.md",
                 "openclaw_knowledge_graph_blueprint.json",
+                "openclaw_knowledge_graph_nodes.json",
+                "openclaw_knowledge_graph_edges.json",
+                "openclaw_knowledge_graph_master_index.md",
+                "openclaw_knowledge_graph_glossary.md",
+                "openclaw_knowledge_graph_marginalia_queue.md",
                 "openclaw_bridge_completion_report.md",
                 "openclaw_bridge_completion_report.json",
             ]
@@ -18037,6 +18124,17 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 json.dumps({"schema": "openclaw_personal_knowledge_graph_blueprint_v1"}, ensure_ascii=False),
                 encoding="utf-8",
             )
+            (openclaw_dir / "openclaw_knowledge_graph_nodes.json").write_text(
+                json.dumps([{"id": "concept.relu", "type": "concept"}], ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_edges.json").write_text(
+                json.dumps([{"from": "concept.relu", "to": "concept.activation_function", "type": "is_a"}], ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_master_index.md").write_text("# Master Index\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_glossary.md").write_text("# Glossary\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md").write_text("# Marginalia\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_completion_report.md").write_text("# ok\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
                 json.dumps({"context_generated_at": "2026-07-05T07:00:00+09:00", "read_order": read_order}),
@@ -18205,6 +18303,33 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (openclaw_dir / "openclaw_knowledge_graph_nodes.json").write_text(
+                json.dumps(
+                    [
+                        {"id": "concept.relu", "type": "concept", "term": "ReLU", "definition": "activation"},
+                        {"id": "topic.graph_rendering_8000_nodes", "type": "topic", "title": "Graph", "status": "active_research"},
+                        {"id": "note.graph_rendering_lod_experiment", "type": "note", "parent": "topic.graph_rendering_8000_nodes"},
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_edges.json").write_text(
+                json.dumps([{"from": "concept.relu", "to": "concept.activation_function", "type": "is_a"}], ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_master_index.md").write_text(
+                "# Master Index\n\ntopic.graph_rendering_8000_nodes\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_glossary.md").write_text(
+                "# Glossary\n\nconcept.relu\n- definition: activation\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md").write_text(
+                "# Marginalia\n\nnote.graph_rendering_lod_experiment\n",
+                encoding="utf-8",
+            )
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
                 json.dumps(
                     {
@@ -18212,6 +18337,13 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "context_generated_at": generated_at,
                         "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
                         "knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json",
+                        "knowledge_graph_files": {
+                            "nodes": "openclaw_knowledge_graph_nodes.json",
+                            "edges": "openclaw_knowledge_graph_edges.json",
+                            "master_index": "openclaw_knowledge_graph_master_index.md",
+                            "glossary": "openclaw_knowledge_graph_glossary.md",
+                            "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+                        },
                         "read_order": tool.EXPECTED_READ_ORDER,
                     },
                     ensure_ascii=False,
@@ -18243,6 +18375,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
                             "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
+                            "knowledge_graph_nodes": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_nodes.json"),
+                            "knowledge_graph_edges": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_edges.json"),
+                            "knowledge_graph_master_index": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_master_index.md"),
+                            "knowledge_graph_glossary": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_glossary.md"),
+                            "knowledge_graph_marginalia": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                         "completion_report_sha256": {
@@ -18311,6 +18448,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "investment_research_context.json",
                     "openclaw_knowledge_graph_blueprint.md",
                     "openclaw_knowledge_graph_blueprint.json",
+                    "openclaw_knowledge_graph_nodes.json",
+                    "openclaw_knowledge_graph_edges.json",
+                    "openclaw_knowledge_graph_master_index.md",
+                    "openclaw_knowledge_graph_glossary.md",
+                    "openclaw_knowledge_graph_marginalia_queue.md",
                     "openclaw_bridge_completion_report.md",
                     "openclaw_bridge_completion_report.json",
                 ],
@@ -18319,20 +18461,28 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "context_markdown": "b" * 64,
                     "knowledge_graph_blueprint_json": "c" * 64,
                     "knowledge_graph_blueprint_markdown": "d" * 64,
-                    "bridge_manifest": "e" * 64,
+                    "knowledge_graph_nodes": "e" * 64,
+                    "knowledge_graph_edges": "f" * 64,
+                    "knowledge_graph_master_index": "1" * 64,
+                    "knowledge_graph_glossary": "2" * 64,
+                    "knowledge_graph_marginalia": "3" * 64,
+                    "bridge_manifest": "4" * 64,
                 },
             },
             "completion_requirements": [
                 "source and OpenClaw bundles validate",
                 "OpenClaw bridge_status file hashes match copied files",
+                "OpenClaw personal knowledge graph artifacts validate",
                 "OpenClaw completion report hashes match completion report files",
             ],
             "bundle_checks": {"source": ["generated_at=ok"], "openclaw": ["generated_at=ok"]},
+            "knowledge_graph_checks": {"source": ["nodes=3 edges=1"], "openclaw": ["nodes=3 edges=1"]},
             "operational_commands": {
                 "safe_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
                 "strict_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
                 "validation": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
                 "completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+                "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
                 "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                 "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -18373,6 +18523,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
         self.assertIn("- knowledge_graph_blueprint_json: `" + ("c" * 64) + "`", markdown)
         self.assertIn("- knowledge_graph_blueprint_markdown: `" + ("d" * 64) + "`", markdown)
+        self.assertIn("- knowledge_graph_nodes: `" + ("e" * 64) + "`", markdown)
+        self.assertIn("## Knowledge Graph Checks", markdown)
         self.assertIn("abc1234", markdown)
 
 

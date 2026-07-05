@@ -12,6 +12,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_DIR = PROJECT_ROOT / "research_vault" / "_system"
 DEFAULT_OUTPUT_DIR = SYSTEM_DIR / "openclaw_integration"
 KST = ZoneInfo("Asia/Seoul")
+KNOWLEDGE_GRAPH_FILES = {
+    "nodes": "openclaw_knowledge_graph_nodes.json",
+    "edges": "openclaw_knowledge_graph_edges.json",
+    "master_index": "openclaw_knowledge_graph_master_index.md",
+    "glossary": "openclaw_knowledge_graph_glossary.md",
+    "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+}
 
 
 def load_json(path: Path, default):
@@ -430,6 +437,7 @@ def build_context(project_root: Path) -> dict:
             "completion_report_json": "openclaw_bridge_completion_report.json",
             "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
             "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "knowledge_graph_validation_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
             "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
@@ -564,7 +572,126 @@ def render_knowledge_graph_blueprint_markdown(blueprint: dict) -> str:
     return "\n".join(lines)
 
 
+def build_personal_knowledge_graph_artifacts(blueprint: dict) -> dict:
+    nodes = []
+    for item in blueprint.get("seed_nodes", []):
+        if not isinstance(item, dict):
+            continue
+        node = dict(item)
+        node.setdefault("source", "openclaw_knowledge_graph_blueprint")
+        node.setdefault("raw_source_excluded", True)
+        node.setdefault("graph_layer", "personal_knowledge_graph")
+        nodes.append(node)
+    edges = []
+    for item in blueprint.get("seed_edges", []):
+        if not isinstance(item, dict):
+            continue
+        edge = dict(item)
+        edge.setdefault("source", "openclaw_knowledge_graph_blueprint")
+        edge.setdefault("raw_source_excluded", True)
+        edges.append(edge)
+    return {
+        "schema": "openclaw_personal_knowledge_graph_artifacts_v1",
+        "source_schema": blueprint.get("schema"),
+        "generated_from": "openclaw_knowledge_graph_blueprint.json",
+        "storage_model": (blueprint.get("recommended_layering") or {}).get("storage_model"),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "node_types": blueprint.get("node_types") or [],
+        "edge_types": blueprint.get("edge_types") or [],
+        "nodes": nodes,
+        "edges": edges,
+        "files": KNOWLEDGE_GRAPH_FILES,
+    }
+
+
+def render_knowledge_graph_master_index(artifacts: dict) -> str:
+    topic_nodes = [node for node in artifacts.get("nodes", []) if node.get("type") == "topic"]
+    concept_nodes = [node for node in artifacts.get("nodes", []) if node.get("type") == "concept"]
+    note_nodes = [node for node in artifacts.get("nodes", []) if node.get("type") == "note"]
+    lines = [
+        "# OpenClaw Knowledge Graph Master Index",
+        "",
+        f"- schema: `{artifacts.get('schema')}`",
+        f"- nodes: {artifacts.get('node_count')}",
+        f"- edges: {artifacts.get('edge_count')}",
+        "- source: `openclaw_knowledge_graph_blueprint.json`",
+        "",
+        "## Topics",
+        "",
+    ]
+    if topic_nodes:
+        for node in topic_nodes:
+            path = " > ".join(node.get("master_index_path") or [])
+            lines.append(f"- `{node.get('id')}`: {node.get('title')} / path: {path or 'unassigned'} / status={node.get('status')}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Concepts", ""])
+    if concept_nodes:
+        for node in concept_nodes:
+            lines.append(f"- `{node.get('id')}`: {node.get('term') or node.get('title')} / status={node.get('status')}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Marginalia Queue", ""])
+    if note_nodes:
+        for node in note_nodes:
+            lines.append(f"- `{node.get('id')}` -> `{node.get('parent')}` / status={node.get('status')}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Graph Files", ""])
+    for key, filename in (artifacts.get("files") or {}).items():
+        lines.append(f"- {key}: `{filename}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_knowledge_graph_glossary(artifacts: dict) -> str:
+    lines = ["# OpenClaw Knowledge Graph Glossary", ""]
+    concept_nodes = [node for node in artifacts.get("nodes", []) if node.get("type") == "concept"]
+    if not concept_nodes:
+        lines.append("- none")
+    for node in concept_nodes:
+        lines.extend(
+            [
+                f"## {node.get('term') or node.get('title') or node.get('id')}",
+                "",
+                f"- id: `{node.get('id')}`",
+                f"- canonical: {node.get('canonical_name') or ''}",
+                f"- definition: {node.get('definition') or ''}",
+                f"- formula: `{node.get('formula') or ''}`",
+                f"- status: {node.get('status')}",
+                f"- related: {', '.join(node.get('related') or [])}",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def render_knowledge_graph_marginalia_queue(artifacts: dict) -> str:
+    lines = ["# OpenClaw Knowledge Graph Marginalia Queue", ""]
+    note_nodes = [node for node in artifacts.get("nodes", []) if node.get("type") == "note"]
+    if not note_nodes:
+        lines.append("- none")
+    for node in note_nodes:
+        lines.extend(
+            [
+                f"## {node.get('title') or node.get('id')}",
+                "",
+                f"- id: `{node.get('id')}`",
+                f"- parent: `{node.get('parent')}`",
+                f"- status: {node.get('status')}",
+                f"- hypothesis: {node.get('hypothesis') or ''}",
+                f"- next_action: {node.get('next_action') or ''}",
+                "",
+                str(node.get("content") or ""),
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def build_bridge_manifest(context: dict) -> dict:
+    graph_files = KNOWLEDGE_GRAPH_FILES
     return {
         "schema": "investment_research_openclaw_bridge_v1",
         "generated_at": datetime.now(tz=KST).isoformat(timespec="seconds"),
@@ -574,6 +701,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "markdown_file": "investment_research_context.md",
         "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
         "knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json",
+        "knowledge_graph_files": graph_files,
         "status_file": "bridge_status.json",
         "readme_file": "README.md",
         "read_order": [
@@ -583,6 +711,11 @@ def build_bridge_manifest(context: dict) -> dict:
             "investment_research_context.json",
             "openclaw_knowledge_graph_blueprint.md",
             "openclaw_knowledge_graph_blueprint.json",
+            graph_files["nodes"],
+            graph_files["edges"],
+            graph_files["master_index"],
+            graph_files["glossary"],
+            graph_files["marginalia"],
             "openclaw_bridge_completion_report.md",
             "openclaw_bridge_completion_report.json",
         ],
@@ -592,6 +725,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
         "validation_command": "python tools\\check_openclaw_investment_context.py --max-age-hours 24",
         "completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24",
+        "knowledge_graph_validation_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
         "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
         "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
         "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
@@ -606,18 +740,34 @@ def write_context(context: dict, output_dir: Path) -> dict:
     md_path = output_dir / "investment_research_context.md"
     kg_json_path = output_dir / "openclaw_knowledge_graph_blueprint.json"
     kg_md_path = output_dir / "openclaw_knowledge_graph_blueprint.md"
+    kg_nodes_path = output_dir / KNOWLEDGE_GRAPH_FILES["nodes"]
+    kg_edges_path = output_dir / KNOWLEDGE_GRAPH_FILES["edges"]
+    kg_master_index_path = output_dir / KNOWLEDGE_GRAPH_FILES["master_index"]
+    kg_glossary_path = output_dir / KNOWLEDGE_GRAPH_FILES["glossary"]
+    kg_marginalia_path = output_dir / KNOWLEDGE_GRAPH_FILES["marginalia"]
     manifest_path = output_dir / "openclaw_bridge_manifest.json"
     json_path.write_text(json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(render_markdown(context), encoding="utf-8")
     blueprint = context.get("openclaw_knowledge_graph_blueprint") or {}
+    graph_artifacts = build_personal_knowledge_graph_artifacts(blueprint)
     kg_json_path.write_text(json.dumps(blueprint, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     kg_md_path.write_text(render_knowledge_graph_blueprint_markdown(blueprint), encoding="utf-8")
+    kg_nodes_path.write_text(json.dumps(graph_artifacts["nodes"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    kg_edges_path.write_text(json.dumps(graph_artifacts["edges"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    kg_master_index_path.write_text(render_knowledge_graph_master_index(graph_artifacts), encoding="utf-8")
+    kg_glossary_path.write_text(render_knowledge_graph_glossary(graph_artifacts), encoding="utf-8")
+    kg_marginalia_path.write_text(render_knowledge_graph_marginalia_queue(graph_artifacts), encoding="utf-8")
     manifest_path.write_text(json.dumps(build_bridge_manifest(context), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
         "json_path": str(json_path),
         "markdown_path": str(md_path),
         "knowledge_graph_blueprint_json_path": str(kg_json_path),
         "knowledge_graph_blueprint_markdown_path": str(kg_md_path),
+        "knowledge_graph_nodes_path": str(kg_nodes_path),
+        "knowledge_graph_edges_path": str(kg_edges_path),
+        "knowledge_graph_master_index_path": str(kg_master_index_path),
+        "knowledge_graph_glossary_path": str(kg_glossary_path),
+        "knowledge_graph_marginalia_path": str(kg_marginalia_path),
         "manifest_path": str(manifest_path),
     }
 

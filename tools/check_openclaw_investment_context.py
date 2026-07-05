@@ -11,6 +11,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_integration"
 DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+KNOWLEDGE_GRAPH_FILES = {
+    "nodes": "openclaw_knowledge_graph_nodes.json",
+    "edges": "openclaw_knowledge_graph_edges.json",
+    "master_index": "openclaw_knowledge_graph_master_index.md",
+    "glossary": "openclaw_knowledge_graph_glossary.md",
+    "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+}
 
 
 SECRET_PATTERNS = [
@@ -138,6 +145,11 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
     md_path = directory / "investment_research_context.md"
     kg_json_path = directory / "openclaw_knowledge_graph_blueprint.json"
     kg_md_path = directory / "openclaw_knowledge_graph_blueprint.md"
+    kg_nodes_path = directory / KNOWLEDGE_GRAPH_FILES["nodes"]
+    kg_edges_path = directory / KNOWLEDGE_GRAPH_FILES["edges"]
+    kg_master_index_path = directory / KNOWLEDGE_GRAPH_FILES["master_index"]
+    kg_glossary_path = directory / KNOWLEDGE_GRAPH_FILES["glossary"]
+    kg_marginalia_path = directory / KNOWLEDGE_GRAPH_FILES["marginalia"]
     manifest_path = directory / "openclaw_bridge_manifest.json"
     if not md_path.exists():
         raise AssertionError(f"context Markdown not found: {md_path}")
@@ -145,12 +157,26 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError(f"OpenClaw knowledge graph blueprint JSON not found: {kg_json_path}")
     if not kg_md_path.exists():
         raise AssertionError(f"OpenClaw knowledge graph blueprint Markdown not found: {kg_md_path}")
+    for label, path in {
+        "nodes": kg_nodes_path,
+        "edges": kg_edges_path,
+        "master_index": kg_master_index_path,
+        "glossary": kg_glossary_path,
+        "marginalia": kg_marginalia_path,
+    }.items():
+        if not path.exists():
+            raise AssertionError(f"OpenClaw knowledge graph {label} file not found: {path}")
     if not manifest_path.exists():
         raise AssertionError(f"OpenClaw bridge manifest not found: {manifest_path}")
     validate_no_secret_like_content(json_path)
     validate_no_secret_like_content(md_path)
     validate_no_secret_like_content(kg_json_path)
     validate_no_secret_like_content(kg_md_path)
+    validate_no_secret_like_content(kg_nodes_path)
+    validate_no_secret_like_content(kg_edges_path)
+    validate_no_secret_like_content(kg_master_index_path)
+    validate_no_secret_like_content(kg_glossary_path)
+    validate_no_secret_like_content(kg_marginalia_path)
     validate_no_secret_like_content(manifest_path)
     payload = load_context(json_path)
     messages = validate_context(payload, max_age_hours=max_age_hours)
@@ -172,6 +198,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError("OpenClaw bridge manifest knowledge_graph_blueprint_file mismatch")
     if manifest.get("knowledge_graph_blueprint_json_file") != "openclaw_knowledge_graph_blueprint.json":
         raise AssertionError("OpenClaw bridge manifest knowledge_graph_blueprint_json_file mismatch")
+    if manifest.get("knowledge_graph_files") != KNOWLEDGE_GRAPH_FILES:
+        raise AssertionError("OpenClaw bridge manifest knowledge_graph_files mismatch")
     expected_read_order = [
         "bridge_status.json",
         "openclaw_bridge_manifest.json",
@@ -179,6 +207,11 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "investment_research_context.json",
         "openclaw_knowledge_graph_blueprint.md",
         "openclaw_knowledge_graph_blueprint.json",
+        KNOWLEDGE_GRAPH_FILES["nodes"],
+        KNOWLEDGE_GRAPH_FILES["edges"],
+        KNOWLEDGE_GRAPH_FILES["master_index"],
+        KNOWLEDGE_GRAPH_FILES["glossary"],
+        KNOWLEDGE_GRAPH_FILES["marginalia"],
         "openclaw_bridge_completion_report.md",
         "openclaw_bridge_completion_report.json",
     ]
@@ -189,6 +222,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "strict_refresh_command",
         "validation_command",
         "completion_audit_command",
+        "knowledge_graph_validation_command",
         "final_completion_audit_command",
         "status_summary_command",
         "offline_readiness_command",
@@ -224,6 +258,26 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
     ]:
         if required not in blueprint_markdown:
             raise AssertionError(f"OpenClaw knowledge graph blueprint markdown is missing required text: {required}")
+    try:
+        graph_nodes = json.loads(kg_nodes_path.read_text(encoding="utf-8-sig"))
+        graph_edges = json.loads(kg_edges_path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"OpenClaw knowledge graph JSON artifact is invalid: {exc}") from exc
+    if not isinstance(graph_nodes, list) or not graph_nodes:
+        raise AssertionError("OpenClaw knowledge graph nodes must be a non-empty list")
+    if not isinstance(graph_edges, list) or not graph_edges:
+        raise AssertionError("OpenClaw knowledge graph edges must be a non-empty list")
+    graph_node_ids = {str(item.get("id") or "") for item in graph_nodes if isinstance(item, dict)}
+    for required in ("concept.relu", "topic.graph_rendering_8000_nodes", "note.graph_rendering_lod_experiment"):
+        if required not in graph_node_ids:
+            raise AssertionError(f"OpenClaw knowledge graph nodes missing required id: {required}")
+    for path, required in (
+        (kg_master_index_path, "topic.graph_rendering_8000_nodes"),
+        (kg_glossary_path, "concept.relu"),
+        (kg_marginalia_path, "note.graph_rendering_lod_experiment"),
+    ):
+        if required not in path.read_text(encoding="utf-8-sig"):
+            raise AssertionError(f"OpenClaw knowledge graph artifact missing {required}: {path}")
     status_path = directory / "bridge_status.json"
     if status_path.exists():
         validate_no_secret_like_content(status_path)
@@ -250,6 +304,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "strict_refresh": "strict_refresh_command",
             "validation": "validation_command",
             "completion_audit": "completion_audit_command",
+            "knowledge_graph_validation": "knowledge_graph_validation_command",
             "final_completion_audit": "final_completion_audit_command",
             "status_summary": "status_summary_command",
             "offline_readiness": "offline_readiness_command",
@@ -264,6 +319,11 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "context_markdown": md_path,
             "knowledge_graph_blueprint_json": kg_json_path,
             "knowledge_graph_blueprint_markdown": kg_md_path,
+            "knowledge_graph_nodes": kg_nodes_path,
+            "knowledge_graph_edges": kg_edges_path,
+            "knowledge_graph_master_index": kg_master_index_path,
+            "knowledge_graph_glossary": kg_glossary_path,
+            "knowledge_graph_marginalia": kg_marginalia_path,
             "bridge_manifest": manifest_path,
         }
         file_hashes = status.get("file_sha256") or {}
@@ -297,6 +357,11 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "investment_research_context.json",
             "openclaw_knowledge_graph_blueprint.md",
             "openclaw_knowledge_graph_blueprint.json",
+            "openclaw_knowledge_graph_nodes.json",
+            "openclaw_knowledge_graph_edges.json",
+            "openclaw_knowledge_graph_master_index.md",
+            "openclaw_knowledge_graph_glossary.md",
+            "openclaw_knowledge_graph_marginalia_queue.md",
             "openclaw_bridge_manifest.json",
             "read_order",
             "context generated at",
