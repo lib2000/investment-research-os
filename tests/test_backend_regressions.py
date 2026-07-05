@@ -1016,7 +1016,10 @@ class InvestmentCalendarStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"kr_event_count"', source)
         self.assertIn('"us_event_count"', source)
         self.assertIn('"earnings_event_count"', source)
+        self.assertIn('"future_earnings_candidate_count"', source)
+        self.assertIn('"future_earnings_candidates"', source)
         self.assertIn('"earnings_events"', source)
+        self.assertIn("향후 실적 후보", source)
 
 
 class ClassificationQualityCheckToolTests(unittest.TestCase):

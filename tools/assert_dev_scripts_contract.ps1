@@ -583,6 +583,8 @@ $contracts = @(
       'user_portfolios.json',
       'interest_list.json',
       '--min-earnings-events',
+      'future_earnings_candidate_count',
+      '향후 실적 후보',
       '실적발표 이벤트 제목 표기 누락',
       '투자 캘린더 저장/실적발표 상태 정상'
     )
@@ -600,6 +602,8 @@ $contracts = @(
       'user_portfolios.json',
       'research_automation_status.json',
       '투자 캘린더/실적 일정',
+      'future_earnings_candidates',
+      '향후 실적 후보',
       '추천 근거 문서 연결',
       'recommendation_citations_signal',
       '저장/RAG 실패 진단',

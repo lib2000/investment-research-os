@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 def project_root(start: Path) -> Path:
@@ -45,6 +46,46 @@ def age_hours(value: Any) -> float | None:
     if not parsed:
         return None
     return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600
+
+
+def parse_date(value: Any) -> date | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return date.fromisoformat(value.strip()[:10])
+    except ValueError:
+        return None
+
+
+def future_earnings_candidates(earnings_cache: Any, *, today: date) -> list[dict[str, Any]]:
+    entries = earnings_cache.get("entries") if isinstance(earnings_cache, dict) and isinstance(earnings_cache.get("entries"), dict) else {}
+    candidates: list[dict[str, Any]] = []
+    for ticker, entry in entries.items():
+        if not isinstance(entry, dict):
+            continue
+        ticker_text = normalize_ticker(entry.get("ticker") or ticker)
+        company_name = str(entry.get("company_name") or entry.get("name") or ticker_text).strip()
+        next_date = parse_date(entry.get("next_earnings_date"))
+        source = str(entry.get("source") or entry.get("earnings_calendar_source") or "earnings_calendar_cache").strip()
+        if not next_date:
+            for event in entry.get("events") or []:
+                if not isinstance(event, dict):
+                    continue
+                event_date = parse_date(event.get("date"))
+                if event_date and event_date >= today:
+                    next_date = event_date
+                    source = str(event.get("source") or source).strip()
+                    break
+        if ticker_text and next_date and next_date >= today:
+            candidates.append(
+                {
+                    "ticker": ticker_text,
+                    "company_name": company_name or ticker_text,
+                    "next_earnings_date": next_date.isoformat(),
+                    "source": source or "earnings_calendar_cache",
+                }
+            )
+    return sorted(candidates, key=lambda item: (str(item.get("next_earnings_date") or ""), str(item.get("ticker") or "")))
 
 
 def add_issue(issues: list[str], condition: bool, message: str) -> None:
@@ -128,6 +169,7 @@ def main() -> int:
     us_events = monthly.get("US") if isinstance(monthly.get("US"), list) else []
     all_events = [event for rows in monthly.values() if isinstance(rows, list) for event in rows if isinstance(event, dict)]
     earnings_events = [event for event in all_events if event.get("event_type") == "earnings" or event.get("category") == "실적발표"]
+    future_candidates = future_earnings_candidates(earnings_cache, today=datetime.now(ZoneInfo("Asia/Seoul")).date())
     source_age = age_hours(payload.get("updated_at"))
 
     add_issue(issues, payload.get("status") != "ok", f"투자 캘린더 상태 확인 필요: {payload.get('status') or '미확인'}")
@@ -136,7 +178,11 @@ def main() -> int:
     add_issue(issues, len(weekly) < 1, "주간 캘린더 버킷 누락")
     add_issue(issues, len(kr_events) < args.min_kr_events, f"한국 시장 일정 부족: {len(kr_events)}개")
     add_issue(issues, len(us_events) < args.min_us_events, f"미국 시장 일정 부족: {len(us_events)}개")
-    add_issue(issues, len(earnings_events) < args.min_earnings_events, f"실적발표 일정 부족: {len(earnings_events)}개")
+    add_issue(
+        issues,
+        len(earnings_events) < args.min_earnings_events and len(future_candidates) < args.min_earnings_events,
+        f"실적발표 일정 부족: {len(earnings_events)}개, 향후 후보 {len(future_candidates)}개",
+    )
     add_issue(
         issues,
         any("실적발표" not in str(event.get("title") or "") for event in earnings_events),
@@ -161,6 +207,8 @@ def main() -> int:
         "us_event_count": len(us_events),
         "weekly_bucket_count": len(weekly),
         "earnings_event_count": len(earnings_events),
+        "future_earnings_candidate_count": len(future_candidates),
+        "future_earnings_candidates": future_candidates[:10],
         "earnings_events": [
             {
                 "date": event.get("date"),
@@ -180,9 +228,13 @@ def main() -> int:
     print(f"캘린더 월: {calendar_month} | 갱신 {payload.get('updated_at')} | 유니버스 {len(universe)}개")
     print(f"시장 일정: 한국 {len(kr_events)}개 | 미국 {len(us_events)}개 | 주간 버킷 {len(weekly)}개")
     print(f"실적발표: {len(earnings_events)}개")
+    print(f"향후 실적 후보: {len(future_candidates)}개")
     for event in earnings_events[:5]:
         related = event.get("related") if isinstance(event.get("related"), list) else []
         print(f"- {event.get('date')} {event.get('market')} {event.get('title')} | {' · '.join(str(x) for x in related)}")
+    if not earnings_events:
+        for item in future_candidates[:5]:
+            print(f"- {item.get('next_earnings_date')} {item.get('ticker')} {item.get('company_name')} | {item.get('source')}")
 
     if issues:
         for issue in issues:

@@ -35,6 +35,15 @@ def kst_now() -> datetime:
     return datetime.now(ZoneInfo("Asia/Seoul"))
 
 
+def parse_iso_date(value: Any) -> datetime.date | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip()[:10]).date()
+    except ValueError:
+        return None
+
+
 def parse_hhmm(value: str, default: time) -> time:
     try:
         hour, minute = [int(part) for part in str(value).split(":", 1)]
@@ -295,16 +304,29 @@ def investment_calendar_signal(vault_dir: Path) -> dict[str, Any]:
     entries = earnings_cache.get("entries") if isinstance(earnings_cache.get("entries"), dict) else {}
     month = str(payload.get("calendar_month") or "")
     earnings_candidates = 0
+    future_earnings_candidates = 0
+    today = kst_now().date()
     if month:
         for entry in entries.values():
             if not isinstance(entry, dict):
                 continue
             if str(entry.get("next_earnings_date") or "").startswith(month):
                 earnings_candidates += 1
+            next_date = parse_iso_date(entry.get("next_earnings_date"))
+            counted_future = bool(next_date and next_date >= today)
+            if counted_future:
+                future_earnings_candidates += 1
                 continue
             for event in entry.get("events") or []:
-                if isinstance(event, dict) and str(event.get("date") or "").startswith(month):
+                if not isinstance(event, dict):
+                    continue
+                if str(event.get("date") or "").startswith(month):
                     earnings_candidates += 1
+                event_date = parse_iso_date(event.get("date"))
+                if event_date and event_date >= today and not counted_future:
+                    future_earnings_candidates += 1
+                    counted_future = True
+                if counted_future:
                     break
     score = 0.0
     # Generated calendar JSON files may omit status; successful loading plus a valid month is enough.
@@ -316,13 +338,16 @@ def investment_calendar_signal(vault_dir: Path) -> dict[str, Any]:
         score += 20.0
     if weekly:
         score += 10.0
-    if earnings_candidates:
+    if earnings_candidates or future_earnings_candidates:
         score += 20.0
     return signal(
         "investment_calendar_store",
         "투자 캘린더/실적 일정",
         score,
-        f"{month or '월 미확인'}, 한국 {len(kr_events)}개, 미국 {len(us_events)}개, 실적 후보 {earnings_candidates}개",
+        (
+            f"{month or '월 미확인'}, 한국 {len(kr_events)}개, 미국 {len(us_events)}개, "
+            f"실적 후보 {earnings_candidates}개, 향후 실적 후보 {future_earnings_candidates}개"
+        ),
         "python tools\\check_investment_calendar_store.py --strict",
     )
 
