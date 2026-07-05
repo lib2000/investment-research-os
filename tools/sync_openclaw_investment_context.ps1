@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$OpenClawWorkspace = "$env:USERPROFILE\.openclaw\workspace",
   [double]$MaxAgeHours = 24,
   [switch]$SkipCopy,
