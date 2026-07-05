@@ -92,7 +92,10 @@ $contracts = @(
       'ConvertTo-Json',
       '/api/v1/manual-transactions/import.csv/template',
       'manual-transactions-template.csv',
-      'CSV 템플릿 API 응답 검증에 실패했습니다.'
+      'CSV 템플릿 API 응답 검증에 실패했습니다.',
+      '8001 연구 콘솔은 research_os_main:app 진입점입니다.',
+      'restart-research-backend.ps1 -Port 8001',
+      'main:app 기반 모바일/API 백엔드 검증용'
     )
   },
   @{
