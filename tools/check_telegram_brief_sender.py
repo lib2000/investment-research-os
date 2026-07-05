@@ -18,6 +18,9 @@ from research_os.portfolio_change_detection import detect_portfolio_changes  # n
 from research_os.telegram_brief_sender import DESIGN_NAME, build_telegram_brief_payload  # noqa: E402
 
 
+DEFAULT_RECOMMENDATIONS_STORE = PROJECT_ROOT / "research_vault" / "_system" / "daily_recommendations.json"
+
+
 def default_telegram_chat_id() -> tuple[str, str]:
     for name in ("MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID"):
         value = os.getenv(name, "").strip()
@@ -58,6 +61,33 @@ def sample_current() -> dict:
     }
 
 
+def sample_today_recommendations() -> list[dict]:
+    return [
+        {
+            "recommendation_date": "2026-07-05",
+            "market": "KR",
+            "market_label": "Korea",
+            "rank": 1,
+            "ticker": "361610",
+            "company_name": "SKIET",
+            "score": 139,
+            "baseline_price": 17800,
+            "currency": "KRW",
+        },
+        {
+            "recommendation_date": "2026-07-05",
+            "market": "US",
+            "market_label": "US",
+            "rank": 1,
+            "ticker": "OTLY",
+            "company_name": "Oatly Group AB",
+            "score": 176,
+            "baseline_price": 8.19,
+            "currency": "USD",
+        },
+    ]
+
+
 def read_json(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -65,10 +95,41 @@ def read_json(path: Path) -> dict:
     return data
 
 
+def latest_recommendations(store: dict) -> list[dict]:
+    records = [item for item in store.get("records") or [] if isinstance(item, dict)]
+    if not records:
+        return []
+    latest_date = str(store.get("latest_recommendation_date") or "").strip()
+    if not latest_date:
+        latest_date = max(str(item.get("recommendation_date") or "") for item in records)
+    latest = [item for item in records if str(item.get("recommendation_date") or "") == latest_date]
+
+    def sort_key(item: dict) -> tuple[str, int, str]:
+        try:
+            rank = int(item.get("rank") or 999)
+        except (TypeError, ValueError):
+            rank = 999
+        return str(item.get("market") or ""), rank, str(item.get("ticker") or "")
+
+    return sorted(latest, key=sort_key)
+
+
+def load_latest_recommendations(path: Path | None) -> list[dict]:
+    if path and path.exists():
+        return latest_recommendations(read_json(path))
+    return sample_today_recommendations()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Telegram portfolio brief payload를 dry-run으로 점검합니다.")
     parser.add_argument("--change-json", type=Path, help="portfolio_change_detection_v1 결과 JSON")
     parser.add_argument("--output-json", type=Path, help="Telegram payload 결과 저장")
+    parser.add_argument(
+        "--recommendations-json",
+        type=Path,
+        default=DEFAULT_RECOMMENDATIONS_STORE,
+        help="daily_recommendations.json 경로. 없으면 샘플 추천으로 dry-run합니다.",
+    )
     parser.add_argument("--chat-id", default=None, help="실제 전송 없이 payload에 넣을 chat id")
     parser.add_argument("--max-message-chars", type=int, default=3600)
     parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
@@ -78,10 +139,12 @@ def main() -> int:
     effective_chat_id = args.chat_id if args.chat_id is not None else env_chat_id
     chat_id_source = "cli" if args.chat_id is not None and args.chat_id else env_chat_source
     change_result = read_json(args.change_json) if args.change_json else detect_portfolio_changes(sample_previous(), sample_current())
+    today_recommendations = load_latest_recommendations(args.recommendations_json)
     payload = build_telegram_brief_payload(
         change_result,
         chat_id=effective_chat_id,
         max_message_chars=args.max_message_chars,
+        today_recommendations=today_recommendations,
     )
     if args.output_json:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
@@ -97,7 +160,11 @@ def main() -> int:
     print(f"- message_count: {payload.get('message_count')}")
     text = str(payload.get("text") or "")
     print(f"- text_chars: {len(text)}")
-    for marker in ["Portfolio Health", "Top Movers", "Watch Items"]:
+    print(f"- today_recommendation_count: {payload.get('today_recommendation_count')}")
+    priority_filter = payload.get("priority_filter") if isinstance(payload.get("priority_filter"), dict) else {}
+    print(f"- priority_filter_mode: {priority_filter.get('mode')}")
+    print(f"- suppressed_low_priority_count: {priority_filter.get('suppressed_low_priority_count')}")
+    for marker in ["Investment Priority Brief", "Today Recommendations", "Portfolio Health", "Top Movers", "Watch Items"]:
         print(f"- contains_{marker.replace(' ', '_').lower()}: {marker in text}")
     return 0 if payload.get("status") == "success" and text else 1
 

@@ -3256,18 +3256,78 @@ class TelegramBriefSenderTests(unittest.TestCase):
             },
         )
 
-        payload = build_telegram_brief_payload(change_result, chat_id="12345")
+        today_recommendations = [
+            {
+                "recommendation_date": "2026-07-05",
+                "market": "KR",
+                "market_label": "Korea",
+                "rank": 1,
+                "ticker": "361610",
+                "company_name": "SKIET",
+                "score": 139,
+                "baseline_price": 17800,
+                "currency": "KRW",
+            },
+            {
+                "recommendation_date": "2026-07-05",
+                "market": "US",
+                "market_label": "US",
+                "rank": 1,
+                "ticker": "OTLY",
+                "company_name": "Oatly Group AB",
+                "score": 176,
+                "baseline_price": 8.19,
+                "currency": "USD",
+            },
+        ]
+
+        payload = build_telegram_brief_payload(change_result, chat_id="12345", today_recommendations=today_recommendations)
 
         self.assertEqual(payload["design"], "telegram_brief_sender_v1")
         self.assertTrue(payload["chat_id_configured"])
         self.assertEqual(payload["message_count"], 1)
+        self.assertIn("Investment Priority Brief", payload["text"])
+        self.assertIn("Today Recommendations", payload["text"])
+        self.assertIn("SKIET", payload["text"])
+        self.assertIn("Oatly Group AB", payload["text"])
         self.assertIn("Portfolio Health", payload["text"])
         self.assertIn("Top Movers", payload["text"])
         self.assertIn("Watch Items", payload["text"])
         self.assertIn("PL Planet Labs", payload["text"])
         self.assertIn("JOBY Joby Aviation", payload["text"])
+        self.assertEqual(payload["today_recommendation_count"], 2)
+        self.assertEqual(payload["priority_filter"]["mode"], "important_only")
+        self.assertGreaterEqual(payload["priority_filter"]["suppressed_low_priority_count"], 1)
         self.assertEqual(payload["messages"][0]["chat_id"], "12345")
         self.assertTrue(payload["messages"][0]["disable_web_page_preview"])
+
+    def test_telegram_brief_check_tool_loads_latest_recommendations(self):
+        tool = load_telegram_brief_check_tool()
+
+        store = {
+            "latest_recommendation_date": "2026-07-05",
+            "records": [
+                {
+                    "recommendation_date": "2026-07-04",
+                    "market": "KR",
+                    "rank": 1,
+                    "ticker": "OLD",
+                    "company_name": "Old Pick",
+                },
+                {
+                    "recommendation_date": "2026-07-05",
+                    "market": "US",
+                    "rank": 1,
+                    "ticker": "ABSI",
+                    "company_name": "Absci Corporation",
+                },
+            ],
+        }
+
+        latest = tool.latest_recommendations(store)
+
+        self.assertEqual(len(latest), 1)
+        self.assertEqual(latest[0]["ticker"], "ABSI")
 
     def test_telegram_brief_sender_chunks_long_messages(self):
         from research_os.telegram_brief_sender import build_telegram_brief_payload
@@ -3671,6 +3731,7 @@ class MarketSignalGraphPipelineContractTests(unittest.TestCase):
         self.assertGreater(result["summary"]["portfolio_score"], 0)
         self.assertTrue(result["change_detection"]["top_movers"])
         self.assertTrue(result["telegram"]["chat_id_configured"])
+        self.assertIn("Investment Priority Brief", result["telegram"]["text"])
         self.assertIn("Portfolio Health", result["telegram"]["text"])
 
     def test_pipeline_contract_reports_payload_validation_errors(self):

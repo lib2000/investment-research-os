@@ -7,6 +7,12 @@ from typing import Any
 
 DESIGN_NAME = "telegram_brief_sender_v1"
 DEFAULT_MAX_MESSAGE_CHARS = 3600
+LOW_PRIORITY_MESSAGE_LABELS = [
+    "routine_status_ok",
+    "dry_run_transport_details",
+    "raw_hash_or_storage_paths",
+    "empty_reference_sections",
+]
 
 
 def _safe_text(value: Any) -> str:
@@ -40,6 +46,37 @@ def _ticker_label(item: dict[str, Any]) -> str:
     return f"{ticker} {company}".strip()
 
 
+def _company_label(item: dict[str, Any]) -> str:
+    company = _safe_text(item.get("company_name")) or _safe_text(item.get("company")) or "UNKNOWN"
+    ticker = _safe_text(item.get("ticker"))
+    return f"{company} ({ticker})" if ticker else company
+
+
+def _format_price(value: Any, currency: Any = "") -> str:
+    if value in (None, ""):
+        return ""
+    currency_text = _safe_text(currency)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        price_text = _safe_text(value)
+    else:
+        if number.is_integer():
+            price_text = f"{int(number):,}"
+        else:
+            price_text = f"{number:,.2f}".rstrip("0").rstrip(".")
+    return f"{price_text} {currency_text}".strip()
+
+
+def _recommendation_sort_key(item: dict[str, Any]) -> tuple[str, int, str]:
+    market = _safe_text(item.get("market")) or _safe_text(item.get("market_label"))
+    try:
+        rank = int(item.get("rank") or 999)
+    except (TypeError, ValueError):
+        rank = 999
+    return market, rank, _safe_text(item.get("ticker"))
+
+
 def _change_reason(item: dict[str, Any]) -> str:
     event_types = item.get("event_types") if isinstance(item.get("event_types"), list) else []
     if "added" in event_types:
@@ -61,11 +98,56 @@ def _change_reason(item: dict[str, Any]) -> str:
 def _section_lines(title: str, items: list[dict[str, Any]], *, limit: int) -> list[str]:
     lines = [title]
     if not items:
-        lines.append("- none")
         return lines
     for item in items[: max(1, limit)]:
         lines.append(f"- {_ticker_label(item)}: {_change_reason(item)}")
     return lines
+
+
+def _recommendation_section_lines(today_recommendations: list[dict[str, Any]], *, limit_per_market: int = 3) -> list[str]:
+    recommendations = [item for item in today_recommendations if isinstance(item, dict)]
+    if not recommendations:
+        return []
+    latest_date = max((_safe_text(item.get("recommendation_date")) for item in recommendations), default="")
+    lines = ["Today Recommendations"]
+    if latest_date:
+        lines.append(f"As of: {latest_date}")
+    market_groups: dict[str, list[dict[str, Any]]] = {}
+    market_labels: dict[str, str] = {}
+    for item in sorted(recommendations, key=_recommendation_sort_key):
+        market = _safe_text(item.get("market")) or "UNKNOWN"
+        market_groups.setdefault(market, []).append(item)
+        market_labels.setdefault(market, _safe_text(item.get("market_label")) or market)
+    for market in sorted(market_groups):
+        lines.append(f"{market_labels.get(market, market)}")
+        for item in market_groups[market][: max(1, limit_per_market)]:
+            rank = _safe_text(item.get("rank")) or "?"
+            score = _safe_text(item.get("score")) or "n/a"
+            price = _format_price(item.get("baseline_price"), item.get("currency"))
+            detail = f"score {score}"
+            if price:
+                detail += f", base {price}"
+            lines.append(f"- #{rank} {_company_label(item)}: {detail}")
+    return lines
+
+
+def build_priority_filter_summary(
+    change_result: dict[str, Any],
+    today_recommendations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    delivered_sections = ["portfolio_health"]
+    if today_recommendations:
+        delivered_sections.insert(0, "today_recommendations")
+    if change_result.get("top_movers"):
+        delivered_sections.append("top_movers")
+    if change_result.get("watch_items"):
+        delivered_sections.append("watch_items")
+    return {
+        "mode": "important_only",
+        "delivered_sections": delivered_sections,
+        "suppressed_low_priority_count": len(LOW_PRIORITY_MESSAGE_LABELS),
+        "suppressed_low_priority_labels": list(LOW_PRIORITY_MESSAGE_LABELS),
+    }
 
 
 def chunk_telegram_message(text: str, *, max_chars: int = DEFAULT_MAX_MESSAGE_CHARS) -> list[str]:
@@ -95,12 +177,20 @@ def chunk_telegram_message(text: str, *, max_chars: int = DEFAULT_MAX_MESSAGE_CH
     return chunks or [""]
 
 
-def render_portfolio_telegram_brief(change_result: dict[str, Any], *, max_items: int = 5) -> str:
+def render_portfolio_telegram_brief(
+    change_result: dict[str, Any],
+    *,
+    max_items: int = 5,
+    today_recommendations: list[dict[str, Any]] | None = None,
+) -> str:
     health = change_result.get("health_score") if isinstance(change_result.get("health_score"), dict) else {}
     counts = change_result.get("change_counts") if isinstance(change_result.get("change_counts"), dict) else {}
     top_movers = [item for item in change_result.get("top_movers") or [] if isinstance(item, dict)]
     watch_items = [item for item in change_result.get("watch_items") or [] if isinstance(item, dict)]
     lines = [
+        "Investment Priority Brief",
+        *_recommendation_section_lines(today_recommendations or []),
+        "",
         "Portfolio Health",
         f"As of: {_safe_text(change_result.get('current_as_of')) or 'n/a'}",
         (
@@ -120,7 +210,7 @@ def render_portfolio_telegram_brief(change_result: dict[str, Any], *, max_items:
         "",
         *_section_lines("Watch Items", watch_items, limit=max_items),
     ]
-    return "\n".join(lines).strip()
+    return "\n".join(line for line in lines if line != "").strip()
 
 
 def build_telegram_brief_payload(
@@ -129,8 +219,14 @@ def build_telegram_brief_payload(
     chat_id: str | None = None,
     max_items: int = 5,
     max_message_chars: int = DEFAULT_MAX_MESSAGE_CHARS,
+    today_recommendations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    text = render_portfolio_telegram_brief(change_result, max_items=max_items)
+    recommendations = [item for item in today_recommendations or [] if isinstance(item, dict)]
+    text = render_portfolio_telegram_brief(
+        change_result,
+        max_items=max_items,
+        today_recommendations=recommendations,
+    )
     messages = chunk_telegram_message(text, max_chars=max_message_chars)
     payloads = [
         {
@@ -147,4 +243,6 @@ def build_telegram_brief_payload(
         "chat_id_configured": bool(chat_id),
         "messages": payloads,
         "text": text,
+        "today_recommendation_count": len(recommendations),
+        "priority_filter": build_priority_filter_summary(change_result, recommendations),
     }

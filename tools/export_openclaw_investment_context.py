@@ -229,6 +229,23 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
             ],
             "news_inbox_count": len(telegram_items),
         },
+        "telegram_priority_brief": {
+            "design": "telegram_brief_sender_v1",
+            "mode": "important_only",
+            "include_sections": [
+                "today_recommendations_kr_us_top_3",
+                "portfolio_health",
+                "top_movers",
+                "watch_items",
+            ],
+            "suppress_low_priority": [
+                "routine_status_ok",
+                "dry_run_transport_details",
+                "raw_hash_or_storage_paths",
+                "empty_reference_sections",
+            ],
+            "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
+        },
     }
 
 
@@ -460,6 +477,7 @@ def build_context(project_root: Path) -> dict:
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
                 "최신 추천/관심종목/텔레그램 인기글 요약 조회",
+                "텔레그램 발송은 오늘 추천과 주의 신호 중심의 Investment Priority Brief 1건으로 축약",
                 "투자리서치 백엔드 health 확인",
                 "투자 판단 전 근거 문서와 최신성 점검 요청",
             ],
@@ -476,6 +494,7 @@ def render_markdown(context: dict) -> str:
     state = context["current_state"]
     rec = state["daily_recommendations"]
     telegram = state["news_and_telegram"]["telegram_favorite_posts"]
+    telegram_priority = state["news_and_telegram"].get("telegram_priority_brief") or {}
     nps = state["nps_rebalancing"]
     firecrawl = state["firecrawl_monitoring"]
     kg = context.get("openclaw_knowledge_graph_blueprint") or {}
@@ -495,6 +514,7 @@ def render_markdown(context: dict) -> str:
         f"- 관심종목: {state['interests'].get('ticker_count')}개 / 관심섹터: {state['interests'].get('sector_count')}개",
         f"- 포트폴리오: {state['portfolios'].get('portfolio_count')}개 / 보유 종목 {state['portfolios'].get('total_holding_count')}개",
         f"- 뉴스 인박스: {state['news_and_telegram'].get('news_item_count')}개 / 텔레그램 인기글 {telegram.get('news_inbox_count')}개",
+        f"- 텔레그램 발송 기준: {telegram_priority.get('mode')} / {telegram_priority.get('message_goal')}",
         f"- 국민연금 공개자료 스냅샷: {nps.get('status')} / 기준 {nps.get('as_of')}",
         f"- Firecrawl 웹훅: ready={firecrawl.get('webhook_ready')} / last={firecrawl.get('last_webhook_status')}",
         "",
