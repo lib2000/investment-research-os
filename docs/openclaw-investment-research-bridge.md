@@ -104,6 +104,8 @@ python tools\check_openclaw_bridge_completion.py --max-age-hours 1 --require-rep
 python tools\show_openclaw_bridge_status.py --json
 ```
 
+상태 요약 JSON은 `hash_status`, `hash_checked_count`, `hash_mismatches`를 함께 반환한다. 정상 상태에서는 `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`가 되어야 한다.
+
 검증 항목:
 
 - JSON/Markdown 번들 존재 여부
@@ -133,6 +135,6 @@ python tools\show_openclaw_bridge_status.py --json
 - 사람이 읽을 요약은 `data/investment_research/investment_research_context.md`를 사용한다.
 - 더 구조적인 처리가 필요하면 `data/investment_research/investment_research_context.json`을 읽는다.
 - 전체 운영 준비도는 원본 프로젝트에서 `python tools\check_offline_readiness.py --json`을 실행해 확인한다.
-- 빠른 상태 요약은 원본 프로젝트에서 `python tools\show_openclaw_bridge_status.py --json`을 실행해 확인한다.
+- 빠른 상태 요약은 원본 프로젝트에서 `python tools\show_openclaw_bridge_status.py --json`을 실행해 확인하고, `hash_status=ok`, `hash_checked_count=14`인지 본다.
 - 원본 상세 판단은 Investment Research OS 콘솔에서 확인한다.
 - 실거래 주문, 계좌 인증, API 키 요청에는 이 번들을 사용하지 않는다.
