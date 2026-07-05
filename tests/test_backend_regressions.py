@@ -12,6 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -506,6 +507,18 @@ def load_portfolio_report_alert_task_status_tool():
     return module
 
 
+def load_research_backend_watchdog_task_status_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_research_backend_watchdog_task_status.py"
+    spec = spec_from_file_location("check_research_backend_watchdog_task_status", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_portfolio_report_alert_postrun_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -804,6 +817,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         register_source = (PROJECT_ROOT / "tools" / "register_research_backend_watchdog_task.ps1").read_text(
             encoding="utf-8"
         )
+        offline_source = (PROJECT_ROOT / "tools" / "check_offline_readiness.py").read_text(encoding="utf-8")
 
         self.assertIn("/api/v1/system/health", ensure_source)
         self.assertIn("/console/index.html", ensure_source)
@@ -813,6 +827,29 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("-RepetitionInterval", register_source)
         self.assertIn("ensure-research-backend.ps1", register_source)
         self.assertIn("InvestmentJournalApp Research Backend Watchdog", register_source)
+        self.assertIn("check_research_backend_watchdog_task_status.py", offline_source)
+
+    def test_research_backend_watchdog_task_status_detects_bad_scheduler_state(self):
+        tool = load_research_backend_watchdog_task_status_tool()
+        result = tool.evaluate_task_status(
+            {
+                "found": True,
+                "Arguments": "-File ensure-research-backend.ps1 -Port 8001",
+                "RepetitionInterval": "PT30M",
+                "NextRunTime": "2026-07-06T04:22:00+09:00",
+                "LastRunTime": "2026-07-06T04:12:00+09:00",
+                "LastTaskResult": 1,
+                "NumberOfMissedRuns": 2,
+            },
+            state_file=PROJECT_ROOT / "tmp" / "missing-watchdog-state.json",
+            max_state_age_hours=2,
+            now=datetime(2026, 7, 6, 4, 20, tzinfo=ZoneInfo("Asia/Seoul")),
+        )
+
+        self.assertEqual(result["status"], "error")
+        self.assertIn("watchdog repetition interval is not PT10M", "\n".join(result["errors"]))
+        self.assertIn("watchdog last result is non-success: 1", result["errors"])
+        self.assertIn("watchdog missed runs: 2", result["errors"])
 
     def test_backend_runtime_env_recommends_research_backend_restart(self):
         script_source = (PROJECT_ROOT / "tools" / "check_backend_runtime_env.py").read_text(
