@@ -315,6 +315,11 @@ def check_actual_answer_capture_status(openclaw_dir: Path) -> dict[str, Any]:
         "errors": list(result.get("errors") or []),
         "summary": {
             "capture_count": result.get("capture_count"),
+            "pending_count": result.get("pending_count"),
+            "pending_route_counts": result.get("pending_route_counts"),
+            "needs_capture": result.get("needs_capture"),
+            "capture_state": result.get("capture_state"),
+            "capture_state_message": result.get("capture_state_message"),
             "latest_capture": result.get("latest_capture"),
             "route_counts": result.get("route_counts"),
         },

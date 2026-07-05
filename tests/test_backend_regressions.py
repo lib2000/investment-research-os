@@ -20951,9 +20951,13 @@ class OpenClawActualAnswerCaptureStatusTests(unittest.TestCase):
 
         self.assertEqual("ok", result["status"])
         self.assertEqual(1, result["capture_count"])
+        self.assertEqual(0, result["pending_count"])
+        self.assertFalse(result["needs_capture"])
+        self.assertEqual("captured", result["capture_state"])
         self.assertEqual(1, result["route_counts"]["today_work_report"])
         self.assertEqual("today_work_report", result["latest_capture"]["route_id"])
         self.assertIn("capture_count: 1", rendered)
+        self.assertIn("pending_count: 0", rendered)
 
     def test_capture_status_can_require_recent_captures(self):
         status_tool = load_openclaw_actual_answer_capture_status_tool()
@@ -20963,7 +20967,40 @@ class OpenClawActualAnswerCaptureStatusTests(unittest.TestCase):
             result = status_tool.build_result(openclaw_dir, require_recent=True)
 
         self.assertEqual("failure", result["status"])
+        self.assertEqual("no_pending_answers", result["capture_state"])
+        self.assertEqual(0, result["pending_count"])
         self.assertTrue(any("no actual answer captures found" in error for error in result["errors"]))
+
+    def test_capture_status_reports_pending_answers_without_failure(self):
+        status_tool = load_openclaw_actual_answer_capture_status_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            pending_dir = openclaw_dir / "pending_actual_answers"
+            pending_dir.mkdir()
+            (pending_dir / "recommendations_priority.json").write_text(
+                json.dumps(
+                    {
+                        "route_id": "recommendations_priority",
+                        "answer": "오늘 추천 종목\n한국 1위\n미국 1위",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            result = status_tool.build_result(openclaw_dir)
+            strict_result = status_tool.build_result(openclaw_dir, require_pending_clear=True)
+            rendered = status_tool.render_text(result)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(0, result["capture_count"])
+        self.assertEqual(1, result["pending_count"])
+        self.assertTrue(result["needs_capture"])
+        self.assertEqual("pending_answers_waiting", result["capture_state"])
+        self.assertEqual(1, result["pending_route_counts"]["recommendations_priority"])
+        self.assertIn("pending_count: 1", rendered)
+        self.assertEqual("failure", strict_result["status"])
+        self.assertTrue(any("pending actual answers waiting" in error for error in strict_result["errors"]))
 
 
 class OpenClawPendingAnswerCollectTests(unittest.TestCase):
@@ -21460,6 +21497,11 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             build_result=lambda openclaw_dir: {
                 "status": "ok",
                 "capture_count": 1,
+                "pending_count": 0,
+                "pending_route_counts": {},
+                "needs_capture": False,
+                "capture_state": "captured",
+                "capture_state_message": "actual answer 1건이 저장되어 있습니다.",
                 "latest_capture": {"route_id": "today_work_report", "age_hours": 0.1},
                 "route_counts": {"today_work_report": 1},
                 "errors": [],
@@ -21513,6 +21555,9 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("answer_capture_task: ok", rendered)
         self.assertIn("answer_capture_canary: ok", rendered)
         self.assertIn("actual_answer_capture_status: ok", rendered)
+        actual_capture_check = next(check for check in result["checks"] if check["label"] == "actual_answer_capture_status")
+        self.assertEqual("captured", actual_capture_check["summary"]["capture_state"])
+        self.assertEqual(0, actual_capture_check["summary"]["pending_count"])
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
         tool = load_openclaw_quick_health_tool()
