@@ -150,6 +150,12 @@ def collect_pending_answers(
                 )
                 item["capture"] = capture
                 if capture.get("status") != "ok":
+                    output_file = capture.get("output_file")
+                    if output_file:
+                        output_path = Path(str(output_file))
+                        if output_path.exists():
+                            output_path.unlink()
+                        item["discarded_output_file"] = str(output_path)
                     raise AssertionError("; ".join(capture.get("errors") or ["capture failed"]))
                 destination = archive_path(processed_dir, path)
                 shutil.move(str(path), str(destination))

@@ -21,6 +21,7 @@ CHECK_MODULES = {
     "priority_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py",
     "answer_samples": PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py",
     "actual_answer_audit": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py",
+    "answer_capture_cycle": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_cycle.py",
     "actual_answer_capture_status": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_capture_status.py",
 }
 
@@ -225,6 +226,28 @@ def check_actual_answer_audit(openclaw_dir: Path) -> dict[str, Any]:
     }
 
 
+def check_answer_capture_cycle(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_answer_capture_cycle", CHECK_MODULES["answer_capture_cycle"])
+    try:
+        result = module.build_result(openclaw_dir, collect=False)
+    except AssertionError as exc:
+        return {"label": "answer_capture_cycle", "status": "failure", "errors": [str(exc)], "summary": {}}
+    collector = result.get("collector") or {}
+    capture_status = result.get("capture_status") or {}
+    return {
+        "label": "answer_capture_cycle",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "pending_count": collector.get("pending_count"),
+            "captured_count": collector.get("captured_count"),
+            "failed_count": collector.get("failed_count"),
+            "total_capture_count": capture_status.get("capture_count"),
+            "collect": result.get("collect"),
+        },
+    }
+
+
 def check_actual_answer_capture_status(openclaw_dir: Path) -> dict[str, Any]:
     module = load_tool(
         "check_openclaw_actual_answer_capture_status",
@@ -270,6 +293,7 @@ def build_result(
         lambda: check_priority_answer_quality(openclaw_dir),
         lambda: check_answer_samples(openclaw_dir),
         lambda: check_actual_answer_audit(openclaw_dir),
+        lambda: check_answer_capture_cycle(openclaw_dir),
         lambda: check_actual_answer_capture_status(openclaw_dir),
     ):
         try:

@@ -25,6 +25,9 @@ $priorityAnswerQualityScript = Join-Path $projectRoot "tools\check_openclaw_prio
 $questionReadOrderScript = Join-Path $projectRoot "tools\check_openclaw_question_read_order.py"
 $answerSamplesScript = Join-Path $projectRoot "tools\check_openclaw_answer_samples.py"
 $actualAnswerAuditScript = Join-Path $projectRoot "tools\check_openclaw_actual_answer_audit.py"
+$answerCaptureCycleScript = Join-Path $projectRoot "tools\check_openclaw_answer_capture_cycle.py"
+$answerCaptureCycleRunner = Join-Path $projectRoot "tools\run_openclaw_answer_capture_cycle.ps1"
+$answerCaptureCycleRegisterScript = Join-Path $projectRoot "tools\register_openclaw_answer_capture_cycle_task.ps1"
 $actualAnswerCaptureScript = Join-Path $projectRoot "tools\capture_openclaw_actual_answer.py"
 $pendingAnswerCollectScript = Join-Path $projectRoot "tools\collect_openclaw_pending_answers.py"
 $wslSyncScript = Join-Path $projectRoot "tools\sync_openclaw_wsl_investment_context.ps1"
@@ -78,6 +81,8 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 검증 명령: python tools\check_openclaw_today_answer_readiness.py --json",
     "- 질문별 read-order 검증: python tools\check_openclaw_question_read_order.py --json",
     "- 질문별 답변 샘플 검증: python tools\check_openclaw_answer_samples.py --json",
+    "- 답변 캡처 cycle: python tools\check_openclaw_answer_capture_cycle.py --json",
+    "- 답변 캡처 cycle 실행: powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState",
     "- 실제 답변 캡처: python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
     "- pending 답변 수집: python tools\collect_openclaw_pending_answers.py --json",
     "- 실제 답변 캡처 상태: python tools\check_openclaw_actual_answer_capture_status.py --json",
@@ -122,6 +127,15 @@ if (-not (Test-Path -LiteralPath $questionReadOrderScript)) {
 }
 if (-not (Test-Path -LiteralPath $answerSamplesScript)) {
   throw "OpenClaw answer samples script not found: $answerSamplesScript"
+}
+if (-not (Test-Path -LiteralPath $answerCaptureCycleScript)) {
+  throw "OpenClaw answer capture cycle script not found: $answerCaptureCycleScript"
+}
+if (-not (Test-Path -LiteralPath $answerCaptureCycleRunner)) {
+  throw "OpenClaw answer capture cycle runner not found: $answerCaptureCycleRunner"
+}
+if (-not (Test-Path -LiteralPath $answerCaptureCycleRegisterScript)) {
+  throw "OpenClaw answer capture cycle task register script not found: $answerCaptureCycleRegisterScript"
 }
 if (-not (Test-Path -LiteralPath $pendingAnswerCollectScript)) {
   throw "OpenClaw pending answer collector script not found: $pendingAnswerCollectScript"
@@ -236,6 +250,9 @@ $operationalCommands = [ordered]@{
   question_read_order = "python tools\check_openclaw_question_read_order.py --json"
   answer_samples = "python tools\check_openclaw_answer_samples.py --json"
   actual_answer_audit = "python tools\check_openclaw_actual_answer_audit.py --json"
+  answer_capture_cycle = "python tools\check_openclaw_answer_capture_cycle.py --json"
+  answer_capture_cycle_run = "powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState"
+  answer_capture_cycle_register = "powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect"
   actual_answer_capture = "python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json"
   pending_answer_collect = "python tools\collect_openclaw_pending_answers.py --json"
   actual_answer_capture_status = "python tools\check_openclaw_actual_answer_capture_status.py --json"
@@ -368,6 +385,9 @@ $readme = @(
   "- priority answer quality smoke: ``python tools\check_openclaw_priority_answer_quality.py --json``",
   "- question read-order smoke: ``python tools\check_openclaw_question_read_order.py --json``",
   "- answer samples smoke: ``python tools\check_openclaw_answer_samples.py --json``",
+  "- answer capture cycle: ``python tools\check_openclaw_answer_capture_cycle.py --json``",
+  "- answer capture cycle runner: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState``",
+  "- answer capture cycle task register: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect``",
   "- actual answer capture: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``",
   "- pending answer collect: ``python tools\collect_openclaw_pending_answers.py --json``",
   "- actual answer capture status: ``python tools\check_openclaw_actual_answer_capture_status.py --json``",
@@ -414,6 +434,9 @@ $startupLines = @(
   "- Priority answer quality smoke from ``$projectRoot``: ``python tools\check_openclaw_priority_answer_quality.py --json``.",
   "- Question read-order smoke from ``$projectRoot``: ``python tools\check_openclaw_question_read_order.py --json``.",
   "- Answer samples smoke from ``$projectRoot``: ``python tools\check_openclaw_answer_samples.py --json``.",
+  "- Answer capture cycle from ``$projectRoot``: ``python tools\check_openclaw_answer_capture_cycle.py --json``.",
+  "- Answer capture cycle runner from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState``.",
+  "- Answer capture cycle task register from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect``.",
   "- Actual answer capture from ``$projectRoot``: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``.",
   "- Pending answer collect from ``$projectRoot``: ``python tools\collect_openclaw_pending_answers.py --json``.",
   "- Actual answer capture status from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_capture_status.py --json``.",
