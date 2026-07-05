@@ -260,6 +260,14 @@ def load_openclaw_today_answer_tool():
     assert spec and spec.loader
     spec.loader.exec_module(module)
     return module
+
+def load_openclaw_wsl_answer_context_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_wsl_answer_context.py"
+    spec = spec_from_file_location("check_openclaw_wsl_answer_context", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
 def load_openclaw_knowledge_graph_check_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
     spec = spec_from_file_location("check_openclaw_knowledge_graph", tool_path)
@@ -1045,6 +1053,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 오늘 작업 답변 준비"],
             ["tools/check_openclaw_today_answer_readiness.py", "--json"],
+        )
+        self.assertIn("OpenClaw WSL PA 답변 컨텍스트", checks)
+        self.assertEqual(
+            checks["OpenClaw WSL PA 답변 컨텍스트"],
+            ["tools/check_openclaw_wsl_answer_context.py", "--json"],
         )
 
     def test_offline_readiness_prints_nps_rebalance_plan(self):
@@ -20128,6 +20141,51 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
 
             with self.assertRaisesRegex(AssertionError, "has_implementation_today=true"):
                 tool.build_result(openclaw_dir)
+class OpenClawWslAnswerContextTests(unittest.TestCase):
+    def test_wsl_answer_context_reports_pa_sessions_and_today_readiness(self):
+        tool = load_openclaw_wsl_answer_context_tool()
+        payload = {
+            "status": "ok",
+            "workspace": "/home/lib2000/.openclaw/workspace",
+            "errors": [],
+            "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
+            "sessions": {
+                "items": {
+                    "agent:pa:main": {"systemSent": False, "hasSystemPromptReport": False},
+                    "agent:pa:main2": {"systemSent": False, "hasSystemPromptReport": False},
+                }
+            },
+        }
+
+        with patch.object(tool, "run_wsl_json", return_value=payload):
+            result = tool.build_result(session_keys=["agent:pa:main", "agent:pa:main2"])
+            rendered = tool.render_text(result)
+
+        self.assertEqual("ok", result["status"])
+        self.assertIn("today commits: 120", rendered)
+        self.assertIn("agent:pa:main2: systemSent=False hasSystemPromptReport=False", rendered)
+
+    def test_wsl_answer_context_fails_when_pa_session_keeps_system_prompt(self):
+        tool = load_openclaw_wsl_answer_context_tool()
+        payload = {
+            "status": "failure",
+            "workspace": "/home/lib2000/.openclaw/workspace",
+            "errors": ["session agent:pa:main2 systemPromptReport must be absent"],
+            "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
+            "sessions": {
+                "items": {
+                    "agent:pa:main2": {"systemSent": True, "hasSystemPromptReport": True},
+                }
+            },
+        }
+
+        with patch.object(tool, "run_wsl_json", return_value=payload):
+            result = tool.build_result(session_keys=["agent:pa:main2"])
+            rendered = tool.render_text(result)
+
+        self.assertEqual("failure", result["status"])
+        self.assertIn("systemPromptReport must be absent", rendered)
+
 class OpenClawQuickHealthTests(unittest.TestCase):
     def test_quick_health_combines_openclaw_specific_checks(self):
         tool = load_openclaw_quick_health_tool()
