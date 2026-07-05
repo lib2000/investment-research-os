@@ -4200,8 +4200,9 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["never_run"])
-        self.assertIn("scheduled task has not run yet", result["warnings"])
-        self.assertIn("portfolio report alert state file has not been written yet", result["warnings"])
+        self.assertEqual(result["warnings"], [])
+        self.assertIn("scheduled task is registered and waiting for its first run", result["info"])
+        self.assertIn("portfolio report alert state file will be written after the first run", result["info"])
 
     def test_task_status_fails_when_live_submit_arguments_are_missing(self):
         tool = load_portfolio_report_alert_task_status_tool()

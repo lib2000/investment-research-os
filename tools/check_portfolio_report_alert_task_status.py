@@ -157,6 +157,7 @@ def evaluate_task_status(
     now = now or datetime.now(LOCAL_TIMEZONE)
     errors: list[str] = []
     warnings: list[str] = []
+    info: list[str] = []
     if not task.get("found"):
         errors.append(_safe_text(task.get("error")) or "portfolio report alert scheduled task not found")
 
@@ -181,7 +182,7 @@ def evaluate_task_status(
     never_run = not last_run_text or any(last_run_text.startswith(prefix) for prefix in NEVER_RUN_PREFIXES)
     last_result = int(task.get("LastTaskResult") or 0)
     if never_run:
-        warnings.append("scheduled task has not run yet")
+        info.append("scheduled task is registered and waiting for its first run")
     elif last_result not in SUCCESS_RESULT_CODES:
         errors.append(f"scheduled task last result is non-success: {last_result}")
 
@@ -197,9 +198,12 @@ def evaluate_task_status(
 
     state_age = _age_hours(state_file, now=now)
     if state_age is None:
-        warnings.append("portfolio report alert state file has not been written yet")
         if require_state_fresh:
             errors.append("portfolio report alert state file is missing")
+        elif never_run:
+            info.append("portfolio report alert state file will be written after the first run")
+        else:
+            warnings.append("portfolio report alert state file has not been written yet")
     elif state_age > max_state_age_hours:
         message = f"portfolio report alert state file is stale: {state_age:.1f}h"
         if require_state_fresh:
@@ -211,6 +215,7 @@ def evaluate_task_status(
         "status": "error" if errors else "ok",
         "errors": errors,
         "warnings": warnings,
+        "info": info,
         "task": task,
         "env": env_status,
         "state_file": str(state_file),
@@ -236,6 +241,8 @@ def render_text(result: dict[str, Any]) -> str:
     ]
     for warning in result.get("warnings") or []:
         lines.append(f"- warning: {warning}")
+    for item in result.get("info") or []:
+        lines.append(f"- info: {item}")
     for error in result.get("errors") or []:
         lines.append(f"- error: {error}")
     return "\n".join(lines)

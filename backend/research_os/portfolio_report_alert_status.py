@@ -77,6 +77,7 @@ def _never_run(task: dict[str, Any]) -> bool:
 def _task_status(task: dict[str, Any], *, expected_time: str, required_marker: str) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+    info: list[str] = []
     arguments = _safe_text(task.get("Arguments"))
     trigger = _safe_text(task.get("Trigger") or task.get("NextRunTime"))
     if not task.get("found"):
@@ -91,7 +92,7 @@ def _task_status(task: dict[str, Any], *, expected_time: str, required_marker: s
     never_run = _never_run(task)
     last_result = int(task.get("LastTaskResult") or 0)
     if never_run:
-        warnings.append("scheduled task has not run yet")
+        info.append("scheduled task is registered and waiting for its first run")
     elif last_result not in {0, 267009, 267011}:
         errors.append(f"scheduled task last result is non-success: {last_result}")
     return {
@@ -100,6 +101,7 @@ def _task_status(task: dict[str, Any], *, expected_time: str, required_marker: s
         "never_run": never_run,
         "errors": errors,
         "warnings": warnings,
+        "info": info,
         "task_name": task.get("TaskName"),
         "task_state": task.get("State"),
         "last_run_at": task.get("LastRunTime"),
