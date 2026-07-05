@@ -418,9 +418,10 @@ def nps_allocation_signal(root: Path, system_dir: Path, *, enforce: bool) -> dic
         (
             f"{guard_label}: {monitor.get('portfolio_name')} 현재 {float(monitor.get('current_domestic_equity_weight') or 0) * 100:.2f}% "
             f"/ 목표 {float(monitor.get('target_domestic_equity_weight') or 0) * 100:.1f}% "
-            f"/ 상태 {monitor.get('status')}"
+            f"/ 상태 {monitor.get('status')} / 조치 {monitor.get('recommended_action')} "
+            "/ 경보 모드: --fail-on-breach 또는 readiness --enforce-nps-allocation"
         ),
-        "python tools\\check_nps_domestic_equity_allocation.py --portfolio-name __all__ --fail-on-breach",
+        "python tools\\check_nps_domestic_equity_allocation.py --portfolio-name __all__ --rebalance-plan",
     )
 
 

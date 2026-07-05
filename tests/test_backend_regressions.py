@@ -1724,8 +1724,11 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertEqual(advisory["status"], "ok")
         self.assertIn("비중 이탈 감시 중", advisory["message"])
         self.assertIn("상태 above_target", advisory["message"])
+        self.assertIn("경보 모드", advisory["message"])
+        self.assertIn("--rebalance-plan", advisory["next_action"])
         self.assertEqual(enforced["status"], "warning")
         self.assertIn("비중 이탈", enforced["message"])
+        self.assertIn("--enforce-nps-allocation", enforced["message"])
         self.assertLess(enforced["score"], 95.0)
 
 
