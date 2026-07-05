@@ -207,6 +207,8 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "show_openclaw_bridge_status.py --json",
         "check_openclaw_quick_health.py --json",
         "check_openclaw_today_answer_readiness.py --json",
+        "sync_openclaw_wsl_investment_context.ps1",
+        "check_openclaw_wsl_answer_context.py --json",
         "check_offline_readiness.py --json",
         "today_work_report",
         "answer_correction",
@@ -283,6 +285,8 @@ def build_result(
             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
             "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
+            "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
+            "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
@@ -338,7 +342,7 @@ def build_result(
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw personal knowledge graph artifacts validate",
         "OpenClaw completion report hashes match completion report files",
-        "OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, and current source git",
+        "OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, WSL PA answer context, and current source git",
         "OpenClaw daily memory tells agents to use today_work_report and next_schedule before answering today-work questions",
     ]
     return {
@@ -429,6 +433,8 @@ def render_markdown_report(result: dict) -> str:
         "status_summary",
         "quick_health",
         "today_answer_readiness",
+        "wsl_refresh",
+        "wsl_answer_context",
         "offline_readiness",
     ):
         command = commands.get(label)

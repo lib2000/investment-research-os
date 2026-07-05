@@ -19035,6 +19035,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
+                            "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
+                            "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -19097,6 +19099,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
                 "- quick health: `python tools\\check_openclaw_quick_health.py --json`\n"
+                "- WSL sync: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`\n"
+                "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
@@ -19150,6 +19154,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"knowledge_graph_validation_command"', manifest_text)
         self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"quick_health_command"', manifest_text)
+        self.assertIn('"wsl_refresh_command"', manifest_text)
+        self.assertIn('"wsl_answer_context_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
@@ -19159,6 +19165,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"', exported_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', exported_text)
+        self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', exported_text)
+        self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"today_work_report"', exported_text)
@@ -19177,6 +19185,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"nodes": "openclaw_knowledge_graph_nodes.json"', manifest_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', manifest_text)
+        self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', manifest_text)
+        self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
         self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
@@ -19376,6 +19386,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run show_openclaw_bridge_status.py --json\n"
                 "run check_openclaw_quick_health.py --json\n"
                 "run check_openclaw_today_answer_readiness.py --json\n"
+                "run sync_openclaw_wsl_investment_context.ps1\n"
+                "run check_openclaw_wsl_answer_context.py --json\n"
                 "run check_offline_readiness.py --json\n"
             )
             (root / "AGENTS.md").write_text(startup_note, encoding="utf-8")
@@ -20013,6 +20025,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                 "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                 "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
+                "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
+                "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20033,6 +20047,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("status_summary", json_payload["operational_commands"])
         self.assertIn("quick_health", json_payload["operational_commands"])
         self.assertIn("today_answer_readiness", json_payload["operational_commands"])
+        self.assertIn("wsl_refresh", json_payload["operational_commands"])
+        self.assertIn("wsl_answer_context", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20058,6 +20074,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- status_summary: `python tools\\show_openclaw_bridge_status.py --json`", markdown)
         self.assertIn("- quick_health: `python tools\\check_openclaw_quick_health.py --json`", markdown)
         self.assertIn("- today_answer_readiness: `python tools\\check_openclaw_today_answer_readiness.py --json`", markdown)
+        self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
+        self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)

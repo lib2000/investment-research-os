@@ -3,6 +3,7 @@
   [double]$MaxAgeHours = 24,
   [switch]$SkipCopy,
   [switch]$SkipValidation,
+  [switch]$SkipWslSync,
   [switch]$RequireCompletionAudit
 )
 
@@ -19,6 +20,8 @@ $knowledgeGraphCheckScript = Join-Path $projectRoot "tools\check_openclaw_knowle
 $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completion.py"
 $statusSummaryScript = Join-Path $projectRoot "tools\show_openclaw_bridge_status.py"
 $quickHealthScript = Join-Path $projectRoot "tools\check_openclaw_quick_health.py"
+$wslSyncScript = Join-Path $projectRoot "tools\sync_openclaw_wsl_investment_context.ps1"
+$wslAnswerContextScript = Join-Path $projectRoot "tools\check_openclaw_wsl_answer_context.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
@@ -93,6 +96,12 @@ if (-not (Test-Path -LiteralPath $statusSummaryScript)) {
 }
 if (-not (Test-Path -LiteralPath $quickHealthScript)) {
   throw "OpenClaw quick health script not found: $quickHealthScript"
+}
+if (-not (Test-Path -LiteralPath $wslSyncScript)) {
+  throw "OpenClaw WSL sync script not found: $wslSyncScript"
+}
+if (-not (Test-Path -LiteralPath $wslAnswerContextScript)) {
+  throw "OpenClaw WSL answer context check script not found: $wslAnswerContextScript"
 }
 
 python $exportScript --print-summary | Out-Host
@@ -193,6 +202,8 @@ $operationalCommands = [ordered]@{
   status_summary = "python tools\show_openclaw_bridge_status.py --json"
   quick_health = "python tools\check_openclaw_quick_health.py --json"
   today_answer_readiness = "python tools\check_openclaw_today_answer_readiness.py --json"
+  wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
+  wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
@@ -315,6 +326,8 @@ $readme = @(
   "- status summary: ``python tools\show_openclaw_bridge_status.py --json``",
   "- quick health: ``python tools\check_openclaw_quick_health.py --json``",
   "- today answer readiness: ``python tools\check_openclaw_today_answer_readiness.py --json``",
+  "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
+  "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
@@ -350,6 +363,8 @@ $startupLines = @(
   "- Status summary from ``$projectRoot``: ``python tools\show_openclaw_bridge_status.py --json``.",
   "- Quick health from ``$projectRoot``: ``python tools\check_openclaw_quick_health.py --json``.",
   "- Today answer readiness from ``$projectRoot``: ``python tools\check_openclaw_today_answer_readiness.py --json``.",
+  "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
+  "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
   "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
@@ -391,6 +406,22 @@ if (-not $SkipValidation.IsPresent) {
     python $statusSummaryScript --openclaw-dir $targetDir --json
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw status summary failed: $LASTEXITCODE"
+    }
+  }
+}
+
+if (-not $SkipWslSync.IsPresent) {
+  $wslCommand = Get-Command wsl.exe -ErrorAction SilentlyContinue
+  if ($null -eq $wslCommand) {
+    Write-Warning "OpenClaw WSL sync skipped because wsl.exe is not available."
+  } else {
+    & powershell.exe -ExecutionPolicy Bypass -File $wslSyncScript
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw WSL sync failed: $LASTEXITCODE"
+    }
+    python $wslAnswerContextScript --json
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw WSL answer context check failed: $LASTEXITCODE"
     }
   }
 }

@@ -115,6 +115,10 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     final_audit = str(usage.get("final_completion_audit_command") or "")
     if "--require-report-hashes" not in final_audit:
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
+    if usage.get("wsl_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1":
+        raise AssertionError("OpenClaw usage must include WSL refresh command")
+    if usage.get("wsl_answer_context_command") != "python tools\\check_openclaw_wsl_answer_context.py --json":
+        raise AssertionError("OpenClaw usage must include WSL answer context command")
     if usage.get("offline_readiness_command") != "python tools\\check_offline_readiness.py --json":
         raise AssertionError("OpenClaw usage must include offline readiness command")
     blueprint = payload.get("openclaw_knowledge_graph_blueprint")
@@ -275,6 +279,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "final_completion_audit_command",
         "status_summary_command",
         "quick_health_command",
+        "wsl_refresh_command",
+        "wsl_answer_context_command",
         "offline_readiness_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
@@ -358,6 +364,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "final_completion_audit": "final_completion_audit_command",
             "status_summary": "status_summary_command",
             "quick_health": "quick_health_command",
+            "wsl_refresh": "wsl_refresh_command",
+            "wsl_answer_context": "wsl_answer_context_command",
             "offline_readiness": "offline_readiness_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
@@ -427,6 +435,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "openclaw_bridge_completion_report.json",
             "openclaw_bridge_completion_report.md",
             "show_openclaw_bridge_status.py --json",
+            "sync_openclaw_wsl_investment_context.ps1",
+            "check_openclaw_wsl_answer_context.py --json",
             "hash_status=ok",
             "hash_checked_count=14",
             "hash_mismatches=[]",
