@@ -20,6 +20,7 @@ CHECK_MODULES = {
     "today_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_quality.py",
     "priority_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py",
     "answer_samples": PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py",
+    "actual_answer_audit": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py",
 }
 
 
@@ -206,6 +207,23 @@ def check_answer_samples(openclaw_dir: Path) -> dict[str, Any]:
     }
 
 
+def check_actual_answer_audit(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_actual_answer_audit", CHECK_MODULES["actual_answer_audit"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "actual_answer_audit", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "actual_answer_audit",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "audited_count": result.get("audited_count"),
+            "answers_dir": result.get("answers_dir"),
+        },
+    }
+
+
 def build_result(
     *,
     project_root: Path = PROJECT_ROOT,
@@ -229,6 +247,7 @@ def build_result(
         lambda: check_today_answer_quality(openclaw_dir),
         lambda: check_priority_answer_quality(openclaw_dir),
         lambda: check_answer_samples(openclaw_dir),
+        lambda: check_actual_answer_audit(openclaw_dir),
     ):
         try:
             result = check()

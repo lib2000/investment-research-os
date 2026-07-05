@@ -1357,7 +1357,7 @@ $contracts = @(
       'check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes',
       'show_openclaw_bridge_status.py --json',
       'check_offline_readiness.py --json',
-      'OpenClaw startup notes point to bridge files, status summary, final audit command, and current source git'
+      'OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, answer quality smokes, question read-order smoke, answer sample smoke, actual answer audit, WSL PA answer context, fresh bootstrap check, and current source git'
     )
   },
   @{

@@ -298,6 +298,15 @@ def load_openclaw_answer_samples_tool():
     return module
 
 
+def load_openclaw_actual_answer_audit_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py"
+    spec = spec_from_file_location("check_openclaw_actual_answer_audit", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_openclaw_wsl_answer_context_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_wsl_answer_context.py"
     spec = spec_from_file_location("check_openclaw_wsl_answer_context", tool_path)
@@ -1110,6 +1119,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 질문별 답변 샘플 smoke"],
             ["tools/check_openclaw_answer_samples.py", "--json"],
+        )
+        self.assertIn("OpenClaw 실제 답변 사후감사", checks)
+        self.assertEqual(
+            checks["OpenClaw 실제 답변 사후감사"],
+            ["tools/check_openclaw_actual_answer_audit.py", "--json"],
         )
         self.assertIn("OpenClaw WSL PA 답변 컨텍스트", checks)
         self.assertEqual(
@@ -19097,6 +19111,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
                             "question_read_order": "python tools\\check_openclaw_question_read_order.py --json",
                             "answer_samples": "python tools\\check_openclaw_answer_samples.py --json",
+                            "actual_answer_audit": "python tools\\check_openclaw_actual_answer_audit.py --json",
                             "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                             "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
@@ -19167,6 +19182,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- priority answer quality smoke: `python tools\\check_openclaw_priority_answer_quality.py --json`\n"
                 "- question read-order smoke: `python tools\\check_openclaw_question_read_order.py --json`\n"
                 "- answer samples smoke: `python tools\\check_openclaw_answer_samples.py --json`\n"
+                "- actual answer audit: `python tools\\check_openclaw_actual_answer_audit.py --json`\n"
                 "- WSL sync: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`\n"
                 "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
                 "- WSL PA fresh bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`\n"
@@ -19228,6 +19244,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"priority_answer_quality_command"', manifest_text)
         self.assertIn('"question_read_order_command"', manifest_text)
         self.assertIn('"answer_samples_command"', manifest_text)
+        self.assertIn('"actual_answer_audit_command"', manifest_text)
         self.assertIn('"wsl_refresh_command"', manifest_text)
         self.assertIn('"wsl_answer_context_command"', manifest_text)
         self.assertIn('"wsl_fresh_bootstrap_command"', manifest_text)
@@ -19245,6 +19262,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"priority_answer_quality_command": "python tools\\\\check_openclaw_priority_answer_quality.py --json"', exported_text)
         self.assertIn('"question_read_order_command": "python tools\\\\check_openclaw_question_read_order.py --json"', exported_text)
         self.assertIn('"answer_samples_command": "python tools\\\\check_openclaw_answer_samples.py --json"', exported_text)
+        self.assertIn('"actual_answer_audit_command": "python tools\\\\check_openclaw_actual_answer_audit.py --json"', exported_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', exported_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', exported_text)
         self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', exported_text)
@@ -19272,6 +19290,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"priority_answer_quality_command": "python tools\\\\check_openclaw_priority_answer_quality.py --json"', manifest_text)
         self.assertIn('"question_read_order_command": "python tools\\\\check_openclaw_question_read_order.py --json"', manifest_text)
         self.assertIn('"answer_samples_command": "python tools\\\\check_openclaw_answer_samples.py --json"', manifest_text)
+        self.assertIn('"actual_answer_audit_command": "python tools\\\\check_openclaw_actual_answer_audit.py --json"', manifest_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', manifest_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
         self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', manifest_text)
@@ -19478,6 +19497,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run check_openclaw_priority_answer_quality.py --json\n"
                 "run check_openclaw_question_read_order.py --json\n"
                 "run check_openclaw_answer_samples.py --json\n"
+                "run check_openclaw_actual_answer_audit.py --json\n"
                 "run sync_openclaw_wsl_investment_context.ps1\n"
                 "run check_openclaw_wsl_answer_context.py --json\n"
                 "run check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json\n"
@@ -19494,6 +19514,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "check_openclaw_today_answer_readiness.py --json\\n"
                 "check_openclaw_question_read_order.py --json\\n"
                 "check_openclaw_answer_samples.py --json\\n"
+                "check_openclaw_actual_answer_audit.py --json\\n"
                 "check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json\\n"
                 "data/investment_research/bridge_status.json\\n"
                 "data/investment_research/openclaw_first_read.json\\n"
@@ -20125,6 +20146,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
                 "question_read_order": "python tools\\check_openclaw_question_read_order.py --json",
                 "answer_samples": "python tools\\check_openclaw_answer_samples.py --json",
+                "actual_answer_audit": "python tools\\check_openclaw_actual_answer_audit.py --json",
                 "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                 "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                 "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
@@ -20152,6 +20174,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("priority_answer_quality", json_payload["operational_commands"])
         self.assertIn("question_read_order", json_payload["operational_commands"])
         self.assertIn("answer_samples", json_payload["operational_commands"])
+        self.assertIn("actual_answer_audit", json_payload["operational_commands"])
         self.assertIn("wsl_refresh", json_payload["operational_commands"])
         self.assertIn("wsl_answer_context", json_payload["operational_commands"])
         self.assertIn("wsl_fresh_bootstrap", json_payload["operational_commands"])
@@ -20184,6 +20207,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- priority_answer_quality: `python tools\\check_openclaw_priority_answer_quality.py --json`", markdown)
         self.assertIn("- question_read_order: `python tools\\check_openclaw_question_read_order.py --json`", markdown)
         self.assertIn("- answer_samples: `python tools\\check_openclaw_answer_samples.py --json`", markdown)
+        self.assertIn("- actual_answer_audit: `python tools\\check_openclaw_actual_answer_audit.py --json`", markdown)
         self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
         self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
         self.assertIn("- wsl_fresh_bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`", markdown)
@@ -20405,6 +20429,7 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
             "question_read_order": "python tools\\check_openclaw_question_read_order.py --json",
             "answer_samples": "python tools\\check_openclaw_answer_samples.py --json",
+            "actual_answer_audit": "python tools\\check_openclaw_actual_answer_audit.py --json",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
         }
@@ -20458,6 +20483,7 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "priority_answer_quality_command": commands["priority_answer_quality"],
             "question_read_order_command": commands["question_read_order"],
             "answer_samples_command": commands["answer_samples"],
+            "actual_answer_audit_command": commands["actual_answer_audit"],
             "final_completion_audit_command": commands["final_completion_audit"],
             "knowledge_graph_validation_command": commands["knowledge_graph_validation"],
         }
@@ -20557,6 +20583,98 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
         self.assertTrue(any("banned fragment" in error for error in errors))
 
 
+class OpenClawActualAnswerAuditTests(unittest.TestCase):
+    def write_bundle(self, openclaw_dir: Path):
+        OpenClawQuestionReadOrderTests().write_bundle(openclaw_dir)
+        first_read = json.loads((openclaw_dir / "openclaw_first_read.json").read_text(encoding="utf-8"))
+        first_read["today_work_report"]["summary"] = ["OpenClaw bridge reinforced"]
+        first_read["latest_recommendation_date"] = "2026-07-05"
+        first_read["latest_recommendations"] = [
+            {"market": "KR", "rank": 1, "ticker": "001", "company_name": "한국1", "score": 99, "baseline_price": 1001, "currency": "KRW"},
+            {"market": "KR", "rank": 2, "ticker": "002", "company_name": "한국2", "score": 98, "baseline_price": 1002, "currency": "KRW"},
+            {"market": "KR", "rank": 3, "ticker": "003", "company_name": "한국3", "score": 97, "baseline_price": 1003, "currency": "KRW"},
+            {"market": "US", "rank": 1, "ticker": "AAA", "company_name": "미국1", "score": 96, "baseline_price": 10.1, "currency": "USD"},
+            {"market": "US", "rank": 2, "ticker": "BBB", "company_name": "미국2", "score": 95, "baseline_price": 10.2, "currency": "USD"},
+            {"market": "US", "rank": 3, "ticker": "CCC", "company_name": "미국3", "score": 94, "baseline_price": 10.3, "currency": "USD"},
+        ]
+        (openclaw_dir / "openclaw_first_read.json").write_text(json.dumps(first_read, ensure_ascii=False), encoding="utf-8")
+        status = json.loads((openclaw_dir / "bridge_status.json").read_text(encoding="utf-8"))
+        status.update(
+            {
+                "source_git_branch": "main",
+                "source_git_commit": "abc1234",
+                "source_git_dirty": False,
+                "completion_report_markdown": str(openclaw_dir / "openclaw_bridge_completion_report.md"),
+                "file_sha256": {"context_json": "a" * 64},
+            }
+        )
+        (openclaw_dir / "bridge_status.json").write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+
+    def test_actual_answer_audit_accepts_captured_answers(self):
+        tool = load_openclaw_actual_answer_audit_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            self.write_bundle(openclaw_dir)
+            answers_dir = openclaw_dir / "actual_answers"
+            answers_dir.mkdir()
+            (answers_dir / "today_work_report.md").write_text(
+                "오늘 구현 작업 보고\n"
+                "- 기준: openclaw_first_read.json / bridge_status.json / today_work_report\n"
+                "- 오늘 반영 커밋: 10건\n"
+                "- OpenClaw bridge reinforced\n"
+                "\n"
+                "다음 스케줄\n"
+                "- 07:00: preopen (scheduled)\n"
+                "- 08:00: recommendations (enabled)\n",
+                encoding="utf-8",
+            )
+            (answers_dir / "recommendations_priority.json").write_text(
+                json.dumps(
+                    {
+                        "route_id": "recommendations_priority",
+                        "answer": (
+                            "오늘 추천 종목\n"
+                            "- 기준 파일: openclaw_first_read.json / bridge_status.json\n"
+                            "- KR#1 001 한국1 score=99 baseline=1001 KRW\n"
+                            "- KR#2 002 한국2 score=98 baseline=1002 KRW\n"
+                            "- KR#3 003 한국3 score=97 baseline=1003 KRW\n"
+                            "- US#1 AAA 미국1 score=96 baseline=10.1 USD\n"
+                            "- US#2 BBB 미국2 score=95 baseline=10.2 USD\n"
+                            "- US#3 CCC 미국3 score=94 baseline=10.3 USD\n"
+                            "\n"
+                            "중요 메시지\n"
+                            "- 텔레그램 즐겨찾기 수집: 10건\n"
+                        ),
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir, answers_dir, require_answers=True)
+            rendered = tool.render_text(result)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(2, result["audited_count"])
+        self.assertIn("recommendations_priority: ok", rendered)
+
+    def test_actual_answer_audit_rejects_stale_claims(self):
+        tool = load_openclaw_actual_answer_audit_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            self.write_bundle(openclaw_dir)
+            answers_dir = openclaw_dir / "actual_answers"
+            answers_dir.mkdir()
+            (answers_dir / "today_work_report.md").write_text("오늘 구현 작업 없음\n", encoding="utf-8")
+
+            result = tool.build_result(openclaw_dir, answers_dir, require_answers=True)
+
+        self.assertEqual("failure", result["status"])
+        self.assertTrue(any("오늘 구현 작업 없음" in error for error in result["errors"]))
+
+
 class OpenClawWslAnswerContextTests(unittest.TestCase):
     def test_wsl_answer_context_reports_pa_sessions_and_today_readiness(self):
         tool = load_openclaw_wsl_answer_context_tool()
@@ -20567,6 +20685,7 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
             "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
             "question_read_order": {"status": "ok", "route_count": 4},
             "answer_samples": {"status": "ok", "sample_count": 4},
+            "actual_answer_audit": {"status": "ok", "audited_count": 0},
             "sessions": {
                 "items": {
                     "agent:pa:main": {"systemSent": False, "hasSystemPromptReport": False},
@@ -20583,6 +20702,7 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
         self.assertIn("today commits: 120", rendered)
         self.assertIn("question read-order: ok", rendered)
         self.assertIn("answer samples: ok", rendered)
+        self.assertIn("actual answer audit: ok", rendered)
         self.assertIn("agent:pa:main2: systemSent=False hasSystemPromptReport=False", rendered)
 
     def test_wsl_answer_context_can_require_fresh_bootstrap(self):
@@ -20594,6 +20714,7 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
             "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
             "question_read_order": {"status": "ok", "route_count": 4},
             "answer_samples": {"status": "ok", "sample_count": 4},
+            "actual_answer_audit": {"status": "ok", "audited_count": 0},
             "sessions": {
                 "items": {
                     "agent:pa:main2": {"systemSent": False, "hasSystemPromptReport": False},
@@ -20622,6 +20743,7 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
             "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
             "question_read_order": {"status": "ok", "route_count": 4},
             "answer_samples": {"status": "ok", "sample_count": 4},
+            "actual_answer_audit": {"status": "ok", "audited_count": 0},
             "sessions": {
                 "items": {
                     "agent:pa:main2": {"systemSent": True, "hasSystemPromptReport": True},
@@ -20729,6 +20851,14 @@ class OpenClawQuickHealthTests(unittest.TestCase):
                 "errors": [],
             }
         )
+        fake_actual_answer_audit = SimpleNamespace(
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "audited_count": 0,
+                "answers_dir": "C:/openclaw/data/investment_research/actual_answers",
+                "errors": [],
+            }
+        )
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
@@ -20739,6 +20869,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_today_answer_quality": fake_today_answer_quality,
             "check_openclaw_priority_answer_quality": fake_priority_answer_quality,
             "check_openclaw_answer_samples": fake_answer_samples,
+            "check_openclaw_actual_answer_audit": fake_actual_answer_audit,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
@@ -20751,7 +20882,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(9, len(result["checks"]))
+        self.assertEqual(10, len(result["checks"]))
         self.assertEqual("ok", result["hash_status"])
         self.assertEqual(14, result["hash_checked_count"])
         self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
@@ -20767,6 +20898,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("today_answer_quality: ok", rendered)
         self.assertIn("priority_answer_quality: ok", rendered)
         self.assertIn("answer_samples: ok", rendered)
+        self.assertIn("actual_answer_audit: ok", rendered)
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
         tool = load_openclaw_quick_health_tool()
@@ -20787,6 +20919,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         fake_today_answer_quality = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_priority_answer_quality = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_answer_samples = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
+        fake_actual_answer_audit = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
@@ -20797,6 +20930,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_today_answer_quality": fake_today_answer_quality,
             "check_openclaw_priority_answer_quality": fake_priority_answer_quality,
             "check_openclaw_answer_samples": fake_answer_samples,
+            "check_openclaw_actual_answer_audit": fake_actual_answer_audit,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):

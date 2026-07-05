@@ -24,6 +24,7 @@ $todayAnswerQualityScript = Join-Path $projectRoot "tools\check_openclaw_today_a
 $priorityAnswerQualityScript = Join-Path $projectRoot "tools\check_openclaw_priority_answer_quality.py"
 $questionReadOrderScript = Join-Path $projectRoot "tools\check_openclaw_question_read_order.py"
 $answerSamplesScript = Join-Path $projectRoot "tools\check_openclaw_answer_samples.py"
+$actualAnswerAuditScript = Join-Path $projectRoot "tools\check_openclaw_actual_answer_audit.py"
 $wslSyncScript = Join-Path $projectRoot "tools\sync_openclaw_wsl_investment_context.ps1"
 $wslAnswerContextScript = Join-Path $projectRoot "tools\check_openclaw_wsl_answer_context.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
@@ -75,6 +76,7 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 검증 명령: python tools\check_openclaw_today_answer_readiness.py --json",
     "- 질문별 read-order 검증: python tools\check_openclaw_question_read_order.py --json",
     "- 질문별 답변 샘플 검증: python tools\check_openclaw_answer_samples.py --json",
+    "- 실제 답변 사후감사: python tools\check_openclaw_actual_answer_audit.py --json",
     "- 답변 직전 fresh bootstrap 검증: python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
     "",
     "## Required Read Order",
@@ -225,6 +227,7 @@ $operationalCommands = [ordered]@{
   priority_answer_quality = "python tools\check_openclaw_priority_answer_quality.py --json"
   question_read_order = "python tools\check_openclaw_question_read_order.py --json"
   answer_samples = "python tools\check_openclaw_answer_samples.py --json"
+  actual_answer_audit = "python tools\check_openclaw_actual_answer_audit.py --json"
   wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
   wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
   wsl_fresh_bootstrap = "python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"
@@ -354,6 +357,7 @@ $readme = @(
   "- priority answer quality smoke: ``python tools\check_openclaw_priority_answer_quality.py --json``",
   "- question read-order smoke: ``python tools\check_openclaw_question_read_order.py --json``",
   "- answer samples smoke: ``python tools\check_openclaw_answer_samples.py --json``",
+  "- actual answer audit: ``python tools\check_openclaw_actual_answer_audit.py --json``",
   "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
   "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
   "- WSL PA fresh bootstrap: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``",
@@ -396,6 +400,7 @@ $startupLines = @(
   "- Priority answer quality smoke from ``$projectRoot``: ``python tools\check_openclaw_priority_answer_quality.py --json``.",
   "- Question read-order smoke from ``$projectRoot``: ``python tools\check_openclaw_question_read_order.py --json``.",
   "- Answer samples smoke from ``$projectRoot``: ``python tools\check_openclaw_answer_samples.py --json``.",
+  "- Actual answer audit from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_audit.py --json``.",
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
   "- WSL PA fresh bootstrap from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``.",
@@ -456,6 +461,10 @@ if (-not $SkipValidation.IsPresent) {
     python $answerSamplesScript --openclaw-dir $targetDir --json
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw answer samples smoke failed: $LASTEXITCODE"
+    }
+    python $actualAnswerAuditScript --openclaw-dir $targetDir --json
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw actual answer audit failed: $LASTEXITCODE"
     }
   }
 }

@@ -13,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TODAY_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py"
 QUESTION_READ_ORDER_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_question_read_order.py"
 ANSWER_SAMPLES_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py"
+ACTUAL_ANSWER_AUDIT_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py"
 DEFAULT_SESSION_KEYS = ["agent:pa:main", "agent:pa:main2"]
 REQUIRED_TEXT = [
     "오늘 시스템에서 구현한 작업",
@@ -25,6 +26,7 @@ REQUIRED_TEXT = [
     "data/investment_research/openclaw_first_read.json",
     "check_openclaw_question_read_order.py --json",
     "check_openclaw_answer_samples.py --json",
+    "check_openclaw_actual_answer_audit.py --json",
 ]
 
 
@@ -62,12 +64,14 @@ def build_result(
     today_tool: Path = TODAY_TOOL,
     question_read_order_tool: Path = QUESTION_READ_ORDER_TOOL,
     answer_samples_tool: Path = ANSWER_SAMPLES_TOOL,
+    actual_answer_audit_tool: Path = ACTUAL_ANSWER_AUDIT_TOOL,
     require_fresh_bootstrap: bool = False,
 ) -> dict[str, Any]:
     session_keys = session_keys or list(DEFAULT_SESSION_KEYS)
     today_tool_wsl = windows_to_wsl_path(today_tool)
     question_read_order_tool_wsl = windows_to_wsl_path(question_read_order_tool)
     answer_samples_tool_wsl = windows_to_wsl_path(answer_samples_tool)
+    actual_answer_audit_tool_wsl = windows_to_wsl_path(actual_answer_audit_tool)
     script = f"""
 import json
 import pathlib
@@ -81,6 +85,7 @@ require_fresh_bootstrap = {require_fresh_bootstrap!r}
 today_tool = pathlib.Path({today_tool_wsl!r})
 question_read_order_tool = pathlib.Path({question_read_order_tool_wsl!r})
 answer_samples_tool = pathlib.Path({answer_samples_tool_wsl!r})
+actual_answer_audit_tool = pathlib.Path({actual_answer_audit_tool_wsl!r})
 errors = []
 startup = {{}}
 for name in ['AGENTS.md', 'MEMORY.md', 'HEARTBEAT.md']:
@@ -127,6 +132,7 @@ def run_bridge_tool(label, tool_path):
 
 question_read_order = run_bridge_tool('question read-order', question_read_order_tool)
 answer_samples = run_bridge_tool('answer samples', answer_samples_tool)
+actual_answer_audit = run_bridge_tool('actual answer audit', actual_answer_audit_tool)
 
 daily_date = str(today.get('generated_at') or '')[:10]
 if not daily_date:
@@ -202,6 +208,7 @@ print(json.dumps({{
     'today_answer': today,
     'question_read_order': question_read_order,
     'answer_samples': answer_samples,
+    'actual_answer_audit': actual_answer_audit,
     'sessions': sessions,
 }}, ensure_ascii=False))
 """
@@ -218,6 +225,7 @@ def render_text(result: dict[str, Any]) -> str:
         f"- next schedule count: {today.get('next_schedule_count')}",
         f"- question read-order: {(result.get('question_read_order') or {}).get('status')}",
         f"- answer samples: {(result.get('answer_samples') or {}).get('status')}",
+        f"- actual answer audit: {(result.get('actual_answer_audit') or {}).get('status')}",
     ]
     sessions = ((result.get("sessions") or {}).get("items") or {})
     for key, item in sessions.items():
