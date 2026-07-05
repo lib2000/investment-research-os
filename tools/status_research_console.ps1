@@ -195,6 +195,7 @@ $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html"
 $marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")
 $naverKrMarketJournalState = Read-OptionalJsonFile -Name "naver KR market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\naver_market_close_journal_state.json")
 $telegramUsMarketJournalState = Read-OptionalJsonFile -Name "telegram US market journal state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_market_close_journal_state.json")
+$telegramBriefDeliveryState = Read-OptionalJsonFile -Name "telegram brief delivery state" -Path (Join-Path $ProjectRootPath "research_vault\_system\telegram_brief_delivery_state.json")
 $storageDuplicateReview = Read-OptionalJsonFile -Name "storage duplicate review" -Path (Join-Path $ProjectRootPath "research_vault\_system\storage_duplicate_review.json")
 $dailyCandidatePolicyPreviewPath = Join-Path $ProjectRootPath "tmp\daily_recommendation_candidate_policy_preview.json"
 $dailyCandidatePolicyPreview = if (Test-Path -LiteralPath $dailyCandidatePolicyPreviewPath) {
@@ -360,6 +361,17 @@ if ($telegramUsMarketJournalState) {
     "저장 경로 미확인"
   }
   Write-Host "미국 시장일지 자동 시도: $($telegramUsMarketJournalState.status), 시도일 $($telegramUsMarketJournalState.last_attempt_date), 세션 $($telegramUsMarketJournalState.session_date), 포함 섹션 $($telegramUsMarketJournalState.included_post_count)개, 저장 $savedPath"
+}
+if ($telegramBriefDeliveryState) {
+  $lastPlan = $telegramBriefDeliveryState.last_delivery_plan
+  if ($lastPlan) {
+    $updatedAt = if ($telegramBriefDeliveryState.updated_at) { $telegramBriefDeliveryState.updated_at } else { "갱신 시각 미확인" }
+    $mode = if ($lastPlan.dry_run) { "dry-run" } else { "live" }
+    $cleanup = if ($lastPlan.cleanup_enabled) { "정리 켜짐" } else { "정리 꺼짐" }
+    Write-Host "텔레그램 중요 브리프 delivery: $($lastPlan.status), 전송 계획 $($lastPlan.planned_send_count)건, 정리 후보 $($lastPlan.delete_candidate_count)건, 보호 $($lastPlan.protected_message_count)건, $mode, $cleanup, 갱신 $updatedAt"
+  } else {
+    Write-Host "텔레그램 중요 브리프 delivery: ledger 생성 필요"
+  }
 }
 if ($researchAutomation) {
   $dashboardDigest = $researchAutomation.dashboard_digest

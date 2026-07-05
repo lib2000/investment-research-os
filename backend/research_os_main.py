@@ -2442,6 +2442,51 @@ def telegram_favorite_posts_state_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "telegram_favorite_posts_state.json"
 
 
+def telegram_brief_delivery_state_path(settings: Settings) -> Path:
+    path = Path(settings.telegram_brief_delivery_state_file)
+    if path.is_absolute():
+        return path
+    return (Path(__file__).resolve().parent / path).resolve()
+
+
+def build_telegram_brief_delivery_status(settings: Settings) -> dict:
+    state_path = telegram_brief_delivery_state_path(settings)
+    state = read_json_store(state_path, {})
+    last_plan = state.get("last_delivery_plan") if isinstance(state.get("last_delivery_plan"), dict) else {}
+    updated_at = state.get("updated_at") or last_plan.get("updated_at")
+    status = "success"
+    next_action = "일일 운영 루틴에서 dry-run ledger가 정상 갱신됩니다."
+    if not last_plan:
+        status = "needs_attention"
+        next_action = "tools\\run_daily_research_operations.ps1 또는 check_telegram_brief_delivery.py --write-state를 실행해 ledger를 생성하세요."
+    elif last_plan.get("status") not in {"success", None}:
+        status = "needs_attention"
+        next_action = "마지막 delivery plan 오류를 확인하세요."
+    elif settings.telegram_brief_delivery_enabled and not settings.telegram_brief_delivery_dry_run and not settings.telegram_bot_token:
+        status = "needs_attention"
+        next_action = "실전 전송 모드에는 TELEGRAM_BOT_TOKEN 또는 MARKET_SIGNAL_GRAPH_TELEGRAM_BOT_TOKEN이 필요합니다."
+
+    return {
+        "status": status,
+        "module": "telegram_brief_delivery_status",
+        "design": "telegram_brief_delivery_v1",
+        "enabled": bool(settings.telegram_brief_delivery_enabled),
+        "dry_run": bool(settings.telegram_brief_delivery_dry_run),
+        "cleanup_enabled": bool(settings.telegram_brief_cleanup_enabled),
+        "bot_token_configured": bool(settings.telegram_bot_token),
+        "state_file": str(state_path),
+        "state_exists": state_path.exists(),
+        "updated_at": updated_at,
+        "last_plan": last_plan,
+        "planned_send_count": int(last_plan.get("planned_send_count") or 0),
+        "delete_candidate_count": int(last_plan.get("delete_candidate_count") or 0),
+        "protected_message_count": int(last_plan.get("protected_message_count") or 0),
+        "applied_send_count": int(last_plan.get("applied_send_count") or 0),
+        "applied_delete_count": int(last_plan.get("applied_delete_count") or 0),
+        "next_action": next_action,
+    }
+
+
 def read_naver_research_cache(settings: Settings) -> dict:
     return read_json_store(
         naver_research_cache_path(settings),
@@ -12447,6 +12492,16 @@ def get_telegram_market_close_task_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_telegram_market_close_task_status(settings, log_limit=log_limit)
+
+
+@app.get(
+    "/api/v1/telegram/brief-delivery/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_telegram_brief_delivery_status(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_telegram_brief_delivery_status(settings)
 
 
 @app.post(

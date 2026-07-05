@@ -348,6 +348,8 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("telegramMarketJournalVisible", "시스템 점검 화면에 텔레그램 미국 시장일지 상태가 표시되지 않았습니다."),
             ("telegramMarketJournalShowsSectionCount", "시스템 점검 화면에 텔레그램 미국 시장일지 포함 섹션 수가 표시되지 않았습니다."),
             ("telegramMarketJournalShowsStoragePath", "시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다."),
+            ("telegramBriefDeliveryVisible", "시스템 점검 화면에 텔레그램 중요 브리프 delivery 상태가 표시되지 않았습니다."),
+            ("telegramBriefDeliveryShowsSafety", "시스템 점검 화면에 텔레그램 중요 브리프 delivery 안전값이 표시되지 않았습니다."),
             ("researchAutomationShowsSourceQuality", "리서치 자동화 상태 화면에 수집 품질 대시보드가 표시되지 않았습니다."),
         ]
     elif stage == "public-ir-sec":
@@ -486,6 +488,8 @@ def run_click_smoke(
                         telegramMarketJournalVisible: text.includes("텔레그램 미국 시장일지"),
                         telegramMarketJournalShowsSectionCount: text.includes("포함 섹션"),
                         telegramMarketJournalShowsStoragePath: text.includes("research_vault/MARKET-US/"),
+                        telegramBriefDeliveryVisible: text.includes("텔레그램 중요 브리프 delivery"),
+                        telegramBriefDeliveryShowsSafety: text.includes("delivery 안전값"),
                         elapsedMs: Date.now() - started,
                         preview: text.split("\\n").slice(0, 28).join("\\n"),
                       };
@@ -506,6 +510,10 @@ def run_click_smoke(
                     raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 포함 섹션 수가 표시되지 않았습니다.")
                 if not result.get("telegramMarketJournalShowsStoragePath"):
                     raise AssertionError("시스템 점검 화면에 텔레그램 미국 시장일지 저장 경로가 표시되지 않았습니다.")
+                if not result.get("telegramBriefDeliveryVisible"):
+                    raise AssertionError("시스템 점검 화면에 텔레그램 중요 브리프 delivery 상태가 표시되지 않았습니다.")
+                if not result.get("telegramBriefDeliveryShowsSafety"):
+                    raise AssertionError("시스템 점검 화면에 텔레그램 중요 브리프 delivery 안전값이 표시되지 않았습니다.")
                 return result
             if only_public_ir_sec:
                 progress_step("public IR/SEC smoke started")
@@ -1426,6 +1434,8 @@ def run_click_smoke(
                       telegramMarketJournalVisible: systemCheckText.includes("텔레그램 미국 시장일지"),
                       telegramMarketJournalShowsSectionCount: systemCheckText.includes("포함 섹션"),
                       telegramMarketJournalShowsStoragePath: systemCheckText.includes("research_vault/MARKET-US/"),
+                      telegramBriefDeliveryVisible: systemCheckText.includes("텔레그램 중요 브리프 delivery"),
+                      telegramBriefDeliveryShowsSafety: systemCheckText.includes("delivery 안전값"),
                       researchAutomationShowsSourceQuality:
                         researchAutomationStatusText.includes("수집 품질 대시보드") &&
                         researchAutomationStatusText.includes("저작권:") &&
@@ -2129,6 +2139,8 @@ def run_click_smoke(
                     telegramMarketJournalVisible: systemCheckText.includes("텔레그램 미국 시장일지"),
                     telegramMarketJournalShowsSectionCount: systemCheckText.includes("포함 섹션"),
                     telegramMarketJournalShowsStoragePath: systemCheckText.includes("research_vault/MARKET-US/"),
+                    telegramBriefDeliveryVisible: systemCheckText.includes("텔레그램 중요 브리프 delivery"),
+                    telegramBriefDeliveryShowsSafety: systemCheckText.includes("delivery 안전값"),
                     naverStatusShowsDuplicateGuard: naverStatusText.includes("중복 시장일지 후보"),
                     naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                     naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
@@ -2343,6 +2355,10 @@ def run_click_smoke(
                 )
             if not result["systemCheckShowsDartReliability"]:
                 raise AssertionError("시스템 점검 화면에 자동화 신뢰도/네이버 리서치 상태가 표시되지 않았습니다.")
+            if not result.get("telegramBriefDeliveryVisible"):
+                raise AssertionError("시스템 점검 화면에 텔레그램 중요 브리프 delivery 상태가 표시되지 않았습니다.")
+            if not result.get("telegramBriefDeliveryShowsSafety"):
+                raise AssertionError("시스템 점검 화면에 텔레그램 중요 브리프 delivery 안전값이 표시되지 않았습니다.")
             if not result["naverStatusShowsDuplicateGuard"]:
                 raise AssertionError("네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다.")
             if not result["naverStatusShowsTaskLog"]:

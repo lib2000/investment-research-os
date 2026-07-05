@@ -14337,6 +14337,28 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token()))', console_js)
         self.assertNotIn('runCheck("일일 브리핑", () => fetchDailyBriefing(token(), false))', console_js)
 
+    def test_console_system_check_shows_telegram_brief_delivery_ledger(self):
+        api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+        status_script = (PROJECT_ROOT / "tools" / "status_research_console.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("export async function fetchTelegramBriefDeliveryStatus", api_js)
+        self.assertIn('request("/api/v1/telegram/brief-delivery/status"', api_js)
+        self.assertIn("fetchTelegramBriefDeliveryStatus,", console_js)
+        self.assertIn(
+            'runCheck("텔레그램 중요 브리프 delivery", () => fetchTelegramBriefDeliveryStatus(token()))',
+            console_js,
+        )
+        self.assertIn("텔레그램 중요 브리프 delivery", console_js)
+        self.assertIn("delivery 안전값", console_js)
+        self.assertIn('"/api/v1/telegram/brief-delivery/status"', backend_source)
+        self.assertIn("def build_telegram_brief_delivery_status", backend_source)
+        self.assertIn("telegram_brief_delivery_state.json", status_script)
+        self.assertIn("텔레그램 중요 브리프 delivery", status_script)
+
     def test_daily_recommendation_status_refreshes_dashboard_top_even_when_hidden(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
             encoding="utf-8"

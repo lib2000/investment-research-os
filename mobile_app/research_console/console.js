@@ -100,11 +100,12 @@
   refreshNaverMarketCloseJournal,
   fetchNaverMarketCloseTaskStatus,
   fetchTelegramMarketCloseTaskStatus,
+  fetchTelegramBriefDeliveryStatus,
   fetchCustomsTradeSnapshot,
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=94c699dbc4a9";
+} from "./api.js?v=fbc0b351edb9";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -5987,6 +5988,11 @@ function summarizeSystemCheckValue(label, value) {
     const sessionDate = state.session_date || state.last_run_date || "미확인";
     return `상태 ${value.status || state.status || "미확인"} · 세션 ${sessionDate} · 포함 섹션 ${sectionCount}개 · 저장 ${storagePath} · ${value.daily_time || "07:20"}`;
   }
+  if (label.includes("텔레그램 중요 브리프")) {
+    const safeMode = value.dry_run ? "dry-run" : "live";
+    const cleanup = value.cleanup_enabled ? "정리 켜짐" : "정리 꺼짐";
+    return `전송 계획 ${value.planned_send_count || 0}건 · 정리 후보 ${value.delete_candidate_count || 0}건 · 보호 ${value.protected_message_count || 0}건 · ${safeMode} · ${cleanup}`;
+  }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
     return `Pulls 대상 ${digest.target_count || 0}개 · RAG ${digest.rag_document_count || 0}개 · Dossier ${digest.dossier_count || 0}개`;
@@ -6027,12 +6033,14 @@ function formatConsoleSystemCheckResult(payload) {
   const dartCheck = checks.find((item) => item.label.includes("DART"));
   const naverCheck = checks.find((item) => item.label.includes("네이버 리서치"));
   const telegramMarketCheck = checks.find((item) => item.label.includes("텔레그램 미국 시장일지"));
+  const telegramBriefDeliveryCheck = checks.find((item) => item.label.includes("텔레그램 중요 브리프"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
   const dartFailures = dartValue.last_failures || [];
   const telegramMarketState = telegramMarketCheck?.value?.state || {};
   const telegramMarketStorage = telegramMarketState.storage || {};
+  const telegramBriefDelivery = telegramBriefDeliveryCheck?.value || {};
   const okCount = checks.length - failed.length;
   const ocrLimits = ocrCheck?.value?.limits || {};
   return [
@@ -6086,6 +6094,18 @@ function formatConsoleSystemCheckResult(payload) {
       : "",
     telegramMarketCheck?.value?.next_action
       ? `- **미국 시장일지 다음 조치:** ${telegramMarketCheck.value.next_action}`
+      : "",
+    telegramBriefDeliveryCheck
+      ? `- **텔레그램 중요 브리프 delivery:** ${telegramBriefDeliveryCheck.status} · ${telegramBriefDeliveryCheck.summary}`
+      : `- **텔레그램 중요 브리프 delivery:** 점검 결과를 불러오지 못했습니다.`,
+    telegramBriefDeliveryCheck
+      ? `- **delivery 안전값:** enabled ${telegramBriefDelivery.enabled ? "true" : "false"} · dry_run ${telegramBriefDelivery.dry_run ? "true" : "false"} · cleanup ${telegramBriefDelivery.cleanup_enabled ? "true" : "false"} · ledger ${telegramBriefDelivery.state_exists ? "있음" : "미생성"}`
+      : "",
+    telegramBriefDelivery.updated_at
+      ? `- **delivery 마지막 갱신:** ${formatDateTime(telegramBriefDelivery.updated_at)}`
+      : "",
+    telegramBriefDelivery.next_action
+      ? `- **delivery 다음 조치:** ${telegramBriefDelivery.next_action}`
       : "",
     `- **실패 상세:** ${
       dartFailures.length
@@ -6200,6 +6220,7 @@ async function runConsoleSystemCheck() {
     runCheck("DART 신규 공시 감시", () => fetchDartFilingWatchStatus(token())),
     runCheck("네이버 리서치/시장일지 자동 반영", () => fetchNaverResearchStatus(token())),
     runCheck("텔레그램 미국 시장일지 자동 반영", () => fetchTelegramMarketCloseTaskStatus(token())),
+    runCheck("텔레그램 중요 브리프 delivery", () => fetchTelegramBriefDeliveryStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
     runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token())),
   ]);

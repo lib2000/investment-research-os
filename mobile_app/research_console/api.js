@@ -2182,6 +2182,13 @@ export async function fetchTelegramMarketCloseTaskStatus(accessToken, logLimit =
   );
 }
 
+export async function fetchTelegramBriefDeliveryStatus(accessToken) {
+  return request("/api/v1/telegram/brief-delivery/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchCustomsTradeSnapshot(
   accessToken,
   {
