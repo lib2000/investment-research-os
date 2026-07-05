@@ -8,6 +8,9 @@
   [switch]$SkipPortfolioRefresh,
   [switch]$SkipRecommendationRun,
   [switch]$SkipRecommendationPreview,
+  [switch]$SkipTelegramBriefDelivery,
+  [switch]$SubmitTelegramBriefDelivery,
+  [switch]$EnableTelegramBriefCleanup,
   [switch]$SkipResearchAutomationRefresh,
   [switch]$SkipOpenClawSync,
   [switch]$SkipVerification
@@ -107,6 +110,22 @@ if (-not $SkipRecommendationPreview.IsPresent) {
       --require-hold-warning `
       --expected-held-ticker 112610 `
       --output-json tmp\daily_recommendation_candidate_policy_preview.json
+  }
+}
+
+if (-not $SkipTelegramBriefDelivery.IsPresent) {
+  Invoke-DailyResearchStep "텔레그램 중요 브리프 delivery ledger 갱신" {
+    $telegramDeliveryArgs = @(
+      "tools\check_telegram_brief_delivery.py",
+      "--write-state"
+    )
+    if ($SubmitTelegramBriefDelivery.IsPresent) {
+      $telegramDeliveryArgs += @("--enabled", "--submit")
+    }
+    if ($EnableTelegramBriefCleanup.IsPresent) {
+      $telegramDeliveryArgs += "--cleanup-enabled"
+    }
+    python @telegramDeliveryArgs
   }
 }
 

@@ -252,6 +252,13 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
             },
             "live_send_requires": ["--enabled", "--submit", "bot token", "chat id"],
             "live_cleanup_requires": ["--enabled", "--submit", "--cleanup-enabled", "message_id ledger"],
+            "daily_operations": {
+                "script": "tools\\run_daily_research_operations.ps1",
+                "default_step": "check_telegram_brief_delivery.py --write-state",
+                "skip_switch": "-SkipTelegramBriefDelivery",
+                "live_send_switch": "-SubmitTelegramBriefDelivery",
+                "live_cleanup_switch": "-EnableTelegramBriefCleanup",
+            },
             "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
         },
     }
@@ -486,6 +493,7 @@ def build_context(project_root: Path) -> dict:
             "safe_actions": [
                 "최신 추천/관심종목/텔레그램 인기글 요약 조회",
                 "텔레그램 발송은 오늘 추천과 주의 신호 중심의 Investment Priority Brief 1건으로 축약",
+                "일일 운영 루틴에서 텔레그램 delivery ledger dry-run 상태 확인",
                 "투자리서치 백엔드 health 확인",
                 "투자 판단 전 근거 문서와 최신성 점검 요청",
             ],

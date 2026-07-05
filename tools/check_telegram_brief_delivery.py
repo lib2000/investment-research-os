@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -60,6 +61,15 @@ def read_json(path: Path, default):
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def state_with_last_plan(state: dict, result: dict) -> dict:
+    clean_result = {key: value for key, value in result.items() if key not in {"updated_state"}}
+    return {
+        **state,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "last_delivery_plan": clean_result,
+    }
 
 
 def sample_state() -> dict:
@@ -132,7 +142,9 @@ def main() -> int:
     result["state_file"] = str(args.state_file)
 
     if args.write_state and result.get("updated_state"):
-        write_json(args.state_file, result["updated_state"])
+        state_to_write = state_with_last_plan(result["updated_state"], result)
+        write_json(args.state_file, state_to_write)
+        result["updated_state"] = state_to_write
         result["state_written"] = True
     else:
         result["state_written"] = False

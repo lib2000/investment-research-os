@@ -663,6 +663,21 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("sync_openclaw_investment_context.ps1", script_source)
         self.assertIn("-RequireCompletionAudit", script_source)
 
+    def test_daily_research_operations_updates_telegram_delivery_ledger(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipTelegramBriefDelivery", script_source)
+        self.assertIn("[switch]$SubmitTelegramBriefDelivery", script_source)
+        self.assertIn("[switch]$EnableTelegramBriefCleanup", script_source)
+        self.assertIn("텔레그램 중요 브리프 delivery ledger 갱신", script_source)
+        self.assertIn("tools\\check_telegram_brief_delivery.py", script_source)
+        self.assertIn("--write-state", script_source)
+        self.assertIn("--enabled", script_source)
+        self.assertIn("--submit", script_source)
+        self.assertIn("--cleanup-enabled", script_source)
+
     def test_daily_research_operations_continues_after_saved_state_timeouts(self):
         script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
             encoding="utf-8-sig"
@@ -3430,6 +3445,37 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertFalse(payload["cleanup_enabled"])
         self.assertEqual(payload["delete_candidate_count"], 1)
         self.assertEqual(payload["protected_message_count"], 1)
+
+    def test_telegram_brief_delivery_check_tool_writes_last_plan_state(self):
+        tool = load_telegram_brief_delivery_check_tool()
+
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            state_path = Path(temp_dir) / "telegram_state.json"
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "check_telegram_brief_delivery.py",
+                    "--sample-state",
+                    "--state-file",
+                    str(state_path),
+                    "--write-state",
+                    "--json",
+                ],
+            ):
+                with patch("builtins.print") as mock_print:
+                    exit_code = tool.main()
+
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertTrue(payload["state_written"])
+        self.assertIn("last_delivery_plan", state)
+        self.assertEqual(state["last_delivery_plan"]["design"], "telegram_brief_delivery_v1")
+        self.assertEqual(state["last_delivery_plan"]["planned_send_count"], 1)
 
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
