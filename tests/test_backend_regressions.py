@@ -4376,6 +4376,12 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
         self.assertTrue(result["state_written"])
         self.assertNotIn("987654321", output_text)
         self.assertEqual(result["payload"]["messages"][0]["chat_id"], "configured")
+        message_text = result["payload"]["messages"][0]["text"]
+        self.assertIn("보유 종목 리포트 알림 사후점검", message_text)
+        self.assertIn("Portfolio Report Alert Post-run Check", message_text)
+        self.assertIn("상태: error", message_text)
+        self.assertIn("마지막 결과: 1", message_text)
+        self.assertIn("오류:", message_text)
         delivery.assert_called_once()
 
     def test_postrun_stays_quiet_when_status_is_ok(self):

@@ -54,22 +54,22 @@ def fingerprint(status: dict[str, Any]) -> str:
 def build_alert_text(status: dict[str, Any]) -> str:
     task = status.get("task") if isinstance(status.get("task"), dict) else {}
     lines = [
-        "Portfolio Report Alert Post-run Check",
-        f"Status: {status.get('status')}",
-        f"Task: {task.get('TaskName') or DEFAULT_TASK_NAME}",
-        f"Last run: {task.get('LastRunTime')}",
-        f"Last result: {task.get('LastTaskResult')}",
-        f"Next run: {task.get('NextRunTime')}",
-        f"State file exists: {status.get('state_file_exists')}",
-        f"State age hours: {status.get('state_file_age_hours')}",
+        "보유 종목 리포트 알림 사후점검 (Portfolio Report Alert Post-run Check)",
+        f"상태: {status.get('status')}",
+        f"작업: {task.get('TaskName') or DEFAULT_TASK_NAME}",
+        f"마지막 실행: {task.get('LastRunTime')}",
+        f"마지막 결과: {task.get('LastTaskResult')}",
+        f"다음 실행: {task.get('NextRunTime')}",
+        f"상태 파일 존재: {status.get('state_file_exists')}",
+        f"상태 파일 경과시간: {status.get('state_file_age_hours')}",
     ]
     errors = [str(item) for item in status.get("errors") or []]
     warnings = [str(item) for item in status.get("warnings") or []]
     if errors:
-        lines.append("Errors:")
+        lines.append("오류:")
         lines.extend(f"- {item}" for item in errors[:8])
     if warnings:
-        lines.append("Warnings:")
+        lines.append("경고:")
         lines.extend(f"- {item}" for item in warnings[:8])
     return "\n".join(lines)
 
