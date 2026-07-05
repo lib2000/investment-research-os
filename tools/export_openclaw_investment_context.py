@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -430,6 +431,76 @@ def build_personal_knowledge_graph_blueprint() -> dict:
     }
 
 
+def _today_kst() -> str:
+    return datetime.now(tz=KST).date().isoformat()
+
+
+def _git_log_since_today(project_root: Path) -> list[dict]:
+    today = _today_kst()
+    command = [
+        "git",
+        "-C",
+        str(project_root),
+        "log",
+        f"--since={today} 00:00:00 +0900",
+        "--pretty=format:%h%x09%ad%x09%s",
+        "--date=iso-local",
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=10)
+    except Exception:
+        return []
+    if completed.returncode != 0:
+        return []
+    commits = []
+    for line in completed.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        commits.append({"commit": parts[0], "committed_at": parts[1], "subject": parts[2]})
+    return commits
+
+
+def build_today_work_report(project_root: Path) -> dict:
+    commits = _git_log_since_today(project_root)
+    subjects = [str(item.get("subject") or "") for item in commits]
+    category_rules = [
+        ("openclaw_bridge", ("OpenClaw", "openclaw"), "OpenClaw 투자리서치 bridge, first-read, status summary, completion audit, hash 검증"),
+        ("telegram_pipeline", ("Telegram", "telegram"), "텔레그램 즐겨찾기 인기글, 중요 브리프, 보유 리포트 알림/사후점검"),
+        ("recommendation_insights", ("recommendation", "recommendations", "sentiment", "insight"), "오늘 추천, 텔레그램 심리, 통합 투자 인사이트 반영"),
+        ("firecrawl_monitor", ("Firecrawl", "firecrawl"), "Firecrawl IR/Monitor 안전 기본값, dry-run, 운영 preflight"),
+        ("local_ai_agent_foundation", ("local AI", "agent operating", "survival", "foundation"), "고급 AI 제한 대비 로컬 AI 생존 모드와 에이전트 운영 기반 readiness"),
+        ("console_backend_ops", ("console", "backend", "restart", "status"), "연구 콘솔/API 상태 노출, 백엔드 재시작 guard, 운영 상태 검증"),
+        ("portfolio_reports", ("portfolio", "report alert", "holding"), "포트폴리오/보유 종목 리포트 알림과 상태 점검"),
+        ("calendar_readiness", ("calendar", "earnings"), "투자 캘린더와 실적 일정 readiness"),
+    ]
+    categories = []
+    for key, needles, label in category_rules:
+        count = sum(1 for subject in subjects if any(needle.lower() in subject.lower() for needle in needles))
+        if count:
+            categories.append({"key": key, "label": label, "commit_count": count})
+    return {
+        "date": _today_kst(),
+        "source": "git_log_since_local_midnight",
+        "commit_count": len(commits),
+        "has_implementation_today": len(commits) > 0,
+        "correction_for_openclaw": "오늘 구현 작업 없음이라고 답하면 안 됩니다. 이 today_work_report와 bridge_status source_git를 먼저 확인하세요.",
+        "summary": [item["label"] for item in categories[:8]],
+        "categories": categories,
+        "latest_commits": commits[:16],
+    }
+
+
+def build_next_schedule() -> list[dict]:
+    return [
+        {"time": "07:00", "task": "OpenClaw 보유 종목 신규 리포트 알림", "status": "scheduled/dry-run safe", "command": "tools\\check_portfolio_report_alert_task_status.py --json"},
+        {"time": "07:10", "task": "보유 종목 리포트 알림 사후점검", "status": "scheduled", "command": "tools\\check_portfolio_report_alert_task_status.py --task-name 'InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun' --json"},
+        {"time": "07:20", "task": "미국 시장 일지 자동 반영", "status": "enabled", "command": "tools\\run_telegram_us_market_close_journal.ps1"},
+        {"time": "08:00", "task": "한국/미국 오늘 추천 1~3위 생성/저장", "status": "enabled", "command": "tools\\check_daily_recommendations_store.py --require-milestones --require-quality"},
+        {"time": "22:00", "task": "텔레그램 즐겨찾기 채널 인기글 수집 및 뉴스/심리 반영", "status": "enabled", "command": "tools\\check_telegram_favorite_posts.py --sample --enabled"},
+        {"time": "on demand", "task": "OpenClaw 최신 컨텍스트 동기화 및 완료 감사", "status": "manual/safe", "command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"},
+    ]
+
 def build_context(project_root: Path) -> dict:
     system_dir = project_root / "research_vault" / "_system"
     daily_recommendations = load_json(system_dir / "daily_recommendations.json", {})
@@ -459,6 +530,13 @@ def build_context(project_root: Path) -> dict:
                 "broker/API secrets",
             ],
             "export_scope": "summary_only",
+        },
+        "today_work_report": build_today_work_report(project_root),
+        "next_schedule": build_next_schedule(),
+        "answer_correction": {
+            "wrong_claim": "오늘(2026-07-05) 특별히 새로 구현된 작업 기록은 없습니다.",
+            "correct_basis": "bridge_status.json source_git와 openclaw_first_read.json today_work_report를 우선 확인해야 합니다.",
+            "expected_answer": "오늘 구현 작업과 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
         },
         "workstreams": [
             "한국/미국 오늘의 추천 1~3위 생성 및 상세 근거 화면",
@@ -520,6 +598,8 @@ def render_markdown(context: dict) -> str:
     nps = state["nps_rebalancing"]
     firecrawl = state["firecrawl_monitoring"]
     kg = context.get("openclaw_knowledge_graph_blueprint") or {}
+    today_report = context.get("today_work_report") or {}
+    next_schedule = context.get("next_schedule") or []
     lines = [
         "# Investment Research OS Context for OpenClaw",
         "",
@@ -528,6 +608,23 @@ def render_markdown(context: dict) -> str:
         f"- 콘솔: {context['source_project']['research_console_url']}",
         f"- 백엔드 헬스: {context['source_project']['backend_health_url']}",
         "- 민감정보: API 키, 토큰, 원문 DB, 브로커 인증 정보 제외",
+        "",
+        "## 오픈클로 답변 정정",
+        "",
+        f"- 오늘 구현 작업 없음: `false` (git 오늘 커밋 {today_report.get('commit_count', 0)}개)",
+        f"- 정정 기준: {today_report.get('correction_for_openclaw', 'bridge_status와 today_work_report 확인')}",
+        "",
+        "## 오늘 구현 보고",
+        "",
+        *(f"- {item}" for item in today_report.get("summary") or ["오늘 구현 요약을 생성하지 못했습니다. git log와 bridge_status를 확인하세요."]),
+        "",
+        "### 오늘 최신 커밋",
+        "",
+        *(f"- `{item.get('commit')}` {item.get('committed_at')} - {item.get('subject')}" for item in (today_report.get("latest_commits") or [])[:8]),
+        "",
+        "## 다음 스케줄",
+        "",
+        *(f"- {item.get('time')}: {item.get('task')} ({item.get('status')})" for item in next_schedule),
         "",
         "## 현재 핵심 상태",
         "",
@@ -978,6 +1075,9 @@ def build_first_read_packet(context: dict) -> dict:
         "read_this_first": True,
         "purpose": "Give OpenClaw a compact, sanitized first-read packet before it loads the larger research context.",
         "source_project": context.get("source_project"),
+        "today_work_report": context.get("today_work_report") or {},
+        "next_schedule": context.get("next_schedule") or [],
+        "answer_correction": context.get("answer_correction") or {},
         "latest_recommendation_date": rec.get("latest_recommendation_date"),
         "latest_market_counts": rec.get("latest_market_counts") or {},
         "latest_recommendations": recommendations,
@@ -1019,6 +1119,8 @@ def build_first_read_packet(context: dict) -> dict:
 
 
 def render_first_read_markdown(packet: dict) -> str:
+    today_report = packet.get("today_work_report") or {}
+    answer_correction = packet.get("answer_correction") or {}
     lines = [
         "# OpenClaw Investment Research First Read",
         "",
@@ -1027,10 +1129,27 @@ def render_first_read_markdown(packet: dict) -> str:
         f"- latest recommendation date: `{packet.get('latest_recommendation_date')}`",
         f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
         f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",
+        f"- today implementation commits: `{today_report.get('commit_count', 0)}`",
         "",
-        "## Latest Recommendations",
+        "## Answer Correction",
+        "",
+        f"- wrong claim to avoid: `{answer_correction.get('wrong_claim', '오늘 작업 없음')}`",
+        f"- correct basis: {answer_correction.get('correct_basis', 'bridge_status와 today_work_report 확인')}",
+        "",
+        "## Today Implementation Report",
         "",
     ]
+    for item in today_report.get("summary") or []:
+        lines.append(f"- {item}")
+    if not today_report.get("summary"):
+        lines.append("- No summary generated; inspect bridge_status.json and git source state.")
+    lines.extend(["", "### Latest Today Commits", ""])
+    for item in (today_report.get("latest_commits") or [])[:8]:
+        lines.append(f"- `{item.get('commit')}` {item.get('committed_at')} - {item.get('subject')}")
+    lines.extend(["", "## Next Schedule", ""])
+    for item in packet.get("next_schedule") or []:
+        lines.append(f"- {item.get('time')}: {item.get('task')} ({item.get('status')})")
+    lines.extend(["", "## Latest Recommendations", ""])
     for row in packet.get("latest_recommendations") or []:
         lines.append(
             f"- {row.get('market')}#{row.get('rank')} `{row.get('ticker')}` {row.get('company_name')} "
@@ -1061,7 +1180,6 @@ def render_first_read_markdown(packet: dict) -> str:
     lines.append("")
     return "\n".join(lines)
 
-
 def build_bridge_manifest(context: dict) -> dict:
     graph_files = KNOWLEDGE_GRAPH_FILES
     return {
@@ -1069,6 +1187,9 @@ def build_bridge_manifest(context: dict) -> dict:
         "generated_at": datetime.now(tz=KST).isoformat(timespec="seconds"),
         "context_generated_at": context.get("generated_at"),
         "source_project": context.get("source_project"),
+        "today_work_report": context.get("today_work_report") or {},
+        "next_schedule": context.get("next_schedule") or [],
+        "answer_correction": context.get("answer_correction") or {},
         "first_read_file": FIRST_READ_MARKDOWN_FILE,
         "first_read_json_file": FIRST_READ_JSON_FILE,
         "context_file": "investment_research_context.json",
