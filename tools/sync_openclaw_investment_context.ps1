@@ -21,6 +21,7 @@ $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completi
 $statusSummaryScript = Join-Path $projectRoot "tools\show_openclaw_bridge_status.py"
 $quickHealthScript = Join-Path $projectRoot "tools\check_openclaw_quick_health.py"
 $todayAnswerQualityScript = Join-Path $projectRoot "tools\check_openclaw_today_answer_quality.py"
+$priorityAnswerQualityScript = Join-Path $projectRoot "tools\check_openclaw_priority_answer_quality.py"
 $wslSyncScript = Join-Path $projectRoot "tools\sync_openclaw_wsl_investment_context.ps1"
 $wslAnswerContextScript = Join-Path $projectRoot "tools\check_openclaw_wsl_answer_context.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
@@ -100,6 +101,9 @@ if (-not (Test-Path -LiteralPath $quickHealthScript)) {
 }
 if (-not (Test-Path -LiteralPath $todayAnswerQualityScript)) {
   throw "OpenClaw today answer quality script not found: $todayAnswerQualityScript"
+}
+if (-not (Test-Path -LiteralPath $priorityAnswerQualityScript)) {
+  throw "OpenClaw priority answer quality script not found: $priorityAnswerQualityScript"
 }
 if (-not (Test-Path -LiteralPath $wslSyncScript)) {
   throw "OpenClaw WSL sync script not found: $wslSyncScript"
@@ -207,6 +211,7 @@ $operationalCommands = [ordered]@{
   quick_health = "python tools\check_openclaw_quick_health.py --json"
   today_answer_readiness = "python tools\check_openclaw_today_answer_readiness.py --json"
   today_answer_quality = "python tools\check_openclaw_today_answer_quality.py --json"
+  priority_answer_quality = "python tools\check_openclaw_priority_answer_quality.py --json"
   wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
   wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
@@ -332,6 +337,7 @@ $readme = @(
   "- quick health: ``python tools\check_openclaw_quick_health.py --json``",
   "- today answer readiness: ``python tools\check_openclaw_today_answer_readiness.py --json``",
   "- today answer quality smoke: ``python tools\check_openclaw_today_answer_quality.py --json``",
+  "- priority answer quality smoke: ``python tools\check_openclaw_priority_answer_quality.py --json``",
   "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
   "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
@@ -370,6 +376,7 @@ $startupLines = @(
   "- Quick health from ``$projectRoot``: ``python tools\check_openclaw_quick_health.py --json``.",
   "- Today answer readiness from ``$projectRoot``: ``python tools\check_openclaw_today_answer_readiness.py --json``.",
   "- Today answer quality smoke from ``$projectRoot``: ``python tools\check_openclaw_today_answer_quality.py --json``.",
+  "- Priority answer quality smoke from ``$projectRoot``: ``python tools\check_openclaw_priority_answer_quality.py --json``.",
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
   "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
@@ -417,6 +424,10 @@ if (-not $SkipValidation.IsPresent) {
     python $todayAnswerQualityScript --openclaw-dir $targetDir --json
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw today answer quality smoke failed: $LASTEXITCODE"
+    }
+    python $priorityAnswerQualityScript --openclaw-dir $targetDir --json
+    if ($LASTEXITCODE -ne 0) {
+      throw "OpenClaw priority answer quality smoke failed: $LASTEXITCODE"
     }
   }
 }

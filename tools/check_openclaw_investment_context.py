@@ -110,6 +110,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include today answer readiness command")
     if usage.get("today_answer_quality_command") != "python tools\\check_openclaw_today_answer_quality.py --json":
         raise AssertionError("OpenClaw usage must include today answer quality command")
+    if usage.get("priority_answer_quality_command") != "python tools\\check_openclaw_priority_answer_quality.py --json":
+        raise AssertionError("OpenClaw usage must include priority answer quality command")
     if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":
         raise AssertionError("OpenClaw usage must include safe refresh command")
     if usage.get("strict_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit":
@@ -282,6 +284,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "status_summary_command",
         "quick_health_command",
         "today_answer_quality_command",
+        "priority_answer_quality_command",
         "wsl_refresh_command",
         "wsl_answer_context_command",
         "offline_readiness_command",
@@ -368,6 +371,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "status_summary": "status_summary_command",
             "quick_health": "quick_health_command",
             "today_answer_quality": "today_answer_quality_command",
+            "priority_answer_quality": "priority_answer_quality_command",
             "wsl_refresh": "wsl_refresh_command",
             "wsl_answer_context": "wsl_answer_context_command",
             "offline_readiness": "offline_readiness_command",
@@ -440,6 +444,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "openclaw_bridge_completion_report.md",
             "show_openclaw_bridge_status.py --json",
             "check_openclaw_today_answer_quality.py --json",
+            "check_openclaw_priority_answer_quality.py --json",
             "sync_openclaw_wsl_investment_context.ps1",
             "check_openclaw_wsl_answer_context.py --json",
             "hash_status=ok",

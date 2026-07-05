@@ -271,6 +271,15 @@ def load_openclaw_today_answer_quality_tool():
     return module
 
 
+def load_openclaw_priority_answer_quality_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py"
+    spec = spec_from_file_location("check_openclaw_priority_answer_quality", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_openclaw_wsl_answer_context_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_wsl_answer_context.py"
     spec = spec_from_file_location("check_openclaw_wsl_answer_context", tool_path)
@@ -1068,6 +1077,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 오늘 작업 답변 품질 smoke"],
             ["tools/check_openclaw_today_answer_quality.py", "--json"],
+        )
+        self.assertIn("OpenClaw 추천/중요 메시지 답변 품질 smoke", checks)
+        self.assertEqual(
+            checks["OpenClaw 추천/중요 메시지 답변 품질 smoke"],
+            ["tools/check_openclaw_priority_answer_quality.py", "--json"],
         )
         self.assertIn("OpenClaw WSL PA 답변 컨텍스트", checks)
         self.assertEqual(
@@ -19051,6 +19065,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                             "today_answer_quality": "python tools\\check_openclaw_today_answer_quality.py --json",
+                            "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
                             "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -19116,6 +19131,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
                 "- quick health: `python tools\\check_openclaw_quick_health.py --json`\n"
                 "- today answer quality smoke: `python tools\\check_openclaw_today_answer_quality.py --json`\n"
+                "- priority answer quality smoke: `python tools\\check_openclaw_priority_answer_quality.py --json`\n"
                 "- WSL sync: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`\n"
                 "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
@@ -19172,6 +19188,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"quick_health_command"', manifest_text)
         self.assertIn('"today_answer_quality_command"', manifest_text)
+        self.assertIn('"priority_answer_quality_command"', manifest_text)
         self.assertIn('"wsl_refresh_command"', manifest_text)
         self.assertIn('"wsl_answer_context_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
@@ -19184,6 +19201,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', exported_text)
         self.assertIn('"today_answer_quality_command": "python tools\\\\check_openclaw_today_answer_quality.py --json"', exported_text)
+        self.assertIn('"priority_answer_quality_command": "python tools\\\\check_openclaw_priority_answer_quality.py --json"', exported_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', exported_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
@@ -19205,6 +19223,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', manifest_text)
         self.assertIn('"today_answer_quality_command": "python tools\\\\check_openclaw_today_answer_quality.py --json"', manifest_text)
+        self.assertIn('"priority_answer_quality_command": "python tools\\\\check_openclaw_priority_answer_quality.py --json"', manifest_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', manifest_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
@@ -19407,6 +19426,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run check_openclaw_quick_health.py --json\n"
                 "run check_openclaw_today_answer_readiness.py --json\n"
                 "run check_openclaw_today_answer_quality.py --json\n"
+                "run check_openclaw_priority_answer_quality.py --json\n"
                 "run sync_openclaw_wsl_investment_context.ps1\n"
                 "run check_openclaw_wsl_answer_context.py --json\n"
                 "run check_offline_readiness.py --json\n"
@@ -20047,6 +20067,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                 "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
                 "today_answer_quality": "python tools\\check_openclaw_today_answer_quality.py --json",
+                "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
                 "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                 "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -20070,6 +20091,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("quick_health", json_payload["operational_commands"])
         self.assertIn("today_answer_readiness", json_payload["operational_commands"])
         self.assertIn("today_answer_quality", json_payload["operational_commands"])
+        self.assertIn("priority_answer_quality", json_payload["operational_commands"])
         self.assertIn("wsl_refresh", json_payload["operational_commands"])
         self.assertIn("wsl_answer_context", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
@@ -20098,6 +20120,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- quick_health: `python tools\\check_openclaw_quick_health.py --json`", markdown)
         self.assertIn("- today_answer_readiness: `python tools\\check_openclaw_today_answer_readiness.py --json`", markdown)
         self.assertIn("- today_answer_quality: `python tools\\check_openclaw_today_answer_quality.py --json`", markdown)
+        self.assertIn("- priority_answer_quality: `python tools\\check_openclaw_priority_answer_quality.py --json`", markdown)
         self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
         self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
@@ -20232,6 +20255,63 @@ class OpenClawTodayAnswerQualityTests(unittest.TestCase):
                 tool.build_result(openclaw_dir, answer_file)
 
 
+class OpenClawPriorityAnswerQualityTests(unittest.TestCase):
+    def sample_first_read_payload(self):
+        return {
+            "schema": "openclaw_investment_research_first_read_v1",
+            "generated_at": "2026-07-05T18:00:00+09:00",
+            "latest_recommendation_date": "2026-07-05",
+            "latest_recommendations": [
+                {"market": "KR", "rank": 1, "ticker": "001", "company_name": "한국1", "score": 99, "baseline_price": 1001, "currency": "KRW"},
+                {"market": "KR", "rank": 2, "ticker": "002", "company_name": "한국2", "score": 98, "baseline_price": 1002, "currency": "KRW"},
+                {"market": "KR", "rank": 3, "ticker": "003", "company_name": "한국3", "score": 97, "baseline_price": 1003, "currency": "KRW"},
+                {"market": "US", "rank": 1, "ticker": "AAA", "company_name": "미국1", "score": 96, "baseline_price": 10.1, "currency": "USD"},
+                {"market": "US", "rank": 2, "ticker": "BBB", "company_name": "미국2", "score": 95, "baseline_price": 10.2, "currency": "USD"},
+                {"market": "US", "rank": 3, "ticker": "CCC", "company_name": "미국3", "score": 94, "baseline_price": 10.3, "currency": "USD"},
+            ],
+            "telegram": {
+                "favorite_saved_count": 10,
+                "priority_brief_design": "telegram_brief_sender_v1",
+                "priority_delivery_design": "telegram_brief_delivery_v1",
+            },
+        }
+
+    def test_priority_answer_quality_builds_recommendation_and_message_answer(self):
+        tool = load_openclaw_priority_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(self.sample_first_read_payload(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(6, result["recommendation_count"])
+        self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
+        self.assertIn("banned_priority_answer_fragments_absent=true", result["messages"])
+        self.assertIn("오늘 추천 종목", result["answer_preview"])
+        self.assertIn("중요 메시지", result["answer_preview"])
+        self.assertIn("AAA", result["answer_preview"])
+
+    def test_priority_answer_quality_rejects_missing_recommendation_answer_file(self):
+        tool = load_openclaw_priority_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            answer_file = openclaw_dir / "answer.md"
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(self.sample_first_read_payload(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            answer_file.write_text("추천 없음\n중요 메시지 없음\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(AssertionError, "banned fragment"):
+                tool.build_result(openclaw_dir, answer_file)
+
+
 class OpenClawWslAnswerContextTests(unittest.TestCase):
     def test_wsl_answer_context_reports_pa_sessions_and_today_readiness(self):
         tool = load_openclaw_wsl_answer_context_tool()
@@ -20345,6 +20425,15 @@ class OpenClawQuickHealthTests(unittest.TestCase):
                 "answer_source": "generated_expected_answer",
             }
         )
+        fake_priority_answer_quality = SimpleNamespace(
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "recommendation_count": 6,
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "telegram_saved_count": 10,
+                "answer_source": "generated_expected_answer",
+            }
+        )
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
@@ -20352,6 +20441,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_consumer_smoke": fake_consumer,
             "check_openclaw_today_answer_readiness": fake_today_answer,
             "check_openclaw_today_answer_quality": fake_today_answer_quality,
+            "check_openclaw_priority_answer_quality": fake_priority_answer_quality,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
@@ -20364,7 +20454,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(6, len(result["checks"]))
+        self.assertEqual(7, len(result["checks"]))
         self.assertEqual("ok", result["hash_status"])
         self.assertEqual(14, result["hash_checked_count"])
         self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
@@ -20377,6 +20467,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("consumer_smoke: ok", rendered)
         self.assertIn("today_answer: ok", rendered)
         self.assertIn("today_answer_quality: ok", rendered)
+        self.assertIn("priority_answer_quality: ok", rendered)
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
         tool = load_openclaw_quick_health_tool()
@@ -20394,6 +20485,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         fake_consumer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_today_answer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_today_answer_quality = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
+        fake_priority_answer_quality = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
@@ -20401,6 +20493,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_consumer_smoke": fake_consumer,
             "check_openclaw_today_answer_readiness": fake_today_answer,
             "check_openclaw_today_answer_quality": fake_today_answer_quality,
+            "check_openclaw_priority_answer_quality": fake_priority_answer_quality,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):

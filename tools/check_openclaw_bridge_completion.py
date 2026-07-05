@@ -208,6 +208,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "check_openclaw_quick_health.py --json",
         "check_openclaw_today_answer_readiness.py --json",
         "check_openclaw_today_answer_quality.py --json",
+        "check_openclaw_priority_answer_quality.py --json",
         "sync_openclaw_wsl_investment_context.ps1",
         "check_openclaw_wsl_answer_context.py --json",
         "check_offline_readiness.py --json",
@@ -287,6 +288,7 @@ def build_result(
             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
             "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
             "today_answer_quality": "python tools\\check_openclaw_today_answer_quality.py --json",
+            "priority_answer_quality": "python tools\\check_openclaw_priority_answer_quality.py --json",
             "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -344,7 +346,7 @@ def build_result(
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw personal knowledge graph artifacts validate",
         "OpenClaw completion report hashes match completion report files",
-        "OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, today answer quality smoke, WSL PA answer context, and current source git",
+        "OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, today answer quality smoke, priority answer quality smoke, WSL PA answer context, and current source git",
         "OpenClaw daily memory tells agents to use today_work_report and next_schedule before answering today-work questions",
     ]
     return {
@@ -436,6 +438,7 @@ def render_markdown_report(result: dict) -> str:
         "quick_health",
         "today_answer_readiness",
         "today_answer_quality",
+        "priority_answer_quality",
         "wsl_refresh",
         "wsl_answer_context",
         "offline_readiness",

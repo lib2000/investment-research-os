@@ -17,6 +17,7 @@ CHECK_MODULES = {
     "consumer_smoke": PROJECT_ROOT / "tools" / "check_openclaw_consumer_smoke.py",
     "today_answer": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py",
     "today_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_quality.py",
+    "priority_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py",
 }
 
 
@@ -150,6 +151,25 @@ def check_today_answer_quality(openclaw_dir: Path) -> dict[str, Any]:
     }
 
 
+def check_priority_answer_quality(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_priority_answer_quality", CHECK_MODULES["priority_answer_quality"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "priority_answer_quality", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "priority_answer_quality",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "recommendation_count": result.get("recommendation_count"),
+            "latest_market_counts": result.get("latest_market_counts"),
+            "telegram_saved_count": result.get("telegram_saved_count"),
+            "answer_source": result.get("answer_source"),
+        },
+    }
+
+
 def build_result(
     *,
     project_root: Path = PROJECT_ROOT,
@@ -170,6 +190,7 @@ def build_result(
         ),
         lambda: check_today_answer(openclaw_dir),
         lambda: check_today_answer_quality(openclaw_dir),
+        lambda: check_priority_answer_quality(openclaw_dir),
     ):
         try:
             result = check()
