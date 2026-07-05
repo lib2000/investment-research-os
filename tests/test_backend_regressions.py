@@ -18103,6 +18103,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- knowledge graph validation: `python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24`\n"
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
+                "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
                 encoding="utf-8",
