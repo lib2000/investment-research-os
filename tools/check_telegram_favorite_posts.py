@@ -188,6 +188,7 @@ def main() -> int:
     parser.add_argument("--sync-news-inbox", action="store_true", help="임시 vault 뉴스 인박스에 dry-run 저장까지 확인합니다.")
     parser.add_argument("--top-n", type=int, default=None)
     parser.add_argument("--min-views", type=int, default=None)
+    parser.add_argument("--min-channel-count", type=int, default=None, help="설정된 채널 수가 이 값보다 적으면 실패합니다.")
     parser.add_argument("--time", default=None)
     parser.add_argument("--timeout-seconds", type=float, default=None)
     parser.add_argument("--output-json", type=Path, help="점검 결과 JSON 저장")
@@ -215,13 +216,18 @@ def main() -> int:
         if args.sync_news_inbox
         else {"status": "skipped", "reason": "sync-news-inbox not requested"}
     )
+    errors = []
+    if args.min_channel_count is not None and len(channels) < args.min_channel_count:
+        errors.append(f"configured channel count {len(channels)} is below required {args.min_channel_count}")
+    result_status = "success" if channels and (posts or not args.live_fetch) and not errors else "needs_configuration"
     result = {
-        "status": "success" if channels and (posts or not args.live_fetch) else "needs_configuration",
+        "status": result_status,
         "module": "telegram_favorite_posts_check",
         "enabled": settings.telegram_favorite_posts_enabled,
         "env_file_loaded": bool(args.env_file),
         "daily_time": settings.telegram_favorite_posts_time,
         "channel_count": len(channels),
+        "min_channel_count": args.min_channel_count,
         "top_n": settings.telegram_favorite_posts_top_n,
         "min_views": settings.telegram_favorite_posts_min_views,
         "candidate_count": len(posts),
@@ -237,6 +243,7 @@ def main() -> int:
         ],
         "task_status": status,
         "refresh_result": refresh_result,
+        "errors": errors,
         "warnings": [*parse_warnings, *collect_warnings],
     }
     if args.output_json:
@@ -251,10 +258,14 @@ def main() -> int:
     console_print(f"- enabled: {result['enabled']}")
     console_print(f"- daily_time: {result['daily_time']}")
     console_print(f"- channel_count: {result['channel_count']}")
+    if result["min_channel_count"] is not None:
+        console_print(f"- min_channel_count: {result['min_channel_count']}")
     console_print(f"- candidate_count: {result['candidate_count']}")
     console_print(f"- task_status: {status.get('status')}")
     for post in result["top_posts"][:5]:
         console_print(f"- top: {post['channel_label']} | {post['view_count']} views | {post['title']}")
+    for error in result["errors"][:5]:
+        console_print(f"- error: {error}")
     for warning in result["warnings"][:5]:
         console_print(f"- warning: {warning}")
     return 0 if result["status"] == "success" else 1

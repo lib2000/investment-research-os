@@ -170,6 +170,26 @@ CHECKS = [
         ],
     ),
 ]
+TELEGRAM_FAVORITE_LOCAL_ENV = Path("tmp") / "telegram-favorite-posts.local.env"
+
+
+def checks_for_root(root: Path) -> list[tuple[str, list[str]]]:
+    checks = list(CHECKS)
+    if (root / TELEGRAM_FAVORITE_LOCAL_ENV).exists():
+        checks.append(
+            (
+                "Telegram 즐겨찾기 운영 채널 설정",
+                [
+                    "tools/check_telegram_favorite_posts.py",
+                    "--env-file",
+                    str(TELEGRAM_FAVORITE_LOCAL_ENV),
+                    "--enabled",
+                    "--min-channel-count",
+                    "18",
+                ],
+            )
+        )
+    return checks
 
 
 def project_root(start: Path) -> Path:
@@ -183,7 +203,8 @@ def project_root(start: Path) -> Path:
 
 def build_json_payload(root: Path, *, tail_lines: int) -> dict:
     results = []
-    for label, check_args in CHECKS:
+    checks = checks_for_root(root)
+    for label, check_args in checks:
         completed = subprocess.run(
             [sys.executable, *check_args],
             cwd=root,
@@ -210,7 +231,7 @@ def build_json_payload(root: Path, *, tail_lines: int) -> dict:
         "generated_at": datetime.now(LOCAL_TIMEZONE).isoformat(timespec="seconds"),
         "timezone": str(LOCAL_TIMEZONE),
         "check_count": len(results),
-        "expected_check_count": len(CHECKS),
+        "expected_check_count": len(checks),
         "failed_count": len(failed),
         "failed_labels": [item["label"] for item in failed],
         "results": results,
@@ -237,7 +258,7 @@ def main() -> int:
         return failed[0]["returncode"] if failed else 0
 
     print(f"프로젝트 루트: {root}", flush=True)
-    for label, args in CHECKS:
+    for label, args in checks_for_root(root):
         print(f"\n==> {label}", flush=True)
         completed = subprocess.run([sys.executable, *args], cwd=root, check=False)
         if completed.returncode != 0:
