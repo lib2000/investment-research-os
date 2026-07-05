@@ -81,6 +81,7 @@ CHECKS = [
     ("OpenClaw 오늘 작업 답변 준비", ["tools/check_openclaw_today_answer_readiness.py", "--json"]),
     ("OpenClaw 오늘 작업 답변 품질 smoke", ["tools/check_openclaw_today_answer_quality.py", "--json"]),
     ("OpenClaw 추천/중요 메시지 답변 품질 smoke", ["tools/check_openclaw_priority_answer_quality.py", "--json"]),
+    ("OpenClaw 질문별 답변 샘플 smoke", ["tools/check_openclaw_answer_samples.py", "--json"]),
     ("OpenClaw WSL PA 답변 컨텍스트", ["tools/check_openclaw_wsl_answer_context.py", "--json"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
     ("Firecrawl IR 수집 payload", ["tools/check_firecrawl_ir_collector.py"]),
