@@ -1520,9 +1520,12 @@ class OperationalReadinessToolTests(unittest.TestCase):
             patch.object(tool, "portfolio_signal", return_value=good), \
             patch.object(tool, "nps_allocation_signal", return_value=weak), \
             patch.object(tool, "investment_insight_hub_signal", return_value=good), \
+            patch.object(tool, "local_ai_survival_signal", return_value=good), \
+            patch.object(tool, "agent_operating_foundation_signal", return_value=good), \
             patch.object(tool, "openclaw_bridge_signal", return_value=good), \
             patch.object(tool, "openclaw_completion_signal", return_value=good), \
-            patch.object(tool, "openclaw_status_summary_signal", return_value=good):
+            patch.object(tool, "openclaw_status_summary_signal", return_value=good), \
+            patch.object(tool, "openclaw_answer_capture_canary_signal", return_value=good):
             result = tool.build_result(
                 Path("C:/tmp/project"),
                 min_score=95.0,
@@ -1531,8 +1534,8 @@ class OperationalReadinessToolTests(unittest.TestCase):
             )
 
         self.assertEqual(result["status"], "warning")
-        self.assertEqual(result["score"], 98.6)
-        self.assertEqual(len(result["signals"]), 14)
+        self.assertEqual(result["score"], 98.8)
+        self.assertEqual(len(result["signals"]), 17)
         self.assertEqual(result["warnings"][0]["id"], "weak")
 
     def test_policy_signal_quality_is_part_of_operational_readiness(self):
@@ -1669,6 +1672,29 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertIn("latest 2026-07-04", result["message"])
         self.assertIn("first-read rows 6", result["message"])
         self.assertIn("hashes ok/14", result["message"])
+
+    def test_openclaw_answer_capture_canary_is_part_of_operational_readiness(self):
+        tool = load_operational_readiness_tool()
+        fake_module = SimpleNamespace(
+            DEFAULT_OPENCLAW_DIR=Path("C:/tmp/openclaw"),
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "route_id": "today_work_report",
+                "processed_files": ["processed.md"],
+                "answer_files": ["answer.json"],
+                "source_openclaw_dir": str(openclaw_dir),
+            },
+        )
+
+        with patch.dict(sys.modules, {"check_openclaw_answer_capture_canary": fake_module}):
+            result = tool.openclaw_answer_capture_canary_signal(PROJECT_ROOT)
+
+        self.assertEqual(result["id"], "openclaw_answer_capture_canary")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["score"], 100.0)
+        self.assertIn("OpenClaw 답변 캡처 canary", result["label"])
+        self.assertIn("processed 1", result["message"])
+        self.assertIn("check_openclaw_answer_capture_canary.py", result["next_action"])
 
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
@@ -5053,6 +5079,7 @@ class BackendModuleBoundaryTests(unittest.TestCase):
                 "tools/check_json_contracts.py",
                 "tools/check_operational_readiness_score.py",
                 "tools/check_openclaw_quick_health.py",
+                "tools/check_openclaw_answer_capture_canary.py",
                 "tools/check_local_ai_survival.py",
                 "tools/check_console_static_contract.py",
                 "tools/check_console_asset_and_js.py",

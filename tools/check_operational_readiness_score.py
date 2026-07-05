@@ -589,6 +589,44 @@ def openclaw_status_summary_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def openclaw_answer_capture_canary_signal(root: Path) -> dict[str, Any]:
+    tools_dir = root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    from check_openclaw_answer_capture_canary import DEFAULT_OPENCLAW_DIR, build_result as build_canary_result
+
+    try:
+        result = build_canary_result(DEFAULT_OPENCLAW_DIR)
+    except (AssertionError, OSError, ValueError, json.JSONDecodeError) as exc:
+        return signal(
+            "openclaw_answer_capture_canary",
+            "OpenClaw 답변 캡처 canary",
+            0.0,
+            f"카나리 실패: {exc}",
+            "python tools\\check_openclaw_answer_capture_canary.py --json",
+        )
+    if result.get("status") != "ok":
+        errors = result.get("errors") or []
+        message = "; ".join(str(error) for error in errors[:3]) or "카나리 실패"
+        return signal(
+            "openclaw_answer_capture_canary",
+            "OpenClaw 답변 캡처 canary",
+            0.0,
+            message,
+            "python tools\\check_openclaw_answer_capture_canary.py --json",
+        )
+    return signal(
+        "openclaw_answer_capture_canary",
+        "OpenClaw 답변 캡처 canary",
+        100.0,
+        (
+            f"route {result.get('route_id')} / processed {len(result.get('processed_files') or [])} / "
+            f"answers {len(result.get('answer_files') or [])} / live pollution false"
+        ),
+        "python tools\\check_openclaw_answer_capture_canary.py --json",
+    )
+
+
 def build_result(
     root: Path,
     *,
@@ -615,6 +653,7 @@ def build_result(
         openclaw_bridge_signal(root),
         openclaw_completion_signal(root),
         openclaw_status_summary_signal(root),
+        openclaw_answer_capture_canary_signal(root),
     ]
     score = round(sum(item["score"] for item in signals) / len(signals), 1) if signals else 0.0
     warnings = [item for item in signals if item["status"] != "ok"]

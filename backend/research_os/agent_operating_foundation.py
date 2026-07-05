@@ -159,6 +159,7 @@ def build_agent_operating_foundation_status(settings: Settings) -> dict:
         "tools/check_offline_readiness.py",
         "tools/check_operational_readiness_score.py",
         "tools/check_openclaw_quick_health.py",
+        "tools/check_openclaw_answer_capture_canary.py",
         "tools/check_public_repo_safety.py",
         "tools/check_local_ai_survival.py",
     ]
