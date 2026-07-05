@@ -3231,6 +3231,7 @@ def build_naver_research_cache_status(settings: Settings, cache: dict | None = N
     stored_file_count = 0
     cache_only_count = 0
     missing_storage_count = 0
+    pdf_import_failure_count = 0
     pdf_extraction_counts: dict[str, int] = {}
     priority_counts = {"보유/관심": 0, "일반": 0}
     for entry in entries.values():
@@ -3245,7 +3246,10 @@ def build_naver_research_cache_status(settings: Settings, cache: dict | None = N
                 missing_storage_count += 1
             if normalize_naver_manifest_path(relative_path) not in manifest_paths:
                 cache_only_count += 1
-        pdf_status = str((entry.get("pdf_analysis") or {}).get("status") or "unknown")
+        pdf_analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
+        if naver_pdf_analysis_has_runtime_failure_note(pdf_analysis):
+            pdf_import_failure_count += 1
+        pdf_status = str(pdf_analysis.get("status") or "unknown")
         pdf_extraction_counts[pdf_status] = pdf_extraction_counts.get(pdf_status, 0) + 1
         score = int(((entry.get("priority") or {}).get("score") or 0))
         if score > 0:
@@ -3257,6 +3261,7 @@ def build_naver_research_cache_status(settings: Settings, cache: dict | None = N
         "stored_file_count": stored_file_count,
         "cache_only_count": cache_only_count,
         "missing_storage_count": missing_storage_count,
+        "pdf_import_failure_count": pdf_import_failure_count,
         "pdf_extraction_counts": pdf_extraction_counts,
         "priority_counts": priority_counts,
     }
@@ -3283,16 +3288,20 @@ def find_existing_naver_cache_key(item: dict, indexes: dict[str, dict[str, str]]
     return None
 
 
-def naver_pdf_analysis_needs_backfill(entry: dict) -> bool:
-    analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
-    status = str(analysis.get("status") or "unknown").lower()
-    note = clean_naver_research_text(analysis.get("note"))
-    has_import_failure_note = (
+def naver_pdf_analysis_has_runtime_failure_note(analysis: dict) -> bool:
+    note = clean_naver_research_text(analysis.get("note") if isinstance(analysis, dict) else "")
+    return (
         "No module named" in note
         or "불러오지 못했습니다" in note
         or "PDF 텍스트 추출 라이브러리" in note
         or "PDF 이미지 렌더링 라이브러리" in note
     )
+
+
+def naver_pdf_analysis_needs_backfill(entry: dict) -> bool:
+    analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
+    status = str(analysis.get("status") or "unknown").lower()
+    has_import_failure_note = naver_pdf_analysis_has_runtime_failure_note(analysis)
     return (status in {"", "unknown", "failed"} or has_import_failure_note) and bool(entry.get("pdf_url"))
 
 
@@ -12511,6 +12520,7 @@ def get_naver_research_status(settings: Settings = Depends(get_settings)) -> dic
         "stored_file_count": cache_status["stored_file_count"],
         "cache_only_count": cache_status["cache_only_count"],
         "missing_storage_count": cache_status["missing_storage_count"],
+        "pdf_import_failure_count": cache_status["pdf_import_failure_count"],
         "pdf_extraction_counts": cache_status["pdf_extraction_counts"],
         "priority_counts": cache_status["priority_counts"],
         "duplicate_archive": duplicate_archive_status,

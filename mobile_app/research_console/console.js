@@ -14615,6 +14615,7 @@ function renderNaverResearchStatusText(result) {
     `- 캐시 전용: ${result.cache_only_count || 0}건`,
     `- 저장 파일 누락: ${result.missing_storage_count || 0}건`,
     `- PDF 구조화: 성공 ${pdfCounts.success || 0}건 · 미분석 ${pdfCounts.unknown || 0}건 · PDF 없음 ${pdfCounts.no_pdf || 0}건 · 실패 ${pdfCounts.failed || 0}건`,
+    `- PDF 런타임 실패 메모: ${result.pdf_import_failure_count || 0}건`,
     `- 보유/관심 우선 항목: ${priorityCounts["보유/관심"] || 0}건`,
     `- 중복 시장일지 후보: ${duplicateArchive.duplicate_candidate_count || 0}건 (${duplicateArchive.policy || "soft_archive"})`,
     "",

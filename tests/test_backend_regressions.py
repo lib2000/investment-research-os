@@ -8006,6 +8006,32 @@ class NaverResearchIngestTests(unittest.TestCase):
             )
         )
 
+    def test_naver_research_cache_status_counts_pdf_import_failures(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as tmpdir, patch.object(main, "read_manifest", return_value=[]):
+            settings = Settings(research_vault_dir=tmpdir)
+            status = main.build_naver_research_cache_status(
+                settings,
+                {
+                    "entries": {
+                        "old-failure": {
+                            "pdf_analysis": {
+                                "status": "no_text",
+                                "note": "PDF 텍스트 추출 라이브러리를 불러오지 못했습니다: No module named 'pypdf'",
+                            }
+                        },
+                        "empty-pdf": {
+                            "pdf_analysis": {"status": "no_text", "note": "PDF에서 텍스트를 찾지 못했습니다."}
+                        },
+                    }
+                },
+            )
+
+        self.assertEqual(status["pdf_import_failure_count"], 1)
+        self.assertEqual(status["pdf_extraction_counts"]["no_text"], 2)
+
     def test_research_source_store_summarizes_market_journal_markets(self):
         from tools import check_research_source_store
 
