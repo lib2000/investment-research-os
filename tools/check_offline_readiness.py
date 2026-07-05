@@ -77,6 +77,7 @@ CHECKS = [
     ("OpenClaw 지식 그래프", ["tools/check_openclaw_knowledge_graph.py", "--max-age-hours", "24"]),
     ("OpenClaw 상태 요약", ["tools/show_openclaw_bridge_status.py", "--json"]),
     ("OpenClaw 소비자 smoke", ["tools/check_openclaw_consumer_smoke.py", "--max-age-hours", "24", "--json"]),
+    ("OpenClaw 질문별 read-order smoke", ["tools/check_openclaw_question_read_order.py", "--json"]),
     ("OpenClaw 오늘 작업 답변 준비", ["tools/check_openclaw_today_answer_readiness.py", "--json"]),
     ("OpenClaw 오늘 작업 답변 품질 smoke", ["tools/check_openclaw_today_answer_quality.py", "--json"]),
     ("OpenClaw 추천/중요 메시지 답변 품질 smoke", ["tools/check_openclaw_priority_answer_quality.py", "--json"]),

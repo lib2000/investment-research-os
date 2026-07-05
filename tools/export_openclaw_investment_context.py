@@ -571,6 +571,7 @@ def build_context(project_root: Path) -> dict:
             "today_answer_readiness_command": "python tools\\check_openclaw_today_answer_readiness.py --json",
             "today_answer_quality_command": "python tools\\check_openclaw_today_answer_quality.py --json",
             "priority_answer_quality_command": "python tools\\check_openclaw_priority_answer_quality.py --json",
+            "question_read_order_command": "python tools\\check_openclaw_question_read_order.py --json",
             "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
             "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
@@ -682,6 +683,7 @@ def render_markdown(context: dict) -> str:
             "- 오늘 작업/다음 스케줄 답변 준비도는 `python tools\\check_openclaw_today_answer_readiness.py --json`으로 확인합니다.",
             "- 오늘 작업/다음 스케줄 답변 품질 smoke는 `python tools\\check_openclaw_today_answer_quality.py --json`으로 확인합니다.",
             "- 추천/중요 메시지 답변 품질 smoke는 `python tools\\check_openclaw_priority_answer_quality.py --json`으로 확인합니다.",
+            "- 질문별 read-order smoke는 `python tools\\check_openclaw_question_read_order.py --json`으로 확인합니다.",
             "- WSL PA 실제 답변 컨텍스트는 `python tools\\check_openclaw_wsl_answer_context.py --json`으로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
@@ -1054,6 +1056,56 @@ def build_openclaw_read_order(graph_files: dict | None = None) -> list[str]:
     ]
 
 
+def build_openclaw_question_routes() -> list[dict]:
+    return [
+        {
+            "id": "today_work_report",
+            "question": "오늘 시스템에서 구현한 작업 보고하고 다음 스케줄을 말해줘",
+            "read_order": ["bridge_status.json", FIRST_READ_MARKDOWN_FILE, FIRST_READ_JSON_FILE],
+            "required_payload_keys": ["today_work_report", "next_schedule", "answer_correction"],
+            "quality_command": "python tools\\check_openclaw_today_answer_quality.py --json",
+        },
+        {
+            "id": "recommendations_priority",
+            "question": "오늘 추천 종목과 중요 메시지 알려줘",
+            "read_order": [
+                "bridge_status.json",
+                FIRST_READ_MARKDOWN_FILE,
+                FIRST_READ_JSON_FILE,
+                "investment_research_context.md",
+                "investment_research_context.json",
+            ],
+            "required_payload_keys": ["latest_recommendations", "latest_market_counts", "telegram"],
+            "quality_command": "python tools\\check_openclaw_priority_answer_quality.py --json",
+        },
+        {
+            "id": "bridge_status_completion",
+            "question": "현재 연동 상태와 완료 감사 결과 알려줘",
+            "read_order": [
+                "bridge_status.json",
+                "openclaw_bridge_completion_report.md",
+                "openclaw_bridge_completion_report.json",
+            ],
+            "required_payload_keys": ["primary_files", "operational_commands"],
+            "quality_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+        },
+        {
+            "id": "knowledge_graph_context",
+            "question": "투자 방향과 지식 그래프 컨텍스트 알려줘",
+            "read_order": [
+                "bridge_status.json",
+                "openclaw_knowledge_graph_blueprint.md",
+                "openclaw_knowledge_graph_blueprint.json",
+                "openclaw_knowledge_graph_nodes.json",
+                "openclaw_knowledge_graph_edges.json",
+                "openclaw_knowledge_graph_master_index.md",
+            ],
+            "required_payload_keys": ["primary_files", "operational_commands"],
+            "quality_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
+        },
+    ]
+
+
 def build_first_read_packet(context: dict) -> dict:
     state = context.get("current_state") or {}
     rec = state.get("daily_recommendations") or {}
@@ -1103,6 +1155,7 @@ def build_first_read_packet(context: dict) -> dict:
             "safe_actions": openclaw_usage.get("safe_actions") or [],
         },
         "read_order": build_openclaw_read_order(),
+        "question_routes": build_openclaw_question_routes(),
         "primary_files": {
             "human_context": "investment_research_context.md",
             "machine_context": "investment_research_context.json",
@@ -1117,6 +1170,7 @@ def build_first_read_packet(context: dict) -> dict:
             "today_answer_readiness": openclaw_usage.get("today_answer_readiness_command"),
             "today_answer_quality": openclaw_usage.get("today_answer_quality_command"),
             "priority_answer_quality": openclaw_usage.get("priority_answer_quality_command"),
+            "question_read_order": openclaw_usage.get("question_read_order_command"),
             "safe_refresh": openclaw_usage.get("safe_refresh_command"),
             "strict_refresh": openclaw_usage.get("strict_refresh_command"),
             "final_completion_audit": openclaw_usage.get("final_completion_audit_command"),
@@ -1188,6 +1242,11 @@ def render_first_read_markdown(packet: dict) -> str:
     lines.extend(["", "## Commands", ""])
     for key, command in (packet.get("operational_commands") or {}).items():
         lines.append(f"- {key}: `{command}`")
+    lines.extend(["", "## Question Routes", ""])
+    for route in packet.get("question_routes") or []:
+        lines.append(f"- {route.get('id')}: {route.get('question')}")
+        lines.append(f"  - read_order: {' -> '.join(route.get('read_order') or [])}")
+        lines.append(f"  - quality_command: `{route.get('quality_command')}`")
     lines.extend(["", "## Optimization Notes", ""])
     for note in packet.get("optimization_notes") or []:
         lines.append(f"- {note}")
@@ -1224,8 +1283,10 @@ def build_bridge_manifest(context: dict) -> dict:
         "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
         "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
         "quick_health_command": "python tools\\check_openclaw_quick_health.py --json",
+        "today_answer_readiness_command": "python tools\\check_openclaw_today_answer_readiness.py --json",
         "today_answer_quality_command": "python tools\\check_openclaw_today_answer_quality.py --json",
         "priority_answer_quality_command": "python tools\\check_openclaw_priority_answer_quality.py --json",
+        "question_read_order_command": "python tools\\check_openclaw_question_read_order.py --json",
         "wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
         "wsl_answer_context_command": "python tools\\check_openclaw_wsl_answer_context.py --json",
         "offline_readiness_command": "python tools\\check_offline_readiness.py --json",

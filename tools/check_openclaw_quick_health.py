@@ -15,6 +15,7 @@ CHECK_MODULES = {
     "context_bundle": PROJECT_ROOT / "tools" / "check_openclaw_investment_context.py",
     "completion_audit": PROJECT_ROOT / "tools" / "check_openclaw_bridge_completion.py",
     "consumer_smoke": PROJECT_ROOT / "tools" / "check_openclaw_consumer_smoke.py",
+    "question_read_order": PROJECT_ROOT / "tools" / "check_openclaw_question_read_order.py",
     "today_answer": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py",
     "today_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_quality.py",
     "priority_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py",
@@ -115,6 +116,23 @@ def check_consumer_smoke(
     }
 
 
+def check_question_read_order(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_question_read_order", CHECK_MODULES["question_read_order"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "question_read_order", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "question_read_order",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "route_count": result.get("route_count"),
+            "first_read_declared_route_count": result.get("first_read_declared_route_count"),
+        },
+    }
+
+
 def check_today_answer(openclaw_dir: Path) -> dict[str, Any]:
     module = load_tool("check_openclaw_today_answer_readiness", CHECK_MODULES["today_answer"])
     try:
@@ -188,6 +206,7 @@ def build_result(
             max_age_hours=max_age_hours,
             expected_latest_count=expected_latest_count,
         ),
+        lambda: check_question_read_order(openclaw_dir),
         lambda: check_today_answer(openclaw_dir),
         lambda: check_today_answer_quality(openclaw_dir),
         lambda: check_priority_answer_quality(openclaw_dir),
