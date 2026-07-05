@@ -19,6 +19,7 @@ DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "portfolio_re
 LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
 SUCCESS_RESULT_CODES = {0, 267009, 267011}
+DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState", "-Enabled", "-Submit")
 
 
 def _safe_text(value: Any) -> str:
@@ -148,6 +149,9 @@ def evaluate_task_status(
     state_file: Path,
     max_state_age_hours: float,
     require_state_fresh: bool,
+    expected_time: str = "07:00",
+    required_args: tuple[str, ...] = DEFAULT_REQUIRED_ARGS,
+    require_telegram_env: bool = True,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(LOCAL_TIMEZONE)
@@ -157,19 +161,13 @@ def evaluate_task_status(
         errors.append(_safe_text(task.get("error")) or "portfolio report alert scheduled task not found")
 
     arguments = _safe_text(task.get("Arguments"))
-    required_args = [
-        "run_openclaw_portfolio_report_alert.ps1",
-        "-WriteState",
-        "-Enabled",
-        "-Submit",
-    ]
     missing_args = [item for item in required_args if item not in arguments]
     if missing_args:
         errors.append("scheduled task missing live alert arguments: " + ", ".join(missing_args))
 
     trigger = _safe_text(task.get("Trigger") or task.get("NextRunTime"))
-    if "07:00" not in trigger:
-        errors.append("scheduled task is not configured for 07:00")
+    if expected_time and expected_time not in trigger:
+        errors.append(f"scheduled task is not configured for {expected_time}")
 
     next_run = _parse_datetime(task.get("NextRunTime"))
     if not next_run:
@@ -192,9 +190,9 @@ def evaluate_task_status(
         errors.append(f"scheduled task missed runs: {missed}")
 
     env_status = telegram_env_status()
-    if not env_status["token_configured"]:
+    if require_telegram_env and not env_status["token_configured"]:
         errors.append("Telegram bot token is not configured for scheduled task runtime")
-    if not env_status["chat_id_configured"]:
+    if require_telegram_env and not env_status["chat_id_configured"]:
         errors.append("Telegram chat id is not configured for scheduled task runtime")
 
     state_age = _age_hours(state_file, now=now)
@@ -249,6 +247,9 @@ def main() -> int:
     parser.add_argument("--state-file", type=Path, default=DEFAULT_STATE_FILE)
     parser.add_argument("--max-state-age-hours", type=float, default=36)
     parser.add_argument("--require-state-fresh", action="store_true")
+    parser.add_argument("--expected-time", default="07:00")
+    parser.add_argument("--required-arg", action="append", default=None)
+    parser.add_argument("--skip-telegram-env-check", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -258,6 +259,9 @@ def main() -> int:
         state_file=state_file,
         max_state_age_hours=args.max_state_age_hours,
         require_state_fresh=args.require_state_fresh,
+        expected_time=args.expected_time,
+        required_args=tuple(args.required_arg) if args.required_arg is not None else DEFAULT_REQUIRED_ARGS,
+        require_telegram_env=not args.skip_telegram_env_check,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
