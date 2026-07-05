@@ -15738,6 +15738,18 @@ class ConsoleAssetHashTests(unittest.TestCase):
             self.assertNotIn("interest-detail-cue", block)
             self.assertNotIn("interest-code-hint", block)
 
+    def test_interest_region_normalizer_accepts_united_states_variants(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        normalizer_start = console_js.index("function normalizeInterestRegion")
+        normalizer_end = console_js.index("function interestRegionLabel")
+        normalizer_block = console_js[normalizer_start:normalizer_end]
+
+        self.assertIn('replace(/[\\s._-]+/g, "")', normalizer_block)
+        self.assertIn('"UNITEDSTATES"', normalizer_block)
+        self.assertIn('"USA"', normalizer_block)
+
     def test_asset_hash_rewrite_reaches_fixed_point(self):
         tool = load_console_hash_tool()
         project_root = PROJECT_ROOT

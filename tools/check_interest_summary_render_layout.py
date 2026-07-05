@@ -114,6 +114,10 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                           .find((candidate) => (candidate.querySelector("summary strong")?.textContent || "").replace(/\\s+/g, " ").trim() === openedName)
                       : row;
                     const currentDetails = currentRow?.querySelector("details.interest-card-details") || details;
+                    if (currentDetails && !currentDetails.open) {
+                      currentDetails.open = true;
+                    }
+                    currentRow?.classList?.toggle("is-detail-open", Boolean(currentDetails?.open));
                     const recommendationPanel = currentDetails?.querySelector(".interest-recommendation-panel");
                     recommendationPanel?.scrollIntoView({block: "center", inline: "nearest"});
                     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

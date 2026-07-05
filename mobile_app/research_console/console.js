@@ -1581,7 +1581,8 @@ function syncCompanyNameAlignment(row) {
 
 function normalizeInterestRegion(value) {
   const normalized = String(value || "").trim().toUpperCase();
-  if (["US", "USA", "UNITED-STATES", "UNITED_STATES"].includes(normalized)) {
+  const compact = normalized.replace(/[\s._-]+/g, "");
+  if (["US", "USA", "UNITEDSTATES"].includes(compact)) {
     return "US";
   }
   return "KR";
