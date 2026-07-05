@@ -18900,8 +18900,20 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "bridge_manifest": "4" * 64,
                 },
             },
+            "first_read": {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-05T04:46:32+09:00",
+                "read_this_first": True,
+                "latest_recommendation_date": "2026-07-04",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [
+                    {"market": "KR", "rank": 1, "ticker": "001"},
+                    {"market": "US", "rank": 1, "ticker": "AAA"},
+                ],
+            },
             "completion_requirements": [
                 "source and OpenClaw bundles validate",
+                "OpenClaw first-read packet validates before larger context ingestion",
                 "OpenClaw bridge_status file hashes match copied files",
                 "OpenClaw personal knowledge graph artifacts validate",
                 "OpenClaw completion report hashes match completion report files",
@@ -18939,6 +18951,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
         self.assertIn("- audit generated: 2026-07-05T05:45:00+09:00", markdown)
         self.assertIn("- bridge max age hours: 1", markdown)
+        self.assertIn("OpenClaw first-read packet validates before larger context ingestion", markdown)
+        self.assertIn("## First-Read Packet", markdown)
+        self.assertIn("- schema: `openclaw_investment_research_first_read_v1`", markdown)
+        self.assertIn("- recommendation rows: 2", markdown)
         self.assertIn("OpenClaw bridge_status file hashes match copied files", markdown)
         self.assertIn("OpenClaw completion report hashes match completion report files", markdown)
         self.assertIn("## Read Order", markdown)

@@ -282,10 +282,15 @@ def build_result(
             errors.extend(bridge_errors)
         except AssertionError as exc:
             errors.append(str(exc))
+        try:
+            details["first_read"] = load_json(openclaw_dir / "openclaw_first_read.json")
+        except AssertionError as exc:
+            errors.append(str(exc))
 
     errors.extend(validate_openclaw_workspace(openclaw_workspace, details.get("bridge_status")))
     details["completion_requirements"] = [
         "source and OpenClaw bundles validate",
+        "OpenClaw first-read packet validates before larger context ingestion",
         "source git branch is main",
         "source git is clean and synced with upstream",
         "OpenClaw bridge_status references current clean commit",
@@ -304,6 +309,7 @@ def build_result(
 def render_markdown_report(result: dict) -> str:
     git_state = result.get("git") or {}
     bridge_status = result.get("bridge_status") or {}
+    first_read = result.get("first_read") or {}
     errors = result.get("errors") or []
     lines = [
         "# OpenClaw Investment Research Bridge Completion Report",
@@ -328,6 +334,18 @@ def render_markdown_report(result: dict) -> str:
     ]
     for item in result.get("completion_requirements") or []:
         lines.append(f"- {item}")
+    lines.extend(["", "## First-Read Packet", ""])
+    if first_read:
+        first_read_counts = first_read.get("latest_market_counts") or {}
+        first_read_rows = first_read.get("latest_recommendations") or []
+        lines.append(f"- schema: `{first_read.get('schema')}`")
+        lines.append(f"- generated_at: {first_read.get('generated_at')}")
+        lines.append(f"- read_this_first: {first_read.get('read_this_first')}")
+        lines.append(f"- latest recommendation date: {first_read.get('latest_recommendation_date')}")
+        lines.append(f"- market counts: {first_read_counts}")
+        lines.append(f"- recommendation rows: {len(first_read_rows) if isinstance(first_read_rows, list) else 0}")
+    else:
+        lines.append("- none")
     lines.extend(["", "## Read Order", ""])
     read_order = bridge_status.get("read_order") or []
     if read_order:
