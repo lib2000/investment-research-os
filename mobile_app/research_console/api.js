@@ -2189,6 +2189,13 @@ export async function fetchTelegramBriefDeliveryStatus(accessToken) {
   });
 }
 
+export async function fetchPortfolioReportAlertStatus(accessToken) {
+  return request("/api/v1/telegram/portfolio-report-alert/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchCustomsTradeSnapshot(
   accessToken,
   {

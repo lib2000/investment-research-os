@@ -3823,6 +3823,78 @@ class PortfolioReportAlertTests(unittest.TestCase):
 
 
 class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
+    def test_console_status_summarizes_alert_and_postrun_state(self):
+        from research_os import portfolio_report_alert_status as status_module
+
+        alert_task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+            "State": "Ready",
+            "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -Enabled -Submit",
+            "LastRunTime": "2026-07-06T07:00:03+09:00",
+            "LastTaskResult": 0,
+            "NextRunTime": "2026-07-07T07:00:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:00:00+09:00",
+        }
+        postrun_task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun",
+            "State": "Ready",
+            "Arguments": "run_openclaw_portfolio_report_alert_postrun.ps1 -WriteState -Enabled -Submit",
+            "LastRunTime": "2026-07-06T07:10:03+09:00",
+            "LastTaskResult": 0,
+            "NextRunTime": "2026-07-07T07:10:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:10:00+09:00",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            alert_state = temp_path / "portfolio_report_alert_state.json"
+            alert_state.write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-06T07:00:05",
+                        "last_plan": {
+                            "candidate_count": 2,
+                            "message_count": 1,
+                            "delivered": True,
+                            "chat_id_configured": True,
+                        },
+                        "sent_report_keys": ["a", "b"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            postrun_state = temp_path / "portfolio_report_alert_postrun_state.json"
+            postrun_state.write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-06T07:10:05",
+                        "last_status": "ok",
+                        "last_sent": False,
+                        "sent_fingerprints": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(status_module, "_read_scheduled_task", side_effect=[alert_task, postrun_task]):
+                payload = status_module.build_portfolio_report_alert_console_status(
+                    project_root=temp_path,
+                    alert_state_path=alert_state,
+                    postrun_state_path=postrun_state,
+                    now=datetime(2026, 7, 6, 7, 12),
+                )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["alert"]["state"]["candidate_count"], 2)
+        self.assertEqual(payload["alert"]["state"]["message_count"], 1)
+        self.assertTrue(payload["alert"]["state"]["delivered"])
+        self.assertEqual(payload["postrun"]["state"]["last_status"], "ok")
+        self.assertNotIn("987654321", json.dumps(payload))
+
     def test_task_status_allows_registered_task_before_first_run(self):
         tool = load_portfolio_report_alert_task_status_tool()
         task = {
@@ -14953,6 +15025,27 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn("def build_telegram_brief_delivery_status", backend_source)
         self.assertIn("telegram_brief_delivery_state.json", status_script)
         self.assertIn("텔레그램 중요 브리프 delivery", status_script)
+
+    def test_console_exposes_portfolio_report_alert_status(self):
+        api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        index_html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(encoding="utf-8")
+        backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+
+        self.assertIn("export async function fetchPortfolioReportAlertStatus", api_js)
+        self.assertIn('request("/api/v1/telegram/portfolio-report-alert/status"', api_js)
+        self.assertIn("fetchPortfolioReportAlertStatus,", console_js)
+        self.assertIn(
+            'runCheck("보유 리포트 알림 07:00/07:10", () => fetchPortfolioReportAlertStatus(token()))',
+            console_js,
+        )
+        self.assertIn("formatPortfolioReportAlertStatus", console_js)
+        self.assertIn("portfolioReportAlertStatusButton", console_js)
+        self.assertIn('id="portfolioReportAlertStatusButton"', index_html)
+        self.assertIn('"/api/v1/telegram/portfolio-report-alert/status"', backend_source)
+        self.assertIn("def build_portfolio_report_alert_status", backend_source)
 
     def test_daily_recommendation_status_refreshes_dashboard_top_even_when_hidden(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(

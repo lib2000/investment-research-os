@@ -341,6 +341,7 @@ from research_os.portfolio_sync import (
     protect_manual_or_overseas_holding_sync_state,
     read_portfolio_sync_history,
 )
+from research_os.portfolio_report_alert_status import build_portfolio_report_alert_console_status
 from research_os.research_memory import (
     ResearchStorageInfo,
     read_manifest,
@@ -2442,6 +2443,14 @@ def telegram_favorite_posts_state_path(settings: Settings) -> Path:
     return user_state_dir(settings) / "telegram_favorite_posts_state.json"
 
 
+def portfolio_report_alert_state_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "portfolio_report_alert_state.json"
+
+
+def portfolio_report_alert_postrun_state_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "portfolio_report_alert_postrun_state.json"
+
+
 def telegram_brief_delivery_state_path(settings: Settings) -> Path:
     path = Path(settings.telegram_brief_delivery_state_file)
     if path.is_absolute():
@@ -3680,6 +3689,14 @@ def build_telegram_favorite_posts_task_status(settings: Settings) -> dict:
     return telegram_favorite_posts.build_telegram_favorite_posts_task_status(
         _telegram_favorite_posts_runtime(),
         settings,
+    )
+
+
+def build_portfolio_report_alert_status(settings: Settings) -> dict:
+    return build_portfolio_report_alert_console_status(
+        project_root=Path(__file__).resolve().parents[1],
+        alert_state_path=portfolio_report_alert_state_path(settings),
+        postrun_state_path=portfolio_report_alert_postrun_state_path(settings),
     )
 
 
@@ -12589,6 +12606,16 @@ def get_telegram_brief_delivery_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return build_telegram_brief_delivery_status(settings)
+
+
+@app.get(
+    "/api/v1/telegram/portfolio-report-alert/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_portfolio_report_alert_status(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_portfolio_report_alert_status(settings)
 
 
 @app.post(

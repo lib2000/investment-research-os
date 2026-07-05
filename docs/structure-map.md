@@ -112,6 +112,7 @@
 | `backend\research_os\portfolio_sync.py` | 키움 국내 잔고 반영, 해외/수동 보유 수량 보호, 동기화 이력 JSONL 저장/조회, 동기화 상태 요약 | `check_portfolio_store.py`, `check_all_portfolio_store.py` |
 | `backend\research_os\portfolio_change_detection.py` | OpenClaw `portfolio_health` brief의 전일 대비 health score, stance, confidence 변화 감지 | `PortfolioChangeDetectionTests`, `check_portfolio_change_detection.py` |
 | `backend\research_os\portfolio_brief_contract.py` | `portfolio_ir`/`portfolio_health` brief 저장 payload 계약 생성 | `PortfolioBriefContractTests`, `check_portfolio_brief_contract.py` |
+| `backend\research_os\portfolio_report_alert_status.py` | 보유 종목 신규 리포트 텔레그램 07:00 알림과 07:10 사후점검 예약/상태 파일을 콘솔용 secret-free payload로 요약 | `PortfolioReportAlertTaskStatusTests` |
 | `backend\research_os\portfolio_signal_score.py` | IR/Earnings/SEC/DART signal을 종목별 통합 포트폴리오 점수로 집계 | `PortfolioSignalScoreTests`, `check_portfolio_signal_score.py` |
 | `backend\research_os\market_signal_graph_pipeline_contract.py` | Firecrawl IR, earnings transcript, 통합 점수, 변화 감지, Telegram dry-run을 묶는 Market Signal Graph offline contract | `MarketSignalGraphPipelineContractTests`, `check_market_signal_graph_pipeline_contract.py` |
 | `backend\research_os\company_ir_config.py` | 공개 IR/SEC 소스 JSON 확장 설정 파싱과 중복 제거 helper | `CompanyIrSourcesWatchTests` |

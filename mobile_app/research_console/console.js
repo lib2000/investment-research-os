@@ -101,11 +101,12 @@
   fetchNaverMarketCloseTaskStatus,
   fetchTelegramMarketCloseTaskStatus,
   fetchTelegramBriefDeliveryStatus,
+  fetchPortfolioReportAlertStatus,
   fetchCustomsTradeSnapshot,
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=fbc0b351edb9";
+} from "./api.js?v=a6313cb0356e";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -253,6 +254,7 @@ const elements = {
   dailyRecommendationPolicySignalsButton: document.querySelector("#dailyRecommendationPolicySignalsButton"),
   dailyRecommendationRepairQueueButton: document.querySelector("#dailyRecommendationRepairQueueButton"),
   dailyRecommendationRepairQueueExecuteButton: document.querySelector("#dailyRecommendationRepairQueueExecuteButton"),
+  portfolioReportAlertStatusButton: document.querySelector("#portfolioReportAlertStatusButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -5995,6 +5997,13 @@ function summarizeSystemCheckValue(label, value) {
     const cleanup = value.cleanup_enabled ? "정리 켜짐" : "정리 꺼짐";
     return `전송 계획 ${value.planned_send_count || 0}건 · 정리 후보 ${value.delete_candidate_count || 0}건 · 보호 ${value.protected_message_count || 0}건 · ${safeMode} · ${cleanup}`;
   }
+  if (label.includes("보유 리포트 알림")) {
+    const alert = value.alert || {};
+    const postrun = value.postrun || {};
+    const alertState = alert.state || {};
+    const postrunState = postrun.state || {};
+    return `07:00 ${alert.status || "미확인"} · 신규 ${formatNumber(alertState.candidate_count ?? 0)}건 · 메시지 ${formatNumber(alertState.message_count ?? 0)}건 · 07:10 ${postrun.status || "미확인"} · 마지막 점검 ${postrunState.updated_at ? formatDateTime(postrunState.updated_at) : "첫 실행 전"}`;
+  }
   if (label.includes("자동화")) {
     const digest = value.dashboard_digest || {};
     return `Pulls 대상 ${digest.target_count || 0}개 · RAG ${digest.rag_document_count || 0}개 · Dossier ${digest.dossier_count || 0}개`;
@@ -6036,6 +6045,7 @@ function formatConsoleSystemCheckResult(payload) {
   const naverCheck = checks.find((item) => item.label.includes("네이버 리서치"));
   const telegramMarketCheck = checks.find((item) => item.label.includes("텔레그램 미국 시장일지"));
   const telegramBriefDeliveryCheck = checks.find((item) => item.label.includes("텔레그램 중요 브리프"));
+  const portfolioReportAlertCheck = checks.find((item) => item.label.includes("보유 리포트 알림"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
@@ -6043,6 +6053,11 @@ function formatConsoleSystemCheckResult(payload) {
   const telegramMarketState = telegramMarketCheck?.value?.state || {};
   const telegramMarketStorage = telegramMarketState.storage || {};
   const telegramBriefDelivery = telegramBriefDeliveryCheck?.value || {};
+  const portfolioReportAlert = portfolioReportAlertCheck?.value || {};
+  const portfolioAlertState = portfolioReportAlert.alert?.state || {};
+  const portfolioPostrunState = portfolioReportAlert.postrun?.state || {};
+  const portfolioAlertTask = portfolioReportAlert.alert?.task || {};
+  const portfolioPostrunTask = portfolioReportAlert.postrun?.task || {};
   const okCount = checks.length - failed.length;
   const ocrLimits = ocrCheck?.value?.limits || {};
   return [
@@ -6108,6 +6123,18 @@ function formatConsoleSystemCheckResult(payload) {
       : "",
     telegramBriefDelivery.next_action
       ? `- **delivery 다음 조치:** ${telegramBriefDelivery.next_action}`
+      : "",
+    portfolioReportAlertCheck
+      ? `- **보유 리포트 알림:** ${portfolioReportAlertCheck.status} · ${portfolioReportAlertCheck.summary}`
+      : `- **보유 리포트 알림:** 점검 결과를 불러오지 못했습니다.`,
+    portfolioReportAlertCheck
+      ? `- **07:00 본작업:** 다음 실행 ${portfolioAlertTask.next_run_at ? formatDateTime(portfolioAlertTask.next_run_at) : "미확인"} · 마지막 실행 ${portfolioAlertTask.last_run_at ? formatDateTime(portfolioAlertTask.last_run_at) : "첫 실행 전"} · 신규 ${formatNumber(portfolioAlertState.candidate_count ?? 0)}건 · 발송 ${portfolioAlertState.delivered === true ? "완료" : portfolioAlertState.state_exists ? "미발송/대기" : "첫 실행 전"}`
+      : "",
+    portfolioReportAlertCheck
+      ? `- **07:10 사후점검:** 다음 실행 ${portfolioPostrunTask.next_run_at ? formatDateTime(portfolioPostrunTask.next_run_at) : "미확인"} · 마지막 점검 ${portfolioPostrunState.updated_at ? formatDateTime(portfolioPostrunState.updated_at) : "첫 실행 전"} · 이상 알림 ${portfolioPostrunState.last_sent === true ? "발송" : "없음/대기"}`
+      : "",
+    portfolioReportAlert.next_action
+      ? `- **보유 리포트 알림 다음 조치:** ${portfolioReportAlert.next_action}`
       : "",
     `- **실패 상세:** ${
       dartFailures.length
@@ -6223,6 +6250,7 @@ async function runConsoleSystemCheck() {
     runCheck("네이버 리서치/시장일지 자동 반영", () => fetchNaverResearchStatus(token())),
     runCheck("텔레그램 미국 시장일지 자동 반영", () => fetchTelegramMarketCloseTaskStatus(token())),
     runCheck("텔레그램 중요 브리프 delivery", () => fetchTelegramBriefDeliveryStatus(token())),
+    runCheck("보유 리포트 알림 07:00/07:10", () => fetchPortfolioReportAlertStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
     runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token())),
   ]);
@@ -13767,6 +13795,7 @@ const MEMORY_ACTION_MESSAGES = {
   dailyRecommendationsStatusButton: "추천 후보와 사후 추적 상태를 조회합니다.",
   dailyRecommendationRepairQueueButton: "추천 근거 보강 큐 dry-run을 실행합니다.",
   dailyRecommendationRepairQueueExecuteButton: "추천 근거 보강 큐 상위 항목을 안전 실행합니다.",
+  portfolioReportAlertStatusButton: "보유 종목 신규 리포트 알림 상태를 조회합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
@@ -14308,6 +14337,22 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
 elements.dailyRecommendationPolicySignalsButton?.addEventListener("click", runDailyRecommendationPolicySignalsFlow);
 elements.dailyRecommendationRepairQueueButton?.addEventListener("click", runDailyRecommendationRepairQueueFlow);
 elements.dailyRecommendationRepairQueueExecuteButton?.addEventListener("click", runDailyRecommendationRepairQueueExecuteFlow);
+
+elements.portfolioReportAlertStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("보유 리포트 알림 상태 조회 중", [
+    "07:00 예약 작업 확인",
+    "최근 신규 리포트 알림 상태 파일 확인",
+    "07:10 사후점검 상태 확인",
+    "텔레그램 이상 알림 여부 정리",
+  ]);
+  try {
+    const result = await fetchPortfolioReportAlertStatus(token());
+    setOutput(result || "보유 리포트 알림 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
 
 elements.recentWeeklyBriefButton?.addEventListener("click", runRecentWeeklyBriefFlow);
 elements.recentWeeklyEvidenceSynthesisButton?.addEventListener("click", runRecentWeeklyEvidenceSynthesisFlow);
@@ -15735,6 +15780,73 @@ function formatInvestmentInsightHub(value) {
   ].join("\n");
 }
 
+function formatPortfolioReportAlertStatus(value) {
+  const alert = value.alert || {};
+  const postrun = value.postrun || {};
+  const alertState = alert.state || {};
+  const postrunState = postrun.state || {};
+  const alertTask = alert.task || {};
+  const postrunTask = postrun.task || {};
+  const statusLabel = {
+    ok: "정상",
+    first_run_pending: "첫 실행 대기",
+    needs_attention: "확인 필요",
+    error: "오류",
+  };
+  return [
+    `### 보유 종목 신규 리포트 텔레그램 알림`,
+    ``,
+    `- **전체 상태:** ${statusLabel[value.status] || value.status || "미확인"}`,
+    `- **수신 봇:** ${value.target_bot || "@lib20_bot"}`,
+    `- **점검 시각:** ${value.checked_at ? formatDateTime(value.checked_at) : "미확인"}`,
+    `- **다음 조치:** ${value.next_action || "상태 확인 필요"}`,
+    ``,
+    `| 구분 | 상태 | 다음 실행 | 마지막 실행/점검 | 핵심 결과 |`,
+    `|---|---|---|---|---|`,
+    [
+      "|",
+      "07:00 신규 리포트 알림",
+      "|",
+      statusLabel[alert.status] || alert.status || "미확인",
+      "|",
+      alertTask.next_run_at ? formatDateTime(alertTask.next_run_at) : "미확인",
+      "|",
+      alertTask.last_run_at ? formatDateTime(alertTask.last_run_at) : "첫 실행 전",
+      "|",
+      `신규 ${formatNumber(alertState.candidate_count ?? 0)}건 / 메시지 ${formatNumber(alertState.message_count ?? 0)}건 / 발송 ${alertState.delivered === true ? "완료" : alertState.state_exists ? "대기" : "첫 실행 전"}`,
+      "|",
+    ].join(" "),
+    [
+      "|",
+      "07:10 사후점검",
+      "|",
+      statusLabel[postrun.status] || postrun.status || "미확인",
+      "|",
+      postrunTask.next_run_at ? formatDateTime(postrunTask.next_run_at) : "미확인",
+      "|",
+      postrunState.updated_at ? formatDateTime(postrunState.updated_at) : "첫 실행 전",
+      "|",
+      `이상 알림 ${postrunState.last_sent === true ? "발송" : "없음/대기"} / 상태파일 ${postrunState.state_exists ? "있음" : "첫 실행 전"}`,
+      "|",
+    ].join(" "),
+    ``,
+    `### 상태 파일`,
+    `- 07:00 상태: ${alertState.state_exists ? "있음" : "첫 실행 전"} · ${alertState.state_file || "경로 미확인"}`,
+    `- 07:10 점검: ${postrunState.state_exists ? "있음" : "첫 실행 전"} · ${postrunState.state_file || "경로 미확인"}`,
+    ``,
+    `### 오류/경고`,
+    ...[
+      ...(alertTask.errors || []).map((item) => `- 07:00 오류: ${item}`),
+      ...(alertTask.warnings || []).map((item) => `- 07:00 경고: ${item}`),
+      ...(postrunTask.errors || []).map((item) => `- 07:10 오류: ${item}`),
+      ...(postrunTask.warnings || []).map((item) => `- 07:10 경고: ${item}`),
+    ].slice(0, 12),
+    ![...(alertTask.errors || []), ...(alertTask.warnings || []), ...(postrunTask.errors || []), ...(postrunTask.warnings || [])].length
+      ? "- 표시할 오류/경고가 없습니다."
+      : "",
+  ].filter(Boolean).join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -15747,6 +15859,10 @@ function formatKoreanResult(value) {
       return "조회된 항목이 없습니다.";
     }
     return value.map((item, index) => formatListItem(item, index)).join("\n\n");
+  }
+
+  if (value.module === "portfolio_report_alert_console_status") {
+    return formatPortfolioReportAlertStatus(value);
   }
 
   if (value.module === "news_inbox" || value.module === "news_promotion") {
