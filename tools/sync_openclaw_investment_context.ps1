@@ -37,13 +37,43 @@ function Set-OpenClawBridgeNoteSection {
   }
   $pattern = "(?s)" + [regex]::Escape($startMarker) + ".*?" + [regex]::Escape($endMarker)
   if ($content -match $pattern) {
-    $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $sectionText })
-  } elseif ([string]::IsNullOrWhiteSpace($content)) {
+    $content = [regex]::Replace($content, $pattern, "")
+  }
+  if ([string]::IsNullOrWhiteSpace($content)) {
     $content = $sectionText + [Environment]::NewLine
   } else {
-    $content = $content.TrimEnd() + ([Environment]::NewLine * 2) + $sectionText + [Environment]::NewLine
+    $content = $sectionText + ([Environment]::NewLine * 2) + $content.Trim()
   }
-  Set-Content -Path $Path -Value $content -Encoding UTF8
+  Set-Content -Path $Path -Value ($content.TrimEnd() + [Environment]::NewLine) -Encoding UTF8
+}
+
+function Set-OpenClawDailyInvestmentMemory {
+  param(
+    [string]$Workspace,
+    [string]$DateText,
+    [string]$GitBranch,
+    [string]$GitCommit
+  )
+  $memoryDir = Join-Path $Workspace "memory"
+  New-Item -ItemType Directory -Force -Path $memoryDir | Out-Null
+  $path = Join-Path $memoryDir "$DateText.md"
+  $lines = @(
+    "# $DateText Investment Research OS Daily Context",
+    "",
+    "## Critical Answer Rule",
+    "- 사용자가 '오늘 시스템에서 구현한 작업 보고하고 다음 스케줄을 말해줘'라고 물으면 MEMORY.md만 보고 답하지 않는다.",
+    "- 반드시 먼저 data/investment_research/bridge_status.json을 확인하고, data/investment_research/openclaw_first_read.json의 today_work_report, answer_correction, next_schedule을 기준으로 답한다.",
+    "- openclaw_first_read.json today_work_report.has_implementation_today=true이면 '오늘 구현 작업 없음' 또는 '특별히 새로 구현된 작업 기록 없음'이라고 답하면 안 된다.",
+    "- 현재 source git: $GitBranch $GitCommit.",
+    "- 검증 명령: python tools\check_openclaw_today_answer_readiness.py --json",
+    "",
+    "## Required Read Order",
+    "1. data/investment_research/bridge_status.json",
+    "2. data/investment_research/openclaw_first_read.json",
+    "3. data/investment_research/openclaw_first_read.md",
+    "4. data/investment_research/openclaw_bridge_manifest.json"
+  )
+  Set-Content -Path $path -Value (($lines -join [Environment]::NewLine) + [Environment]::NewLine) -Encoding UTF8
 }
 
 if (-not (Test-Path -LiteralPath $exportScript)) {
@@ -292,9 +322,14 @@ $readme = @(
 )
 Set-Content -Path $readmePath -Value $readme -Encoding UTF8
 
+$todayText = (Get-Date).ToString("yyyy-MM-dd")
 $startupLines = @(
-  "## Investment Research OS Bridge",
+  "## Investment Research OS Bridge - Critical Answer Override",
   "",
+  "- 질문이 '오늘 시스템에서 구현한 작업 보고하고 다음 스케줄을 말해줘'이면 MEMORY.md만 보고 답하지 않는다.",
+  "- 먼저 ``data/investment_research/bridge_status.json``을 확인하고 ``data/investment_research/openclaw_first_read.json``의 ``today_work_report``, ``answer_correction``, ``next_schedule``을 기준으로 답한다.",
+  "- ``today_work_report.has_implementation_today=true``이면 '오늘 구현 작업 없음' 또는 '특별히 새로 구현된 작업 기록 없음'이라고 답하면 안 된다.",
+  "- 이 규칙의 준비 상태는 ``python tools\check_openclaw_today_answer_readiness.py --json``으로 확인한다.",
   "- Read ``data/investment_research/bridge_status.json`` first.",
   "- Read order: ``bridge_status.json`` -> ``openclaw_first_read.md`` -> ``openclaw_first_read.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_knowledge_graph_nodes.json`` -> ``openclaw_knowledge_graph_edges.json`` -> ``openclaw_knowledge_graph_master_index.md`` -> ``openclaw_knowledge_graph_glossary.md`` -> ``openclaw_knowledge_graph_marginalia_queue.md`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
   "- First-read packet: ``data/investment_research/openclaw_first_read.md`` and ``data/investment_research/openclaw_first_read.json``.",
@@ -320,6 +355,8 @@ $startupLines = @(
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
   "- Treat the bridge as decision-support context only; do not place trades from it."
 )
+Set-OpenClawDailyInvestmentMemory -Workspace $OpenClawWorkspace -DateText $todayText -GitBranch $gitBranch -GitCommit $gitCommit
+Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "AGENTS.md") -Lines $startupLines
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "MEMORY.md") -Lines $startupLines
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "HEARTBEAT.md") -Lines $startupLines
 

@@ -19258,6 +19258,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_branch": "main",
                         "source_git_dirty": False,
                         "secrets_excluded": True,
+                        "context_generated_at": "2026-07-05T07:00:00+09:00",
                         "file_sha256": {
                             "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
                             "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
@@ -19307,6 +19308,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_branch": "main",
                         "source_git_dirty": True,
                         "secrets_excluded": True,
+                        "context_generated_at": "2026-07-05T07:00:00+09:00",
                         "file_sha256": {
                             "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
                             "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
@@ -19332,6 +19334,10 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             self.assertTrue(any("file_sha256 mismatch" in error for error in errors))
 
             startup_note = (
+                "질문이 오늘 시스템에서 구현한 작업 보고하고 다음 스케줄을 말해줘 이면 MEMORY.md만 보고 답하지 않는다.\n"
+                "오늘 시스템에서 구현한 작업 / 오늘 구현 작업 없음 / 특별히 새로 구현된 작업 기록 없음\n"
+                "today_work_report answer_correction next_schedule\n"
+                "run check_openclaw_today_answer_readiness.py --json\n"
                 "read data/investment_research/bridge_status.json\n"
                 "Read order: bridge_status.json -> openclaw_first_read.md -> openclaw_first_read.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_knowledge_graph_nodes.json -> openclaw_knowledge_graph_edges.json -> openclaw_knowledge_graph_master_index.md -> openclaw_knowledge_graph_glossary.md -> openclaw_knowledge_graph_marginalia_queue.md -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_first_read.md\n"
@@ -19356,10 +19362,23 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run check_openclaw_knowledge_graph.py --max-age-hours 24\n"
                 "run show_openclaw_bridge_status.py --json\n"
                 "run check_openclaw_quick_health.py --json\n"
+                "run check_openclaw_today_answer_readiness.py --json\n"
                 "run check_offline_readiness.py --json\n"
             )
+            (root / "AGENTS.md").write_text(startup_note, encoding="utf-8")
             (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
             (root / "HEARTBEAT.md").write_text(startup_note, encoding="utf-8")
+            daily_dir = root / "memory"
+            daily_dir.mkdir()
+            (daily_dir / "2026-07-05.md").write_text(
+                "today_work_report answer_correction next_schedule\\n"
+                "오늘 시스템에서 구현한 작업 / 오늘 구현 작업 없음 / 특별히 새로 구현된 작업 기록 없음\\n"
+                "check_openclaw_today_answer_readiness.py --json\\n"
+                "data/investment_research/bridge_status.json\\n"
+                "data/investment_research/openclaw_first_read.json\\n"
+                "source git main abc1234\\n",
+                encoding="utf-8",
+            )
             self.assertEqual([], tool.validate_openclaw_workspace(root, status))
 
     def test_openclaw_status_summary_reads_bridge_files(self):
@@ -19980,6 +19999,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                 "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                 "quick_health": "python tools\\check_openclaw_quick_health.py --json",
+                "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20024,6 +20044,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)
         self.assertIn("- status_summary: `python tools\\show_openclaw_bridge_status.py --json`", markdown)
         self.assertIn("- quick_health: `python tools\\check_openclaw_quick_health.py --json`", markdown)
+        self.assertIn("- today_answer_readiness: `python tools\\check_openclaw_today_answer_readiness.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)

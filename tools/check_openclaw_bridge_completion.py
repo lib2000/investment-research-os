@@ -169,10 +169,18 @@ def validate_bridge_status(
     return status, errors
 
 
+def infer_daily_memory_date(bridge_status: dict | None) -> str:
+    if bridge_status:
+        for key in ("context_generated_at", "copied_at"):
+            value = bridge_status.get(key)
+            if value:
+                return parse_datetime(value).date().isoformat()
+    return datetime.now(timezone.utc).date().isoformat()
+
+
 def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = None) -> list[str]:
     errors: list[str] = []
-    memory = workspace / "MEMORY.md"
-    heartbeat = workspace / "HEARTBEAT.md"
+    startup_paths = [workspace / "AGENTS.md", workspace / "MEMORY.md", workspace / "HEARTBEAT.md"]
     required_items = [
         "data/investment_research",
         "bridge_status.json",
@@ -198,14 +206,21 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "check_openclaw_knowledge_graph.py --max-age-hours 24",
         "show_openclaw_bridge_status.py --json",
         "check_openclaw_quick_health.py --json",
+        "check_openclaw_today_answer_readiness.py --json",
         "check_offline_readiness.py --json",
+        "today_work_report",
+        "answer_correction",
+        "next_schedule",
+        "오늘 시스템에서 구현한 작업",
+        "오늘 구현 작업 없음",
+        "특별히 새로 구현된 작업 기록 없음",
     ]
     source_git = ""
     if bridge_status:
         source_git = f"{bridge_status.get('source_git_branch')} {bridge_status.get('source_git_commit')}"
         if "None" in source_git:
             source_git = ""
-    for path in (memory, heartbeat):
+    for path in startup_paths:
         if not path.exists():
             errors.append(f"OpenClaw startup note missing: {path}")
             continue
@@ -215,6 +230,29 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
                 errors.append(f"OpenClaw startup note missing {required}: {path}")
         if source_git and source_git not in text:
             errors.append(f"OpenClaw startup note missing source git {source_git}: {path}")
+
+    daily_date = infer_daily_memory_date(bridge_status)
+    daily_path = workspace / "memory" / f"{daily_date}.md"
+    daily_required = [
+        "today_work_report",
+        "answer_correction",
+        "next_schedule",
+        "오늘 시스템에서 구현한 작업",
+        "오늘 구현 작업 없음",
+        "특별히 새로 구현된 작업 기록 없음",
+        "check_openclaw_today_answer_readiness.py --json",
+        "data/investment_research/bridge_status.json",
+        "data/investment_research/openclaw_first_read.json",
+    ]
+    if not daily_path.exists():
+        errors.append(f"OpenClaw daily investment memory missing: {daily_path}")
+    else:
+        daily_text = daily_path.read_text(encoding="utf-8-sig")
+        for required in daily_required:
+            if required not in daily_text:
+                errors.append(f"OpenClaw daily investment memory missing {required}: {daily_path}")
+        if source_git and source_git not in daily_text:
+            errors.append(f"OpenClaw daily investment memory missing source git {source_git}: {daily_path}")
     return errors
 
 
@@ -244,6 +282,7 @@ def build_result(
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
+            "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
@@ -299,7 +338,8 @@ def build_result(
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw personal knowledge graph artifacts validate",
         "OpenClaw completion report hashes match completion report files",
-        "OpenClaw startup notes point to bridge files, status summary, final audit command, and current source git",
+        "OpenClaw startup notes point to bridge files, status summary, final audit command, today answer readiness, and current source git",
+        "OpenClaw daily memory tells agents to use today_work_report and next_schedule before answering today-work questions",
     ]
     return {
         "status": "ok" if not errors else "failure",
@@ -388,6 +428,7 @@ def render_markdown_report(result: dict) -> str:
         "final_completion_audit",
         "status_summary",
         "quick_health",
+        "today_answer_readiness",
         "offline_readiness",
     ):
         command = commands.get(label)
