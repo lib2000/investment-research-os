@@ -10,7 +10,10 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = PROJECT_ROOT / "tools"
-EXTRA_TOOL_PATHS = [TOOLS_DIR / "analyze_code_diff_impact.py"]
+EXTRA_TOOL_PATHS = [
+    TOOLS_DIR / "analyze_code_diff_impact.py",
+    TOOLS_DIR / "collect_openclaw_pending_answers.py",
+]
 
 
 def check_tool_source(path: Path) -> dict:

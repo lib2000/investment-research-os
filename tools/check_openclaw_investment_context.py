@@ -120,6 +120,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include actual answer audit command")
     if usage.get("actual_answer_capture_command") != "python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json":
         raise AssertionError("OpenClaw usage must include actual answer capture command")
+    if usage.get("pending_answer_collect_command") != "python tools\\collect_openclaw_pending_answers.py --json":
+        raise AssertionError("OpenClaw usage must include pending answer collect command")
     if usage.get("actual_answer_capture_status_command") != "python tools\\check_openclaw_actual_answer_capture_status.py --json":
         raise AssertionError("OpenClaw usage must include actual answer capture status command")
     if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":

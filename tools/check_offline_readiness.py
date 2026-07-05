@@ -83,6 +83,7 @@ CHECKS = [
     ("OpenClaw 추천/중요 메시지 답변 품질 smoke", ["tools/check_openclaw_priority_answer_quality.py", "--json"]),
     ("OpenClaw 질문별 답변 샘플 smoke", ["tools/check_openclaw_answer_samples.py", "--json"]),
     ("OpenClaw 실제 답변 사후감사", ["tools/check_openclaw_actual_answer_audit.py", "--json"]),
+    ("OpenClaw pending 답변 수집", ["tools/collect_openclaw_pending_answers.py", "--json"]),
     ("OpenClaw 실제 답변 캡처 상태", ["tools/check_openclaw_actual_answer_capture_status.py", "--json"]),
     ("OpenClaw WSL PA 답변 컨텍스트", ["tools/check_openclaw_wsl_answer_context.py", "--json"]),
     ("공개 IR/SEC 저장 품질", ["tools/check_public_ir_sec_store.py", "--require-any"]),
