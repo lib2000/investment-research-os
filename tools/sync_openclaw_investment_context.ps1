@@ -18,6 +18,7 @@ $checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.p
 $knowledgeGraphCheckScript = Join-Path $projectRoot "tools\check_openclaw_knowledge_graph.py"
 $completionScript = Join-Path $projectRoot "tools\check_openclaw_bridge_completion.py"
 $statusSummaryScript = Join-Path $projectRoot "tools\show_openclaw_bridge_status.py"
+$quickHealthScript = Join-Path $projectRoot "tools\check_openclaw_quick_health.py"
 $sourceDir = Join-Path $projectRoot "research_vault\_system\openclaw_integration"
 $targetDir = Join-Path $OpenClawWorkspace "data\investment_research"
 
@@ -59,6 +60,9 @@ if (-not (Test-Path -LiteralPath $completionScript)) {
 }
 if (-not (Test-Path -LiteralPath $statusSummaryScript)) {
   throw "OpenClaw status summary script not found: $statusSummaryScript"
+}
+if (-not (Test-Path -LiteralPath $quickHealthScript)) {
+  throw "OpenClaw quick health script not found: $quickHealthScript"
 }
 
 python $exportScript --print-summary | Out-Host
@@ -157,6 +161,7 @@ $operationalCommands = [ordered]@{
   knowledge_graph_validation = "python tools\check_openclaw_knowledge_graph.py --max-age-hours 24"
   final_completion_audit = "python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"
   status_summary = "python tools\show_openclaw_bridge_status.py --json"
+  quick_health = "python tools\check_openclaw_quick_health.py --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
@@ -277,6 +282,7 @@ $readme = @(
   "- knowledge graph validation: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``",
   "- final completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``",
   "- status summary: ``python tools\show_openclaw_bridge_status.py --json``",
+  "- quick health: ``python tools\check_openclaw_quick_health.py --json``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
@@ -305,6 +311,7 @@ $startupLines = @(
   "- Knowledge graph validation from ``$projectRoot``: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``.",
   "- Final completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``.",
   "- Status summary from ``$projectRoot``: ``python tools\show_openclaw_bridge_status.py --json``.",
+  "- Quick health from ``$projectRoot``: ``python tools\check_openclaw_quick_health.py --json``.",
   "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",

@@ -30,7 +30,7 @@ OpenClaw 워크스페이스 동기화 위치:
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/openclaw_bridge_completion_report.md`
 - `%USERPROFILE%/.openclaw/workspace/data/investment_research/README.md`
 
-`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 첫 읽기 순서(`read_order`), 완료 리포트 Markdown/JSON 파일명, 안전 갱신 명령, 최종 엄격 갱신 명령, 검증 명령, 완료 감사 명령, 최종 완료 해시 감사 명령, 상태 요약 명령, 전체 오프라인 준비도 명령, 민감정보 제외 범위를 포함한다.
+`openclaw_bridge_manifest.json`은 OpenClaw 자동화가 읽을 수 있는 파일 지도다. 컨텍스트 파일명, Markdown 파일명, 상태 파일명, 첫 읽기 순서(`read_order`), 완료 리포트 Markdown/JSON 파일명, 안전 갱신 명령, 최종 엄격 갱신 명령, 검증 명령, 완료 감사 명령, 최종 완료 해시 감사 명령, 상태 요약 명령, OpenClaw 빠른 헬스체크 명령, 전체 오프라인 준비도 명령, 민감정보 제외 범위를 포함한다.
 
 `bridge_status.json`은 OpenClaw가 가장 먼저 읽는 런타임 상태 파일이다. 첫 읽기 순서, 원본 커밋/브랜치/dirty 상태, 컨텍스트 생성 시각, 최신성 기준 시간, 최신 추천일, 한국/미국 추천 수, 최신 추천 1~3위 요약, 텔레그램 반영 수, 민감정보 제외 확인, 완료 리포트 경로, 시작 안내 갱신 여부, 운영 명령 묶음, 핵심 파일 SHA256, 완료 리포트 SHA256을 포함한다. `README.md`에도 컨텍스트 생성 시각, 최신 추천일, 시장별 추천 수, 텔레그램 반영 수를 요약해 둔다.
 
@@ -106,6 +106,12 @@ python tools\show_openclaw_bridge_status.py --json
 
 상태 요약 JSON은 `hash_status`, `hash_checked_count`, `hash_mismatches`를 함께 반환한다. 정상 상태에서는 `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`가 되어야 한다.
 
+OpenClaw 전용 빠른 헬스체크:
+
+```powershell
+python tools\check_openclaw_quick_health.py --json
+```
+
 검증 항목:
 
 - JSON/Markdown 번들 존재 여부
@@ -115,7 +121,7 @@ python tools\show_openclaw_bridge_status.py --json
 - `bridge_status.json`의 복사 상태, 생성 시각, 민감정보 제외 확인 여부
 - `bridge_status.json`의 최신성 기준 시간과 완료 감사의 `--max-age-hours` 기준 일치 여부
 - `bridge_status.json`의 완료 리포트 경로, 시작 안내 갱신 여부, 운영 명령이 매니페스트 명령과 일치하는지 여부
-- `bridge_status.json`의 운영 명령에 상태 요약 명령과 전체 오프라인 준비도 명령이 포함되는지 여부
+- `bridge_status.json`의 운영 명령에 상태 요약 명령, OpenClaw 빠른 헬스체크 명령, 전체 오프라인 준비도 명령이 포함되는지 여부
 - `bridge_status.json`의 핵심 파일 SHA256이 실제 JSON/Markdown/manifest 파일과 일치하는지 여부
 - `bridge_status.json`의 완료 리포트 SHA256이 실제 완료 리포트 파일과 일치하는지 여부
 - 원본 Git 브랜치가 `main`이고 upstream과 동기화되어 있으며 작업트리가 clean인지 여부
@@ -136,5 +142,6 @@ python tools\show_openclaw_bridge_status.py --json
 - 더 구조적인 처리가 필요하면 `data/investment_research/investment_research_context.json`을 읽는다.
 - 전체 운영 준비도는 원본 프로젝트에서 `python tools\check_offline_readiness.py --json`을 실행해 확인한다.
 - 빠른 상태 요약은 원본 프로젝트에서 `python tools\show_openclaw_bridge_status.py --json`을 실행해 확인하고, `hash_status=ok`, `hash_checked_count=14`인지 본다.
+- OpenClaw 전용 빠른 헬스체크는 원본 프로젝트에서 `python tools\check_openclaw_quick_health.py --json`을 실행해 `status_summary`, `context_bundle`, `completion_audit`, `consumer_smoke`를 한 번에 확인한다.
 - 원본 상세 판단은 Investment Research OS 콘솔에서 확인한다.
 - 실거래 주문, 계좌 인증, API 키 요청에는 이 번들을 사용하지 않는다.

@@ -219,6 +219,15 @@ def load_openclaw_consumer_smoke_tool():
     return module
 
 
+def load_openclaw_quick_health_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_quick_health.py"
+    spec = spec_from_file_location("check_openclaw_quick_health", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_openclaw_knowledge_graph_check_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
     spec = spec_from_file_location("check_openclaw_knowledge_graph", tool_path)
@@ -720,6 +729,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("check_openclaw_knowledge_graph.py", script_source)
         self.assertIn("check_openclaw_bridge_completion.py", script_source)
         self.assertIn("show_openclaw_bridge_status.py", script_source)
+        self.assertIn("check_openclaw_quick_health.py", script_source)
         self.assertIn("expected status summary hashes", script_source)
         self.assertIn("Expected status summary hashes", script_source)
         self.assertIn("hash_checked_count=14", script_source)
@@ -2598,6 +2608,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
             "first-read packet이 컨텍스트와 일치",
             "openclaw_bridge_completion_report.md/json",
             "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
+            "check_openclaw_quick_health.py --json",
             "hash_status=ok",
             "hash_checked_count=14",
             "hash_mismatches=[]",
@@ -18042,6 +18053,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
+                            "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -18103,6 +18115,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- knowledge graph validation: `python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24`\n"
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
+                "- quick health: `python tools\\check_openclaw_quick_health.py --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
@@ -18153,6 +18166,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"completion_audit_command"', manifest_text)
         self.assertIn('"knowledge_graph_validation_command"', manifest_text)
         self.assertIn('"final_completion_audit_command"', manifest_text)
+        self.assertIn('"quick_health_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
@@ -18161,6 +18175,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1"', exported_text)
         self.assertIn('"strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"', exported_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
+        self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
@@ -18170,6 +18185,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"knowledge_graph_files"', manifest_text)
         self.assertIn('"nodes": "openclaw_knowledge_graph_nodes.json"', manifest_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
+        self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
         self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
@@ -18361,6 +18377,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes\n"
                 "run check_openclaw_knowledge_graph.py --max-age-hours 24\n"
                 "run show_openclaw_bridge_status.py --json\n"
+                "run check_openclaw_quick_health.py --json\n"
                 "run check_offline_readiness.py --json\n"
             )
             (root / "MEMORY.md").write_text(startup_note, encoding="utf-8")
@@ -18984,6 +19001,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
                 "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                 "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
+                "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -19002,6 +19020,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertEqual("ok", json_payload["status"])
         self.assertIn("strict_refresh", json_payload["operational_commands"])
         self.assertIn("status_summary", json_payload["operational_commands"])
+        self.assertIn("quick_health", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -19025,6 +19044,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24`", markdown)
         self.assertIn("- final_completion_audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`", markdown)
         self.assertIn("- status_summary: `python tools\\show_openclaw_bridge_status.py --json`", markdown)
+        self.assertIn("- quick_health: `python tools\\check_openclaw_quick_health.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
@@ -19033,6 +19053,117 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- knowledge_graph_nodes: `" + ("e" * 64) + "`", markdown)
         self.assertIn("## Knowledge Graph Checks", markdown)
         self.assertIn("abc1234", markdown)
+
+
+class OpenClawQuickHealthTests(unittest.TestCase):
+    def test_quick_health_combines_openclaw_specific_checks(self):
+        tool = load_openclaw_quick_health_tool()
+        observed = {}
+
+        fake_status = SimpleNamespace(
+            build_status_summary=lambda openclaw_dir: {
+                "status": "ok",
+                "errors": [],
+                "hash_status": "ok",
+                "hash_checked_count": 14,
+                "hash_mismatches": [],
+                "source_git": {"branch": "main", "commit": "abc1234", "dirty": False},
+                "latest_recommendation_date": "2026-07-04",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "telegram_saved_count": 10,
+            }
+        )
+
+        def fake_validate_bundle(openclaw_dir, *, max_age_hours):
+            observed["context"] = {"openclaw_dir": openclaw_dir, "max_age_hours": max_age_hours}
+            return ["generated_at=2026-07-05 latest=2026-07-04 rows=6 telegram_saved=10"]
+
+        fake_context = SimpleNamespace(validate_bundle=fake_validate_bundle)
+
+        def fake_completion_build_result(**kwargs):
+            observed["completion"] = kwargs
+            return {
+                "status": "ok",
+                "errors": [],
+                "git": {"branch": "main", "commit": "abc1234"},
+                "bridge_status": {"context_generated_at": "2026-07-05T15:31:49+09:00"},
+                "openclaw_workspace": "C:/Users/test/.openclaw/workspace",
+            }
+
+        fake_completion = SimpleNamespace(build_result=fake_completion_build_result)
+
+        def fake_consumer_build_result(openclaw_dir, *, max_age_hours, expected_latest_count):
+            observed["consumer"] = {
+                "openclaw_dir": openclaw_dir,
+                "max_age_hours": max_age_hours,
+                "expected_latest_count": expected_latest_count,
+            }
+            return {
+                "status": "ok",
+                "errors": [],
+                "loaded_files": ["bridge_status.json", "openclaw_first_read.md"],
+                "latest_recommendation_count": 6,
+                "hash_checked_count": 14,
+            }
+
+        fake_consumer = SimpleNamespace(build_result=fake_consumer_build_result)
+        fake_modules = {
+            "show_openclaw_bridge_status": fake_status,
+            "check_openclaw_investment_context": fake_context,
+            "check_openclaw_bridge_completion": fake_completion,
+            "check_openclaw_consumer_smoke": fake_consumer,
+        }
+
+        with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
+            result = tool.build_result(
+                project_root=Path("C:/project"),
+                openclaw_dir=Path("C:/openclaw/data/investment_research"),
+                max_age_hours=24,
+                expected_latest_count=6,
+            )
+            rendered = tool.render_text(result)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(4, len(result["checks"]))
+        self.assertEqual("ok", result["hash_status"])
+        self.assertEqual(14, result["hash_checked_count"])
+        self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
+        self.assertEqual(10, result["telegram_saved_count"])
+        self.assertEqual(24, observed["context"]["max_age_hours"])
+        self.assertTrue(observed["completion"]["require_report_hashes"])
+        self.assertEqual(6, observed["consumer"]["expected_latest_count"])
+        self.assertIn("OpenClaw quick health: ok", rendered)
+        self.assertIn("status_summary: ok", rendered)
+        self.assertIn("consumer_smoke: ok", rendered)
+
+    def test_quick_health_fails_on_status_hash_mismatch(self):
+        tool = load_openclaw_quick_health_tool()
+        fake_status = SimpleNamespace(
+            build_status_summary=lambda openclaw_dir: {
+                "status": "ok",
+                "errors": [],
+                "hash_status": "failure",
+                "hash_checked_count": 14,
+                "hash_mismatches": ["file_sha256.context_json mismatch"],
+            }
+        )
+        fake_context = SimpleNamespace(validate_bundle=lambda *args, **kwargs: ["ok"])
+        fake_completion = SimpleNamespace(build_result=lambda **kwargs: {"status": "ok", "errors": []})
+        fake_consumer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
+        fake_modules = {
+            "show_openclaw_bridge_status": fake_status,
+            "check_openclaw_investment_context": fake_context,
+            "check_openclaw_bridge_completion": fake_completion,
+            "check_openclaw_consumer_smoke": fake_consumer,
+        }
+
+        with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
+            result = tool.build_result(openclaw_dir=Path("C:/openclaw"))
+
+        self.assertEqual("failure", result["status"])
+        self.assertEqual("failure", result["hash_status"])
+        self.assertTrue(any("status_summary" in error for error in result["errors"]))
+        self.assertTrue(any("hashes are not ok" in error for error in result["errors"]))
 
 
 if __name__ == "__main__":

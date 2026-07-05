@@ -197,6 +197,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
         "check_openclaw_knowledge_graph.py --max-age-hours 24",
         "show_openclaw_bridge_status.py --json",
+        "check_openclaw_quick_health.py --json",
         "check_offline_readiness.py --json",
     ]
     source_git = ""
@@ -242,6 +243,7 @@ def build_result(
             "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
+            "quick_health": "python tools\\check_openclaw_quick_health.py --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
@@ -385,6 +387,7 @@ def render_markdown_report(result: dict) -> str:
         "knowledge_graph_validation",
         "final_completion_audit",
         "status_summary",
+        "quick_health",
         "offline_readiness",
     ):
         command = commands.get(label)

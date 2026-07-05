@@ -104,6 +104,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must point to completion report JSON")
     if usage.get("status_summary_command") != "python tools\\show_openclaw_bridge_status.py --json":
         raise AssertionError("OpenClaw usage must include status summary command")
+    if usage.get("quick_health_command") != "python tools\\check_openclaw_quick_health.py --json":
+        raise AssertionError("OpenClaw usage must include quick health command")
     if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":
         raise AssertionError("OpenClaw usage must include safe refresh command")
     if usage.get("strict_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit":
@@ -270,6 +272,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "knowledge_graph_validation_command",
         "final_completion_audit_command",
         "status_summary_command",
+        "quick_health_command",
         "offline_readiness_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
@@ -352,6 +355,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "knowledge_graph_validation": "knowledge_graph_validation_command",
             "final_completion_audit": "final_completion_audit_command",
             "status_summary": "status_summary_command",
+            "quick_health": "quick_health_command",
             "offline_readiness": "offline_readiness_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
