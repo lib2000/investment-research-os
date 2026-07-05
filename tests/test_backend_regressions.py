@@ -8114,6 +8114,28 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("포함 섹션 4개", telegram_attempt)
         self.assertIn("MARKET-US-market-close-review-2026-06-18-003.md", telegram_attempt)
 
+    def test_research_source_store_detects_naver_pdf_import_failures(self):
+        from tools import check_research_source_store
+
+        rows = [
+            {
+                "title": "과거 실패",
+                "pdf_analysis": {
+                    "status": "no_text",
+                    "note": "PDF 텍스트 추출 라이브러리를 불러오지 못했습니다: No module named 'pypdf'",
+                },
+            },
+            {
+                "title": "정상 no_text",
+                "pdf_analysis": {"status": "no_text", "note": "PDF에서 텍스트를 찾지 못했습니다."},
+            },
+        ]
+
+        failures = check_research_source_store.naver_pdf_import_failure_rows(rows)
+
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["title"], "과거 실패")
+
     def test_research_source_store_json_contract_includes_market_journal_status(self):
         from tools import check_research_source_store
 
@@ -8125,6 +8147,8 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn('"by_market"', source)
         self.assertIn('"impact"', source)
         self.assertIn('"unlinked_samples"', source)
+        self.assertIn('"naver_pdf_import_failure_count"', source)
+        self.assertIn("PDF 런타임 실패 메모", source)
 
     def test_market_close_journal_daily_gate(self):
         import research_os_main as main

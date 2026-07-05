@@ -1134,6 +1134,8 @@ $contracts = @(
       'metadata_policy_ok',
       'rows_from_mapping_or_list',
       'missing_storage_files',
+      'naver_pdf_import_failure_rows',
+      '네이버 PDF 추출 런타임 실패 메모 잔존',
       '네이버 리서치 저장 파일 누락',
       '신한 리서치 저장 파일 누락',
       '--min-naver-reports',

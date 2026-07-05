@@ -118,6 +118,18 @@ def rows_with_storage(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def naver_pdf_import_failure_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for row in rows:
+        analysis = row.get("pdf_analysis")
+        if not isinstance(analysis, dict):
+            continue
+        note = str(analysis.get("note") or "")
+        if "No module named" in note or "불러오지 못했습니다" in note:
+            result.append(row)
+    return result
+
+
 def missing_storage_files(root: Path, rows: list[dict[str, Any]]) -> list[str]:
     missing: list[str] = []
     for row in rows:
@@ -387,6 +399,7 @@ def main() -> int:
     naver_complete_rows = non_empty_rows(naver_rows, "title", "published_at", "url", "source", "summary")
     naver_storage_rows = rows_with_storage(naver_rows)
     naver_missing_files = missing_storage_files(root, naver_storage_rows)
+    naver_pdf_import_failures = naver_pdf_import_failure_rows(naver_rows)
     naver_age = age_hours(naver.get("updated_at"))
     naver_category_counts = Counter(str(item.get("category") or "미확인") for item in naver_rows)
     add_issue(issues, len(naver_rows) < args.min_naver_reports, f"네이버 리서치 캐시 부족: {len(naver_rows)}개")
@@ -398,6 +411,11 @@ def main() -> int:
         f"네이버 리서치 저장 경로 누락 허용 초과: {naver_missing_storage}개 / 허용 {args.max_naver_missing_storage}개",
     )
     add_issue(issues, bool(naver_missing_files), f"네이버 리서치 저장 파일 누락 {len(naver_missing_files)}개")
+    add_issue(
+        issues,
+        bool(naver_pdf_import_failures),
+        f"네이버 PDF 추출 런타임 실패 메모 잔존: {len(naver_pdf_import_failures)}개",
+    )
     add_issue(issues, naver_age is None or naver_age > args.max_source_age_hours, "네이버 리서치 캐시 최신성 확인 필요")
     add_issue(issues, naver_category_counts.get("시황정보", 0) < 1, "네이버 시황정보 리포트 캐시 확인 필요")
 
@@ -548,6 +566,7 @@ def main() -> int:
             "naver_storage_count": len(naver_storage_rows),
             "naver_missing_storage": naver_missing_storage,
             "naver_missing_files": len(naver_missing_files),
+            "naver_pdf_import_failure_count": len(naver_pdf_import_failures),
             "naver_category_counts": dict(naver_category_counts),
             "shinhan_count": len(shinhan_rows),
             "shinhan_storage_count": len(shinhan_storage_rows),
@@ -605,7 +624,12 @@ def main() -> int:
     if isinstance(deduped_refresh, dict):
         print(f"리서치 자동화 Dossier 갱신: 후보 {deduped_refresh.get('candidate_count')}개 | 갱신 {deduped_refresh.get('refreshed_count')}개 | 실패 {deduped_refresh.get('failed_count')}개 | 갱신 {deduped_refresh.get('updated_at')}")
     naver_category_summary = ", ".join(f"{name}={count}" for name, count in naver_category_counts.most_common(4))
-    print(f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | 저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | {naver_category_summary} | 갱신 {naver.get('updated_at')}")
+    print(
+        f"네이버 리서치: {len(naver_rows)}개 | 저장 {len(naver_storage_rows)}개 | "
+        f"저장경로 누락 {naver_missing_storage}개 | 파일 누락 {len(naver_missing_files)}개 | "
+        f"PDF 런타임 실패 메모 {len(naver_pdf_import_failures)}개 | "
+        f"{naver_category_summary} | 갱신 {naver.get('updated_at')}"
+    )
     print(f"신한 리서치: {len(shinhan_rows)}개 | 저장 {len(shinhan_storage_rows)}개 | 파일 누락 {len(shinhan_missing_files)}개 | 갱신 {shinhan.get('updated_at')}")
     print(f"마감 시황 자동 시도: {format_market_journal_attempt(market_close_state)}")
     print(f"텔레그램 미국 시장일지 자동 시도: {format_telegram_market_journal_attempt(telegram_market_close_state)}")
