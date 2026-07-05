@@ -494,7 +494,7 @@ def build_today_work_report(project_root: Path) -> dict:
 
 def build_next_schedule() -> list[dict]:
     return [
-        {"time": "07:00", "task": "OpenClaw 보유 종목 신규 리포트 알림", "status": "scheduled/dry-run safe", "command": "tools\\check_portfolio_report_alert_task_status.py --json"},
+        {"time": "07:00", "task": "OpenClaw 보유 종목 신규 리포트 알림", "status": "scheduled/live submit, first run pending", "command": "tools\\check_portfolio_report_alert_task_status.py --json"},
         {"time": "07:10", "task": "보유 종목 리포트 알림 사후점검", "status": "scheduled", "command": "tools\\check_portfolio_report_alert_task_status.py --task-name 'InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun' --json"},
         {"time": "07:20", "task": "미국 시장 일지 자동 반영", "status": "enabled", "command": "tools\\run_telegram_us_market_close_journal.ps1"},
         {"time": "08:00", "task": "한국/미국 오늘 추천 1~3위 생성/저장", "status": "enabled", "command": "tools\\check_daily_recommendations_store.py --require-milestones --require-quality"},
