@@ -166,6 +166,13 @@ class Settings(BaseModel):
     telegram_favorite_posts_top_n: int = 10
     telegram_favorite_posts_min_views: int = 0
     telegram_favorite_posts_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    telegram_brief_delivery_enabled: bool = False
+    telegram_brief_delivery_dry_run: bool = True
+    telegram_brief_cleanup_enabled: bool = False
+    telegram_bot_token: str = Field(default="")
+    telegram_api_base_url: str = "https://api.telegram.org"
+    telegram_timeout_seconds: float = 10.0
+    telegram_brief_delivery_state_file: str = "../research_vault/_system/telegram_brief_delivery_state.json"
     daily_recommendations_enabled: bool = True
     daily_recommendations_time: str = "08:00"
     daily_recommendations_tracking_enabled: bool = True
@@ -459,6 +466,19 @@ class Settings(BaseModel):
             telegram_favorite_posts_user_agent=os.getenv(
                 "TELEGRAM_FAVORITE_POSTS_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            telegram_brief_delivery_enabled=_read_bool("TELEGRAM_BRIEF_DELIVERY_ENABLED", False),
+            telegram_brief_delivery_dry_run=_read_bool("TELEGRAM_BRIEF_DELIVERY_DRY_RUN", True),
+            telegram_brief_cleanup_enabled=_read_bool("TELEGRAM_BRIEF_CLEANUP_ENABLED", False),
+            telegram_bot_token=os.getenv(
+                "MARKET_SIGNAL_GRAPH_TELEGRAM_BOT_TOKEN",
+                os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            ),
+            telegram_api_base_url=os.getenv("TELEGRAM_API_BASE_URL", "https://api.telegram.org"),
+            telegram_timeout_seconds=float(os.getenv("TELEGRAM_TIMEOUT_SECONDS", "10")),
+            telegram_brief_delivery_state_file=os.getenv(
+                "TELEGRAM_BRIEF_DELIVERY_STATE_FILE",
+                "../research_vault/_system/telegram_brief_delivery_state.json",
             ),
             daily_recommendations_enabled=_read_bool(
                 "DAILY_RECOMMENDATIONS_ENABLED", True

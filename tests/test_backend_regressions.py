@@ -321,6 +321,18 @@ def load_telegram_brief_check_tool():
     return module
 
 
+def load_telegram_brief_delivery_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_brief_delivery.py"
+    spec = spec_from_file_location("check_telegram_brief_delivery", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_favorite_posts_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -3353,6 +3365,71 @@ class TelegramBriefSenderTests(unittest.TestCase):
 
         self.assertGreater(payload["message_count"], 1)
         self.assertTrue(all(len(message["text"]) <= 500 for message in payload["messages"]))
+
+    def test_telegram_brief_delivery_plan_protects_priority_brief_and_marks_cleanup_candidates(self):
+        from research_os.telegram_brief_delivery import build_telegram_delivery_plan
+
+        payload = {
+            "messages": [
+                {
+                    "chat_id": "12345",
+                    "text": "Investment Priority Brief\nToday Recommendations\n- #1 ABSI",
+                }
+            ]
+        }
+        state = {
+            "sent_messages": [
+                {
+                    "chat_id": "12345",
+                    "message_id": 10,
+                    "text": "Investment Priority Brief\nToday Recommendations\n- #1 OTLY",
+                },
+                {
+                    "chat_id": "12345",
+                    "message_id": 11,
+                    "text": "routine status ok",
+                    "category": "routine_status_ok",
+                },
+            ]
+        }
+
+        plan = build_telegram_delivery_plan(payload, state=state, enabled=True, dry_run=True, cleanup_enabled=True)
+
+        self.assertEqual(plan["status"], "success")
+        self.assertEqual(plan["planned_send_count"], 1)
+        self.assertEqual(plan["planned_sends"][0]["priority"], "must_keep")
+        self.assertEqual(plan["protected_message_count"], 1)
+        self.assertEqual(plan["delete_candidate_count"], 1)
+        self.assertEqual(plan["delete_candidates"][0]["category"], "routine_status_ok")
+        self.assertEqual(plan["delete_candidates"][0]["action"], "dry_run_delete_candidate")
+
+    def test_telegram_brief_delivery_live_requires_bot_token(self):
+        from research_os.telegram_brief_delivery import build_telegram_delivery_plan
+
+        plan = build_telegram_delivery_plan(
+            {"messages": [{"chat_id": "12345", "text": "Investment Priority Brief"}]},
+            enabled=True,
+            dry_run=False,
+            bot_token="",
+        )
+
+        self.assertEqual(plan["status"], "failure")
+        self.assertIn("TELEGRAM_BOT_TOKEN", plan["errors"][0])
+
+    def test_telegram_brief_delivery_check_tool_is_safe_by_default(self):
+        tool = load_telegram_brief_delivery_check_tool()
+
+        with patch.object(sys, "argv", ["check_telegram_brief_delivery.py", "--sample-state", "--json"]):
+            with patch("builtins.print") as mock_print:
+                exit_code = tool.main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertFalse(payload["enabled"])
+        self.assertTrue(payload["dry_run"])
+        self.assertFalse(payload["cleanup_enabled"])
+        self.assertEqual(payload["delete_candidate_count"], 1)
+        self.assertEqual(payload["protected_message_count"], 1)
 
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):

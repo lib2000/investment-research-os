@@ -231,6 +231,7 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
         },
         "telegram_priority_brief": {
             "design": "telegram_brief_sender_v1",
+            "delivery_design": "telegram_brief_delivery_v1",
             "mode": "important_only",
             "include_sections": [
                 "today_recommendations_kr_us_top_3",
@@ -244,6 +245,13 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
                 "raw_hash_or_storage_paths",
                 "empty_reference_sections",
             ],
+            "safe_defaults": {
+                "TELEGRAM_BRIEF_DELIVERY_ENABLED": "false",
+                "TELEGRAM_BRIEF_DELIVERY_DRY_RUN": "true",
+                "TELEGRAM_BRIEF_CLEANUP_ENABLED": "false",
+            },
+            "live_send_requires": ["--enabled", "--submit", "bot token", "chat id"],
+            "live_cleanup_requires": ["--enabled", "--submit", "--cleanup-enabled", "message_id ledger"],
             "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
         },
     }
