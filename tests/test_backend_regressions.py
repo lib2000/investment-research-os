@@ -20555,6 +20555,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                 "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                 "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
+                "backend_watchdog_status": "python tools\\check_research_backend_watchdog_task_status.py --json",
+                "backend_watchdog_ensure": "powershell.exe -ExecutionPolicy Bypass -File .\\scripts\\ensure-research-backend.ps1",
+                "backend_watchdog_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20591,6 +20594,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("wsl_refresh", json_payload["operational_commands"])
         self.assertIn("wsl_answer_context", json_payload["operational_commands"])
         self.assertIn("wsl_fresh_bootstrap", json_payload["operational_commands"])
+        self.assertIn("backend_watchdog_status", json_payload["operational_commands"])
+        self.assertIn("backend_watchdog_ensure", json_payload["operational_commands"])
+        self.assertIn("backend_watchdog_register", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20632,6 +20638,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
         self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
         self.assertIn("- wsl_fresh_bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`", markdown)
+        self.assertIn("- backend_watchdog_status: `python tools\\check_research_backend_watchdog_task_status.py --json`", markdown)
+        self.assertIn("- backend_watchdog_ensure: `powershell.exe -ExecutionPolicy Bypass -File .\\scripts\\ensure-research-backend.ps1`", markdown)
+        self.assertIn("- backend_watchdog_register: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
