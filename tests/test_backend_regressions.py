@@ -8724,6 +8724,30 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(written["entries"]["old-key"]["pdf_analysis"]["status"], "success")
         self.assertFalse(written["entries"]["old-key"]["pdf_analysis"]["full_text_stored"])
 
+    def test_naver_pdf_backfill_retries_import_failure_notes(self):
+        import research_os_main as main
+
+        self.assertTrue(
+            main.naver_pdf_analysis_needs_backfill(
+                {
+                    "pdf_url": "https://example.com/report.pdf",
+                    "pdf_analysis": {
+                        "status": "no_text",
+                        "note": "PDF 텍스트 추출 라이브러리를 불러오지 못했습니다: No module named 'pypdf'",
+                    },
+                }
+            )
+        )
+
+        self.assertFalse(
+            main.naver_pdf_analysis_needs_backfill(
+                {
+                    "pdf_url": "https://example.com/report.pdf",
+                    "pdf_analysis": {"status": "no_text", "note": "PDF에서 텍스트를 찾지 못했습니다."},
+                }
+            )
+        )
+
     def test_naver_research_repair_saves_cache_entries_missing_storage(self):
         import research_os_main as main
         from research_os.settings import Settings

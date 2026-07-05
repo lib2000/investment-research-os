@@ -3286,7 +3286,14 @@ def find_existing_naver_cache_key(item: dict, indexes: dict[str, dict[str, str]]
 def naver_pdf_analysis_needs_backfill(entry: dict) -> bool:
     analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
     status = str(analysis.get("status") or "unknown").lower()
-    return status in {"", "unknown", "failed"} and bool(entry.get("pdf_url"))
+    note = clean_naver_research_text(analysis.get("note"))
+    has_import_failure_note = (
+        "No module named" in note
+        or "불러오지 못했습니다" in note
+        or "PDF 텍스트 추출 라이브러리" in note
+        or "PDF 이미지 렌더링 라이브러리" in note
+    )
+    return (status in {"", "unknown", "failed"} or has_import_failure_note) and bool(entry.get("pdf_url"))
 
 
 def compact_naver_linked_impact(response: ResearchCaptureResponse) -> dict | None:
