@@ -1833,6 +1833,7 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
             "tickerRegionGroups": [{"label": "한국"}],
             "sectorRegionGroups": [{"label": "한국"}],
             "tickerRegionSortOk": False,
+            "sectorRegionSortOk": False,
             "holdingCount": 1,
             "holdingDetailOpened": False,
             "holdingOpen": {"overviewChipCount": 2, "actionLabels": ["저장", "분석"]},
@@ -1851,6 +1852,7 @@ class InterestSummaryRenderLayoutCheckToolTests(unittest.TestCase):
         self.assertIn("관심종목 한국/미국 구분 섹션이 모두 보이지 않습니다.", errors)
         self.assertIn("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.", errors)
         self.assertIn("관심종목 지역별 정렬이 한국 가나다순/미국 알파벳순이 아닙니다.", errors)
+        self.assertIn("관심섹터 지역별 정렬이 한국 가나다순/미국 알파벳순이 아닙니다.", errors)
         self.assertIn("보유 종목 요약 클릭 후 상세 정보가 열리지 않았습니다.", errors)
         self.assertIn("보유 종목 상세 판단 요약이 부족합니다.", errors)
         self.assertIn("보유 종목 상세 액션 누락: 차트", errors)

@@ -265,6 +265,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     tickerRegionSortOk: tickerRegionGroups.every((item) =>
                       sortedLike(item.names || [], item.label.includes("미국") ? "en-US" : "ko-KR")
                     ),
+                    sectorRegionSortOk: sectorRegionGroups.every((item) =>
+                      sortedLike(item.names || [], item.label.includes("미국") ? "en-US" : "ko-KR")
+                    ),
                     tickerNameOnlyCount: tickerBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     sectorNameOnlyCount: sectorBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     tickerDetailOpened: tickerOpen.opened && tickerOpen.hasDetailGrid,
@@ -331,6 +334,8 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.")
     if not result.get("tickerRegionSortOk"):
         errors.append("관심종목 지역별 정렬이 한국 가나다순/미국 알파벳순이 아닙니다.")
+    if not result.get("sectorRegionSortOk"):
+        errors.append("관심섹터 지역별 정렬이 한국 가나다순/미국 알파벳순이 아닙니다.")
     if int(result.get("holdingCount") or 0) < 1:
         errors.append("보유 종목 행이 렌더링되지 않았습니다.")
     if not result.get("holdingDetailOpened"):

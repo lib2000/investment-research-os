@@ -1664,6 +1664,28 @@ function sortInterestTickersForDisplay(rows = []) {
   });
 }
 
+function sortInterestSectorsForDisplay(rows = []) {
+  return [...rows].sort((a, b) => {
+    const regionA = normalizeInterestRegion(a.region || "KR");
+    const regionB = normalizeInterestRegion(b.region || "KR");
+    if (regionA !== regionB) {
+      return regionA === "KR" ? -1 : 1;
+    }
+    const locale = regionA === "US" ? "en-US" : "ko-KR";
+    const nameCompare = String(a.name || "").localeCompare(String(b.name || ""), locale, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (nameCompare) {
+      return nameCompare;
+    }
+    return String(a.thesis || "").localeCompare(String(b.thesis || ""), locale, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
 function buildInterestRecommendationRecord(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
   const priority = item.priority || "medium";
   const priorityLabel = interestPriorityLabel(priority);
@@ -5012,10 +5034,12 @@ function fillInterestsForm(response) {
   );
   renderInterestRowsByRegion(
     elements.interestSectorEditor,
-    sectors.map(({ created_at, updated_at, ...item }) => ({
-      ...item,
-      region: normalizeInterestRegion(item.region || "KR"),
-    })),
+    sortInterestSectorsForDisplay(
+      sectors.map(({ created_at, updated_at, ...item }) => ({
+        ...item,
+        region: normalizeInterestRegion(item.region || "KR"),
+      }))
+    ),
     makeInterestSectorSummaryRow,
     "추가된 관심섹터가 없습니다. 위 입력칸에서 1개씩 추가하세요."
   );
