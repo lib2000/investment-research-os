@@ -23,6 +23,8 @@ REQUIRED_DISTRIBUTIONS = {
     "pydantic": "2.13.2",
     "httpx": "0.28.1",
     "python-dotenv": "1.1.0",
+    "pypdf": "6.10.2",
+    "PyMuPDF": "1.27.2.3",
 }
 
 
@@ -37,8 +39,10 @@ def project_root(start: Path) -> Path:
 
 def preferred_python(root: Path) -> Path:
     candidates = [
+        root / ".venv-win" / "Scripts" / "python.exe",
         root / ".venv" / "Scripts" / "python.exe",
         root / ".venv" / "bin" / "python",
+        root / "venv" / "Scripts" / "python.exe",
     ]
     for candidate in candidates:
         if candidate.exists():
