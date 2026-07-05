@@ -26,6 +26,7 @@ REQUIRED_TEXT = [
     "data/investment_research/openclaw_first_read.json",
     "check_openclaw_question_read_order.py --json",
     "check_openclaw_answer_samples.py --json",
+    "capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
     "check_openclaw_actual_answer_audit.py --json",
 ]
 

@@ -118,6 +118,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include answer samples command")
     if usage.get("actual_answer_audit_command") != "python tools\\check_openclaw_actual_answer_audit.py --json":
         raise AssertionError("OpenClaw usage must include actual answer audit command")
+    if usage.get("actual_answer_capture_command") != "python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json":
+        raise AssertionError("OpenClaw usage must include actual answer capture command")
     if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":
         raise AssertionError("OpenClaw usage must include safe refresh command")
     if usage.get("strict_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit":
@@ -297,6 +299,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "question_read_order_command",
         "answer_samples_command",
         "actual_answer_audit_command",
+        "actual_answer_capture_command",
         "wsl_refresh_command",
         "wsl_answer_context_command",
         "wsl_fresh_bootstrap_command",
@@ -388,6 +391,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "question_read_order": "question_read_order_command",
             "answer_samples": "answer_samples_command",
             "actual_answer_audit": "actual_answer_audit_command",
+            "actual_answer_capture": "actual_answer_capture_command",
             "wsl_refresh": "wsl_refresh_command",
             "wsl_answer_context": "wsl_answer_context_command",
             "wsl_fresh_bootstrap": "wsl_fresh_bootstrap_command",
@@ -464,6 +468,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "check_openclaw_priority_answer_quality.py --json",
             "check_openclaw_question_read_order.py --json",
             "check_openclaw_answer_samples.py --json",
+            "capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
             "check_openclaw_actual_answer_audit.py --json",
             "sync_openclaw_wsl_investment_context.ps1",
             "check_openclaw_wsl_answer_context.py --json",
