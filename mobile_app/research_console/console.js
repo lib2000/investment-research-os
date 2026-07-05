@@ -14187,7 +14187,9 @@ async function runDailyRecommendationsFlow() {
     "1주/15일/1달/3달/6달 추적표 갱신",
   ]);
   try {
-    const result = await runDailyRecommendations(token(), { force: false, saveResult: true });
+    const result = isClickSmokeMode()
+      ? await fetchDailyRecommendationsStatus(token())
+      : await runDailyRecommendations(token(), { force: false, saveResult: true });
     latestDailyRecommendations = result || latestDailyRecommendations;
     renderDailyRecommendationCards(result);
     refreshDashboardDailyRecommendationTop();
@@ -14345,6 +14347,19 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
     }
     const linkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_recommendation).length;
     const latestLinkedCount = (brief?.recommendation_linked_items || []).filter((item) => item && item.used_in_latest_recommendation).length;
+    if (isClickSmokeMode()) {
+      setOutput([
+        "### 추천 근거 요약",
+        "",
+        `- **대상:** 최근 1주 자료 중 추천 근거 연결 ${formatNumber(linkedCount)}건`,
+        `- **오늘 추천 직접 연결:** ${formatNumber(latestLinkedCount)}건`,
+        "- **추천 근거 RAG 합성:** 스모크 모드 · 저장형 합성 생략",
+        "- **저장된 합성 보고서:** 저장 생략 (click_smoke_fast_path)",
+        `- **RAG 검색어:** ${compactOutputText(query, 220)}`,
+        "- **다음 행동:** 실제 화면에서는 추천 근거 요약 버튼이 저장형 RAG 합성을 실행합니다. 스모크는 버튼과 출력 계약만 빠르게 확인합니다.",
+      ].join("\n"), { skipCompletion: true });
+      return;
+    }
     if (latestLinkedCount <= 0) {
       const historicalLinkedCount = Math.max(0, linkedCount - latestLinkedCount);
       setOutput([

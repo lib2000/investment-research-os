@@ -80,6 +80,7 @@ class CdpClient:
         self.sock = socket.create_connection((self.host, self.port), timeout=10)
         self.sock.settimeout(300)
         self.next_id = 1
+        self.last_progress_label = ""
         self._handshake()
 
     def close(self) -> None:
@@ -151,6 +152,22 @@ class CdpClient:
             return self._read_frame()
         return json.loads(payload.decode("utf-8"))
 
+    def _record_console_progress(self, message: dict) -> None:
+        if message.get("method") != "Runtime.consoleAPICalled":
+            return
+        params = message.get("params") or {}
+        for arg in params.get("args") or []:
+            value = arg.get("value")
+            if isinstance(value, str) and value.startswith("__smoke_step__:"):
+                self.last_progress_label = value.split(":", 1)[1].strip()
+                return
+
+    def _heartbeat_message(self, label: str | None, method: str) -> str:
+        base = label or f"waiting for {method}"
+        if self.last_progress_label:
+            return f"{base} - {self.last_progress_label}"
+        return base
+
     def call(
         self,
         method: str,
@@ -175,11 +192,12 @@ class CdpClient:
                 readable, _, _ = select.select([self.sock], [], [], wait_seconds)
                 if not readable:
                     if heartbeat and time.monotonic() >= next_heartbeat:
-                        heartbeat(heartbeat_label or f"waiting for {method}")
+                        heartbeat(self._heartbeat_message(heartbeat_label, method))
                         next_heartbeat = time.monotonic() + max(1.0, heartbeat_interval)
                     continue
                 message = self._read_frame()
                 if message.get("id") != command_id:
+                    self._record_console_progress(message)
                     continue
                 if "error" in message:
                     raise RuntimeError(f"CDP {method} failed: {message['error']}")
@@ -297,6 +315,15 @@ def assert_project_root() -> None:
 
 def assert_truthy(result: dict, key: str, message: str) -> None:
     if not result.get(key):
+        preview_key = ""
+        if key.startswith("dailyRecommendations"):
+            preview_key = "dailyRecommendationsPreview"
+        elif key.startswith("dailyRecommendationRepairQueue"):
+            preview_key = "dailyRecommendationRepairQueuePreview"
+        elif key.startswith("investmentCalendar"):
+            preview_key = "investmentCalendarPreview"
+        if preview_key and result.get(preview_key):
+            message = f"{message} preview={result.get(preview_key)!r}"
         raise AssertionError(message)
 
 
@@ -970,6 +997,10 @@ def run_click_smoke(
                   }};
                   const tickerRegex = new RegExp({json.dumps(COMMON_TICKER_PATTERN)});
                   const stopAfter = {stop_after_json};
+                  const smokeStep = (label) => {{
+                    window.__smokeProgress = label;
+                    console.info(`__smoke_step__:${{label}}`);
+                  }};
                   const observedBackendStatus = () => {{
                     const badge = document.querySelector("#backendStatus")?.textContent || "";
                     if (badge && badge !== "확인 중") {{
@@ -1021,6 +1052,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("recent weekly brief click");
                   document.querySelector("#recentWeeklyBriefButton")?.click();
                   const recentWeeklyBriefText = await waitFor(
                     () => {{
@@ -1044,6 +1076,7 @@ def run_click_smoke(
                   if (!recentWeeklyEvidenceButtonVisible) {{
                     throw new Error("recent weekly evidence synthesis button missing or hidden");
                   }}
+                  smokeStep("recent weekly evidence synthesis click");
                   recentWeeklyEvidenceButton.click();
                   let recentWeeklyEvidenceText = "";
                   try {{
@@ -1094,6 +1127,7 @@ def run_click_smoke(
                     );
                   }};
 
+                  smokeStep("macro form start");
                   const macroText = await runForm(
                     "macro",
                     "#macroForm",
@@ -1107,6 +1141,7 @@ def run_click_smoke(
                     150000
                   );
 
+                  smokeStep("compounder form start");
                   const compounderText = await runForm(
                     "compounder",
                     "#compounderForm",
@@ -1119,6 +1154,7 @@ def run_click_smoke(
                   );
                   assertNoRuntimeErrors("macro/compounder");
 
+                  smokeStep("interests tab start");
                   document.querySelector('[data-tab="interests"]').click();
                   await waitFor(() => document.querySelector("#interests")?.classList.contains("active"), 5000, "interests active");
                   const interestInitialText = document.querySelector("#interests")?.innerText || "";
@@ -1148,6 +1184,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("portfolio tab start");
                   document.querySelector('[data-tab="portfolio"]').click();
                   await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio active");
                   const portfolioSelect = document.querySelector("#portfolioSelect");
@@ -1189,6 +1226,7 @@ def run_click_smoke(
                   let plQuantityRecalc = false;
                   let plQuantityPreserved = false;
                   const kiwoomSyncButtonText = document.querySelector("#portfolioKiwoomSyncButton")?.textContent || "";
+                  smokeStep("portfolio kiwoom preview start");
                   document.querySelector("#portfolioKiwoomSyncButton")?.click();
                   const kiwoomPreviewText = await waitFor(
                     () => {{
@@ -1274,6 +1312,7 @@ def run_click_smoke(
                     10000,
                     "portfolio performance button enabled"
                   );
+                  smokeStep("portfolio performance start");
                   portfolioPerformanceButton.dispatchEvent(new MouseEvent("click", {{ bubbles: true, cancelable: true }}));
                   await sleep(250);
                   let portfolioPerformanceText = "";
@@ -1302,6 +1341,7 @@ def run_click_smoke(
                       `portfolio performance overview failed: ${{error.message}} | selected=${{selected}} | form=${{formName}} | buttonDisabled=${{buttonDisabled}} | overview=${{overview.split("\\n").slice(0, 8).join(" / ")}} | output=${{output.split("\\n").slice(0, 8).join(" / ")}}`
                     );
                   }}
+                  smokeStep("portfolio risk scan start");
                   document.querySelector("#portfolioQuickRiskButton").click();
                   const portfolioRiskText = await waitFor(
                     () => {{
@@ -1314,6 +1354,7 @@ def run_click_smoke(
                     120000,
                     "portfolio risk scan"
                   );
+                  smokeStep("portfolio team queue start");
                   document.querySelector("#portfolioTeamQueueButton").click();
                   const portfolioTeamQueueText = await waitFor(
                     () => {{
@@ -1356,6 +1397,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("system check start");
                   document.querySelector('[data-workflow-action="system-check"]').click();
                   let systemCheckText = "";
                   let systemCheckCompleted = false;
@@ -1379,6 +1421,7 @@ def run_click_smoke(
                     systemCheckText = document.querySelector("#output")?.innerText || String(error?.message || error || "");
                   }}
 
+                  smokeStep("research automation status start");
                   document.querySelector("#researchAutomationStatusButton")?.click();
                   const researchAutomationStatusApiFallback = async () => {{
                     const response = await fetch("http://127.0.0.1:8001/api/v1/research-automation/status", {{
@@ -1446,6 +1489,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("memory tab start");
                   document.querySelector('[data-tab="memory"]').click();
                   await waitFor(() => document.querySelector("#memory")?.classList.contains("active"), 5000, "memory active");
                   const memoryForm = document.querySelector("#memoryForm");
@@ -1547,6 +1591,7 @@ def run_click_smoke(
                       `Hosted API: ${{hosted.api_key_configured ? "API key 설정됨" : "API key 미설정"}} · ${{hosted.base_url || "https://api.firecrawl.dev/v2"}}`,
                     ].filter(Boolean).join("\\n");
                   }};
+                  smokeStep("public IR SEC status start");
                   document.querySelector("#publicIrSecStatusButton")?.click();
                   let publicIrSecStatusText = "";
                   try {{
@@ -1594,6 +1639,7 @@ def run_click_smoke(
                     "public IR SEC empty input feedback"
                   );
                   await sleep(1000);
+                  smokeStep("public IR SEC firecrawl dry-run start");
                   document.querySelector("#publicIrSecFirecrawlDryRunButton")?.click();
                   try {{
                     await waitFor(
@@ -1658,6 +1704,7 @@ def run_click_smoke(
                       publicIrSecFirecrawlDryRunPreview: publicIrSecFirecrawlDryRunText.split("\\n").slice(0, 10).join("\\n"),
                     }});
                   }}
+                  smokeStep("code knowledge graph start");
                   document.querySelector("#codeKnowledgeGraphButton")?.click();
                   let codeKnowledgeGraphText = "";
                   try {{
@@ -1679,6 +1726,7 @@ def run_click_smoke(
                   }} catch (error) {{
                     codeKnowledgeGraphText = await codeKnowledgeGraphApiFallback("code knowledge graph button");
                   }}
+                  smokeStep("naver research status start");
                   document.querySelector("#naverResearchStatusButton")?.click();
                   let naverStatusText = "";
                   try {{
@@ -1699,6 +1747,7 @@ def run_click_smoke(
                   }} catch (error) {{
                     naverStatusText = await naverResearchStatusApiFallback("naver research status");
                   }}
+                  smokeStep("naver research repair start");
                   document.querySelector("#naverResearchRepairButton")?.click();
                   let naverRepairText = "";
                   try {{
@@ -1730,6 +1779,7 @@ def run_click_smoke(
                       String(error?.message || error || ""),
                     ].join("\\n");
                   }}
+                  smokeStep("naver market journal start");
                   document.querySelector("#naverMarketJournalButton")?.click();
                   const naverMarketJournalText = await waitFor(
                     () => {{
@@ -1808,6 +1858,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("daily recommendations start");
                   document.querySelector("#dailyRecommendationsButton")?.click();
                   let dailyRecommendationsText = "";
                   try {{
@@ -1860,6 +1911,7 @@ def run_click_smoke(
                     dailyRecommendationsText = `${{dailyRecommendationsText}}\n${{dailyRecommendationDetailText}}`;
                   }}
                   await sleep(1000);
+                  smokeStep("daily recommendations status start");
                   document.querySelector("#dailyRecommendationsStatusButton")?.click();
                   let dailyRecommendationsStatusText = "";
                   try {{
@@ -1892,6 +1944,7 @@ def run_click_smoke(
                     dailyRecommendationsStatusText = await dailyRecommendationApiFallback("daily recommendations status button");
                   }}
 
+                  smokeStep("daily recommendation repair queue start");
                   document.querySelector('[data-tab="memory"]').click();
                   await waitFor(() => document.querySelector("#memory")?.classList.contains("active"), 5000, "memory active for recommendation repair queue");
                   document.querySelector("#dailyRecommendationRepairQueueButton")?.click();
@@ -1922,6 +1975,7 @@ def run_click_smoke(
                     dailyRecommendationRepairQueueText = await dailyRecommendationRepairQueueApiFallback("daily recommendation repair queue button");
                   }}
 
+                  smokeStep("investment calendar start");
                   document.querySelector('[data-tab="investmentCalendar"]').click();
                   await waitFor(() => document.querySelector("#investmentCalendar")?.classList.contains("active"), 5000, "investment calendar active");
                   document.querySelector("#investmentCalendarRefreshButton")?.click();
@@ -1993,6 +2047,7 @@ def run_click_smoke(
                     }});
                   }}
 
+                  smokeStep("llm bridge start");
                   document.querySelector('[data-tab="llmBridge"]').click();
                   await waitFor(() => document.querySelector("#llmBridge")?.classList.contains("active"), 5000, "llm active");
                   const llmPromptForm = document.querySelector("#llmPromptForm");
@@ -2391,7 +2446,8 @@ def run_click_smoke(
                 raise AssertionError("오늘 한국/미국 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsExposure"]:
                 raise AssertionError(
-                    "오늘 한국/미국 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다."
+                    "오늘 한국/미국 추천 1~3위 결과에 보유/관심/최근자료 추천 연결 요약이 표시되지 않았습니다. "
+                    f"preview={result.get('dailyRecommendationsPreview', '')!r}"
                 )
             if not result["dailyRecommendationsShowsInvestmentProfile"]:
                 raise AssertionError("오늘 한국/미국 추천 1~3위 결과에 투자 방향 프로필 표시가 누락되었습니다.")
