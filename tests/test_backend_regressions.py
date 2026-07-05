@@ -607,6 +607,14 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertEqual(tool.normalize_progress_heartbeat_seconds("2.5"), 2.5)
         self.assertEqual(tool.normalize_progress_heartbeat_seconds("bad"), 30.0)
 
+    def test_click_smoke_configures_utf8_json_output(self):
+        smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_clicks.py").read_text(encoding="utf-8")
+
+        self.assertIn("configure_utf8_stdio()", smoke_source)
+        self.assertIn('stream.reconfigure(encoding="utf-8")', smoke_source)
+        self.assertIn("def print_json", smoke_source)
+        self.assertIn("print_json({\"status\": \"success\", **result})", smoke_source)
+
     def test_click_smoke_covers_firecrawl_ir_dry_run_button(self):
         smoke_source = (PROJECT_ROOT / "tools" / "smoke_research_console_clicks.py").read_text(encoding="utf-8")
 

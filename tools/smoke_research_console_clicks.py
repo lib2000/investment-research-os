@@ -16,6 +16,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -37,6 +38,19 @@ STOP_AFTER_STAGE_ORDER = (
     "recommendations-calendar",
 )
 STOP_AFTER_STAGES = set(STOP_AFTER_STAGE_ORDER)
+
+
+def configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
+
+def print_json(payload: dict) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def emit_progress(enabled: bool, label: str) -> None:
@@ -2481,6 +2495,7 @@ def run_click_smoke(
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Research console headless click smoke test")
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--include-llm-save", action="store_true", help="LLM 응답 저장 후 입력 초기화까지 확인합니다.")
@@ -2506,7 +2521,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.list_stages:
-        print(json.dumps({"status": "success", "stages": list(STOP_AFTER_STAGE_ORDER)}, ensure_ascii=False, indent=2))
+        print_json({"status": "success", "stages": list(STOP_AFTER_STAGE_ORDER)})
         return 0
     try:
         result = run_click_smoke(
@@ -2519,28 +2534,24 @@ def main() -> int:
             stop_after=args.stop_after,
         )
     except (AssertionError, RuntimeError, TimeoutError, OSError, ValueError) as exc:
-        print(json.dumps({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2))
+        print_json({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)})
         return 1
     elapsed_seconds = result.get("elapsedSeconds")
     if args.max_elapsed_seconds is not None and isinstance(elapsed_seconds, (int, float)):
         if elapsed_seconds > args.max_elapsed_seconds:
-            print(
-                json.dumps(
-                    {
-                        "status": "failure",
-                        "errorType": "ElapsedTimeExceeded",
-                        "message": (
-                            f"click smoke elapsed {elapsed_seconds}s exceeded "
-                            f"{args.max_elapsed_seconds}s"
-                        ),
-                        **result,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
+            print_json(
+                {
+                    "status": "failure",
+                    "errorType": "ElapsedTimeExceeded",
+                    "message": (
+                        f"click smoke elapsed {elapsed_seconds}s exceeded "
+                        f"{args.max_elapsed_seconds}s"
+                    ),
+                    **result,
+                }
             )
             return 1
-    print(json.dumps({"status": "success", **result}, ensure_ascii=False, indent=2))
+    print_json({"status": "success", **result})
     return 0
 
 
