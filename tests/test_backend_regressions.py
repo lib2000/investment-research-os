@@ -19645,6 +19645,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                             "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
                             "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
+                            "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -19725,6 +19726,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
                 "- WSL PA fresh bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`\n"
                 "- market journal linkage: `python tools\\check_market_journal_linkage.py --strict --json`\n"
+                "- market journal linkage backlog: `python tools\\check_market_journal_linkage.py --strict --write-backlog --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
@@ -19796,6 +19798,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"wsl_answer_context_command"', manifest_text)
         self.assertIn('"wsl_fresh_bootstrap_command"', manifest_text)
         self.assertIn('"market_journal_linkage_command"', manifest_text)
+        self.assertIn('"market_journal_linkage_backlog_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
@@ -19824,6 +19827,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"market_journal_linkage_command": "python tools\\\\check_market_journal_linkage.py --strict --json"', exported_text)
+        self.assertIn('"market_journal_linkage_backlog_command": "python tools\\\\check_market_journal_linkage.py --strict --write-backlog --json"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"today_work_report"', exported_text)
         self.assertIn('"next_schedule"', exported_text)
@@ -19860,6 +19864,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
         self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', manifest_text)
         self.assertIn('"market_journal_linkage_command": "python tools\\\\check_market_journal_linkage.py --strict --json"', manifest_text)
+        self.assertIn('"market_journal_linkage_backlog_command": "python tools\\\\check_market_journal_linkage.py --strict --write-backlog --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
         self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
@@ -19868,6 +19873,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("show_openclaw_bridge_status.py --json", markdown_text)
         self.assertIn("check_market_journal_linkage.py --strict --json", markdown_text)
+        self.assertIn("check_market_journal_linkage.py --strict --write-backlog --json", markdown_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 
 
@@ -20746,6 +20752,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "backend_watchdog_ensure": "powershell.exe -ExecutionPolicy Bypass -File .\\scripts\\ensure-research-backend.ps1",
                 "backend_watchdog_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
                 "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
+                "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20786,6 +20793,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("backend_watchdog_ensure", json_payload["operational_commands"])
         self.assertIn("backend_watchdog_register", json_payload["operational_commands"])
         self.assertIn("market_journal_linkage", json_payload["operational_commands"])
+        self.assertIn("market_journal_linkage_backlog", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20831,6 +20839,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- backend_watchdog_ensure: `powershell.exe -ExecutionPolicy Bypass -File .\\scripts\\ensure-research-backend.ps1`", markdown)
         self.assertIn("- backend_watchdog_register: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1`", markdown)
         self.assertIn("- market_journal_linkage: `python tools\\check_market_journal_linkage.py --strict --json`", markdown)
+        self.assertIn("- market_journal_linkage_backlog: `python tools\\check_market_journal_linkage.py --strict --write-backlog --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)

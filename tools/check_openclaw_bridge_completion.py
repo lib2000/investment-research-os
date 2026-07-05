@@ -224,6 +224,7 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "check_openclaw_wsl_answer_context.py --json",
         "check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
         "check_market_journal_linkage.py --strict --json",
+        "check_market_journal_linkage.py --strict --write-backlog --json",
         "check_offline_readiness.py --json",
         "today_work_report",
         "answer_correction",
@@ -331,6 +332,7 @@ def build_result(
             "backend_watchdog_ensure": "powershell.exe -ExecutionPolicy Bypass -File .\\scripts\\ensure-research-backend.ps1",
             "backend_watchdog_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
             "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
+            "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
     }
@@ -497,6 +499,7 @@ def render_markdown_report(result: dict) -> str:
         "backend_watchdog_ensure",
         "backend_watchdog_register",
         "market_journal_linkage",
+        "market_journal_linkage_backlog",
         "offline_readiness",
     ):
         command = commands.get(label)
