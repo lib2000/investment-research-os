@@ -96,6 +96,25 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
     if usage.get("offline_readiness_command") != "python tools\\check_offline_readiness.py --json":
         raise AssertionError("OpenClaw usage must include offline readiness command")
+    blueprint = payload.get("openclaw_knowledge_graph_blueprint")
+    if not isinstance(blueprint, dict):
+        raise AssertionError("OpenClaw knowledge graph blueprint missing")
+    if blueprint.get("schema") != "openclaw_personal_knowledge_graph_blueprint_v1":
+        raise AssertionError("OpenClaw knowledge graph blueprint schema mismatch")
+    if (blueprint.get("source") or {}).get("raw_content_excluded") is not True:
+        raise AssertionError("OpenClaw knowledge graph blueprint must exclude raw source content")
+    seed_ids = {str(item.get("id") or "") for item in blueprint.get("seed_nodes") or [] if isinstance(item, dict)}
+    for required_seed in (
+        "concept.relu",
+        "topic.graph_rendering_8000_nodes",
+        "note.graph_rendering_lod_experiment",
+    ):
+        if required_seed not in seed_ids:
+            raise AssertionError(f"OpenClaw knowledge graph blueprint missing seed node: {required_seed}")
+    edge_types = set(blueprint.get("edge_types") or [])
+    for edge in blueprint.get("seed_edges") or []:
+        if isinstance(edge, dict) and edge.get("type") not in edge_types:
+            raise AssertionError(f"OpenClaw knowledge graph blueprint edge type is undeclared: {edge.get('type')}")
     messages.append(
         f"generated_at={payload.get('generated_at')} latest={rec.get('latest_recommendation_date')} "
         f"rows={len(latest_rows)} telegram_saved={telegram.get('saved_count')}"
@@ -117,16 +136,29 @@ def sha256_hex(path: Path) -> str:
 def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> list[str]:
     json_path = directory / "investment_research_context.json"
     md_path = directory / "investment_research_context.md"
+    kg_json_path = directory / "openclaw_knowledge_graph_blueprint.json"
+    kg_md_path = directory / "openclaw_knowledge_graph_blueprint.md"
     manifest_path = directory / "openclaw_bridge_manifest.json"
     if not md_path.exists():
         raise AssertionError(f"context Markdown not found: {md_path}")
+    if not kg_json_path.exists():
+        raise AssertionError(f"OpenClaw knowledge graph blueprint JSON not found: {kg_json_path}")
+    if not kg_md_path.exists():
+        raise AssertionError(f"OpenClaw knowledge graph blueprint Markdown not found: {kg_md_path}")
     if not manifest_path.exists():
         raise AssertionError(f"OpenClaw bridge manifest not found: {manifest_path}")
     validate_no_secret_like_content(json_path)
     validate_no_secret_like_content(md_path)
+    validate_no_secret_like_content(kg_json_path)
+    validate_no_secret_like_content(kg_md_path)
     validate_no_secret_like_content(manifest_path)
     payload = load_context(json_path)
     messages = validate_context(payload, max_age_hours=max_age_hours)
+    blueprint_payload = load_context(kg_json_path)
+    if blueprint_payload.get("schema") != "openclaw_personal_knowledge_graph_blueprint_v1":
+        raise AssertionError("OpenClaw knowledge graph blueprint JSON schema mismatch")
+    if blueprint_payload != payload.get("openclaw_knowledge_graph_blueprint"):
+        raise AssertionError("OpenClaw knowledge graph blueprint JSON does not match context payload")
     manifest = load_context(manifest_path)
     if manifest.get("schema") != "investment_research_openclaw_bridge_v1":
         raise AssertionError("OpenClaw bridge manifest schema mismatch")
@@ -136,11 +168,17 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError("OpenClaw bridge manifest context_file mismatch")
     if manifest.get("markdown_file") != "investment_research_context.md":
         raise AssertionError("OpenClaw bridge manifest markdown_file mismatch")
+    if manifest.get("knowledge_graph_blueprint_file") != "openclaw_knowledge_graph_blueprint.md":
+        raise AssertionError("OpenClaw bridge manifest knowledge_graph_blueprint_file mismatch")
+    if manifest.get("knowledge_graph_blueprint_json_file") != "openclaw_knowledge_graph_blueprint.json":
+        raise AssertionError("OpenClaw bridge manifest knowledge_graph_blueprint_json_file mismatch")
     expected_read_order = [
         "bridge_status.json",
         "openclaw_bridge_manifest.json",
         "investment_research_context.md",
         "investment_research_context.json",
+        "openclaw_knowledge_graph_blueprint.md",
+        "openclaw_knowledge_graph_blueprint.json",
         "openclaw_bridge_completion_report.md",
         "openclaw_bridge_completion_report.json",
     ]
@@ -170,9 +208,22 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "show_openclaw_bridge_status.py --json",
         "KR 1위",
         "US 1위",
+        "OpenClaw 개인 지식 그래프 Blueprint",
+        "openclaw_knowledge_graph_blueprint.json",
     ]:
         if required not in markdown:
             raise AssertionError(f"Markdown context is missing required text: {required}")
+    blueprint_markdown = kg_md_path.read_text(encoding="utf-8-sig")
+    for required in [
+        "Master Index",
+        "Glossary",
+        "Marginalia",
+        "concept.relu",
+        "topic.graph_rendering_8000_nodes",
+        "note.graph_rendering_lod_experiment",
+    ]:
+        if required not in blueprint_markdown:
+            raise AssertionError(f"OpenClaw knowledge graph blueprint markdown is missing required text: {required}")
     status_path = directory / "bridge_status.json"
     if status_path.exists():
         validate_no_secret_like_content(status_path)
@@ -211,6 +262,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         expected_hashes = {
             "context_json": json_path,
             "context_markdown": md_path,
+            "knowledge_graph_blueprint_json": kg_json_path,
+            "knowledge_graph_blueprint_markdown": kg_md_path,
             "bridge_manifest": manifest_path,
         }
         file_hashes = status.get("file_sha256") or {}
@@ -242,6 +295,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         for required in [
             "investment_research_context.md",
             "investment_research_context.json",
+            "openclaw_knowledge_graph_blueprint.md",
+            "openclaw_knowledge_graph_blueprint.json",
             "openclaw_bridge_manifest.json",
             "read_order",
             "context generated at",

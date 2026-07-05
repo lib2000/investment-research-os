@@ -17782,6 +17782,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "openclaw_bridge_manifest.json",
                             "investment_research_context.md",
                             "investment_research_context.json",
+                            "openclaw_knowledge_graph_blueprint.md",
+                            "openclaw_knowledge_graph_blueprint.json",
                             "openclaw_bridge_completion_report.md",
                             "openclaw_bridge_completion_report.json",
                         ],
@@ -17800,6 +17802,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                         "file_sha256": {
                             "context_json": check_tool.sha256_hex(output_dir / "investment_research_context.json"),
                             "context_markdown": check_tool.sha256_hex(output_dir / "investment_research_context.md"),
+                            "knowledge_graph_blueprint_json": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_blueprint.json"),
+                            "knowledge_graph_blueprint_markdown": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_blueprint.md"),
                             "bridge_manifest": check_tool.sha256_hex(output_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17813,6 +17817,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "# Investment Research OS Bridge\n\n"
                 "- `investment_research_context.md`: human-readable sanitized summary\n"
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
+                "- `openclaw_knowledge_graph_blueprint.md`: human-readable personal knowledge graph blueprint from `투자.txt`\n"
+                "- `openclaw_knowledge_graph_blueprint.json`: machine-readable personal knowledge graph blueprint\n"
                 "- `openclaw_bridge_manifest.json`: machine-readable file map and refresh/check commands\n"
                 "- `openclaw_bridge_completion_report.json`: machine-readable completion audit report\n"
                 "- `openclaw_bridge_completion_report.md`: latest completion audit report\n"
@@ -17890,8 +17896,14 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
+        self.assertIn('"knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md"', manifest_text)
+        self.assertIn('"knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json"', manifest_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
+        self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
+        self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
+        self.assertIn("OpenClaw 개인 지식 그래프 Blueprint", markdown_text)
+        self.assertIn("concept.relu", markdown_text)
         self.assertNotIn('"access_token":', exported_text)
         self.assertIn("show_openclaw_bridge_status.py --json", markdown_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
@@ -17907,6 +17919,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             openclaw_dir.mkdir(parents=True)
             (openclaw_dir / "investment_research_context.json").write_text('{"ok": true}', encoding="utf-8")
             (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.json").write_text(
+                '{"schema": "openclaw_personal_knowledge_graph_blueprint_v1"}',
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text("# Master Index\nconcept.relu\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text('{"schema": "ok"}', encoding="utf-8")
             copied_at = tool.datetime.now(tool.timezone.utc).isoformat()
             (openclaw_dir / "bridge_status.json").write_text(
@@ -17921,6 +17938,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "file_sha256": {
                             "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
+                            "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17961,6 +17980,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "file_sha256": {
                             "context_json": "bad",
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
+                            "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                     },
@@ -17975,10 +17996,12 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"
-                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
+                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
                 "read data/investment_research/investment_research_context.md\n"
                 "read data/investment_research/investment_research_context.json\n"
+                "read data/investment_research/openclaw_knowledge_graph_blueprint.md\n"
+                "read data/investment_research/openclaw_knowledge_graph_blueprint.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.json\n"
                 "read data/investment_research/openclaw_bridge_completion_report.md\n"
                 "read completion_report_sha256\n"
@@ -18003,10 +18026,17 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "openclaw_bridge_manifest.json",
                 "investment_research_context.md",
                 "investment_research_context.json",
+                "openclaw_knowledge_graph_blueprint.md",
+                "openclaw_knowledge_graph_blueprint.json",
                 "openclaw_bridge_completion_report.md",
                 "openclaw_bridge_completion_report.json",
             ]
             (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text("# Master Index\nconcept.relu\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.json").write_text(
+                json.dumps({"schema": "openclaw_personal_knowledge_graph_blueprint_v1"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
             (openclaw_dir / "openclaw_bridge_completion_report.md").write_text("# ok\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
                 json.dumps({"context_generated_at": "2026-07-05T07:00:00+09:00", "read_order": read_order}),
@@ -18149,11 +18179,39 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text(
+                "# OpenClaw Personal Knowledge Graph Blueprint\n\n"
+                "## Principles\n\n"
+                "- Master Index: map\n"
+                "- Glossary: concepts\n"
+                "- Marginalia: notes\n\n"
+                "## Seed Nodes\n\n"
+                "- `concept.relu`\n"
+                "- `topic.graph_rendering_8000_nodes`\n"
+                "- `note.graph_rendering_lod_experiment`\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_knowledge_graph_blueprint.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openclaw_personal_knowledge_graph_blueprint_v1",
+                        "seed_nodes": [
+                            {"id": "concept.relu"},
+                            {"id": "topic.graph_rendering_8000_nodes"},
+                            {"id": "note.graph_rendering_lod_experiment"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
                 json.dumps(
                     {
                         "schema": "investment_research_openclaw_bridge_v1",
                         "context_generated_at": generated_at,
+                        "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
+                        "knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json",
                         "read_order": tool.EXPECTED_READ_ORDER,
                     },
                     ensure_ascii=False,
@@ -18183,6 +18241,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "file_sha256": {
                             "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
+                            "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
                             "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
                         },
                         "completion_report_sha256": {
@@ -18249,13 +18309,17 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "openclaw_bridge_manifest.json",
                     "investment_research_context.md",
                     "investment_research_context.json",
+                    "openclaw_knowledge_graph_blueprint.md",
+                    "openclaw_knowledge_graph_blueprint.json",
                     "openclaw_bridge_completion_report.md",
                     "openclaw_bridge_completion_report.json",
                 ],
                 "file_sha256": {
                     "context_json": "a" * 64,
                     "context_markdown": "b" * 64,
-                    "bridge_manifest": "c" * 64,
+                    "knowledge_graph_blueprint_json": "c" * 64,
+                    "knowledge_graph_blueprint_markdown": "d" * 64,
+                    "bridge_manifest": "e" * 64,
                 },
             },
             "completion_requirements": [
@@ -18307,6 +18371,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
+        self.assertIn("- knowledge_graph_blueprint_json: `" + ("c" * 64) + "`", markdown)
+        self.assertIn("- knowledge_graph_blueprint_markdown: `" + ("d" * 64) + "`", markdown)
         self.assertIn("abc1234", markdown)
 
 

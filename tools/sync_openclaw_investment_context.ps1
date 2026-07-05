@@ -61,12 +61,20 @@ python $exportScript --print-summary | Out-Host
 
 $jsonPath = Join-Path $sourceDir "investment_research_context.json"
 $markdownPath = Join-Path $sourceDir "investment_research_context.md"
+$knowledgeGraphJsonPath = Join-Path $sourceDir "openclaw_knowledge_graph_blueprint.json"
+$knowledgeGraphMarkdownPath = Join-Path $sourceDir "openclaw_knowledge_graph_blueprint.md"
 $manifestPath = Join-Path $sourceDir "openclaw_bridge_manifest.json"
 if (-not (Test-Path -LiteralPath $jsonPath)) {
   throw "Generated JSON context not found: $jsonPath"
 }
 if (-not (Test-Path -LiteralPath $markdownPath)) {
   throw "Generated Markdown context not found: $markdownPath"
+}
+if (-not (Test-Path -LiteralPath $knowledgeGraphJsonPath)) {
+  throw "Generated OpenClaw knowledge graph blueprint JSON not found: $knowledgeGraphJsonPath"
+}
+if (-not (Test-Path -LiteralPath $knowledgeGraphMarkdownPath)) {
+  throw "Generated OpenClaw knowledge graph blueprint Markdown not found: $knowledgeGraphMarkdownPath"
 }
 if (-not (Test-Path -LiteralPath $manifestPath)) {
   throw "Generated bridge manifest not found: $manifestPath"
@@ -90,6 +98,8 @@ if (-not (Test-Path -LiteralPath $OpenClawWorkspace)) {
 New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 Copy-Item -Force -LiteralPath $jsonPath -Destination (Join-Path $targetDir "investment_research_context.json")
 Copy-Item -Force -LiteralPath $markdownPath -Destination (Join-Path $targetDir "investment_research_context.md")
+Copy-Item -Force -LiteralPath $knowledgeGraphJsonPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.json")
+Copy-Item -Force -LiteralPath $knowledgeGraphMarkdownPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.md")
 Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
 $context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -118,6 +128,8 @@ $operationalCommands = [ordered]@{
 $fileSha256 = [ordered]@{
   context_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.json")).Hash.ToLowerInvariant()
   context_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.md")).Hash.ToLowerInvariant()
+  knowledge_graph_blueprint_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.json")).Hash.ToLowerInvariant()
+  knowledge_graph_blueprint_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.md")).Hash.ToLowerInvariant()
   bridge_manifest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_bridge_manifest.json")).Hash.ToLowerInvariant()
 }
 $latestRecommendations = @()
@@ -147,6 +159,8 @@ $status = [ordered]@{
     "openclaw_bridge_manifest.json",
     "investment_research_context.md",
     "investment_research_context.json",
+    "openclaw_knowledge_graph_blueprint.md",
+    "openclaw_knowledge_graph_blueprint.json",
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json"
   )
@@ -156,6 +170,8 @@ $status = [ordered]@{
   source_git_dirty = $gitDirty
   source_context_json = $jsonPath
   source_context_markdown = $markdownPath
+  source_knowledge_graph_blueprint_json = $knowledgeGraphJsonPath
+  source_knowledge_graph_blueprint_markdown = $knowledgeGraphMarkdownPath
   source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
@@ -180,6 +196,8 @@ $readme = @(
   "",
   "- ``investment_research_context.md``: human-readable sanitized summary",
   "- ``investment_research_context.json``: machine-readable sanitized summary",
+  "- ``openclaw_knowledge_graph_blueprint.md``: human-readable personal knowledge graph blueprint from ``투자.txt``",
+  "- ``openclaw_knowledge_graph_blueprint.json``: machine-readable personal knowledge graph blueprint",
   "- ``openclaw_bridge_manifest.json``: machine-readable file map and refresh/check commands",
   "- ``openclaw_bridge_completion_report.json``: machine-readable completion audit report",
   "- ``openclaw_bridge_completion_report.md``: latest completion audit report",
@@ -209,9 +227,10 @@ $startupLines = @(
   "## Investment Research OS Bridge",
   "",
   "- Read ``data/investment_research/bridge_status.json`` first.",
-  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
+  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
   "- Human summary: ``data/investment_research/investment_research_context.md``.",
   "- Machine state: ``data/investment_research/investment_research_context.json``.",
+  "- Knowledge graph blueprint: ``data/investment_research/openclaw_knowledge_graph_blueprint.md`` and ``data/investment_research/openclaw_knowledge_graph_blueprint.json``.",
   "- Manifest and commands: ``data/investment_research/openclaw_bridge_manifest.json``.",
   "- Machine completion report: ``data/investment_research/openclaw_bridge_completion_report.json``.",
   "- Human completion report: ``data/investment_research/openclaw_bridge_completion_report.md``.",

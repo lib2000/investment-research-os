@@ -14,6 +14,8 @@ EXPECTED_READ_ORDER = [
     "openclaw_bridge_manifest.json",
     "investment_research_context.md",
     "investment_research_context.json",
+    "openclaw_knowledge_graph_blueprint.md",
+    "openclaw_knowledge_graph_blueprint.json",
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json",
 ]
@@ -21,6 +23,7 @@ JSON_FILES = {
     "bridge_status.json",
     "openclaw_bridge_manifest.json",
     "investment_research_context.json",
+    "openclaw_knowledge_graph_blueprint.json",
     "openclaw_bridge_completion_report.json",
 }
 SENSITIVE_MARKERS = [
@@ -93,6 +96,8 @@ def validate_hashes(openclaw_dir: Path, status: dict[str, Any], errors: list[str
     expected_file_hashes = {
         "context_json": "investment_research_context.json",
         "context_markdown": "investment_research_context.md",
+        "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
+        "knowledge_graph_blueprint_markdown": "openclaw_knowledge_graph_blueprint.md",
         "bridge_manifest": "openclaw_bridge_manifest.json",
     }
     file_hashes = status.get("file_sha256") if isinstance(status.get("file_sha256"), dict) else {}
@@ -155,8 +160,10 @@ def build_result(
 
     manifest = loaded_files.get("openclaw_bridge_manifest.json")
     context = loaded_files.get("investment_research_context.json")
+    knowledge_graph_blueprint = loaded_files.get("openclaw_knowledge_graph_blueprint.json")
     completion = loaded_files.get("openclaw_bridge_completion_report.json")
     context_markdown = str(loaded_files.get("investment_research_context.md") or "")
+    knowledge_graph_markdown = str(loaded_files.get("openclaw_knowledge_graph_blueprint.md") or "")
     completion_markdown = str(loaded_files.get("openclaw_bridge_completion_report.md") or "")
 
     if status.get("status") != "ok":
@@ -173,6 +180,10 @@ def build_result(
     if isinstance(manifest, dict):
         if manifest.get("read_order") != EXPECTED_READ_ORDER:
             errors.append("OpenClaw consumer manifest read_order mismatch")
+        if manifest.get("knowledge_graph_blueprint_file") != "openclaw_knowledge_graph_blueprint.md":
+            errors.append("OpenClaw consumer manifest missing knowledge graph blueprint markdown")
+        if manifest.get("knowledge_graph_blueprint_json_file") != "openclaw_knowledge_graph_blueprint.json":
+            errors.append("OpenClaw consumer manifest missing knowledge graph blueprint JSON")
     else:
         errors.append("OpenClaw consumer manifest did not load")
 
@@ -193,6 +204,24 @@ def build_result(
             errors.append("OpenClaw consumer manifest context_generated_at mismatch")
     else:
         errors.append("OpenClaw consumer context did not load")
+
+    if isinstance(knowledge_graph_blueprint, dict):
+        if knowledge_graph_blueprint.get("schema") != "openclaw_personal_knowledge_graph_blueprint_v1":
+            errors.append("OpenClaw consumer knowledge graph blueprint schema mismatch")
+        seed_ids = {
+            str(item.get("id") or "")
+            for item in knowledge_graph_blueprint.get("seed_nodes", [])
+            if isinstance(item, dict)
+        }
+        for required_seed in (
+            "concept.relu",
+            "topic.graph_rendering_8000_nodes",
+            "note.graph_rendering_lod_experiment",
+        ):
+            if required_seed not in seed_ids:
+                errors.append(f"OpenClaw consumer knowledge graph blueprint missing seed: {required_seed}")
+    else:
+        errors.append("OpenClaw consumer knowledge graph blueprint did not load")
 
     if isinstance(completion, dict):
         if completion.get("status") != "ok":
@@ -216,6 +245,8 @@ def build_result(
         errors.append("OpenClaw consumer markdown missing latest recommendations")
     if "secrets, broker tokens, raw DB files" not in context_markdown and "민감정보" not in context_markdown:
         errors.append("OpenClaw consumer markdown missing sensitive-data exclusion note")
+    if "Master Index" not in knowledge_graph_markdown or "concept.relu" not in knowledge_graph_markdown:
+        errors.append("OpenClaw consumer knowledge graph markdown missing expected blueprint content")
     if "completion_report_sha256" not in completion_markdown and "File Hashes" not in completion_markdown:
         errors.append("OpenClaw consumer completion markdown missing completion hashes")
 

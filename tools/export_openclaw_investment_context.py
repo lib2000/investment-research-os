@@ -242,6 +242,135 @@ def build_firecrawl_state(store: dict) -> dict:
     }
 
 
+def build_personal_knowledge_graph_blueprint() -> dict:
+    return {
+        "schema": "openclaw_personal_knowledge_graph_blueprint_v1",
+        "source": {
+            "source_file_label": "투자.txt",
+            "applied_as": "OpenClaw bridge knowledge graph blueprint",
+            "raw_content_excluded": True,
+            "reason": "원문에는 초안/예시/깨진 스캐폴드가 섞여 있어 안전한 스키마로 정규화해 반영합니다.",
+        },
+        "recommended_layering": {
+            "strategy": "기존 OpenClaw knowledge ingestion 위에 Knowledge Graph Layer를 추가합니다.",
+            "avoid": "검증기 없이 별도 대형 그래프 DB를 먼저 만들지 않습니다.",
+            "storage_model": "Markdown index + JSON/YAML nodes + JSON/YAML edges + validator + graph export",
+        },
+        "principles": [
+            {"name": "Master Index", "role": "전체 지식 지도를 담당하고 주제별 진입점을 제공합니다."},
+            {"name": "Glossary", "role": "안정적으로 검증된 개념 정의를 보관합니다."},
+            {"name": "Marginalia", "role": "미검증 메모, 질문, 실험 가설을 분리해 지식 오염을 막습니다."},
+            {"name": "Edges", "role": "개념, 주제, 출처, 결정 사이의 관계를 명시합니다."},
+            {"name": "Validator", "role": "노드/엣지 필수 필드와 깨진 참조를 점검합니다."},
+        ],
+        "node_types": [
+            "concept",
+            "topic",
+            "source",
+            "project",
+            "decision",
+            "note",
+            "artifact",
+        ],
+        "edge_types": [
+            "is_a",
+            "part_of",
+            "related_to",
+            "depends_on",
+            "uses",
+            "contrasts_with",
+            "causes",
+            "mitigates",
+            "based_on",
+            "explores",
+        ],
+        "seed_nodes": [
+            {
+                "id": "concept.relu",
+                "type": "concept",
+                "term": "ReLU",
+                "canonical_name": "Rectified Linear Unit",
+                "definition": "입력값이 0보다 작으면 0을 출력하고, 0보다 크면 입력값을 그대로 출력하는 활성화 함수입니다.",
+                "formula": "f(x) = max(0, x)",
+                "domain": ["deep_learning", "neural_networks"],
+                "related": [
+                    "concept.activation_function",
+                    "concept.vanishing_gradient",
+                    "concept.leaky_relu",
+                    "concept.gelu",
+                ],
+                "status": "verified",
+                "confidence": "high",
+            },
+            {
+                "id": "topic.graph_rendering_8000_nodes",
+                "type": "topic",
+                "title": "8000-node network visualization rendering optimization",
+                "domain": ["visualization", "graph_rendering", "performance_engineering"],
+                "problem": "수천 개 노드와 엣지를 가진 네트워크를 브라우저에서 탐색 가능한 속도로 렌더링합니다.",
+                "master_index_path": ["Engineering", "Visualization", "Large Graph Rendering"],
+                "glossary_links": [
+                    "concept.force_directed_layout",
+                    "concept.webgl_rendering",
+                    "concept.level_of_detail",
+                    "concept.spatial_index",
+                    "concept.edge_bundling",
+                ],
+                "marginalia_links": ["note.graph_rendering_lod_experiment"],
+                "recommended_strategies": [
+                    "Canvas/WebGL rendering",
+                    "Web Worker layout",
+                    "precomputed or incremental layout",
+                    "edge bundling and filtering",
+                    "viewport culling",
+                    "memoization and dirty-region rendering",
+                    "picking layer for interactions",
+                    "progressive loading and clustering",
+                ],
+                "status": "active_research",
+            },
+            {
+                "id": "note.graph_rendering_lod_experiment",
+                "type": "note",
+                "title": "8000-node graph LOD rendering experiment",
+                "parent": "topic.graph_rendering_8000_nodes",
+                "content": "대규모 그래프는 전체 세부 정보를 즉시 렌더링하기보다 줌 레벨과 선택 상태에 따라 점진적으로 보여주는 편이 안정적입니다.",
+                "hypothesis": "LOD, 클러스터링, viewport culling을 결합하면 8000개 노드에서도 상호작용 지연을 줄일 수 있습니다.",
+                "status": "unverified",
+                "next_action": "1000, 4000, 8000, 16000개 노드 synthetic benchmark를 만들어 렌더링 시간을 비교합니다.",
+            },
+        ],
+        "seed_edges": [
+            {"from": "concept.relu", "to": "concept.activation_function", "type": "is_a"},
+            {"from": "concept.relu", "to": "concept.dead_relu", "type": "related_to"},
+            {"from": "topic.graph_rendering_8000_nodes", "to": "concept.webgl_rendering", "type": "uses"},
+            {"from": "note.graph_rendering_lod_experiment", "to": "topic.graph_rendering_8000_nodes", "type": "explores"},
+        ],
+        "validation_rules": [
+            "Every node must have id and type.",
+            "Concept nodes require term or title and definition.",
+            "Topic nodes require title and status.",
+            "Marginalia/note nodes require parent.",
+            "Every edge must include from, to, and type.",
+            "Edge type must be one of the declared edge_types.",
+            "Status should be one of verified, active_research, unverified, or deprecated.",
+        ],
+        "milestones": [
+            {"id": "M24", "title": "Personal Knowledge Graph Schema"},
+            {"id": "M25", "title": "Master Index Builder"},
+            {"id": "M26", "title": "Glossary Extractor"},
+            {"id": "M27", "title": "Marginalia Queue"},
+            {"id": "M28", "title": "Graph JSON Exporter"},
+            {"id": "M29", "title": "8000-node Visualization Benchmark"},
+        ],
+        "next_actions": [
+            "Keep this blueprint in the OpenClaw bridge context first.",
+            "Add a validator before creating OpenClaw-side knowledge_graph files.",
+            "After validation passes, scaffold Master Index, Glossary, Marginalia, and graph export files.",
+        ],
+    }
+
+
 def build_context(project_root: Path) -> dict:
     system_dir = project_root / "research_vault" / "_system"
     daily_recommendations = load_json(system_dir / "daily_recommendations.json", {})
@@ -290,10 +419,13 @@ def build_context(project_root: Path) -> dict:
             "nps_rebalancing": build_nps_state(nps_snapshot),
             "firecrawl_monitoring": build_firecrawl_state(firecrawl_status),
         },
+        "openclaw_knowledge_graph_blueprint": build_personal_knowledge_graph_blueprint(),
         "openclaw_usage": {
             "status_file": "bridge_status.json",
             "read_this_first": "investment_research_context.md",
             "machine_readable": "investment_research_context.json",
+            "knowledge_graph_blueprint": "openclaw_knowledge_graph_blueprint.md",
+            "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
             "completion_report": "openclaw_bridge_completion_report.md",
             "completion_report_json": "openclaw_bridge_completion_report.json",
             "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
@@ -320,6 +452,7 @@ def render_markdown(context: dict) -> str:
     telegram = state["news_and_telegram"]["telegram_favorite_posts"]
     nps = state["nps_rebalancing"]
     firecrawl = state["firecrawl_monitoring"]
+    kg = context.get("openclaw_knowledge_graph_blueprint") or {}
     lines = [
         "# Investment Research OS Context for OpenClaw",
         "",
@@ -351,6 +484,24 @@ def render_markdown(context: dict) -> str:
     lines.extend(
         [
             "",
+            "## OpenClaw 개인 지식 그래프 Blueprint",
+            "",
+            f"- 적용 방식: {(kg.get('recommended_layering') or {}).get('strategy')}",
+            f"- 저장 모델: {(kg.get('recommended_layering') or {}).get('storage_model')}",
+            "- 별도 파일: `openclaw_knowledge_graph_blueprint.md`, `openclaw_knowledge_graph_blueprint.json`",
+        ]
+    )
+    for principle in kg.get("principles", []):
+        lines.append(f"- {principle.get('name')}: {principle.get('role')}")
+    seed_ids = [item.get("id") for item in kg.get("seed_nodes", []) if item.get("id")]
+    if seed_ids:
+        lines.append(f"- 초기 seed node: {', '.join(seed_ids)}")
+    milestones = [f"{item.get('id')} {item.get('title')}" for item in kg.get("milestones", [])]
+    if milestones:
+        lines.append(f"- 다음 milestone: {' -> '.join(milestones)}")
+    lines.extend(
+        [
+            "",
             "## 오픈클로 사용 규칙",
             "",
             "- 이 파일은 투자 판단 보조용 요약입니다. 실거래 주문 또는 계좌 인증 정보 공유에 사용하지 않습니다.",
@@ -372,6 +523,47 @@ def render_markdown(context: dict) -> str:
     return "\n".join(lines)
 
 
+def render_knowledge_graph_blueprint_markdown(blueprint: dict) -> str:
+    lines = [
+        "# OpenClaw Personal Knowledge Graph Blueprint",
+        "",
+        f"- schema: `{blueprint.get('schema')}`",
+        "- source: `투자.txt` 내용 검토 후 정규화 적용",
+        "- raw source content: excluded",
+        f"- strategy: {(blueprint.get('recommended_layering') or {}).get('strategy')}",
+        f"- storage model: {(blueprint.get('recommended_layering') or {}).get('storage_model')}",
+        "",
+        "## Principles",
+        "",
+    ]
+    for item in blueprint.get("principles", []):
+        lines.append(f"- {item.get('name')}: {item.get('role')}")
+    lines.extend(["", "## Node Types", ""])
+    for item in blueprint.get("node_types", []):
+        lines.append(f"- `{item}`")
+    lines.extend(["", "## Edge Types", ""])
+    for item in blueprint.get("edge_types", []):
+        lines.append(f"- `{item}`")
+    lines.extend(["", "## Seed Nodes", ""])
+    for item in blueprint.get("seed_nodes", []):
+        title = item.get("term") or item.get("title") or item.get("id")
+        lines.append(f"- `{item.get('id')}` ({item.get('type')}): {title} / status={item.get('status')}")
+    lines.extend(["", "## Seed Edges", ""])
+    for item in blueprint.get("seed_edges", []):
+        lines.append(f"- `{item.get('from')}` -[{item.get('type')}]-> `{item.get('to')}`")
+    lines.extend(["", "## Validation Rules", ""])
+    for item in blueprint.get("validation_rules", []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Milestones", ""])
+    for item in blueprint.get("milestones", []):
+        lines.append(f"- `{item.get('id')}`: {item.get('title')}")
+    lines.extend(["", "## Next Actions", ""])
+    for item in blueprint.get("next_actions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_bridge_manifest(context: dict) -> dict:
     return {
         "schema": "investment_research_openclaw_bridge_v1",
@@ -380,6 +572,8 @@ def build_bridge_manifest(context: dict) -> dict:
         "source_project": context.get("source_project"),
         "context_file": "investment_research_context.json",
         "markdown_file": "investment_research_context.md",
+        "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
+        "knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json",
         "status_file": "bridge_status.json",
         "readme_file": "README.md",
         "read_order": [
@@ -387,6 +581,8 @@ def build_bridge_manifest(context: dict) -> dict:
             "openclaw_bridge_manifest.json",
             "investment_research_context.md",
             "investment_research_context.json",
+            "openclaw_knowledge_graph_blueprint.md",
+            "openclaw_knowledge_graph_blueprint.json",
             "openclaw_bridge_completion_report.md",
             "openclaw_bridge_completion_report.json",
         ],
@@ -408,11 +604,22 @@ def write_context(context: dict, output_dir: Path) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "investment_research_context.json"
     md_path = output_dir / "investment_research_context.md"
+    kg_json_path = output_dir / "openclaw_knowledge_graph_blueprint.json"
+    kg_md_path = output_dir / "openclaw_knowledge_graph_blueprint.md"
     manifest_path = output_dir / "openclaw_bridge_manifest.json"
     json_path.write_text(json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(render_markdown(context), encoding="utf-8")
+    blueprint = context.get("openclaw_knowledge_graph_blueprint") or {}
+    kg_json_path.write_text(json.dumps(blueprint, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    kg_md_path.write_text(render_knowledge_graph_blueprint_markdown(blueprint), encoding="utf-8")
     manifest_path.write_text(json.dumps(build_bridge_manifest(context), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"json_path": str(json_path), "markdown_path": str(md_path), "manifest_path": str(manifest_path)}
+    return {
+        "json_path": str(json_path),
+        "markdown_path": str(md_path),
+        "knowledge_graph_blueprint_json_path": str(kg_json_path),
+        "knowledge_graph_blueprint_markdown_path": str(kg_md_path),
+        "manifest_path": str(manifest_path),
+    }
 
 
 def main() -> int:

@@ -118,6 +118,8 @@ def validate_bridge_status(
     expected_hashes = {
         "context_json": openclaw_dir / "investment_research_context.json",
         "context_markdown": openclaw_dir / "investment_research_context.md",
+        "knowledge_graph_blueprint_json": openclaw_dir / "openclaw_knowledge_graph_blueprint.json",
+        "knowledge_graph_blueprint_markdown": openclaw_dir / "openclaw_knowledge_graph_blueprint.md",
         "bridge_manifest": openclaw_dir / "openclaw_bridge_manifest.json",
     }
     file_hashes = status.get("file_sha256") or {}
@@ -161,6 +163,8 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         "openclaw_bridge_manifest.json",
         "investment_research_context.md",
         "investment_research_context.json",
+        "openclaw_knowledge_graph_blueprint.md",
+        "openclaw_knowledge_graph_blueprint.json",
         "openclaw_bridge_completion_report.json",
         "openclaw_bridge_completion_report.md",
         "completion_report_sha256",
@@ -330,7 +334,13 @@ def render_markdown_report(result: dict) -> str:
     lines.extend(["", "## File Hashes", ""])
     file_hashes = bridge_status.get("file_sha256") or {}
     if file_hashes:
-        for label in ("context_json", "context_markdown", "bridge_manifest"):
+        for label in (
+            "context_json",
+            "context_markdown",
+            "knowledge_graph_blueprint_json",
+            "knowledge_graph_blueprint_markdown",
+            "bridge_manifest",
+        ):
             file_hash = file_hashes.get(label)
             if file_hash:
                 lines.append(f"- {label}: `{file_hash}`")
