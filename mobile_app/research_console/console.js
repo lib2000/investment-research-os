@@ -8936,7 +8936,8 @@ function dailyRecommendationExposureSummary(record = {}) {
   } else if (portfolioRisk.priority === "watch") {
     chips.push("편입 전 조건 확인");
   }
-  return chips.filter(Boolean).slice(0, 6).join(" · ");
+  const summary = chips.filter(Boolean).slice(0, 6).join(" · ");
+  return summary || "보유/관심 연결 정보 없음";
 }
 
 function dailyRecommendationInvestmentProfileSummary(record = {}) {
@@ -14330,8 +14331,9 @@ elements.publicIrSecStatusButton?.addEventListener("click", async () => {
 
 elements.publicIrSecFirecrawlDryRunButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
-  startOutputLoading("Firecrawl IR hosted dry-run 실행 중", [
-    "Firecrawl API 키 설정 확인",
+  startOutputLoading("Firecrawl IR Hosted Dry-run 실행 중", [
+    "FIRECRAWL_API_KEY 설정 확인",
+    "키 미설정 시 안전하게 hosted scrape 건너뜀",
     "첫 번째 IR registry URL 선택",
     "RPC 저장 없이 payload 정규화 검증",
   ]);

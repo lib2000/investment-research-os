@@ -660,11 +660,12 @@ def run_click_smoke(
                             text.includes("firecrawl_ir_hosted_dry_run")
                           ) &&
                             (
-                              text.includes("firecrawl_api_key_missing") ||
-                              text.includes("FIRECRAWL_API_KEY") ||
-                              text.includes("hosted_scrape") ||
-                              text.includes("success")
-                            )
+                            text.includes("firecrawl_api_key_missing") ||
+                            text.includes("FIRECRAWL_API_KEY") ||
+                            text.includes("RPC 저장 없이 payload 정규화 검증") ||
+                            text.includes("hosted_scrape") ||
+                            text.includes("success")
+                          )
                             ? text
                             : "";
                         },
@@ -694,6 +695,7 @@ def run_click_smoke(
                           (
                             publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
                             publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                            publicIrSecFirecrawlDryRunText.includes("RPC 저장 없이 payload 정규화 검증") ||
                             publicIrSecFirecrawlDryRunText.includes("hosted_scrape") ||
                             publicIrSecFirecrawlDryRunText.includes("success")
                           ),
@@ -1608,6 +1610,7 @@ def run_click_smoke(
                         (
                           combined.includes("firecrawl_api_key_missing") ||
                           combined.includes("FIRECRAWL_API_KEY") ||
+                          combined.includes("RPC 저장 없이 payload 정규화 검증") ||
                           combined.includes("Firecrawl hosted scrape dry-run이 성공")
                         )
                         ? combined
@@ -1637,6 +1640,7 @@ def run_click_smoke(
                         (
                           publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
                           publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                          publicIrSecFirecrawlDryRunText.includes("RPC 저장 없이 payload 정규화 검증") ||
                           publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
                         ),
                       publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
@@ -1753,6 +1757,7 @@ def run_click_smoke(
                         (
                           publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
                           publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                          publicIrSecFirecrawlDryRunText.includes("RPC 저장 없이 payload 정규화 검증") ||
                           publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
                         ),
                       codeKnowledgeGraphShowsFlows:
@@ -1822,6 +1827,27 @@ def run_click_smoke(
                     );
                   }} catch (error) {{
                     dailyRecommendationsText = await dailyRecommendationApiFallback("daily recommendations button");
+                  }}
+                  const dailyRecommendationDetailButton = document.querySelector('[data-daily-recommendation-toggle="detail"]');
+                  if (dailyRecommendationDetailButton) {{
+                    dailyRecommendationDetailButton.click();
+                    const dailyRecommendationDetailText = await waitFor(
+                      () => {{
+                        const cards = document.querySelector("#dailyRecommendationCards")?.innerText || "";
+                        return cards.includes("상세 근거") &&
+                          (
+                            cards.includes("추천 연결:") ||
+                            cards.includes("보유/관심 연결 정보 없음") ||
+                            cards.includes("최근자료 영향") ||
+                            cards.includes("환율 확인")
+                          )
+                          ? cards
+                          : "";
+                      }},
+                      15000,
+                      "daily recommendation detail exposure"
+                    );
+                    dailyRecommendationsText = `${{dailyRecommendationsText}}\n${{dailyRecommendationDetailText}}`;
                   }}
                   await sleep(1000);
                   document.querySelector("#dailyRecommendationsStatusButton")?.click();
@@ -2133,6 +2159,7 @@ def run_click_smoke(
                       (
                         publicIrSecFirecrawlDryRunText.includes("firecrawl_api_key_missing") ||
                         publicIrSecFirecrawlDryRunText.includes("FIRECRAWL_API_KEY") ||
+                        publicIrSecFirecrawlDryRunText.includes("RPC 저장 없이 payload 정규화 검증") ||
                         publicIrSecFirecrawlDryRunText.includes("Firecrawl hosted scrape dry-run이 성공")
                       ),
                     codeKnowledgeGraphShowsFlows:
