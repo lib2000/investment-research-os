@@ -3944,7 +3944,14 @@ class PortfolioReportAlertTests(unittest.TestCase):
         self.assertEqual({item["ticker"] for item in result["reports"]}, {"ABSI", "005930"})
         self.assertEqual(payload["target_bot"], "@lib20_bot")
         self.assertEqual(payload["send_time"], "07:00")
+        self.assertIn("보유 종목 리포트 알림", payload["text"])
         self.assertIn("Portfolio Report Alert", payload["text"])
+        self.assertIn("기준일:", payload["text"])
+        self.assertIn("스캔 보유 종목: 2개", payload["text"])
+        self.assertIn("신규 리포트/공시: 2건", payload["text"])
+        self.assertIn("일자/출처:", payload["text"])
+        self.assertIn("제목:", payload["text"])
+        self.assertIn("링크:", payload["text"])
         self.assertIn("Absci Corporation", payload["text"])
         self.assertIn("삼성전자", payload["text"])
 
@@ -4090,7 +4097,7 @@ class PortfolioReportAlertTests(unittest.TestCase):
 
         state = {
             "sent_messages": [
-                {"chat_id": "12345", "message_id": 1, "text": "Portfolio Report Alert\nABSI new report"},
+                {"chat_id": "12345", "message_id": 1, "text": "보유 종목 리포트 알림 (Portfolio Report Alert)\nABSI new report"},
                 {"chat_id": "12345", "message_id": 2, "text": "routine dry-run status ok"},
             ]
         }

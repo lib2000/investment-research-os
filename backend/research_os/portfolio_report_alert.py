@@ -9,7 +9,7 @@ from typing import Any
 
 
 DESIGN_NAME = "portfolio_report_alert_v1"
-REPORT_ALERT_TITLE = "Portfolio Report Alert"
+REPORT_ALERT_TITLE = "보유 종목 리포트 알림 (Portfolio Report Alert)"
 REPORT_KEYWORDS = (
     "report",
     "리포트",
@@ -219,26 +219,26 @@ def render_report_alert_text(result: dict[str, Any], *, max_items: int = 8) -> s
     reports = [item for item in result.get("reports") or [] if isinstance(item, dict)]
     lines = [
         REPORT_ALERT_TITLE,
-        f"As of: {_safe_text(result.get('as_of')) or datetime.now().isoformat(timespec='seconds')}",
-        f"Holdings scanned: {result.get('holding_count', 0)}",
-        f"New holding reports: {len(reports)}",
+        f"기준일: {_safe_text(result.get('as_of')) or datetime.now().isoformat(timespec='seconds')}",
+        f"스캔 보유 종목: {result.get('holding_count', 0)}개",
+        f"신규 리포트/공시: {len(reports)}건",
     ]
     if not reports:
-        lines.append("No new holding reports found.")
+        lines.append("새로 확인된 보유 종목 리포트/공시는 없습니다.")
         return "\n".join(lines)
     lines.append("")
     for index, item in enumerate(reports[: max(1, max_items)], start=1):
         ticker = _safe_text(item.get("ticker"))
         company = _safe_text(item.get("holding_name") or item.get("company_name"))
         title = _safe_text(item.get("title"))
-        published_at = _safe_text(item.get("published_at")) or "date n/a"
+        published_at = _safe_text(item.get("published_at")) or "일자 미확인"
         provider = _safe_text(item.get("source_provider") or item.get("category"))
         url = _safe_text(item.get("detail_url") or item.get("relative_path"))
         lines.append(f"{index}. {ticker} {company}")
-        lines.append(f"- {published_at} | {provider}")
-        lines.append(f"- {title}")
+        lines.append(f"- 일자/출처: {published_at} | {provider}")
+        lines.append(f"- 제목: {title}")
         if url:
-            lines.append(f"- {url}")
+            lines.append(f"- 링크: {url}")
     return "\n".join(lines).strip()
 
 
