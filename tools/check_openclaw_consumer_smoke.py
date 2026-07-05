@@ -352,6 +352,23 @@ def build_result(
 
     validate_hashes(openclaw_dir, status, errors)
 
+    hashes_checked = [
+        "file_sha256.context_json",
+        "file_sha256.first_read_json",
+        "file_sha256.first_read_markdown",
+        "file_sha256.context_markdown",
+        "file_sha256.knowledge_graph_blueprint_json",
+        "file_sha256.knowledge_graph_blueprint_markdown",
+        "file_sha256.knowledge_graph_nodes",
+        "file_sha256.knowledge_graph_edges",
+        "file_sha256.knowledge_graph_master_index",
+        "file_sha256.knowledge_graph_glossary",
+        "file_sha256.knowledge_graph_marginalia",
+        "file_sha256.bridge_manifest",
+        "completion_report_sha256.completion_report_json",
+        "completion_report_sha256.completion_report_markdown",
+    ]
+
     return {
         "status": "ok" if not errors else "failure",
         "errors": errors,
@@ -370,22 +387,8 @@ def build_result(
         "latest_recommendation_count": len(latest_recommendations),
         "latest_recommendations": latest_recommendations,
         "telegram_saved_count": telegram_saved_count,
-        "hashes_checked": [
-            "file_sha256.context_json",
-            "file_sha256.first_read_json",
-            "file_sha256.first_read_markdown",
-            "file_sha256.context_markdown",
-            "file_sha256.knowledge_graph_blueprint_json",
-            "file_sha256.knowledge_graph_blueprint_markdown",
-            "file_sha256.knowledge_graph_nodes",
-            "file_sha256.knowledge_graph_edges",
-            "file_sha256.knowledge_graph_master_index",
-            "file_sha256.knowledge_graph_glossary",
-            "file_sha256.knowledge_graph_marginalia",
-            "file_sha256.bridge_manifest",
-            "completion_report_sha256.completion_report_json",
-            "completion_report_sha256.completion_report_markdown",
-        ],
+        "hash_checked_count": len(hashes_checked),
+        "hashes_checked": hashes_checked,
         "sensitive_markers_checked": SENSITIVE_MARKERS,
     }
 
@@ -400,6 +403,7 @@ def render_text(result: dict[str, Any]) -> str:
         f"- latest: {result.get('latest_recommendation_date')} rows={result.get('latest_recommendation_count')}",
         f"- market_counts: {json.dumps(result.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}",
         f"- telegram_saved_count: {result.get('telegram_saved_count')}",
+        f"- hash_checked_count: {result.get('hash_checked_count')}",
         "- loaded_files:",
     ]
     for filename in result.get("loaded_files") or []:
