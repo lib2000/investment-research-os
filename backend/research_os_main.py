@@ -11529,6 +11529,49 @@ OPENCLAW_CONSUMER_READ_ORDER = [
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json",
 ]
+OPENCLAW_FILE_HASH_TARGETS = {
+    "first_read_json": "openclaw_first_read.json",
+    "first_read_markdown": "openclaw_first_read.md",
+    "context_json": "investment_research_context.json",
+    "context_markdown": "investment_research_context.md",
+    "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
+    "knowledge_graph_blueprint_markdown": "openclaw_knowledge_graph_blueprint.md",
+    "knowledge_graph_nodes": "openclaw_knowledge_graph_nodes.json",
+    "knowledge_graph_edges": "openclaw_knowledge_graph_edges.json",
+    "knowledge_graph_master_index": "openclaw_knowledge_graph_master_index.md",
+    "knowledge_graph_glossary": "openclaw_knowledge_graph_glossary.md",
+    "knowledge_graph_marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+    "bridge_manifest": "openclaw_bridge_manifest.json",
+}
+OPENCLAW_COMPLETION_HASH_TARGETS = {
+    "completion_report_json": "openclaw_bridge_completion_report.json",
+    "completion_report_markdown": "openclaw_bridge_completion_report.md",
+}
+
+
+def _openclaw_file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _openclaw_hash_mismatches(bridge_dir: Path, status: dict) -> list[str]:
+    mismatches: list[str] = []
+    file_hashes = status.get("file_sha256") if isinstance(status.get("file_sha256"), dict) else {}
+    for key, filename in OPENCLAW_FILE_HASH_TARGETS.items():
+        expected = str(file_hashes.get(key) or "").lower()
+        target = bridge_dir / filename
+        if not expected:
+            mismatches.append(f"file_sha256.{key} missing")
+        elif not target.exists() or expected != _openclaw_file_sha256(target):
+            mismatches.append(f"file_sha256.{key} mismatch")
+    report_hashes = status.get("completion_report_sha256") if isinstance(status.get("completion_report_sha256"), dict) else {}
+    for key, filename in OPENCLAW_COMPLETION_HASH_TARGETS.items():
+        expected = str(report_hashes.get(key) or "").lower()
+        target = bridge_dir / filename
+        if not expected:
+            mismatches.append(f"completion_report_sha256.{key} missing")
+        elif not target.exists() or expected != _openclaw_file_sha256(target):
+            mismatches.append(f"completion_report_sha256.{key} mismatch")
+    return mismatches
 
 
 def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
@@ -11613,6 +11656,8 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         consumer_smoke_errors.append(f"first_read rows {len(first_read_rows)} != {len(latest_recommendations)}")
     if bridge_status.get("context_generated_at") != context.get("generated_at"):
         consumer_smoke_errors.append("context_generated_at mismatch")
+    hash_mismatches = _openclaw_hash_mismatches(bridge_dir, bridge_status)
+    consumer_smoke_errors.extend(hash_mismatches[:3])
 
     copied_at = bridge_status.get("copied_at")
     age_hours = None
@@ -11631,6 +11676,9 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
             "completion_status": completion.get("status"),
             "consumer_smoke_status": "ok" if not consumer_smoke_errors else "warning",
             "consumer_smoke_errors": consumer_smoke_errors,
+            "hash_status": "ok" if not hash_mismatches else "warning",
+            "hash_checked_count": len(OPENCLAW_FILE_HASH_TARGETS) + len(OPENCLAW_COMPLETION_HASH_TARGETS),
+            "hash_mismatches": hash_mismatches,
             "source_git": {
                 "branch": bridge_status.get("source_git_branch"),
                 "commit": bridge_status.get("source_git_commit"),

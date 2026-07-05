@@ -18597,6 +18597,14 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 json.dumps({"status": "ok"}, ensure_ascii=False),
                 encoding="utf-8",
             )
+            file_hashes = {
+                key: main._openclaw_file_sha256(openclaw_dir / filename)
+                for key, filename in main.OPENCLAW_FILE_HASH_TARGETS.items()
+            }
+            completion_hashes = {
+                key: main._openclaw_file_sha256(openclaw_dir / filename)
+                for key, filename in main.OPENCLAW_COMPLETION_HASH_TARGETS.items()
+            }
             (openclaw_dir / "bridge_status.json").write_text(
                 json.dumps(
                     {
@@ -18608,7 +18616,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_dirty": False,
                         "secrets_excluded": True,
                         "read_order": read_order,
-                        "completion_report_sha256": {},
+                        "file_sha256": file_hashes,
+                        "completion_report_sha256": completion_hashes,
                         "operational_commands": {
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                         },
@@ -18619,13 +18628,19 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             )
 
             status = main.build_openclaw_console_status(openclaw_dir)
+            (openclaw_dir / "openclaw_first_read.md").write_text("# changed\n", encoding="utf-8")
+            hash_mismatch = main.build_openclaw_console_status(openclaw_dir)
 
         self.assertEqual("ok", status["status"])
         self.assertEqual("ok", status["first_read_status"])
+        self.assertEqual("ok", status["hash_status"])
+        self.assertEqual(14, status["hash_checked_count"])
         self.assertEqual(2, status["first_read"]["latest_recommendation_count"])
         self.assertTrue(status["first_read"]["read_this_first"])
         self.assertEqual(read_order, status["read_order"])
         self.assertEqual([], status["consumer_smoke_errors"])
+        self.assertEqual("warning", hash_mismatch["hash_status"])
+        self.assertTrue(any("first_read_markdown mismatch" in error for error in hash_mismatch["hash_mismatches"]))
 
     def test_openclaw_consumer_smoke_reads_bundle_in_consumer_order(self):
         tool = load_openclaw_consumer_smoke_tool()

@@ -970,7 +970,7 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
   const counts = status.latest_market_counts || {};
   const firstRead = status.first_read || {};
   const errors = Array.isArray(status.consumer_smoke_errors) ? status.consumer_smoke_errors : [];
-  const hashCount = Object.keys(status.completion_report_sha256 || {}).length;
+  const hashCount = Number(status.hash_checked_count || Object.keys(status.completion_report_sha256 || {}).length);
   const warningText = errors.length
     ? errors.slice(0, 3).join(" · ")
     : "first-read 패킷, read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
@@ -985,7 +985,7 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
         <b>KR ${escapeHtml(formatNumber(counts.KR || 0))} / US ${escapeHtml(formatNumber(counts.US || 0))}</b>
         <b>Smoke ${escapeHtml(status.consumer_smoke_status || "미확인")}</b>
         <b>감사 ${escapeHtml(status.completion_status || "미확인")}</b>
-        <b>해시 ${escapeHtml(formatNumber(hashCount))}개</b>
+        <b>해시 ${escapeHtml(status.hash_status || "미확인")} · ${escapeHtml(formatNumber(hashCount))}개</b>
         <b>민감정보 ${status.secrets_excluded ? "제외" : "확인 필요"}</b>
       </div>
       <p>${escapeHtml(warningText)}</p>

@@ -166,6 +166,7 @@ REQUIRED_JS_SNIPPETS = {
     "openclaw_status_label": "openClawStatusLabel",
     "openclaw_status_first_read": "first-read 패킷",
     "openclaw_status_first_read_metric": "첫확인 ${escapeHtml(status.first_read_status",
+    "openclaw_status_hash_status": "해시 ${escapeHtml(status.hash_status",
     "daily_recommendation_top_panel_status_text": "매일 ${schedule} 자동 실행",
     "daily_recommendation_rank_card_class": "daily-recommendation-rank-card",
     "daily_recommendation_rank_trigger": "daily-recommendation-rank-trigger",
