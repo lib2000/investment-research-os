@@ -107,9 +107,20 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         read_scheduled_task(args.task_name),
         state_file=state_file,
         max_state_age_hours=args.max_state_age_hours,
-        require_state_fresh=True,
+        require_state_fresh=False,
         expected_time="07:00",
     )
+    if not status.get("never_run"):
+        if not status.get("state_file_exists"):
+            status["errors"].append("portfolio report alert state file is missing")
+        elif (
+            status.get("state_file_age_hours") is not None
+            and float(status.get("state_file_age_hours") or 0) > float(args.max_state_age_hours)
+        ):
+            status["errors"].append(
+                f"portfolio report alert state file is stale: {float(status.get('state_file_age_hours') or 0):.1f}h"
+            )
+        status["status"] = "error" if status.get("errors") else "ok"
     bot_token, bot_token_source = default_bot_token()
     chat_id, chat_id_source = default_chat_id()
     effective_chat_id = args.chat_id if args.chat_id is not None else chat_id

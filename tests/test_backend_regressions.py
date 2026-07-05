@@ -4514,6 +4514,59 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
         self.assertEqual(result["payload"]["message_count"], 0)
         delivery.assert_called_once()
 
+    def test_postrun_stays_quiet_before_first_run_when_main_task_is_pending(self):
+        tool = load_portfolio_report_alert_postrun_tool()
+        pending_task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+            "Execute": "powershell.exe",
+            "Arguments": (
+                "-NoProfile -ExecutionPolicy Bypass -File "
+                '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
+                "-WriteState -Enabled -Submit"
+            ),
+            "LastRunTime": "1999-11-30T00:00:00+09:00",
+            "LastTaskResult": 267011,
+            "NextRunTime": "2026-07-06T07:00:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:00:00+09:00",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            args = SimpleNamespace(
+                task_name="InvestmentJournalApp OpenClaw Portfolio Report Alert",
+                state_file=temp_path / "portfolio_report_alert_state.json",
+                monitor_state_file=temp_path / "postrun_state.json",
+                max_state_age_hours=2,
+                chat_id="987654321",
+                enabled=True,
+                submit=False,
+                notify_ok=False,
+                repeat=False,
+                write_state=False,
+                api_base_url="https://api.telegram.org",
+                timeout_seconds=10,
+            )
+            with patch.object(tool, "read_scheduled_task", return_value=pending_task), patch.dict(
+                tool.evaluate_task_status.__globals__,
+                {"telegram_env_status": lambda: {"token_configured": True, "chat_id_configured": True}},
+            ), patch.object(tool, "default_bot_token", return_value=("token-secret", "TELEGRAM_BOT_TOKEN")), patch.object(
+                tool, "default_chat_id", return_value=("12345", "TELEGRAM_CHAT_ID")
+            ), patch.object(
+                tool,
+                "execute_telegram_delivery",
+                return_value={"status": "success", "applied_send_count": 0, "updated_state": {"sent_messages": []}},
+            ) as delivery:
+                result = tool.build_result(args)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["errors"], [])
+        self.assertTrue(result["task_status"]["never_run"])
+        self.assertFalse(result["payload"]["should_send"])
+        self.assertEqual(result["payload"]["message_count"], 0)
+        delivery.assert_called_once()
+
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
     def test_check_tool_sample_mode_returns_candidates(self):
