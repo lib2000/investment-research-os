@@ -22,6 +22,7 @@ CHECK_MODULES = {
     "answer_samples": PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py",
     "actual_answer_audit": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py",
     "answer_capture_cycle": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_cycle.py",
+    "answer_capture_task": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_task_status.py",
     "actual_answer_capture_status": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_capture_status.py",
 }
 
@@ -248,6 +249,36 @@ def check_answer_capture_cycle(openclaw_dir: Path) -> dict[str, Any]:
     }
 
 
+def check_answer_capture_task(project_root: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_answer_capture_task_status", CHECK_MODULES["answer_capture_task"])
+    state_file = project_root / "research_vault" / "_system" / "openclaw_answer_capture_cycle_state.json"
+    try:
+        result = module.evaluate_task_status(
+            module.read_scheduled_task(module.DEFAULT_TASK_NAME),
+            state_file=state_file,
+            max_state_age_hours=24.0,
+            require_state_fresh=False,
+        )
+    except (AssertionError, OSError, ValueError) as exc:
+        return {"label": "answer_capture_task", "status": "failure", "errors": [str(exc)], "summary": {}}
+    task = result.get("task") or {}
+    return {
+        "label": "answer_capture_task",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "task_name": task.get("TaskName"),
+            "next_run": task.get("NextRunTime"),
+            "last_run": task.get("LastRunTime"),
+            "last_result": task.get("LastTaskResult"),
+            "repetition_interval": task.get("RepetitionInterval"),
+            "state_file_exists": result.get("state_file_exists"),
+            "state_file_age_hours": result.get("state_file_age_hours"),
+            "warnings": result.get("warnings") or [],
+        },
+    }
+
+
 def check_actual_answer_capture_status(openclaw_dir: Path) -> dict[str, Any]:
     module = load_tool(
         "check_openclaw_actual_answer_capture_status",
@@ -294,6 +325,7 @@ def build_result(
         lambda: check_answer_samples(openclaw_dir),
         lambda: check_actual_answer_audit(openclaw_dir),
         lambda: check_answer_capture_cycle(openclaw_dir),
+        lambda: check_answer_capture_task(project_root),
         lambda: check_actual_answer_capture_status(openclaw_dir),
     ):
         try:
