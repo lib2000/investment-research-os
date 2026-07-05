@@ -281,6 +281,8 @@ def build_result(
         "hashes_checked": [
             "file_sha256.context_json",
             "file_sha256.context_markdown",
+            "file_sha256.knowledge_graph_blueprint_json",
+            "file_sha256.knowledge_graph_blueprint_markdown",
             "file_sha256.bridge_manifest",
             "completion_report_sha256.completion_report_json",
             "completion_report_sha256.completion_report_markdown",
