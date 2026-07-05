@@ -10,6 +10,14 @@ python tools\create_firecrawl_monitor_env_template.py --output tmp\firecrawl-mon
 
 The tool does not overwrite an existing file unless `--force` is passed. Fill `FIRECRAWL_API_KEY` and `FIRECRAWL_MONITOR_WEBHOOK_SECRET` manually after creation. Before final create readiness, also add a public `webhook.url` to each monitor registry entry that should feed the InvestmentJournalApp webhook endpoint.
 
+The production webhook path is:
+
+```text
+https://<public-investment-app-host>/api/v1/public-ir-sec/firecrawl-monitor/webhook
+```
+
+Send the secret with either `X-Firecrawl-Webhook-Secret: <FIRECRAWL_MONITOR_WEBHOOK_SECRET>`, `X-Webhook-Secret: <FIRECRAWL_MONITOR_WEBHOOK_SECRET>`, or `Authorization: Bearer <FIRECRAWL_MONITOR_WEBHOOK_SECRET>`. The preflight command below verifies that mismatched secrets are rejected and valid secrets are accepted before any real monitor creation is allowed.
+
 ## 2. Validate Registry And Webhook
 
 ```powershell

@@ -7013,6 +7013,9 @@ class CompanyIrSourcesWatchTests(unittest.TestCase):
         self.assertIn("FIRECRAWL_MONITOR_DRY_RUN=true", content)
         self.assertIn("FIRECRAWL_API_KEY=replace-with-firecrawl-api-key", content)
         self.assertIn("FIRECRAWL_MONITOR_WEBHOOK_SECRET=replace-with-long-random-webhook-secret", content)
+        self.assertIn("/api/v1/public-ir-sec/firecrawl-monitor/webhook", content)
+        self.assertIn("X-Firecrawl-Webhook-Secret", content)
+        self.assertIn("Authorization: Bearer <secret>", content)
         self.assertIn("FIRECRAWL_MONITOR_SOURCES_JSON=", content)
 
     def test_firecrawl_monitor_env_template_does_not_overwrite_existing_file(self):

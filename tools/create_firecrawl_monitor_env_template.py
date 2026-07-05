@@ -39,6 +39,11 @@ def build_env_template(registry_json: str) -> str:
         f"""\
         # Firecrawl Monitor local secret env.
         # Keep this file out of git. Fill placeholders manually before operational preflight.
+        # Public webhook path:
+        # https://<public-investment-app-host>/api/v1/public-ir-sec/firecrawl-monitor/webhook
+        # Configure Firecrawl to send one of these secret headers:
+        # X-Firecrawl-Webhook-Secret, X-Webhook-Secret, or Authorization: Bearer <secret>.
+        # Add a webhook.url to each monitor entry before --require-monitor-webhook / --require-create-ready.
         FIRECRAWL_MONITOR_ENABLED=false
         FIRECRAWL_MONITOR_DRY_RUN=true
         FIRECRAWL_API_KEY={PLACEHOLDER_API_KEY}
