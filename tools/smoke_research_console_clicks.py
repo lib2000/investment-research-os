@@ -411,6 +411,7 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("naverStatusShowsTaskLog", "네이버 리서치 상태 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
             ("naverStatusShowsKoreanTaskLog", "네이버 리서치 상태 화면의 작업 로그 한글 제목이 정상 표시되지 않았습니다."),
             ("naverStatusShowsJournalSource", "시장일지 화면 연결 요약에 자동/수동 입력 구분이 표시되지 않았습니다."),
+            ("naverStatusUsesCompactDebug", "네이버 리서치 상태 화면에 recent_entries 원본 JSON이 과도하게 표시됩니다."),
             ("naverMarketJournalShowsDigest", "시황 시장일지 반영 화면에 시장일지 연결 요약이 표시되지 않았습니다."),
             ("naverMarketJournalShowsTaskLog", "시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
         ]
@@ -799,9 +800,26 @@ def run_click_smoke(
                       throw new Error(`${{label}} API fallback failed: ${{response.status}}`);
                     }}
                     const payload = await response.json();
-                    const jsonText = JSON.stringify(payload);
-                    const cacheCount = Number(payload.cache_count || payload.total_count || payload.total_cache_count || 0);
-                    const duplicateCount = Number(payload.duplicate_journal_candidate_count || payload.duplicate_count || 0);
+                    const cacheCount = Number(payload.entry_count || payload.cache_count || payload.total_count || payload.total_cache_count || 0);
+                    const duplicateCount = Number(
+                      payload.duplicate_archive?.duplicate_candidate_count ||
+                      payload.duplicate_journal_candidate_count ||
+                      payload.duplicate_count ||
+                      0
+                    );
+                    const compactPayload = {{
+                      status: payload.status || "unknown",
+                      module: payload.module || "naver_research_ingest",
+                      entry_count: cacheCount,
+                      pdf_import_failure_count: payload.pdf_import_failure_count || 0,
+                      pdf_extraction_counts: payload.pdf_extraction_counts || {{}},
+                      duplicate_archive: {{
+                        policy: payload.duplicate_archive?.policy || "soft_archive",
+                        duplicate_candidate_count: duplicateCount,
+                      }},
+                      market_close_journal: payload.market_close_journal || {{}},
+                    }};
+                    const jsonText = JSON.stringify(compactPayload);
                     const hasMarketJournal = jsonText.includes("market_close") || jsonText.includes("시장일지") || jsonText.includes("journal");
                     if (!jsonText.includes("naver") && cacheCount <= 0) {{
                       throw new Error(`${{label}} API fallback did not include Naver cache status`);
@@ -815,7 +833,7 @@ def run_click_smoke(
                       "국내 주식 마감 시황",
                       `시장일지 화면 연결: ${{hasMarketJournal ? "확인" : "상태 확인"}}`,
                       "입력 구분:",
-                      jsonText.slice(0, 4000),
+                      jsonText,
                     ].join("\\n");
                   }};
                   const dailyRecommendationApiFallback = async (label) => {{
@@ -1844,6 +1862,9 @@ def run_click_smoke(
                       naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                       naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
                       naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
+                      naverStatusUsesCompactDebug:
+                        naverStatusText.includes("pdf_import_failure_count") &&
+                        !naverStatusText.includes("recent_entries"),
                       naverRepairShowsSoftArchive:
                         naverRepairText.includes("soft_archive") ||
                         naverRepairText.includes("소프트 보관") ||
@@ -2214,6 +2235,9 @@ def run_click_smoke(
                     naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                     naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
                     naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
+                    naverStatusUsesCompactDebug:
+                      naverStatusText.includes("pdf_import_failure_count") &&
+                      !naverStatusText.includes("recent_entries"),
                     researchAutomationShowsSourceQuality:
                       researchAutomationStatusText.includes("수집 품질 대시보드") &&
                       researchAutomationStatusText.includes("저작권:") &&

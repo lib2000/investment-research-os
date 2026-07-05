@@ -3464,6 +3464,26 @@ def repair_naver_research_cache(
     }
 
 
+def compact_naver_research_status_entry(entry: dict) -> dict:
+    pdf_analysis = entry.get("pdf_analysis") if isinstance(entry.get("pdf_analysis"), dict) else {}
+    priority = entry.get("priority") if isinstance(entry.get("priority"), dict) else {}
+    storage = entry.get("storage") if isinstance(entry.get("storage"), dict) else {}
+    return {
+        "item_id": entry.get("item_id"),
+        "category": entry.get("category"),
+        "scope": entry.get("scope"),
+        "title": entry.get("title"),
+        "broker": entry.get("broker"),
+        "published_at": entry.get("published_at"),
+        "ticker": entry.get("ticker"),
+        "company_name": entry.get("company_name"),
+        "priority_score": priority.get("score") or 0,
+        "pdf_status": pdf_analysis.get("status") or "unknown",
+        "pdf_note": pdf_analysis.get("note"),
+        "storage_relative_path": storage.get("relative_path") or naver_research_storage_relative_path(entry),
+    }
+
+
 def naver_market_close_duplicate_key(entry: dict, payload: dict) -> tuple[str, str, str]:
     return naver_market_close_automation.naver_market_close_duplicate_key(
         _naver_market_close_automation_runtime(),
@@ -12456,7 +12476,12 @@ def get_shinhan_research_status(settings: Settings = Depends(get_settings)) -> d
         entries.values(),
         key=lambda item: str(item.get("ingested_at") or item.get("published_at") or ""),
         reverse=True,
-    )[:20]
+    )[:10]
+    compact_recent_entries = [
+        compact_naver_research_status_entry(entry)
+        for entry in recent_entries
+        if isinstance(entry, dict)
+    ]
     return {
         "status": "success",
         "module": "shinhan_research_ingest",
@@ -12505,7 +12530,12 @@ def get_naver_research_status(settings: Settings = Depends(get_settings)) -> dic
         entries.values(),
         key=lambda item: str(item.get("ingested_at") or item.get("published_at") or ""),
         reverse=True,
-    )[:20]
+    )[:10]
+    compact_recent_entries = [
+        compact_naver_research_status_entry(entry)
+        for entry in recent_entries
+        if isinstance(entry, dict)
+    ]
     return {
         "status": "success",
         "module": "naver_research_ingest",
@@ -12534,7 +12564,7 @@ def get_naver_research_status(settings: Settings = Depends(get_settings)) -> dic
             "source_title": market_journal_state.get("source_title"),
             "source_published_at": market_journal_state.get("source_published_at"),
         },
-        "recent_entries": recent_entries,
+        "recent_entries": compact_recent_entries,
         "cache_path": str(naver_research_cache_path(settings)),
     }
 

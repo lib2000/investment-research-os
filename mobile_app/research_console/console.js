@@ -14629,6 +14629,30 @@ function renderNaverResearchStatusText(result) {
   ].join("\n");
 }
 
+function naverResearchStatusDebugPayload(result) {
+  if (!result) {
+    return null;
+  }
+  return {
+    status: result.status || "unknown",
+    module: result.module || "naver_research_ingest",
+    updated_at: result.updated_at || null,
+    entry_count: result.entry_count || 0,
+    active_rag_count: result.active_rag_count || 0,
+    stored_file_count: result.stored_file_count || 0,
+    missing_storage_count: result.missing_storage_count || 0,
+    pdf_import_failure_count: result.pdf_import_failure_count || 0,
+    pdf_extraction_counts: result.pdf_extraction_counts || {},
+    priority_counts: result.priority_counts || {},
+    duplicate_archive: {
+      policy: result.duplicate_archive?.policy || "soft_archive",
+      duplicate_candidate_count: result.duplicate_archive?.duplicate_candidate_count || 0,
+    },
+    market_close_journal: result.market_close_journal || {},
+    cache_path: result.cache_path || null,
+  };
+}
+
 function renderMarketCloseJournalDigest(result) {
   const entries = Array.isArray(result?.entries) ? result.entries : [];
   const latest = entries
@@ -14835,7 +14859,7 @@ elements.naverResearchStatusButton?.addEventListener("click", async () => {
       taskText,
       journalText,
       errors.length ? `## 지연/오류\n\n${errors.map((item) => `- ${item}`).join("\n")}` : "",
-      result ? `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`` : "",
+      result ? `\`\`\`json\n${JSON.stringify(naverResearchStatusDebugPayload(result), null, 2)}\n\`\`\`` : "",
     ].filter(Boolean).join("\n\n")
   );
 });

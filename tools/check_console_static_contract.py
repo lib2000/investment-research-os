@@ -219,6 +219,7 @@ REQUIRED_JS_SNIPPETS = {
     "recent_weekly_recommendation_linked_section": "추천 근거 연결 자료",
     "recent_weekly_latest_recommendation_linked_section": "오늘 추천 근거 연결 자료",
     "naver_pdf_import_failure_status": "PDF 런타임 실패 메모:",
+    "naver_research_compact_debug_payload": "naverResearchStatusDebugPayload",
     "recent_weekly_historical_recommendation_linked_section": "추천 이력 근거 연결 자료",
     "recent_weekly_latest_recommendation_linked_count": "오늘 추천 직접 연결",
     "recent_weekly_recommendation_link_badge": "추천근거 최신",

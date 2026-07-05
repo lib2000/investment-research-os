@@ -8040,6 +8040,31 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(status["pdf_import_failure_count"], 1)
         self.assertEqual(status["pdf_extraction_counts"]["no_text"], 2)
 
+    def test_naver_research_status_entry_compacts_pdf_payload(self):
+        import research_os_main as main
+
+        compact = main.compact_naver_research_status_entry(
+            {
+                "item_id": "a1",
+                "title": "리포트",
+                "published_at": "2026-07-06",
+                "pdf_analysis": {
+                    "status": "success",
+                    "note": "PDF 본문 텍스트 추출 완료",
+                    "snippets": ["긴 본문"],
+                    "text_char_count": 10000,
+                },
+                "summary": "긴 요약",
+                "storage": {"relative_path": "research_vault/TEST/report.md"},
+            }
+        )
+
+        self.assertEqual(compact["pdf_status"], "success")
+        self.assertEqual(compact["storage_relative_path"], "research_vault/TEST/report.md")
+        self.assertNotIn("pdf_analysis", compact)
+        self.assertNotIn("snippets", json.dumps(compact, ensure_ascii=False))
+        self.assertNotIn("긴 요약", json.dumps(compact, ensure_ascii=False))
+
     def test_research_source_store_summarizes_market_journal_markets(self):
         from tools import check_research_source_store
 
