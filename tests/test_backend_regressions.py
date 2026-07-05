@@ -18469,6 +18469,24 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 json.dumps({"status": "ok"}, ensure_ascii=False),
                 encoding="utf-8",
             )
+            file_hashes = {
+                "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
+                "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
+                "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
+                "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
+                "knowledge_graph_blueprint_markdown": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.md"),
+                "knowledge_graph_nodes": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_nodes.json"),
+                "knowledge_graph_edges": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_edges.json"),
+                "knowledge_graph_master_index": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_master_index.md"),
+                "knowledge_graph_glossary": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_glossary.md"),
+                "knowledge_graph_marginalia": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md"),
+                "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
+            }
+            completion_hashes = {
+                "completion_report_json": tool.sha256_hex(openclaw_dir / "openclaw_bridge_completion_report.json"),
+                "completion_report_markdown": tool.sha256_hex(openclaw_dir / "openclaw_bridge_completion_report.md"),
+            }
             (openclaw_dir / "bridge_status.json").write_text(
                 json.dumps(
                     {
@@ -18479,7 +18497,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_commit": "abc1234",
                         "source_git_dirty": False,
                         "read_order": read_order,
-                        "completion_report_sha256": {},
+                        "file_sha256": file_hashes,
+                        "completion_report_sha256": completion_hashes,
                         "operational_commands": {
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -18499,22 +18518,32 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 encoding="utf-8",
             )
             mismatch_summary = tool.build_status_summary(openclaw_dir)
+            (openclaw_dir / "openclaw_first_read.md").write_text("# changed\n", encoding="utf-8")
+            hash_mismatch_summary = tool.build_status_summary(openclaw_dir)
 
         self.assertEqual("ok", summary["status"])
         self.assertEqual("abc1234", summary["source_git"]["commit"])
         self.assertEqual(2, summary["first_read"]["latest_recommendation_count"])
+        self.assertEqual("ok", summary["hash_status"])
+        self.assertEqual(14, summary["hash_checked_count"])
+        self.assertEqual([], summary["hash_mismatches"])
         self.assertIsInstance(summary["context_age_hours"], float)
         self.assertEqual({"KR": 1, "US": 1}, summary["latest_market_counts"])
         self.assertEqual("한국1", summary["latest_recommendations"][0]["company_name"])
         self.assertEqual("미국1", summary["latest_recommendations"][1]["company_name"])
         self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
         self.assertIn("first_read: rows=2", rendered)
+        self.assertIn("hashes: ok checked=14", rendered)
         self.assertIn("context_age_hours:", rendered)
         self.assertIn('latest_market_counts: {"KR":1,"US":1}', rendered)
         self.assertIn("KR#1 001 한국1 score=99", rendered)
         self.assertIn("US#1 AAA 미국1 score=98", rendered)
         self.assertEqual("failure", mismatch_summary["status"])
         self.assertIn("latest_recommendations count mismatch", mismatch_summary["errors"][0])
+        self.assertEqual("failure", hash_mismatch_summary["hash_status"])
+        self.assertTrue(
+            any("file_sha256.first_read_markdown mismatch" in error for error in hash_mismatch_summary["hash_mismatches"])
+        )
 
     def test_openclaw_console_status_surfaces_first_read_packet(self):
         import research_os_main as main

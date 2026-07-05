@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,24 @@ EXPECTED_READ_ORDER = [
     "openclaw_bridge_completion_report.md",
     "openclaw_bridge_completion_report.json",
 ]
+FILE_HASH_TARGETS = {
+    "first_read_json": "openclaw_first_read.json",
+    "first_read_markdown": "openclaw_first_read.md",
+    "context_json": "investment_research_context.json",
+    "context_markdown": "investment_research_context.md",
+    "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
+    "knowledge_graph_blueprint_markdown": "openclaw_knowledge_graph_blueprint.md",
+    "knowledge_graph_nodes": "openclaw_knowledge_graph_nodes.json",
+    "knowledge_graph_edges": "openclaw_knowledge_graph_edges.json",
+    "knowledge_graph_master_index": "openclaw_knowledge_graph_master_index.md",
+    "knowledge_graph_glossary": "openclaw_knowledge_graph_glossary.md",
+    "knowledge_graph_marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
+    "bridge_manifest": "openclaw_bridge_manifest.json",
+}
+COMPLETION_HASH_TARGETS = {
+    "completion_report_json": "openclaw_bridge_completion_report.json",
+    "completion_report_markdown": "openclaw_bridge_completion_report.md",
+}
 
 
 def summarize_latest_recommendations(rows: list[dict]) -> list[dict]:
@@ -59,6 +78,32 @@ def load_json(path: Path) -> dict:
     if not isinstance(payload, dict):
         raise AssertionError(f"JSON root must be an object: {path}")
     return payload
+
+
+def sha256_hex(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def hash_mismatches(openclaw_dir: Path, status: dict) -> list[str]:
+    mismatches: list[str] = []
+    file_hashes = status.get("file_sha256") if isinstance(status.get("file_sha256"), dict) else {}
+    for key, filename in FILE_HASH_TARGETS.items():
+        expected = str(file_hashes.get(key) or "").lower()
+        actual_path = openclaw_dir / filename
+        if not expected:
+            mismatches.append(f"file_sha256.{key} missing")
+        elif not actual_path.exists() or expected != sha256_hex(actual_path):
+            mismatches.append(f"file_sha256.{key} mismatch")
+
+    report_hashes = status.get("completion_report_sha256") if isinstance(status.get("completion_report_sha256"), dict) else {}
+    for key, filename in COMPLETION_HASH_TARGETS.items():
+        expected = str(report_hashes.get(key) or "").lower()
+        actual_path = openclaw_dir / filename
+        if not expected:
+            mismatches.append(f"completion_report_sha256.{key} missing")
+        elif not actual_path.exists() or expected != sha256_hex(actual_path):
+            mismatches.append(f"completion_report_sha256.{key} mismatch")
+    return mismatches
 
 
 def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
@@ -120,10 +165,15 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     first_read_rows = first_read.get("latest_recommendations") if isinstance(first_read.get("latest_recommendations"), list) else []
     if len(first_read_rows) != len(latest_recommendations):
         errors.append(f"first_read recommendations count mismatch: {len(first_read_rows)} != {len(latest_recommendations)}")
+    hash_errors = hash_mismatches(openclaw_dir, status)
+    errors.extend(hash_errors)
     return {
         "status": "ok" if not errors else "failure",
         "errors": errors,
         "openclaw_dir": str(openclaw_dir),
+        "hash_status": "ok" if not hash_errors else "failure",
+        "hash_checked_count": len(FILE_HASH_TARGETS) + len(COMPLETION_HASH_TARGETS),
+        "hash_mismatches": hash_errors,
         "source_git": {
             "branch": status.get("source_git_branch"),
             "commit": status.get("source_git_commit"),
@@ -163,6 +213,7 @@ def render_text(summary: dict) -> str:
         f"- context_generated_at: {summary.get('context_generated_at')}",
         f"- context_age_hours: {summary.get('context_age_hours')}",
         f"- first_read: rows={(summary.get('first_read') or {}).get('latest_recommendation_count')} generated_at={(summary.get('first_read') or {}).get('generated_at')}",
+        f"- hashes: {summary.get('hash_status')} checked={summary.get('hash_checked_count')}",
         f"- latest_recommendation_date: {summary.get('latest_recommendation_date')}",
         f"- latest_market_counts: {market_counts}",
         f"- telegram_saved_count: {summary.get('telegram_saved_count')}",
