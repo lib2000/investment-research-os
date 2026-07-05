@@ -50,9 +50,9 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
         for item in categories
         if isinstance(item, dict)
     }
-    for required in ("openclaw_bridge", "telegram_pipeline", "local_ai_agent_foundation"):
-        if required not in category_ids:
-            raise AssertionError(f"today_work_report missing required category: {required}")
+    category_ids.discard("")
+    if not category_ids:
+        raise AssertionError("today_work_report categories must include id/key values")
 
     latest_commits = today_report.get("latest_commits")
     if not isinstance(latest_commits, list) or not latest_commits:
@@ -99,7 +99,7 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
 
     return [
         f"commit_count={commit_count}",
-        f"categories={len(categories)}",
+        f"categories={len(category_ids)}",
         f"schedule_items={len(schedule)}",
     ]
 

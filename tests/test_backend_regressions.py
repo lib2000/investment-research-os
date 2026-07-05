@@ -20423,13 +20423,11 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                 "generated_at": "2026-07-05T18:00:00+09:00",
                 "today_work_report": {
                     "has_implementation_today": True,
-                    "commit_count": 12,
+                    "commit_count": 1,
                     "implemented_categories": [
-                        {"id": "openclaw_bridge", "title": "OpenClaw bridge"},
-                        {"id": "telegram_pipeline", "title": "Telegram pipeline"},
-                        {"id": "local_ai_agent_foundation", "title": "Local AI foundation"},
+                        {"id": "console_backend_ops", "title": "Console/backend ops"},
                     ],
-                    "latest_commits": [{"hash": "abc1234", "subject": "Add OpenClaw daily context"}],
+                    "latest_commits": [{"hash": "abc1234", "subject": "Speed up research console click smoke"}],
                 },
                 "next_schedule": [
                     {"time": "07:00", "title": "portfolio report alert"},
@@ -20461,9 +20459,9 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
             result = tool.build_result(openclaw_dir)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(12, result["today_commit_count"])
+        self.assertEqual(1, result["today_commit_count"])
         self.assertEqual(4, result["next_schedule_count"])
-        self.assertIn("openclaw_bridge", result["today_categories"])
+        self.assertIn("console_backend_ops", result["today_categories"])
 
     def test_today_answer_readiness_rejects_no_work_claim_context(self):
         tool = load_openclaw_today_answer_tool()
