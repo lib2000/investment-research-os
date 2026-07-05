@@ -354,6 +354,18 @@ def load_portfolio_report_alert_check_tool():
     return module
 
 
+def load_portfolio_report_alert_task_status_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_portfolio_report_alert_task_status.py"
+    spec = spec_from_file_location("check_portfolio_report_alert_task_status", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_favorite_posts_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -896,6 +908,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["Telegram 보유 종목 리포트 알림 dry-run"],
             ["tools/check_portfolio_report_alert.py", "--json"],
+        )
+        self.assertIn("Telegram 보유 종목 리포트 예약작업", checks)
+        self.assertEqual(
+            checks["Telegram 보유 종목 리포트 예약작업"],
+            ["tools/check_portfolio_report_alert_task_status.py", "--json"],
         )
 
     def test_offline_readiness_checks_openclaw_investment_bridge(self):
@@ -3774,6 +3791,84 @@ class PortfolioReportAlertTests(unittest.TestCase):
         self.assertEqual(plan["protected_message_count"], 1)
         self.assertEqual(plan["delete_candidate_count"], 1)
         self.assertEqual(plan["protected_messages"][0]["category"], "portfolio_report_alert")
+
+
+class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
+    def test_task_status_allows_registered_task_before_first_run(self):
+        tool = load_portfolio_report_alert_task_status_tool()
+        task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+            "Execute": "powershell.exe",
+            "Arguments": (
+                "-NoProfile -ExecutionPolicy Bypass -File "
+                '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
+                '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
+                "-WriteState -Enabled -Submit"
+            ),
+            "LastRunTime": "1999-11-30T00:00:00+09:00",
+            "LastTaskResult": 267011,
+            "NextRunTime": "2026-07-06T07:00:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:00:00+09:00",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "portfolio_report_alert_state.json"
+            with patch.object(
+                tool,
+                "telegram_env_status",
+                return_value={"token_configured": True, "chat_id_configured": True},
+            ):
+                result = tool.evaluate_task_status(
+                    task,
+                    state_file=state_file,
+                    max_state_age_hours=36,
+                    require_state_fresh=False,
+                    now=datetime(2026, 7, 5, 16, 0, tzinfo=tool.LOCAL_TIMEZONE),
+                )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["never_run"])
+        self.assertIn("scheduled task has not run yet", result["warnings"])
+        self.assertIn("portfolio report alert state file has not been written yet", result["warnings"])
+
+    def test_task_status_fails_when_live_submit_arguments_are_missing(self):
+        tool = load_portfolio_report_alert_task_status_tool()
+        task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+            "Execute": "powershell.exe",
+            "Arguments": (
+                "-NoProfile -ExecutionPolicy Bypass -File "
+                '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
+                "-ProjectRoot C:\\Users\\lib20\\InvestmentJournalApp -WriteState"
+            ),
+            "LastRunTime": "2026-07-06T07:00:10+09:00",
+            "LastTaskResult": 0,
+            "NextRunTime": "2026-07-07T07:00:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:00:00+09:00",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "portfolio_report_alert_state.json"
+            state_file.write_text("{}", encoding="utf-8")
+            with patch.object(
+                tool,
+                "telegram_env_status",
+                return_value={"token_configured": True, "chat_id_configured": True},
+            ):
+                result = tool.evaluate_task_status(
+                    task,
+                    state_file=state_file,
+                    max_state_age_hours=36,
+                    require_state_fresh=True,
+                    now=datetime(2026, 7, 6, 8, 0, tzinfo=tool.LOCAL_TIMEZONE),
+                )
+
+        self.assertEqual(result["status"], "error")
+        self.assertTrue(any("-Enabled" in error and "-Submit" in error for error in result["errors"]))
 
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):

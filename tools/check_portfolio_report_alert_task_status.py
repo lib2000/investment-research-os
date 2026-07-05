@@ -1,0 +1,270 @@
+"""Check the Windows scheduled task for the 07:00 portfolio report Telegram alert."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_TASK_NAME = "InvestmentJournalApp OpenClaw Portfolio Report Alert"
+DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "portfolio_report_alert_state.json"
+LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
+NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
+SUCCESS_RESULT_CODES = {0, 267009, 267011}
+
+
+def _safe_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    text = _safe_text(value)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=LOCAL_TIMEZONE)
+    return parsed
+
+
+def _age_hours(path: Path, *, now: datetime | None = None) -> float | None:
+    if not path.exists():
+        return None
+    now = now or datetime.now(LOCAL_TIMEZONE)
+    modified = datetime.fromtimestamp(path.stat().st_mtime, tz=LOCAL_TIMEZONE)
+    return max(0.0, (now - modified).total_seconds() / 3600)
+
+
+def _configured_env(name: str) -> dict[str, Any]:
+    current = bool(os.getenv(name, "").strip())
+    user = ""
+    machine = ""
+    try:
+        user = os.getenv(name, "") or ""
+        # Environment.GetEnvironmentVariable is the reliable way to check values
+        # persisted for Windows scheduled tasks without printing secret contents.
+        command = (
+            "[Environment]::GetEnvironmentVariable('{0}', 'User');"
+            "[Environment]::GetEnvironmentVariable('{0}', 'Machine')"
+        ).format(name)
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = [line.strip() for line in (completed.stdout or "").splitlines()]
+        user = lines[0] if len(lines) >= 1 else user
+        machine = lines[1] if len(lines) >= 2 else ""
+    except OSError:
+        pass
+    return {
+        "name": name,
+        "configured": bool(current or user or machine),
+        "current_process": current,
+        "user": bool(user),
+        "machine": bool(machine),
+    }
+
+
+def telegram_env_status() -> dict[str, Any]:
+    token_vars = [
+        "TELEGRAM_REPORT_ALERT_BOT_TOKEN",
+        "MARKET_SIGNAL_GRAPH_TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_BOT_TOKEN",
+    ]
+    chat_vars = [
+        "TELEGRAM_REPORT_ALERT_CHAT_ID",
+        "MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID",
+        "TELEGRAM_CHAT_ID",
+    ]
+    token = [_configured_env(name) for name in token_vars]
+    chat = [_configured_env(name) for name in chat_vars]
+    return {
+        "token_configured": any(item["configured"] for item in token),
+        "chat_id_configured": any(item["configured"] for item in chat),
+        "token_variables": token,
+        "chat_id_variables": chat,
+    }
+
+
+def read_scheduled_task(task_name: str) -> dict[str, Any]:
+    ps = r"""
+$task = Get-ScheduledTask -TaskName $env:PORTFOLIO_REPORT_ALERT_TASK_NAME -ErrorAction Stop
+$info = $task | Get-ScheduledTaskInfo
+[pscustomobject]@{
+  TaskName = $task.TaskName
+  State = "$($task.State)"
+  Execute = $task.Actions[0].Execute
+  Arguments = $task.Actions[0].Arguments
+  LastRunTime = $info.LastRunTime.ToString("o")
+  LastTaskResult = $info.LastTaskResult
+  NextRunTime = $info.NextRunTime.ToString("o")
+  NumberOfMissedRuns = $info.NumberOfMissedRuns
+  Trigger = $task.Triggers[0].StartBoundary
+} | ConvertTo-Json -Depth 4
+"""
+    env = {**os.environ, "PORTFOLIO_REPORT_ALERT_TASK_NAME": task_name}
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", ps],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if completed.returncode != 0:
+        return {
+            "found": False,
+            "returncode": completed.returncode,
+            "error": _safe_text(completed.stderr or completed.stdout),
+        }
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        return {"found": False, "returncode": 1, "error": f"scheduled task JSON parse failed: {exc.msg}"}
+    return {"found": True, **payload}
+
+
+def evaluate_task_status(
+    task: dict[str, Any],
+    *,
+    state_file: Path,
+    max_state_age_hours: float,
+    require_state_fresh: bool,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    now = now or datetime.now(LOCAL_TIMEZONE)
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not task.get("found"):
+        errors.append(_safe_text(task.get("error")) or "portfolio report alert scheduled task not found")
+
+    arguments = _safe_text(task.get("Arguments"))
+    required_args = [
+        "run_openclaw_portfolio_report_alert.ps1",
+        "-WriteState",
+        "-Enabled",
+        "-Submit",
+    ]
+    missing_args = [item for item in required_args if item not in arguments]
+    if missing_args:
+        errors.append("scheduled task missing live alert arguments: " + ", ".join(missing_args))
+
+    trigger = _safe_text(task.get("Trigger") or task.get("NextRunTime"))
+    if "07:00" not in trigger:
+        errors.append("scheduled task is not configured for 07:00")
+
+    next_run = _parse_datetime(task.get("NextRunTime"))
+    if not next_run:
+        errors.append("scheduled task next run time is unavailable")
+    elif next_run < now:
+        warnings.append("scheduled task next run time is in the past")
+    elif (next_run - now).total_seconds() > 48 * 3600:
+        warnings.append("scheduled task next run time is more than 48 hours away")
+
+    last_run_text = _safe_text(task.get("LastRunTime"))
+    never_run = not last_run_text or any(last_run_text.startswith(prefix) for prefix in NEVER_RUN_PREFIXES)
+    last_result = int(task.get("LastTaskResult") or 0)
+    if never_run:
+        warnings.append("scheduled task has not run yet")
+    elif last_result not in SUCCESS_RESULT_CODES:
+        errors.append(f"scheduled task last result is non-success: {last_result}")
+
+    missed = int(task.get("NumberOfMissedRuns") or 0)
+    if missed:
+        errors.append(f"scheduled task missed runs: {missed}")
+
+    env_status = telegram_env_status()
+    if not env_status["token_configured"]:
+        errors.append("Telegram bot token is not configured for scheduled task runtime")
+    if not env_status["chat_id_configured"]:
+        errors.append("Telegram chat id is not configured for scheduled task runtime")
+
+    state_age = _age_hours(state_file, now=now)
+    if state_age is None:
+        warnings.append("portfolio report alert state file has not been written yet")
+        if require_state_fresh:
+            errors.append("portfolio report alert state file is missing")
+    elif state_age > max_state_age_hours:
+        message = f"portfolio report alert state file is stale: {state_age:.1f}h"
+        if require_state_fresh:
+            errors.append(message)
+        else:
+            warnings.append(message)
+
+    return {
+        "status": "error" if errors else "ok",
+        "errors": errors,
+        "warnings": warnings,
+        "task": task,
+        "env": env_status,
+        "state_file": str(state_file),
+        "state_file_exists": state_age is not None,
+        "state_file_age_hours": state_age,
+        "never_run": never_run,
+        "checked_at": now.isoformat(timespec="seconds"),
+    }
+
+
+def render_text(result: dict[str, Any]) -> str:
+    task = result.get("task") if isinstance(result.get("task"), dict) else {}
+    lines = [
+        f"[{result.get('status')}] portfolio_report_alert_task_status_v1",
+        f"- task_name: {task.get('TaskName')}",
+        f"- next_run: {task.get('NextRunTime')}",
+        f"- last_run: {task.get('LastRunTime')}",
+        f"- last_result: {task.get('LastTaskResult')}",
+        f"- token_configured: {((result.get('env') or {}).get('token_configured'))}",
+        f"- chat_id_configured: {((result.get('env') or {}).get('chat_id_configured'))}",
+        f"- state_file_exists: {result.get('state_file_exists')}",
+        f"- state_file_age_hours: {result.get('state_file_age_hours')}",
+    ]
+    for warning in result.get("warnings") or []:
+        lines.append(f"- warning: {warning}")
+    for error in result.get("errors") or []:
+        lines.append(f"- error: {error}")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Check the 07:00 OpenClaw Telegram holding-report scheduled task.")
+    parser.add_argument("--task-name", default=DEFAULT_TASK_NAME)
+    parser.add_argument("--state-file", type=Path, default=DEFAULT_STATE_FILE)
+    parser.add_argument("--max-state-age-hours", type=float, default=36)
+    parser.add_argument("--require-state-fresh", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    state_file = args.state_file if args.state_file.is_absolute() else PROJECT_ROOT / args.state_file
+    result = evaluate_task_status(
+        read_scheduled_task(args.task_name),
+        state_file=state_file,
+        max_state_age_hours=args.max_state_age_hours,
+        require_state_fresh=args.require_state_fresh,
+    )
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(result))
+    return 0 if result["status"] == "ok" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
