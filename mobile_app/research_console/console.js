@@ -939,14 +939,14 @@ function openClawStatusTone(status) {
   if (!status) {
     return "warning";
   }
-  return status.status === "ok" && status.consumer_smoke_status === "ok" ? "ok" : "warning";
+  return status.status === "ok" && status.consumer_smoke_status === "ok" && status.first_read_status !== "warning" ? "ok" : "warning";
 }
 
 function openClawStatusLabel(status) {
   if (!status) {
     return "확인 실패";
   }
-  if (status.status === "ok" && status.consumer_smoke_status === "ok") {
+  if (status.status === "ok" && status.consumer_smoke_status === "ok" && status.first_read_status !== "warning") {
     return "정상";
   }
   if (status.status === "warning") {
@@ -968,11 +968,12 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
   }
   const git = status.source_git || {};
   const counts = status.latest_market_counts || {};
+  const firstRead = status.first_read || {};
   const errors = Array.isArray(status.consumer_smoke_errors) ? status.consumer_smoke_errors : [];
   const hashCount = Object.keys(status.completion_report_sha256 || {}).length;
   const warningText = errors.length
     ? errors.slice(0, 3).join(" · ")
-    : "read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
+    : "first-read 패킷, read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
   return `
     <article class="dashboard-card ${escapeHtml(tone)} openclaw-status-card">
       <span>OpenClaw 연동</span>
@@ -980,6 +981,7 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
       <p>동기화 ${escapeHtml(status.context_generated_at || status.copied_at || "미확인")} · ${escapeHtml(git.branch || "branch?")} ${escapeHtml(git.commit || "commit?")}</p>
       <div class="openclaw-status-metrics" aria-label="OpenClaw 연동 세부 상태">
         <b>추천 ${escapeHtml(formatNumber(status.latest_recommendation_count || 0))}개</b>
+        <b>첫확인 ${escapeHtml(status.first_read_status || "미확인")} · ${escapeHtml(formatNumber(firstRead.latest_recommendation_count || 0))}개</b>
         <b>KR ${escapeHtml(formatNumber(counts.KR || 0))} / US ${escapeHtml(formatNumber(counts.US || 0))}</b>
         <b>Smoke ${escapeHtml(status.consumer_smoke_status || "미확인")}</b>
         <b>감사 ${escapeHtml(status.completion_status || "미확인")}</b>

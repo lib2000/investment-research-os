@@ -11512,6 +11512,25 @@ def _read_openclaw_json(path: Path) -> dict:
     return payload
 
 
+OPENCLAW_CONSUMER_READ_ORDER = [
+    "bridge_status.json",
+    "openclaw_first_read.md",
+    "openclaw_first_read.json",
+    "openclaw_bridge_manifest.json",
+    "investment_research_context.md",
+    "investment_research_context.json",
+    "openclaw_knowledge_graph_blueprint.md",
+    "openclaw_knowledge_graph_blueprint.json",
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
+    "openclaw_knowledge_graph_master_index.md",
+    "openclaw_knowledge_graph_glossary.md",
+    "openclaw_knowledge_graph_marginalia_queue.md",
+    "openclaw_bridge_completion_report.md",
+    "openclaw_bridge_completion_report.json",
+]
+
+
 def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
     bridge_dir = openclaw_dir or (Path.home() / ".openclaw" / "workspace" / "data" / "investment_research")
     result: dict[str, Any] = {
@@ -11521,16 +11540,10 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         "errors": [],
         "warnings": [],
     }
-    expected_read_order = [
-        "bridge_status.json",
-        "openclaw_bridge_manifest.json",
-        "investment_research_context.md",
-        "investment_research_context.json",
-        "openclaw_bridge_completion_report.md",
-        "openclaw_bridge_completion_report.json",
-    ]
+    expected_read_order = OPENCLAW_CONSUMER_READ_ORDER
     try:
         bridge_status = _read_openclaw_json(bridge_dir / "bridge_status.json")
+        first_read = _read_openclaw_json(bridge_dir / "openclaw_first_read.json")
         manifest = _read_openclaw_json(bridge_dir / "openclaw_bridge_manifest.json")
         context = _read_openclaw_json(bridge_dir / "investment_research_context.json")
         completion = _read_openclaw_json(bridge_dir / "openclaw_bridge_completion_report.json")
@@ -11579,10 +11592,25 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         consumer_smoke_errors.append("secrets_excluded=false")
     if read_order != expected_read_order or manifest.get("read_order") != expected_read_order:
         consumer_smoke_errors.append("read_order mismatch")
+    if manifest.get("first_read_file") != "openclaw_first_read.md":
+        consumer_smoke_errors.append("manifest first_read_file mismatch")
+    if manifest.get("first_read_json_file") != "openclaw_first_read.json":
+        consumer_smoke_errors.append("manifest first_read_json_file mismatch")
+    if first_read.get("schema") != "openclaw_investment_research_first_read_v1":
+        consumer_smoke_errors.append("first_read schema mismatch")
+    if first_read.get("generated_at") != context.get("generated_at"):
+        consumer_smoke_errors.append("first_read generated_at mismatch")
+    if first_read.get("read_order") != expected_read_order:
+        consumer_smoke_errors.append("first_read read_order mismatch")
+    if first_read.get("latest_market_counts") != latest_market_counts:
+        consumer_smoke_errors.append("first_read market counts mismatch")
     if any(not present for present in files_present.values()):
         consumer_smoke_errors.append("read_order file missing")
     if len(latest_recommendations) != expected_count:
         consumer_smoke_errors.append(f"latest rows {len(latest_recommendations)} != {expected_count}")
+    first_read_rows = first_read.get("latest_recommendations") if isinstance(first_read.get("latest_recommendations"), list) else []
+    if len(first_read_rows) != len(latest_recommendations):
+        consumer_smoke_errors.append(f"first_read rows {len(first_read_rows)} != {len(latest_recommendations)}")
     if bridge_status.get("context_generated_at") != context.get("generated_at"):
         consumer_smoke_errors.append("context_generated_at mismatch")
 
@@ -11611,6 +11639,17 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
             "copied_at": copied_at,
             "bridge_age_hours": age_hours,
             "context_generated_at": context.get("generated_at"),
+            "first_read_status": "ok" if not any(str(error).startswith("first_read") for error in consumer_smoke_errors) else "warning",
+            "first_read": {
+                "schema": first_read.get("schema"),
+                "generated_at": first_read.get("generated_at"),
+                "read_this_first": first_read.get("read_this_first") is True,
+                "latest_recommendation_date": first_read.get("latest_recommendation_date"),
+                "latest_market_counts": first_read.get("latest_market_counts") or {},
+                "latest_recommendation_count": len(first_read_rows),
+                "markdown_present": files_present.get("openclaw_first_read.md") is True,
+                "json_present": files_present.get("openclaw_first_read.json") is True,
+            },
             "latest_recommendation_date": recommendations.get("latest_recommendation_date"),
             "latest_market_counts": latest_market_counts,
             "latest_recommendation_count": len(latest_recommendations),

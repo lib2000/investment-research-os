@@ -1319,6 +1319,7 @@ class OperationalReadinessToolTests(unittest.TestCase):
                 "source_git": {"branch": "main", "commit": "abc1234", "dirty": False},
                 "context_age_hours": 0.2,
                 "latest_recommendation_date": "2026-07-04",
+                "first_read": {"latest_recommendation_count": 6},
             }
         )
 
@@ -1331,6 +1332,7 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertIn("OpenClaw 상태 요약", result["label"])
         self.assertIn("show_openclaw_bridge_status.py", result["next_action"])
         self.assertIn("latest 2026-07-04", result["message"])
+        self.assertIn("first-read rows 6", result["message"])
 
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
@@ -18384,6 +18386,11 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     {
                         "schema": "openclaw_investment_research_first_read_v1",
                         "generated_at": "2026-07-05T07:00:00+09:00",
+                        "latest_market_counts": {"KR": 1, "US": 1},
+                        "latest_recommendations": [
+                            {"market": "KR", "rank": 1, "ticker": "001", "company_name": "한국1", "score": 99},
+                            {"market": "US", "rank": 1, "ticker": "AAA", "company_name": "미국1", "score": 98},
+                        ],
                         "read_order": read_order,
                     },
                     ensure_ascii=False,
@@ -18409,7 +18416,15 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             (openclaw_dir / "openclaw_knowledge_graph_marginalia_queue.md").write_text("# Marginalia\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_completion_report.md").write_text("# ok\n", encoding="utf-8")
             (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
-                json.dumps({"context_generated_at": "2026-07-05T07:00:00+09:00", "read_order": read_order}),
+                json.dumps(
+                    {
+                        "context_generated_at": "2026-07-05T07:00:00+09:00",
+                        "first_read_file": "openclaw_first_read.md",
+                        "first_read_json_file": "openclaw_first_read.json",
+                        "read_order": read_order,
+                    },
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
             (openclaw_dir / "investment_research_context.json").write_text(
@@ -18485,17 +18500,130 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
         self.assertEqual("ok", summary["status"])
         self.assertEqual("abc1234", summary["source_git"]["commit"])
+        self.assertEqual(2, summary["first_read"]["latest_recommendation_count"])
         self.assertIsInstance(summary["context_age_hours"], float)
         self.assertEqual({"KR": 1, "US": 1}, summary["latest_market_counts"])
         self.assertEqual("한국1", summary["latest_recommendations"][0]["company_name"])
         self.assertEqual("미국1", summary["latest_recommendations"][1]["company_name"])
         self.assertIn("latest_recommendation_date: 2026-07-04", rendered)
+        self.assertIn("first_read: rows=2", rendered)
         self.assertIn("context_age_hours:", rendered)
         self.assertIn('latest_market_counts: {"KR":1,"US":1}', rendered)
         self.assertIn("KR#1 001 한국1 score=99", rendered)
         self.assertIn("US#1 AAA 미국1 score=98", rendered)
         self.assertEqual("failure", mismatch_summary["status"])
         self.assertIn("latest_recommendations count mismatch", mismatch_summary["errors"][0])
+
+    def test_openclaw_console_status_surfaces_first_read_packet(self):
+        import research_os_main as main
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            read_order = main.OPENCLAW_CONSUMER_READ_ORDER
+            generated_at = "2026-07-05T07:00:00+09:00"
+            latest_rows = [
+                {
+                    "market": "KR",
+                    "rank": 1,
+                    "ticker": "001",
+                    "company_name": "한국1",
+                    "score": 99,
+                    "baseline_price": 1001,
+                    "currency": "KRW",
+                },
+                {
+                    "market": "US",
+                    "rank": 1,
+                    "ticker": "AAA",
+                    "company_name": "미국1",
+                    "score": 98,
+                    "baseline_price": 10.5,
+                    "currency": "USD",
+                },
+            ]
+            for filename in read_order:
+                path = openclaw_dir / filename
+                if filename.endswith(".md"):
+                    path.write_text("# ok\n", encoding="utf-8")
+                elif filename.endswith(".json"):
+                    path.write_text("{}", encoding="utf-8")
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openclaw_investment_research_first_read_v1",
+                        "generated_at": generated_at,
+                        "read_this_first": True,
+                        "latest_recommendation_date": "2026-07-05",
+                        "latest_market_counts": {"KR": 1, "US": 1},
+                        "latest_recommendations": latest_rows,
+                        "read_order": read_order,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "context_generated_at": generated_at,
+                        "first_read_file": "openclaw_first_read.md",
+                        "first_read_json_file": "openclaw_first_read.json",
+                        "read_order": read_order,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "investment_research_context.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": generated_at,
+                        "current_state": {
+                            "daily_recommendations": {
+                                "latest_recommendation_date": "2026-07-05",
+                                "latest_market_counts": {"KR": 1, "US": 1},
+                                "latest_rows": latest_rows,
+                            },
+                            "news_and_telegram": {"telegram_favorite_posts": {"saved_count": 10}},
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_completion_report.json").write_text(
+                json.dumps({"status": "ok"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "copied_at": datetime.now(timezone.utc).isoformat(),
+                        "context_generated_at": generated_at,
+                        "source_git_branch": "main",
+                        "source_git_commit": "abc1234",
+                        "source_git_dirty": False,
+                        "secrets_excluded": True,
+                        "read_order": read_order,
+                        "completion_report_sha256": {},
+                        "operational_commands": {
+                            "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = main.build_openclaw_console_status(openclaw_dir)
+
+        self.assertEqual("ok", status["status"])
+        self.assertEqual("ok", status["first_read_status"])
+        self.assertEqual(2, status["first_read"]["latest_recommendation_count"])
+        self.assertTrue(status["first_read"]["read_this_first"])
+        self.assertEqual(read_order, status["read_order"])
+        self.assertEqual([], status["consumer_smoke_errors"])
 
     def test_openclaw_consumer_smoke_reads_bundle_in_consumer_order(self):
         tool = load_openclaw_consumer_smoke_tool()

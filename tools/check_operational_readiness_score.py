@@ -528,13 +528,15 @@ def openclaw_status_summary_signal(root: Path) -> dict[str, Any]:
             "python tools\\show_openclaw_bridge_status.py --json",
         )
     source_git = summary.get("source_git") or {}
+    first_read = summary.get("first_read") or {}
     return signal(
         "openclaw_status_summary",
         "OpenClaw 상태 요약",
         100.0,
         (
             f"{source_git.get('branch')} {source_git.get('commit')} / "
-            f"age {summary.get('context_age_hours')}h / latest {summary.get('latest_recommendation_date')}"
+            f"age {summary.get('context_age_hours')}h / latest {summary.get('latest_recommendation_date')} / "
+            f"first-read rows {first_read.get('latest_recommendation_count')}"
         ),
         "python tools\\show_openclaw_bridge_status.py --json",
     )

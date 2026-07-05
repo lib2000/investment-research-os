@@ -8,6 +8,23 @@ from pathlib import Path
 
 DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
 MODULE_NAME = "show_openclaw_bridge_status"
+EXPECTED_READ_ORDER = [
+    "bridge_status.json",
+    "openclaw_first_read.md",
+    "openclaw_first_read.json",
+    "openclaw_bridge_manifest.json",
+    "investment_research_context.md",
+    "investment_research_context.json",
+    "openclaw_knowledge_graph_blueprint.md",
+    "openclaw_knowledge_graph_blueprint.json",
+    "openclaw_knowledge_graph_nodes.json",
+    "openclaw_knowledge_graph_edges.json",
+    "openclaw_knowledge_graph_master_index.md",
+    "openclaw_knowledge_graph_glossary.md",
+    "openclaw_knowledge_graph_marginalia_queue.md",
+    "openclaw_bridge_completion_report.md",
+    "openclaw_bridge_completion_report.json",
+]
 
 
 def summarize_latest_recommendations(rows: list[dict]) -> list[dict]:
@@ -46,6 +63,7 @@ def load_json(path: Path) -> dict:
 
 def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     status = load_json(openclaw_dir / "bridge_status.json")
+    first_read = load_json(openclaw_dir / "openclaw_first_read.json")
     manifest = load_json(openclaw_dir / "openclaw_bridge_manifest.json")
     context = load_json(openclaw_dir / "investment_research_context.json")
     completion = load_json(openclaw_dir / "openclaw_bridge_completion_report.json")
@@ -76,6 +94,20 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
     missing = [name for name, present in files_present.items() if not present]
     if missing:
         errors.append(f"read_order files missing: {', '.join(missing)}")
+    if read_order != EXPECTED_READ_ORDER or manifest.get("read_order") != EXPECTED_READ_ORDER:
+        errors.append("read_order does not match optimized OpenClaw consumer order")
+    if manifest.get("first_read_file") != "openclaw_first_read.md":
+        errors.append("manifest first_read_file mismatch")
+    if manifest.get("first_read_json_file") != "openclaw_first_read.json":
+        errors.append("manifest first_read_json_file mismatch")
+    if first_read.get("schema") != "openclaw_investment_research_first_read_v1":
+        errors.append("first_read schema mismatch")
+    if first_read.get("generated_at") != context_generated_at:
+        errors.append("first_read generated_at does not match context generated_at")
+    if first_read.get("read_order") != EXPECTED_READ_ORDER:
+        errors.append("first_read read_order mismatch")
+    if first_read.get("latest_market_counts") != market_counts:
+        errors.append("first_read market counts mismatch")
     if manifest.get("context_generated_at") != context_generated_at:
         errors.append("manifest context_generated_at does not match context generated_at")
     if status.get("context_generated_at") != context_generated_at:
@@ -85,6 +117,9 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
         errors.append(
             f"latest_recommendations count mismatch: {len(latest_recommendations)} != {expected_recommendation_count}"
         )
+    first_read_rows = first_read.get("latest_recommendations") if isinstance(first_read.get("latest_recommendations"), list) else []
+    if len(first_read_rows) != len(latest_recommendations):
+        errors.append(f"first_read recommendations count mismatch: {len(first_read_rows)} != {len(latest_recommendations)}")
     return {
         "status": "ok" if not errors else "failure",
         "errors": errors,
@@ -97,6 +132,14 @@ def build_status_summary(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict:
         "copied_at": status.get("copied_at"),
         "context_generated_at": context_generated_at,
         "context_age_hours": context_age_hours,
+        "first_read": {
+            "schema": first_read.get("schema"),
+            "generated_at": first_read.get("generated_at"),
+            "read_this_first": first_read.get("read_this_first") is True,
+            "latest_recommendation_date": first_read.get("latest_recommendation_date"),
+            "latest_market_counts": first_read.get("latest_market_counts") or {},
+            "latest_recommendation_count": len(first_read_rows),
+        },
         "latest_recommendation_date": rec.get("latest_recommendation_date"),
         "latest_market_counts": market_counts,
         "latest_recommendations": latest_recommendations,
@@ -119,6 +162,7 @@ def render_text(summary: dict) -> str:
         f"- copied_at: {summary.get('copied_at')}",
         f"- context_generated_at: {summary.get('context_generated_at')}",
         f"- context_age_hours: {summary.get('context_age_hours')}",
+        f"- first_read: rows={(summary.get('first_read') or {}).get('latest_recommendation_count')} generated_at={(summary.get('first_read') or {}).get('generated_at')}",
         f"- latest_recommendation_date: {summary.get('latest_recommendation_date')}",
         f"- latest_market_counts: {market_counts}",
         f"- telegram_saved_count: {summary.get('telegram_saved_count')}",
