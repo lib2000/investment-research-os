@@ -529,6 +529,8 @@ def openclaw_status_summary_signal(root: Path) -> dict[str, Any]:
         )
     source_git = summary.get("source_git") or {}
     first_read = summary.get("first_read") or {}
+    hash_status = summary.get("hash_status") or "unknown"
+    hash_checked_count = summary.get("hash_checked_count")
     return signal(
         "openclaw_status_summary",
         "OpenClaw 상태 요약",
@@ -536,7 +538,7 @@ def openclaw_status_summary_signal(root: Path) -> dict[str, Any]:
         (
             f"{source_git.get('branch')} {source_git.get('commit')} / "
             f"age {summary.get('context_age_hours')}h / latest {summary.get('latest_recommendation_date')} / "
-            f"first-read rows {first_read.get('latest_recommendation_count')}"
+            f"first-read rows {first_read.get('latest_recommendation_count')} / hashes {hash_status}/{hash_checked_count}"
         ),
         "python tools\\show_openclaw_bridge_status.py --json",
     )

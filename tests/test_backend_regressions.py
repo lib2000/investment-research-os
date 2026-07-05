@@ -1320,6 +1320,8 @@ class OperationalReadinessToolTests(unittest.TestCase):
                 "context_age_hours": 0.2,
                 "latest_recommendation_date": "2026-07-04",
                 "first_read": {"latest_recommendation_count": 6},
+                "hash_status": "ok",
+                "hash_checked_count": 14,
             }
         )
 
@@ -1333,6 +1335,7 @@ class OperationalReadinessToolTests(unittest.TestCase):
         self.assertIn("show_openclaw_bridge_status.py", result["next_action"])
         self.assertIn("latest 2026-07-04", result["message"])
         self.assertIn("first-read rows 6", result["message"])
+        self.assertIn("hashes ok/14", result["message"])
 
     def test_nps_allocation_signal_is_advisory_until_enforced(self):
         tool = load_operational_readiness_tool()
