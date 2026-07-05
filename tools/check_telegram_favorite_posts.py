@@ -188,6 +188,7 @@ def main() -> int:
     parser.add_argument("--state-file", type=Path, help="점검 상태 파일 경로. 생략하면 tmp 아래 기본 파일을 사용합니다.")
     parser.add_argument("--live-fetch", action="store_true", help="실제 t.me/s 공개 preview를 조회합니다.")
     parser.add_argument("--sync-news-inbox", action="store_true", help="임시 vault 뉴스 인박스에 dry-run 저장까지 확인합니다.")
+    parser.add_argument("--config-only", action="store_true", help="예약 상태 파일을 보지 않고 채널 설정만 검증합니다.")
     parser.add_argument("--top-n", type=int, default=None)
     parser.add_argument("--min-views", type=int, default=None)
     parser.add_argument("--min-channel-count", type=int, default=None, help="설정된 채널 수가 이 값보다 적으면 실패합니다.")
@@ -212,7 +213,20 @@ def main() -> int:
     runtime = build_runtime(settings, live_fetch=args.live_fetch, state_path=state_file)
     channels, parse_warnings = parse_telegram_favorite_channels_json(settings.telegram_favorite_channels_json)
     posts, collect_warnings = collect_telegram_favorite_popular_posts(runtime, settings) if channels else ([], [])
-    status = build_telegram_favorite_posts_task_status(runtime, settings)
+    status = (
+        {
+            "status": "config_only",
+            "module": "telegram_favorite_posts_task_status",
+            "enabled": settings.telegram_favorite_posts_enabled,
+            "daily_time": settings.telegram_favorite_posts_time,
+            "configured_channel_count": len(channels),
+            "top_n": settings.telegram_favorite_posts_top_n,
+            "min_views": settings.telegram_favorite_posts_min_views,
+            "next_action": "채널 설정 검증 전용 모드입니다.",
+        }
+        if args.config_only
+        else build_telegram_favorite_posts_task_status(runtime, settings)
+    )
     refresh_result = (
         refresh_telegram_favorite_posts(runtime, settings, force=True)
         if args.sync_news_inbox

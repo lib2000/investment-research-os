@@ -185,6 +185,7 @@ def checks_for_root(root: Path) -> list[tuple[str, list[str]]]:
                     str(TELEGRAM_FAVORITE_LOCAL_ENV),
                     "--state-file",
                     "tmp/telegram_favorite_posts_local_env_check_state.json",
+                    "--config-only",
                     "--enabled",
                     "--min-channel-count",
                     "18",
