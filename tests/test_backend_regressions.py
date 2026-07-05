@@ -799,6 +799,21 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("http://127.0.0.1:8001/console/index.html", script_source)
         self.assertIn("-RestartBackend -OpenConsole", readme_source)
 
+    def test_research_backend_watchdog_scripts_restart_dead_console(self):
+        ensure_source = (PROJECT_ROOT / "scripts" / "ensure-research-backend.ps1").read_text(encoding="utf-8")
+        register_source = (PROJECT_ROOT / "tools" / "register_research_backend_watchdog_task.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("/api/v1/system/health", ensure_source)
+        self.assertIn("/console/index.html", ensure_source)
+        self.assertIn("restart-research-backend.ps1", ensure_source)
+        self.assertIn("research_backend_watchdog_state.json", ensure_source)
+        self.assertIn("New-ScheduledTaskTrigger", register_source)
+        self.assertIn("-RepetitionInterval", register_source)
+        self.assertIn("ensure-research-backend.ps1", register_source)
+        self.assertIn("InvestmentJournalApp Research Backend Watchdog", register_source)
+
     def test_backend_runtime_env_recommends_research_backend_restart(self):
         script_source = (PROJECT_ROOT / "tools" / "check_backend_runtime_env.py").read_text(
             encoding="utf-8"
