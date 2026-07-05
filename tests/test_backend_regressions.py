@@ -325,6 +325,15 @@ def load_openclaw_answer_capture_task_status_tool():
     return module
 
 
+def load_openclaw_answer_capture_canary_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_canary.py"
+    spec = spec_from_file_location("check_openclaw_answer_capture_canary", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_openclaw_actual_answer_capture_tool():
     tool_path = PROJECT_ROOT / "tools" / "capture_openclaw_actual_answer.py"
     spec = spec_from_file_location("capture_openclaw_actual_answer", tool_path)
@@ -1179,6 +1188,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 답변 캡처 작업 상태"],
             ["tools/check_openclaw_answer_capture_task_status.py", "--json"],
+        )
+        self.assertIn("OpenClaw 답변 캡처 canary", checks)
+        self.assertEqual(
+            checks["OpenClaw 답변 캡처 canary"],
+            ["tools/check_openclaw_answer_capture_canary.py", "--json"],
         )
         self.assertIn("OpenClaw pending 답변 수집", checks)
         self.assertEqual(
@@ -19181,6 +19195,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "answer_capture_cycle_run": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState",
                             "answer_capture_cycle_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_openclaw_answer_capture_cycle_task.ps1 -Collect",
                             "answer_capture_task_status": "python tools\\check_openclaw_answer_capture_task_status.py --json",
+                            "answer_capture_canary": "python tools\\check_openclaw_answer_capture_canary.py --json",
                             "actual_answer_capture": "python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
                             "pending_answer_collect": "python tools\\collect_openclaw_pending_answers.py --json",
                             "actual_answer_capture_status": "python tools\\check_openclaw_actual_answer_capture_status.py --json",
@@ -19258,6 +19273,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- answer capture cycle runner: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState`\n"
                 "- answer capture cycle task register: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_openclaw_answer_capture_cycle_task.ps1 -Collect`\n"
                 "- answer capture task status: `python tools\\check_openclaw_answer_capture_task_status.py --json`\n"
+                "- answer capture canary: `python tools\\check_openclaw_answer_capture_canary.py --json`\n"
                 "- actual answer capture: `python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json`\n"
                 "- pending answer collect: `python tools\\collect_openclaw_pending_answers.py --json`\n"
                 "- actual answer capture status: `python tools\\check_openclaw_actual_answer_capture_status.py --json`\n"
@@ -19328,6 +19344,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_capture_cycle_run_command"', manifest_text)
         self.assertIn('"answer_capture_cycle_register_command"', manifest_text)
         self.assertIn('"answer_capture_task_status_command"', manifest_text)
+        self.assertIn('"answer_capture_canary_command"', manifest_text)
         self.assertIn('"actual_answer_capture_command"', manifest_text)
         self.assertIn('"pending_answer_collect_command"', manifest_text)
         self.assertIn('"actual_answer_capture_status_command"', manifest_text)
@@ -19353,6 +19370,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_capture_cycle_run_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState"', exported_text)
         self.assertIn('"answer_capture_cycle_register_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\register_openclaw_answer_capture_cycle_task.ps1 -Collect"', exported_text)
         self.assertIn('"answer_capture_task_status_command": "python tools\\\\check_openclaw_answer_capture_task_status.py --json"', exported_text)
+        self.assertIn('"answer_capture_canary_command": "python tools\\\\check_openclaw_answer_capture_canary.py --json"', exported_text)
         self.assertIn('"actual_answer_capture_command": "python tools\\\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json"', exported_text)
         self.assertIn('"pending_answer_collect_command": "python tools\\\\collect_openclaw_pending_answers.py --json"', exported_text)
         self.assertIn('"actual_answer_capture_status_command": "python tools\\\\check_openclaw_actual_answer_capture_status.py --json"', exported_text)
@@ -19388,6 +19406,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_capture_cycle_run_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState"', manifest_text)
         self.assertIn('"answer_capture_cycle_register_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\register_openclaw_answer_capture_cycle_task.ps1 -Collect"', manifest_text)
         self.assertIn('"answer_capture_task_status_command": "python tools\\\\check_openclaw_answer_capture_task_status.py --json"', manifest_text)
+        self.assertIn('"answer_capture_canary_command": "python tools\\\\check_openclaw_answer_capture_canary.py --json"', manifest_text)
         self.assertIn('"actual_answer_capture_command": "python tools\\\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json"', manifest_text)
         self.assertIn('"pending_answer_collect_command": "python tools\\\\collect_openclaw_pending_answers.py --json"', manifest_text)
         self.assertIn('"actual_answer_capture_status_command": "python tools\\\\check_openclaw_actual_answer_capture_status.py --json"', manifest_text)
@@ -19601,6 +19620,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run run_openclaw_answer_capture_cycle.ps1\n"
                 "run register_openclaw_answer_capture_cycle_task.ps1\n"
                 "run check_openclaw_answer_capture_task_status.py --json\n"
+                "run check_openclaw_answer_capture_canary.py --json\n"
                 "run capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json\n"
                 "run collect_openclaw_pending_answers.py --json\n"
                 "run check_openclaw_actual_answer_capture_status.py --json\n"
@@ -19624,6 +19644,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "check_openclaw_answer_capture_cycle.py --json\\n"
                 "run_openclaw_answer_capture_cycle.ps1\\n"
                 "check_openclaw_answer_capture_task_status.py --json\\n"
+                "check_openclaw_answer_capture_canary.py --json\\n"
                 "capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json\\n"
                 "collect_openclaw_pending_answers.py --json\\n"
                 "check_openclaw_actual_answer_capture_status.py --json\\n"
@@ -20264,6 +20285,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "answer_capture_cycle_run": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState",
                 "answer_capture_cycle_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_openclaw_answer_capture_cycle_task.ps1 -Collect",
                 "answer_capture_task_status": "python tools\\check_openclaw_answer_capture_task_status.py --json",
+                "answer_capture_canary": "python tools\\check_openclaw_answer_capture_canary.py --json",
                 "actual_answer_capture": "python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
                 "pending_answer_collect": "python tools\\collect_openclaw_pending_answers.py --json",
                 "actual_answer_capture_status": "python tools\\check_openclaw_actual_answer_capture_status.py --json",
@@ -20299,6 +20321,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("answer_capture_cycle_run", json_payload["operational_commands"])
         self.assertIn("answer_capture_cycle_register", json_payload["operational_commands"])
         self.assertIn("answer_capture_task_status", json_payload["operational_commands"])
+        self.assertIn("answer_capture_canary", json_payload["operational_commands"])
         self.assertIn("actual_answer_capture", json_payload["operational_commands"])
         self.assertIn("pending_answer_collect", json_payload["operational_commands"])
         self.assertIn("actual_answer_capture_status", json_payload["operational_commands"])
@@ -20339,6 +20362,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- answer_capture_cycle_run: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState`", markdown)
         self.assertIn("- answer_capture_cycle_register: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_openclaw_answer_capture_cycle_task.ps1 -Collect`", markdown)
         self.assertIn("- answer_capture_task_status: `python tools\\check_openclaw_answer_capture_task_status.py --json`", markdown)
+        self.assertIn("- answer_capture_canary: `python tools\\check_openclaw_answer_capture_canary.py --json`", markdown)
         self.assertIn("- actual_answer_capture: `python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json`", markdown)
         self.assertIn("- pending_answer_collect: `python tools\\collect_openclaw_pending_answers.py --json`", markdown)
         self.assertIn("- actual_answer_capture_status: `python tools\\check_openclaw_actual_answer_capture_status.py --json`", markdown)
@@ -20568,6 +20592,7 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "answer_capture_cycle_run": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState",
             "answer_capture_cycle_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_openclaw_answer_capture_cycle_task.ps1 -Collect",
             "answer_capture_task_status": "python tools\\check_openclaw_answer_capture_task_status.py --json",
+            "answer_capture_canary": "python tools\\check_openclaw_answer_capture_canary.py --json",
             "actual_answer_capture": "python tools\\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
             "pending_answer_collect": "python tools\\collect_openclaw_pending_answers.py --json",
             "actual_answer_capture_status": "python tools\\check_openclaw_actual_answer_capture_status.py --json",
@@ -20629,6 +20654,7 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "answer_capture_cycle_run_command": commands["answer_capture_cycle_run"],
             "answer_capture_cycle_register_command": commands["answer_capture_cycle_register"],
             "answer_capture_task_status_command": commands["answer_capture_task_status"],
+            "answer_capture_canary_command": commands["answer_capture_canary"],
             "actual_answer_capture_command": commands["actual_answer_capture"],
             "pending_answer_collect_command": commands["pending_answer_collect"],
             "actual_answer_capture_status_command": commands["actual_answer_capture_status"],
@@ -21127,6 +21153,53 @@ class OpenClawAnswerCaptureTaskStatusTests(unittest.TestCase):
         self.assertTrue(any("state file is missing" in error for error in result["errors"]))
 
 
+class OpenClawAnswerCaptureCanaryTests(unittest.TestCase):
+    def test_answer_capture_canary_uses_disposable_copy(self):
+        tool = load_openclaw_answer_capture_canary_tool()
+
+        with TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "source"
+            source_dir.mkdir()
+            OpenClawActualAnswerAuditTests().write_bundle(source_dir)
+
+            result = tool.build_result(source_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertFalse(result["artifacts_kept"])
+        self.assertEqual("today_work_report", result["route_id"])
+        self.assertTrue(result["pending_file_archived"])
+        self.assertEqual(1, len(result["processed_files"]))
+        self.assertEqual(1, len(result["answer_files"]))
+        self.assertEqual(1, result["collector"]["captured_count"])
+        self.assertEqual(1, result["capture_status"]["capture_count"])
+        self.assertEqual(1, result["audit"]["audited_count"])
+
+    def test_answer_capture_canary_can_keep_artifacts_for_debugging(self):
+        tool = load_openclaw_answer_capture_canary_tool()
+
+        with TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "source"
+            artifacts_dir = Path(tmp) / "artifacts"
+            source_dir.mkdir()
+            OpenClawActualAnswerAuditTests().write_bundle(source_dir)
+
+            result = tool.build_result(
+                source_dir,
+                route_id="recommendations_priority",
+                keep_artifacts=True,
+                artifacts_dir=artifacts_dir,
+            )
+            rendered = tool.render_text(result)
+            answer_file_exists = Path(result["answer_files"][0]).exists()
+
+        self.assertEqual("ok", result["status"])
+        self.assertTrue(result["artifacts_kept"])
+        self.assertEqual("recommendations_priority", result["route_id"])
+        self.assertTrue(answer_file_exists)
+        self.assertIn("OpenClaw answer capture canary: ok", rendered)
+        self.assertIn("answer_count: 1", rendered)
+
+
 class OpenClawWslAnswerContextTests(unittest.TestCase):
     def test_wsl_answer_context_reports_pa_sessions_and_today_readiness(self):
         tool = load_openclaw_wsl_answer_context_tool()
@@ -21343,6 +21416,17 @@ class OpenClawQuickHealthTests(unittest.TestCase):
                 "state_file_age_hours": 0.1,
             },
         )
+        fake_answer_capture_canary = SimpleNamespace(
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "errors": [],
+                "route_id": "today_work_report",
+                "pending_file_archived": True,
+                "processed_files": ["processed.md"],
+                "answer_files": ["actual.json"],
+                "artifacts_kept": False,
+            }
+        )
         fake_actual_answer_capture_status = SimpleNamespace(
             build_result=lambda openclaw_dir: {
                 "status": "ok",
@@ -21365,6 +21449,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_actual_answer_audit": fake_actual_answer_audit,
             "check_openclaw_answer_capture_cycle": fake_answer_capture_cycle,
             "check_openclaw_answer_capture_task_status": fake_answer_capture_task,
+            "check_openclaw_answer_capture_canary": fake_answer_capture_canary,
             "check_openclaw_actual_answer_capture_status": fake_actual_answer_capture_status,
         }
 
@@ -21378,7 +21463,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(13, len(result["checks"]))
+        self.assertEqual(14, len(result["checks"]))
         self.assertEqual("ok", result["hash_status"])
         self.assertEqual(14, result["hash_checked_count"])
         self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
@@ -21397,6 +21482,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("actual_answer_audit: ok", rendered)
         self.assertIn("answer_capture_cycle: ok", rendered)
         self.assertIn("answer_capture_task: ok", rendered)
+        self.assertIn("answer_capture_canary: ok", rendered)
         self.assertIn("actual_answer_capture_status: ok", rendered)
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
@@ -21425,6 +21511,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             read_scheduled_task=lambda task_name: {"found": True, "TaskName": task_name},
             evaluate_task_status=lambda *args, **kwargs: {"status": "ok", "errors": [], "task": {}},
         )
+        fake_answer_capture_canary = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_actual_answer_capture_status = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
@@ -21439,6 +21526,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             "check_openclaw_actual_answer_audit": fake_actual_answer_audit,
             "check_openclaw_answer_capture_cycle": fake_answer_capture_cycle,
             "check_openclaw_answer_capture_task_status": fake_answer_capture_task,
+            "check_openclaw_answer_capture_canary": fake_answer_capture_canary,
             "check_openclaw_actual_answer_capture_status": fake_actual_answer_capture_status,
         }
 

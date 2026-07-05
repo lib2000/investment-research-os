@@ -85,6 +85,7 @@ CHECKS = [
     ("OpenClaw 실제 답변 사후감사", ["tools/check_openclaw_actual_answer_audit.py", "--json"]),
     ("OpenClaw 답변 캡처 cycle", ["tools/check_openclaw_answer_capture_cycle.py", "--json"]),
     ("OpenClaw 답변 캡처 작업 상태", ["tools/check_openclaw_answer_capture_task_status.py", "--json"]),
+    ("OpenClaw 답변 캡처 canary", ["tools/check_openclaw_answer_capture_canary.py", "--json"]),
     ("OpenClaw pending 답변 수집", ["tools/collect_openclaw_pending_answers.py", "--json"]),
     ("OpenClaw 실제 답변 캡처 상태", ["tools/check_openclaw_actual_answer_capture_status.py", "--json"]),
     ("OpenClaw WSL PA 답변 컨텍스트", ["tools/check_openclaw_wsl_answer_context.py", "--json"]),

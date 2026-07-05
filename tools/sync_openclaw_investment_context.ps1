@@ -29,6 +29,7 @@ $answerCaptureCycleScript = Join-Path $projectRoot "tools\check_openclaw_answer_
 $answerCaptureCycleRunner = Join-Path $projectRoot "tools\run_openclaw_answer_capture_cycle.ps1"
 $answerCaptureCycleRegisterScript = Join-Path $projectRoot "tools\register_openclaw_answer_capture_cycle_task.ps1"
 $answerCaptureTaskStatusScript = Join-Path $projectRoot "tools\check_openclaw_answer_capture_task_status.py"
+$answerCaptureCanaryScript = Join-Path $projectRoot "tools\check_openclaw_answer_capture_canary.py"
 $actualAnswerCaptureScript = Join-Path $projectRoot "tools\capture_openclaw_actual_answer.py"
 $pendingAnswerCollectScript = Join-Path $projectRoot "tools\collect_openclaw_pending_answers.py"
 $wslSyncScript = Join-Path $projectRoot "tools\sync_openclaw_wsl_investment_context.ps1"
@@ -85,6 +86,7 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 답변 캡처 cycle: python tools\check_openclaw_answer_capture_cycle.py --json",
     "- 답변 캡처 cycle 실행: powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState",
     "- 답변 캡처 작업 상태: python tools\check_openclaw_answer_capture_task_status.py --json",
+    "- 답변 캡처 canary: python tools\check_openclaw_answer_capture_canary.py --json",
     "- 실제 답변 캡처: python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
     "- pending 답변 수집: python tools\collect_openclaw_pending_answers.py --json",
     "- 실제 답변 캡처 상태: python tools\check_openclaw_actual_answer_capture_status.py --json",
@@ -141,6 +143,9 @@ if (-not (Test-Path -LiteralPath $answerCaptureCycleRegisterScript)) {
 }
 if (-not (Test-Path -LiteralPath $answerCaptureTaskStatusScript)) {
   throw "OpenClaw answer capture task status script not found: $answerCaptureTaskStatusScript"
+}
+if (-not (Test-Path -LiteralPath $answerCaptureCanaryScript)) {
+  throw "OpenClaw answer capture canary script not found: $answerCaptureCanaryScript"
 }
 if (-not (Test-Path -LiteralPath $pendingAnswerCollectScript)) {
   throw "OpenClaw pending answer collector script not found: $pendingAnswerCollectScript"
@@ -259,6 +264,7 @@ $operationalCommands = [ordered]@{
   answer_capture_cycle_run = "powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState"
   answer_capture_cycle_register = "powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect"
   answer_capture_task_status = "python tools\check_openclaw_answer_capture_task_status.py --json"
+  answer_capture_canary = "python tools\check_openclaw_answer_capture_canary.py --json"
   actual_answer_capture = "python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json"
   pending_answer_collect = "python tools\collect_openclaw_pending_answers.py --json"
   actual_answer_capture_status = "python tools\check_openclaw_actual_answer_capture_status.py --json"
@@ -395,6 +401,7 @@ $readme = @(
   "- answer capture cycle runner: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState``",
   "- answer capture cycle task register: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect``",
   "- answer capture task status: ``python tools\check_openclaw_answer_capture_task_status.py --json``",
+  "- answer capture canary: ``python tools\check_openclaw_answer_capture_canary.py --json``",
   "- actual answer capture: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``",
   "- pending answer collect: ``python tools\collect_openclaw_pending_answers.py --json``",
   "- actual answer capture status: ``python tools\check_openclaw_actual_answer_capture_status.py --json``",
@@ -445,6 +452,7 @@ $startupLines = @(
   "- Answer capture cycle runner from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\run_openclaw_answer_capture_cycle.ps1 -Collect -WriteState``.",
   "- Answer capture cycle task register from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_openclaw_answer_capture_cycle_task.ps1 -Collect``.",
   "- Answer capture task status from ``$projectRoot``: ``python tools\check_openclaw_answer_capture_task_status.py --json``.",
+  "- Answer capture canary from ``$projectRoot``: ``python tools\check_openclaw_answer_capture_canary.py --json``.",
   "- Actual answer capture from ``$projectRoot``: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``.",
   "- Pending answer collect from ``$projectRoot``: ``python tools\collect_openclaw_pending_answers.py --json``.",
   "- Actual answer capture status from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_capture_status.py --json``.",

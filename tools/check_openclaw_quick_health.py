@@ -23,6 +23,7 @@ CHECK_MODULES = {
     "actual_answer_audit": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py",
     "answer_capture_cycle": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_cycle.py",
     "answer_capture_task": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_task_status.py",
+    "answer_capture_canary": PROJECT_ROOT / "tools" / "check_openclaw_answer_capture_canary.py",
     "actual_answer_capture_status": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_capture_status.py",
 }
 
@@ -279,6 +280,26 @@ def check_answer_capture_task(project_root: Path) -> dict[str, Any]:
     }
 
 
+def check_answer_capture_canary(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_answer_capture_canary", CHECK_MODULES["answer_capture_canary"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except (AssertionError, OSError, ValueError) as exc:
+        return {"label": "answer_capture_canary", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "answer_capture_canary",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "route_id": result.get("route_id"),
+            "pending_file_archived": result.get("pending_file_archived"),
+            "processed_count": len(result.get("processed_files") or []),
+            "answer_count": len(result.get("answer_files") or []),
+            "artifacts_kept": result.get("artifacts_kept"),
+        },
+    }
+
+
 def check_actual_answer_capture_status(openclaw_dir: Path) -> dict[str, Any]:
     module = load_tool(
         "check_openclaw_actual_answer_capture_status",
@@ -326,6 +347,7 @@ def build_result(
         lambda: check_actual_answer_audit(openclaw_dir),
         lambda: check_answer_capture_cycle(openclaw_dir),
         lambda: check_answer_capture_task(project_root),
+        lambda: check_answer_capture_canary(openclaw_dir),
         lambda: check_actual_answer_capture_status(openclaw_dir),
     ):
         try:
