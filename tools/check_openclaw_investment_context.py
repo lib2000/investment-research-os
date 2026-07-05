@@ -18,6 +18,8 @@ KNOWLEDGE_GRAPH_FILES = {
     "glossary": "openclaw_knowledge_graph_glossary.md",
     "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
 }
+FIRST_READ_JSON_FILE = "openclaw_first_read.json"
+FIRST_READ_MARKDOWN_FILE = "openclaw_first_read.md"
 
 
 SECRET_PATTERNS = [
@@ -92,12 +94,20 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     usage = payload.get("openclaw_usage") or {}
     if usage.get("status_file") != "bridge_status.json":
         raise AssertionError("OpenClaw usage must point to bridge_status.json")
+    if usage.get("read_this_first") != FIRST_READ_MARKDOWN_FILE:
+        raise AssertionError("OpenClaw usage must point read_this_first to first-read Markdown")
+    if usage.get("read_this_first_json") != FIRST_READ_JSON_FILE:
+        raise AssertionError("OpenClaw usage must point read_this_first_json to first-read JSON")
     if usage.get("completion_report") != "openclaw_bridge_completion_report.md":
         raise AssertionError("OpenClaw usage must point to completion report")
     if usage.get("completion_report_json") != "openclaw_bridge_completion_report.json":
         raise AssertionError("OpenClaw usage must point to completion report JSON")
     if usage.get("status_summary_command") != "python tools\\show_openclaw_bridge_status.py --json":
         raise AssertionError("OpenClaw usage must include status summary command")
+    if usage.get("safe_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1":
+        raise AssertionError("OpenClaw usage must include safe refresh command")
+    if usage.get("strict_refresh_command") != "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit":
+        raise AssertionError("OpenClaw usage must include strict refresh command")
     final_audit = str(usage.get("final_completion_audit_command") or "")
     if "--require-report-hashes" not in final_audit:
         raise AssertionError("OpenClaw usage must include final completion hash audit command")
@@ -140,9 +150,31 @@ def sha256_hex(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def expected_read_order() -> list[str]:
+    return [
+        "bridge_status.json",
+        FIRST_READ_MARKDOWN_FILE,
+        FIRST_READ_JSON_FILE,
+        "openclaw_bridge_manifest.json",
+        "investment_research_context.md",
+        "investment_research_context.json",
+        "openclaw_knowledge_graph_blueprint.md",
+        "openclaw_knowledge_graph_blueprint.json",
+        KNOWLEDGE_GRAPH_FILES["nodes"],
+        KNOWLEDGE_GRAPH_FILES["edges"],
+        KNOWLEDGE_GRAPH_FILES["master_index"],
+        KNOWLEDGE_GRAPH_FILES["glossary"],
+        KNOWLEDGE_GRAPH_FILES["marginalia"],
+        "openclaw_bridge_completion_report.md",
+        "openclaw_bridge_completion_report.json",
+    ]
+
+
 def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> list[str]:
     json_path = directory / "investment_research_context.json"
     md_path = directory / "investment_research_context.md"
+    first_read_json_path = directory / FIRST_READ_JSON_FILE
+    first_read_md_path = directory / FIRST_READ_MARKDOWN_FILE
     kg_json_path = directory / "openclaw_knowledge_graph_blueprint.json"
     kg_md_path = directory / "openclaw_knowledge_graph_blueprint.md"
     kg_nodes_path = directory / KNOWLEDGE_GRAPH_FILES["nodes"]
@@ -153,6 +185,10 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
     manifest_path = directory / "openclaw_bridge_manifest.json"
     if not md_path.exists():
         raise AssertionError(f"context Markdown not found: {md_path}")
+    if not first_read_json_path.exists():
+        raise AssertionError(f"OpenClaw first-read JSON not found: {first_read_json_path}")
+    if not first_read_md_path.exists():
+        raise AssertionError(f"OpenClaw first-read Markdown not found: {first_read_md_path}")
     if not kg_json_path.exists():
         raise AssertionError(f"OpenClaw knowledge graph blueprint JSON not found: {kg_json_path}")
     if not kg_md_path.exists():
@@ -170,6 +206,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError(f"OpenClaw bridge manifest not found: {manifest_path}")
     validate_no_secret_like_content(json_path)
     validate_no_secret_like_content(md_path)
+    validate_no_secret_like_content(first_read_json_path)
+    validate_no_secret_like_content(first_read_md_path)
     validate_no_secret_like_content(kg_json_path)
     validate_no_secret_like_content(kg_md_path)
     validate_no_secret_like_content(kg_nodes_path)
@@ -180,6 +218,24 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
     validate_no_secret_like_content(manifest_path)
     payload = load_context(json_path)
     messages = validate_context(payload, max_age_hours=max_age_hours)
+    first_read_payload = load_context(first_read_json_path)
+    if first_read_payload.get("schema") != "openclaw_investment_research_first_read_v1":
+        raise AssertionError("OpenClaw first-read JSON schema mismatch")
+    if first_read_payload.get("generated_at") != payload.get("generated_at"):
+        raise AssertionError("OpenClaw first-read generated_at does not match context")
+    if first_read_payload.get("read_order") != expected_read_order():
+        raise AssertionError("OpenClaw first-read read_order mismatch")
+    first_read_markdown = first_read_md_path.read_text(encoding="utf-8-sig")
+    for required in [
+        "OpenClaw Investment Research First Read",
+        "Latest Recommendations",
+        "Safety",
+        "Read Order",
+        "bridge_status.json",
+        "openclaw_bridge_manifest.json",
+    ]:
+        if required not in first_read_markdown:
+            raise AssertionError(f"OpenClaw first-read Markdown is missing required text: {required}")
     blueprint_payload = load_context(kg_json_path)
     if blueprint_payload.get("schema") != "openclaw_personal_knowledge_graph_blueprint_v1":
         raise AssertionError("OpenClaw knowledge graph blueprint JSON schema mismatch")
@@ -190,6 +246,10 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError("OpenClaw bridge manifest schema mismatch")
     if manifest.get("context_generated_at") != payload.get("generated_at"):
         raise AssertionError("OpenClaw bridge manifest generated_at does not match context")
+    if manifest.get("first_read_file") != FIRST_READ_MARKDOWN_FILE:
+        raise AssertionError("OpenClaw bridge manifest first_read_file mismatch")
+    if manifest.get("first_read_json_file") != FIRST_READ_JSON_FILE:
+        raise AssertionError("OpenClaw bridge manifest first_read_json_file mismatch")
     if manifest.get("context_file") != "investment_research_context.json":
         raise AssertionError("OpenClaw bridge manifest context_file mismatch")
     if manifest.get("markdown_file") != "investment_research_context.md":
@@ -200,22 +260,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         raise AssertionError("OpenClaw bridge manifest knowledge_graph_blueprint_json_file mismatch")
     if manifest.get("knowledge_graph_files") != KNOWLEDGE_GRAPH_FILES:
         raise AssertionError("OpenClaw bridge manifest knowledge_graph_files mismatch")
-    expected_read_order = [
-        "bridge_status.json",
-        "openclaw_bridge_manifest.json",
-        "investment_research_context.md",
-        "investment_research_context.json",
-        "openclaw_knowledge_graph_blueprint.md",
-        "openclaw_knowledge_graph_blueprint.json",
-        KNOWLEDGE_GRAPH_FILES["nodes"],
-        KNOWLEDGE_GRAPH_FILES["edges"],
-        KNOWLEDGE_GRAPH_FILES["master_index"],
-        KNOWLEDGE_GRAPH_FILES["glossary"],
-        KNOWLEDGE_GRAPH_FILES["marginalia"],
-        "openclaw_bridge_completion_report.md",
-        "openclaw_bridge_completion_report.json",
-    ]
-    if manifest.get("read_order") != expected_read_order:
+    if manifest.get("read_order") != expected_read_order():
         raise AssertionError("OpenClaw bridge manifest read_order mismatch")
     command_fields = [
         "safe_refresh_command",
@@ -296,7 +341,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             raise AssertionError("bridge status must confirm startup_notes_updated=true")
         if not str(status.get("completion_report_markdown") or "").endswith("openclaw_bridge_completion_report.md"):
             raise AssertionError("bridge status completion_report_markdown mismatch")
-        if status.get("read_order") != expected_read_order:
+        if status.get("read_order") != expected_read_order():
             raise AssertionError("bridge status read_order mismatch")
         commands = status.get("operational_commands") or {}
         command_manifest_map = {
@@ -315,6 +360,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             if commands.get(command_key) != manifest.get(manifest_key):
                 raise AssertionError(f"bridge status operational command mismatch: {command_key}")
         expected_hashes = {
+            "first_read_json": first_read_json_path,
+            "first_read_markdown": first_read_md_path,
             "context_json": json_path,
             "context_markdown": md_path,
             "knowledge_graph_blueprint_json": kg_json_path,
@@ -355,6 +402,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         for required in [
             "investment_research_context.md",
             "investment_research_context.json",
+            "openclaw_first_read.md",
+            "openclaw_first_read.json",
             "openclaw_knowledge_graph_blueprint.md",
             "openclaw_knowledge_graph_blueprint.json",
             "openclaw_knowledge_graph_nodes.json",

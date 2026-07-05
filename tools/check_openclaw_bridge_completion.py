@@ -126,6 +126,8 @@ def validate_bridge_status(
     if status.get("secrets_excluded") is not True:
         errors.append("bridge status must confirm secrets_excluded=true")
     expected_hashes = {
+        "first_read_json": openclaw_dir / "openclaw_first_read.json",
+        "first_read_markdown": openclaw_dir / "openclaw_first_read.md",
         "context_json": openclaw_dir / "investment_research_context.json",
         "context_markdown": openclaw_dir / "investment_research_context.md",
         "knowledge_graph_blueprint_json": openclaw_dir / "openclaw_knowledge_graph_blueprint.json",
@@ -174,6 +176,8 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
     required_items = [
         "data/investment_research",
         "bridge_status.json",
+        "openclaw_first_read.md",
+        "openclaw_first_read.json",
         "Read order:",
         "openclaw_bridge_manifest.json",
         "investment_research_context.md",
@@ -367,6 +371,8 @@ def render_markdown_report(result: dict) -> str:
     file_hashes = bridge_status.get("file_sha256") or {}
     if file_hashes:
         for label in (
+            "first_read_json",
+            "first_read_markdown",
             "context_json",
             "context_markdown",
             "knowledge_graph_blueprint_json",

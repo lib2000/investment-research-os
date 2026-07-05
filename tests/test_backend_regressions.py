@@ -18003,6 +18003,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                         "source_git_dirty": False,
                         "read_order": [
                             "bridge_status.json",
+                            "openclaw_first_read.md",
+                            "openclaw_first_read.json",
                             "openclaw_bridge_manifest.json",
                             "investment_research_context.md",
                             "investment_research_context.json",
@@ -18030,6 +18032,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
+                            "first_read_json": check_tool.sha256_hex(output_dir / "openclaw_first_read.json"),
+                            "first_read_markdown": check_tool.sha256_hex(output_dir / "openclaw_first_read.md"),
                             "context_json": check_tool.sha256_hex(output_dir / "investment_research_context.json"),
                             "context_markdown": check_tool.sha256_hex(output_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": check_tool.sha256_hex(output_dir / "openclaw_knowledge_graph_blueprint.json"),
@@ -18050,9 +18054,11 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 check_tool.validate_bundle(output_dir, max_age_hours=1)
             (output_dir / "README.md").write_text(
                 "# Investment Research OS Bridge\n\n"
+                "- `openclaw_first_read.md`: compact first-read status, recommendations, safety, and command packet\n"
+                "- `openclaw_first_read.json`: machine-readable first-read packet\n"
                 "- `investment_research_context.md`: human-readable sanitized summary\n"
                 "- `investment_research_context.json`: machine-readable sanitized summary\n"
-                "- `openclaw_knowledge_graph_blueprint.md`: human-readable personal knowledge graph blueprint from `투자.txt`\n"
+                "- `openclaw_knowledge_graph_blueprint.md`: human-readable personal knowledge graph blueprint from sanitized investment thesis notes\n"
                 "- `openclaw_knowledge_graph_blueprint.json`: machine-readable personal knowledge graph blueprint\n"
                 "- `openclaw_knowledge_graph_nodes.json`: machine-readable graph nodes\n"
                 "- `openclaw_knowledge_graph_edges.json`: machine-readable graph edges\n"
@@ -18127,6 +18133,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"backend_health_url": "http://127.0.0.1:8001/api/v1/system/health"', exported_text)
         self.assertIn('"schema": "investment_research_openclaw_bridge_v1"', manifest_text)
         self.assertIn('"read_order"', manifest_text)
+        self.assertIn('"first_read_file": "openclaw_first_read.md"', manifest_text)
+        self.assertIn('"first_read_json_file": "openclaw_first_read.json"', manifest_text)
         self.assertIn('"strict_refresh_command"', manifest_text)
         self.assertIn('"completion_audit_command"', manifest_text)
         self.assertIn('"knowledge_graph_validation_command"', manifest_text)
@@ -18134,6 +18142,10 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
+        self.assertIn('"read_this_first": "openclaw_first_read.md"', exported_text)
+        self.assertIn('"read_this_first_json": "openclaw_first_read.json"', exported_text)
+        self.assertIn('"safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1"', exported_text)
+        self.assertIn('"strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"', exported_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
@@ -18162,6 +18174,37 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             root = Path(tmp)
             openclaw_dir = root / "data" / "investment_research"
             openclaw_dir.mkdir(parents=True)
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openclaw_investment_research_first_read_v1",
+                        "generated_at": "2026-07-05T07:00:00+09:00",
+                        "read_order": [
+                            "bridge_status.json",
+                            "openclaw_first_read.md",
+                            "openclaw_first_read.json",
+                            "openclaw_bridge_manifest.json",
+                            "investment_research_context.md",
+                            "investment_research_context.json",
+                            "openclaw_knowledge_graph_blueprint.md",
+                            "openclaw_knowledge_graph_blueprint.json",
+                            "openclaw_knowledge_graph_nodes.json",
+                            "openclaw_knowledge_graph_edges.json",
+                            "openclaw_knowledge_graph_master_index.md",
+                            "openclaw_knowledge_graph_glossary.md",
+                            "openclaw_knowledge_graph_marginalia_queue.md",
+                            "openclaw_bridge_completion_report.md",
+                            "openclaw_bridge_completion_report.json",
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# OpenClaw Investment Research First Read\n\n## Latest Recommendations\n\n- KR#1 001 한국1\n\n## Safety\n\n- secrets excluded\n",
+                encoding="utf-8",
+            )
             (openclaw_dir / "investment_research_context.json").write_text('{"ok": true}', encoding="utf-8")
             (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
             (openclaw_dir / "openclaw_knowledge_graph_blueprint.json").write_text(
@@ -18208,6 +18251,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_dirty": False,
                         "secrets_excluded": True,
                         "file_sha256": {
+                            "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
+                            "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
                             "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
@@ -18255,6 +18300,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "source_git_dirty": True,
                         "secrets_excluded": True,
                         "file_sha256": {
+                            "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
+                            "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
                             "context_json": "bad",
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
@@ -18278,7 +18325,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
 
             startup_note = (
                 "read data/investment_research/bridge_status.json\n"
-                "Read order: bridge_status.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_knowledge_graph_nodes.json -> openclaw_knowledge_graph_edges.json -> openclaw_knowledge_graph_master_index.md -> openclaw_knowledge_graph_glossary.md -> openclaw_knowledge_graph_marginalia_queue.md -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
+                "Read order: bridge_status.json -> openclaw_first_read.md -> openclaw_first_read.json -> openclaw_bridge_manifest.json -> investment_research_context.md -> investment_research_context.json -> openclaw_knowledge_graph_blueprint.md -> openclaw_knowledge_graph_blueprint.json -> openclaw_knowledge_graph_nodes.json -> openclaw_knowledge_graph_edges.json -> openclaw_knowledge_graph_master_index.md -> openclaw_knowledge_graph_glossary.md -> openclaw_knowledge_graph_marginalia_queue.md -> openclaw_bridge_completion_report.md -> openclaw_bridge_completion_report.json\n"
+                "read data/investment_research/openclaw_first_read.md\n"
+                "read data/investment_research/openclaw_first_read.json\n"
                 "read data/investment_research/openclaw_bridge_manifest.json\n"
                 "read data/investment_research/investment_research_context.md\n"
                 "read data/investment_research/investment_research_context.json\n"
@@ -18311,6 +18360,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
             openclaw_dir = Path(tmp)
             read_order = [
                 "bridge_status.json",
+                "openclaw_first_read.md",
+                "openclaw_first_read.json",
                 "openclaw_bridge_manifest.json",
                 "investment_research_context.md",
                 "investment_research_context.json",
@@ -18324,6 +18375,21 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "openclaw_bridge_completion_report.md",
                 "openclaw_bridge_completion_report.json",
             ]
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# OpenClaw Investment Research First Read\n\n## Latest Recommendations\n\n- KR#1 001 한국1\n\n## Safety\n\n- secrets excluded\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openclaw_investment_research_first_read_v1",
+                        "generated_at": "2026-07-05T07:00:00+09:00",
+                        "read_order": read_order,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
             (openclaw_dir / "investment_research_context.md").write_text("# ok\n", encoding="utf-8")
             (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text("# Master Index\nconcept.relu\n", encoding="utf-8")
             (openclaw_dir / "openclaw_knowledge_graph_blueprint.json").write_text(
@@ -18483,6 +18549,29 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openclaw_investment_research_first_read_v1",
+                        "generated_at": generated_at,
+                        "latest_recommendation_date": "2026-07-05",
+                        "latest_market_counts": {"KR": 1, "US": 1},
+                        "latest_recommendations": latest_rows,
+                        "read_order": tool.EXPECTED_READ_ORDER,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# OpenClaw Investment Research First Read\n\n"
+                "## Latest Recommendations\n\n"
+                "- KR#1 `001` 한국1 | score 99 | baseline 1001 KRW\n"
+                "- US#1 `AAA` 미국1 | score 98 | baseline 10.5 USD\n\n"
+                "## Safety\n\n"
+                "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
+                encoding="utf-8",
+            )
             (openclaw_dir / "openclaw_knowledge_graph_blueprint.md").write_text(
                 "# OpenClaw Personal Knowledge Graph Blueprint\n\n"
                 "## Principles\n\n"
@@ -18541,6 +18630,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     {
                         "schema": "investment_research_openclaw_bridge_v1",
                         "context_generated_at": generated_at,
+                        "first_read_file": "openclaw_first_read.md",
+                        "first_read_json_file": "openclaw_first_read.json",
                         "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
                         "knowledge_graph_blueprint_json_file": "openclaw_knowledge_graph_blueprint.json",
                         "knowledge_graph_files": {
@@ -18577,6 +18668,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                         "read_order": tool.EXPECTED_READ_ORDER,
                         "latest_recommendations": latest_rows,
                         "file_sha256": {
+                            "first_read_json": tool.sha256_hex(openclaw_dir / "openclaw_first_read.json"),
+                            "first_read_markdown": tool.sha256_hex(openclaw_dir / "openclaw_first_read.md"),
                             "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
                             "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
                             "knowledge_graph_blueprint_json": tool.sha256_hex(openclaw_dir / "openclaw_knowledge_graph_blueprint.json"),
@@ -18649,6 +18742,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "secrets_excluded": True,
                 "read_order": [
                     "bridge_status.json",
+                    "openclaw_first_read.md",
+                    "openclaw_first_read.json",
                     "openclaw_bridge_manifest.json",
                     "investment_research_context.md",
                     "investment_research_context.json",
@@ -18663,6 +18758,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                     "openclaw_bridge_completion_report.json",
                 ],
                 "file_sha256": {
+                    "first_read_json": "5" * 64,
+                    "first_read_markdown": "6" * 64,
                     "context_json": "a" * 64,
                     "context_markdown": "b" * 64,
                     "knowledge_graph_blueprint_json": "c" * 64,

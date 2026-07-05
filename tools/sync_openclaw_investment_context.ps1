@@ -72,6 +72,8 @@ $knowledgeGraphEdgesPath = Join-Path $sourceDir "openclaw_knowledge_graph_edges.
 $knowledgeGraphMasterIndexPath = Join-Path $sourceDir "openclaw_knowledge_graph_master_index.md"
 $knowledgeGraphGlossaryPath = Join-Path $sourceDir "openclaw_knowledge_graph_glossary.md"
 $knowledgeGraphMarginaliaPath = Join-Path $sourceDir "openclaw_knowledge_graph_marginalia_queue.md"
+$firstReadJsonPath = Join-Path $sourceDir "openclaw_first_read.json"
+$firstReadMarkdownPath = Join-Path $sourceDir "openclaw_first_read.md"
 $manifestPath = Join-Path $sourceDir "openclaw_bridge_manifest.json"
 if (-not (Test-Path -LiteralPath $jsonPath)) {
   throw "Generated JSON context not found: $jsonPath"
@@ -89,6 +91,12 @@ foreach ($graphPath in @($knowledgeGraphNodesPath, $knowledgeGraphEdgesPath, $kn
   if (-not (Test-Path -LiteralPath $graphPath)) {
     throw "Generated OpenClaw knowledge graph artifact not found: $graphPath"
   }
+}
+if (-not (Test-Path -LiteralPath $firstReadJsonPath)) {
+  throw "Generated OpenClaw first-read JSON not found: $firstReadJsonPath"
+}
+if (-not (Test-Path -LiteralPath $firstReadMarkdownPath)) {
+  throw "Generated OpenClaw first-read Markdown not found: $firstReadMarkdownPath"
 }
 if (-not (Test-Path -LiteralPath $manifestPath)) {
   throw "Generated bridge manifest not found: $manifestPath"
@@ -123,6 +131,8 @@ Copy-Item -Force -LiteralPath $knowledgeGraphEdgesPath -Destination (Join-Path $
 Copy-Item -Force -LiteralPath $knowledgeGraphMasterIndexPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_master_index.md")
 Copy-Item -Force -LiteralPath $knowledgeGraphGlossaryPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_glossary.md")
 Copy-Item -Force -LiteralPath $knowledgeGraphMarginaliaPath -Destination (Join-Path $targetDir "openclaw_knowledge_graph_marginalia_queue.md")
+Copy-Item -Force -LiteralPath $firstReadJsonPath -Destination (Join-Path $targetDir "openclaw_first_read.json")
+Copy-Item -Force -LiteralPath $firstReadMarkdownPath -Destination (Join-Path $targetDir "openclaw_first_read.md")
 Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
 $context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -150,6 +160,8 @@ $operationalCommands = [ordered]@{
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
+  first_read_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_first_read.json")).Hash.ToLowerInvariant()
+  first_read_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_first_read.md")).Hash.ToLowerInvariant()
   context_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.json")).Hash.ToLowerInvariant()
   context_markdown = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "investment_research_context.md")).Hash.ToLowerInvariant()
   knowledge_graph_blueprint_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_knowledge_graph_blueprint.json")).Hash.ToLowerInvariant()
@@ -185,6 +197,8 @@ $status = [ordered]@{
   copied_at = (Get-Date).ToString("o")
   read_order = @(
     "bridge_status.json",
+    "openclaw_first_read.md",
+    "openclaw_first_read.json",
     "openclaw_bridge_manifest.json",
     "investment_research_context.md",
     "investment_research_context.json",
@@ -211,6 +225,8 @@ $status = [ordered]@{
   source_knowledge_graph_master_index = $knowledgeGraphMasterIndexPath
   source_knowledge_graph_glossary = $knowledgeGraphGlossaryPath
   source_knowledge_graph_marginalia = $knowledgeGraphMarginaliaPath
+  source_first_read_json = $firstReadJsonPath
+  source_first_read_markdown = $firstReadMarkdownPath
   source_bridge_manifest = $manifestPath
   openclaw_workspace = $OpenClawWorkspace
   target_dir = $targetDir
@@ -235,7 +251,9 @@ $readme = @(
   "",
   "- ``investment_research_context.md``: human-readable sanitized summary",
   "- ``investment_research_context.json``: machine-readable sanitized summary",
-  "- ``openclaw_knowledge_graph_blueprint.md``: human-readable personal knowledge graph blueprint from ``투자.txt``",
+  "- ``openclaw_first_read.md``: compact first-read status, recommendations, safety, and command packet",
+  "- ``openclaw_first_read.json``: machine-readable first-read packet",
+  "- ``openclaw_knowledge_graph_blueprint.md``: human-readable personal knowledge graph blueprint from sanitized investment thesis notes",
   "- ``openclaw_knowledge_graph_blueprint.json``: machine-readable personal knowledge graph blueprint",
   "- ``openclaw_knowledge_graph_nodes.json`` and ``openclaw_knowledge_graph_edges.json``: consumable graph layer",
   "- ``openclaw_knowledge_graph_master_index.md`` / ``openclaw_knowledge_graph_glossary.md`` / ``openclaw_knowledge_graph_marginalia_queue.md``: human-readable graph views",
@@ -269,7 +287,8 @@ $startupLines = @(
   "## Investment Research OS Bridge",
   "",
   "- Read ``data/investment_research/bridge_status.json`` first.",
-  "- Read order: ``bridge_status.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_knowledge_graph_nodes.json`` -> ``openclaw_knowledge_graph_edges.json`` -> ``openclaw_knowledge_graph_master_index.md`` -> ``openclaw_knowledge_graph_glossary.md`` -> ``openclaw_knowledge_graph_marginalia_queue.md`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
+  "- Read order: ``bridge_status.json`` -> ``openclaw_first_read.md`` -> ``openclaw_first_read.json`` -> ``openclaw_bridge_manifest.json`` -> ``investment_research_context.md`` -> ``investment_research_context.json`` -> ``openclaw_knowledge_graph_blueprint.md`` -> ``openclaw_knowledge_graph_blueprint.json`` -> ``openclaw_knowledge_graph_nodes.json`` -> ``openclaw_knowledge_graph_edges.json`` -> ``openclaw_knowledge_graph_master_index.md`` -> ``openclaw_knowledge_graph_glossary.md`` -> ``openclaw_knowledge_graph_marginalia_queue.md`` -> ``openclaw_bridge_completion_report.md`` -> ``openclaw_bridge_completion_report.json``.",
+  "- First-read packet: ``data/investment_research/openclaw_first_read.md`` and ``data/investment_research/openclaw_first_read.json``.",
   "- Human summary: ``data/investment_research/investment_research_context.md``.",
   "- Machine state: ``data/investment_research/investment_research_context.json``.",
   "- Knowledge graph blueprint: ``data/investment_research/openclaw_knowledge_graph_blueprint.md`` and ``data/investment_research/openclaw_knowledge_graph_blueprint.json``.",

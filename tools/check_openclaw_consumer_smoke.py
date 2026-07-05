@@ -11,6 +11,8 @@ from typing import Any
 DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
 EXPECTED_READ_ORDER = [
     "bridge_status.json",
+    "openclaw_first_read.md",
+    "openclaw_first_read.json",
     "openclaw_bridge_manifest.json",
     "investment_research_context.md",
     "investment_research_context.json",
@@ -26,6 +28,7 @@ EXPECTED_READ_ORDER = [
 ]
 JSON_FILES = {
     "bridge_status.json",
+    "openclaw_first_read.json",
     "openclaw_bridge_manifest.json",
     "investment_research_context.json",
     "openclaw_knowledge_graph_blueprint.json",
@@ -116,6 +119,8 @@ def sorted_recommendations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def validate_hashes(openclaw_dir: Path, status: dict[str, Any], errors: list[str]) -> None:
     expected_file_hashes = {
+        "first_read_json": "openclaw_first_read.json",
+        "first_read_markdown": "openclaw_first_read.md",
         "context_json": "investment_research_context.json",
         "context_markdown": "investment_research_context.md",
         "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
@@ -189,12 +194,14 @@ def build_result(
             errors.append(str(exc))
 
     manifest = loaded_files.get("openclaw_bridge_manifest.json")
+    first_read = loaded_files.get("openclaw_first_read.json")
     context = loaded_files.get("investment_research_context.json")
     knowledge_graph_blueprint = loaded_files.get("openclaw_knowledge_graph_blueprint.json")
     knowledge_graph_nodes = loaded_files.get("openclaw_knowledge_graph_nodes.json")
     knowledge_graph_edges = loaded_files.get("openclaw_knowledge_graph_edges.json")
     completion = loaded_files.get("openclaw_bridge_completion_report.json")
     context_markdown = str(loaded_files.get("investment_research_context.md") or "")
+    first_read_markdown = str(loaded_files.get("openclaw_first_read.md") or "")
     knowledge_graph_markdown = str(loaded_files.get("openclaw_knowledge_graph_blueprint.md") or "")
     knowledge_graph_master_index = str(loaded_files.get("openclaw_knowledge_graph_master_index.md") or "")
     knowledge_graph_glossary = str(loaded_files.get("openclaw_knowledge_graph_glossary.md") or "")
@@ -215,6 +222,10 @@ def build_result(
     if isinstance(manifest, dict):
         if manifest.get("read_order") != EXPECTED_READ_ORDER:
             errors.append("OpenClaw consumer manifest read_order mismatch")
+        if manifest.get("first_read_file") != "openclaw_first_read.md":
+            errors.append("OpenClaw consumer manifest missing first-read markdown")
+        if manifest.get("first_read_json_file") != "openclaw_first_read.json":
+            errors.append("OpenClaw consumer manifest missing first-read JSON")
         if manifest.get("knowledge_graph_blueprint_file") != "openclaw_knowledge_graph_blueprint.md":
             errors.append("OpenClaw consumer manifest missing knowledge graph blueprint markdown")
         if manifest.get("knowledge_graph_blueprint_json_file") != "openclaw_knowledge_graph_blueprint.json":
@@ -231,6 +242,14 @@ def build_result(
                 errors.append(f"OpenClaw consumer manifest missing knowledge graph file: {key}")
     else:
         errors.append("OpenClaw consumer manifest did not load")
+
+    if isinstance(first_read, dict):
+        if first_read.get("schema") != "openclaw_investment_research_first_read_v1":
+            errors.append("OpenClaw consumer first-read schema mismatch")
+        if first_read.get("read_order") != EXPECTED_READ_ORDER:
+            errors.append("OpenClaw consumer first-read read_order mismatch")
+    else:
+        errors.append("OpenClaw consumer first-read JSON did not load")
 
     latest_recommendations: list[dict[str, Any]] = []
     market_counts: dict[str, Any] = {}
@@ -306,6 +325,10 @@ def build_result(
 
     if "latest recommendations" not in context_markdown.lower() and "최신 추천" not in context_markdown:
         errors.append("OpenClaw consumer markdown missing latest recommendations")
+    if "OpenClaw Investment Research First Read" not in first_read_markdown:
+        errors.append("OpenClaw consumer first-read markdown missing title")
+    if "Latest Recommendations" not in first_read_markdown or "Safety" not in first_read_markdown:
+        errors.append("OpenClaw consumer first-read markdown missing compact sections")
     if "secrets, broker tokens, raw DB files" not in context_markdown and "민감정보" not in context_markdown:
         errors.append("OpenClaw consumer markdown missing sensitive-data exclusion note")
     if "Master Index" not in knowledge_graph_markdown or "concept.relu" not in knowledge_graph_markdown:
@@ -349,6 +372,8 @@ def build_result(
         "telegram_saved_count": telegram_saved_count,
         "hashes_checked": [
             "file_sha256.context_json",
+            "file_sha256.first_read_json",
+            "file_sha256.first_read_markdown",
             "file_sha256.context_markdown",
             "file_sha256.knowledge_graph_blueprint_json",
             "file_sha256.knowledge_graph_blueprint_markdown",

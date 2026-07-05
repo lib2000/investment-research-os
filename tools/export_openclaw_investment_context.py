@@ -20,6 +20,8 @@ KNOWLEDGE_GRAPH_FILES = {
     "glossary": "openclaw_knowledge_graph_glossary.md",
     "marginalia": "openclaw_knowledge_graph_marginalia_queue.md",
 }
+FIRST_READ_JSON_FILE = "openclaw_first_read.json"
+FIRST_READ_MARKDOWN_FILE = "openclaw_first_read.md"
 
 
 def load_json(path: Path, default):
@@ -479,13 +481,16 @@ def build_context(project_root: Path) -> dict:
         "openclaw_knowledge_graph_blueprint": build_personal_knowledge_graph_blueprint(),
         "openclaw_usage": {
             "status_file": "bridge_status.json",
-            "read_this_first": "investment_research_context.md",
+            "read_this_first": FIRST_READ_MARKDOWN_FILE,
+            "read_this_first_json": FIRST_READ_JSON_FILE,
             "machine_readable": "investment_research_context.json",
             "knowledge_graph_blueprint": "openclaw_knowledge_graph_blueprint.md",
             "knowledge_graph_blueprint_json": "openclaw_knowledge_graph_blueprint.json",
             "completion_report": "openclaw_bridge_completion_report.md",
             "completion_report_json": "openclaw_bridge_completion_report.json",
             "status_summary_command": "python tools\\show_openclaw_bridge_status.py --json",
+            "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
+            "strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "final_completion_audit_command": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "knowledge_graph_validation_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
             "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
@@ -920,6 +925,140 @@ def render_knowledge_graph_marginalia_queue(artifacts: dict) -> str:
     return "\n".join(lines)
 
 
+def build_openclaw_read_order(graph_files: dict | None = None) -> list[str]:
+    graph_files = graph_files or KNOWLEDGE_GRAPH_FILES
+    return [
+        "bridge_status.json",
+        FIRST_READ_MARKDOWN_FILE,
+        FIRST_READ_JSON_FILE,
+        "openclaw_bridge_manifest.json",
+        "investment_research_context.md",
+        "investment_research_context.json",
+        "openclaw_knowledge_graph_blueprint.md",
+        "openclaw_knowledge_graph_blueprint.json",
+        graph_files["nodes"],
+        graph_files["edges"],
+        graph_files["master_index"],
+        graph_files["glossary"],
+        graph_files["marginalia"],
+        "openclaw_bridge_completion_report.md",
+        "openclaw_bridge_completion_report.json",
+    ]
+
+
+def build_first_read_packet(context: dict) -> dict:
+    state = context.get("current_state") or {}
+    rec = state.get("daily_recommendations") or {}
+    news = state.get("news_and_telegram") or {}
+    openclaw_usage = context.get("openclaw_usage") or {}
+    recommendations = []
+    for row in rec.get("latest_rows") or []:
+        if not isinstance(row, dict):
+            continue
+        recommendations.append(
+            {
+                "market": row.get("market"),
+                "rank": row.get("rank"),
+                "ticker": row.get("ticker"),
+                "company_name": row.get("company_name"),
+                "score": row.get("score"),
+                "baseline_price": row.get("baseline_price"),
+                "currency": row.get("currency"),
+                "investment_direction": row.get("investment_direction"),
+                "evidence_quality": row.get("evidence_quality_grade"),
+                "next_tracking_date": row.get("next_tracking_date"),
+            }
+        )
+    return {
+        "schema": "openclaw_investment_research_first_read_v1",
+        "generated_at": context.get("generated_at"),
+        "status": "ready",
+        "read_this_first": True,
+        "purpose": "Give OpenClaw a compact, sanitized first-read packet before it loads the larger research context.",
+        "source_project": context.get("source_project"),
+        "latest_recommendation_date": rec.get("latest_recommendation_date"),
+        "latest_market_counts": rec.get("latest_market_counts") or {},
+        "latest_recommendations": recommendations,
+        "telegram": {
+            "favorite_saved_count": (news.get("telegram_favorite_posts") or {}).get("saved_count"),
+            "priority_brief_design": (news.get("telegram_priority_brief") or {}).get("design"),
+            "priority_delivery_design": (news.get("telegram_priority_brief") or {}).get("delivery_design"),
+            "delivery_safe_defaults": (news.get("telegram_priority_brief") or {}).get("safe_defaults"),
+        },
+        "safety": {
+            "secrets_excluded": True,
+            "decision_support_only": True,
+            "restricted_actions": openclaw_usage.get("restricted_actions") or [],
+            "safe_actions": openclaw_usage.get("safe_actions") or [],
+        },
+        "read_order": build_openclaw_read_order(),
+        "primary_files": {
+            "human_context": "investment_research_context.md",
+            "machine_context": "investment_research_context.json",
+            "manifest": "openclaw_bridge_manifest.json",
+            "status": "bridge_status.json",
+            "completion_report": "openclaw_bridge_completion_report.md",
+            "completion_report_json": "openclaw_bridge_completion_report.json",
+        },
+        "operational_commands": {
+            "status_summary": openclaw_usage.get("status_summary_command"),
+            "safe_refresh": openclaw_usage.get("safe_refresh_command"),
+            "strict_refresh": openclaw_usage.get("strict_refresh_command"),
+            "final_completion_audit": openclaw_usage.get("final_completion_audit_command"),
+            "offline_readiness": openclaw_usage.get("offline_readiness_command"),
+        },
+        "optimization_notes": [
+            "Start with this packet for current state, then read bridge_status.json for hashes and freshness.",
+            "Use market counts to confirm KR/US recommendation coverage before using ranked rows.",
+            "Use completion report hashes before trusting copied OpenClaw files.",
+        ],
+    }
+
+
+def render_first_read_markdown(packet: dict) -> str:
+    lines = [
+        "# OpenClaw Investment Research First Read",
+        "",
+        f"- status: `{packet.get('status')}`",
+        f"- generated_at: `{packet.get('generated_at')}`",
+        f"- latest recommendation date: `{packet.get('latest_recommendation_date')}`",
+        f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
+        f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",
+        "",
+        "## Latest Recommendations",
+        "",
+    ]
+    for row in packet.get("latest_recommendations") or []:
+        lines.append(
+            f"- {row.get('market')}#{row.get('rank')} `{row.get('ticker')}` {row.get('company_name')} "
+            f"| score {row.get('score')} | baseline {row.get('baseline_price')} {row.get('currency')} "
+            f"| quality {row.get('evidence_quality') or 'n/a'}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Safety",
+            "",
+            "- decision support only: `true`",
+            "- secrets excluded: `true`",
+            "- never place trades or expose broker/API secrets from this bridge",
+            "",
+            "## Read Order",
+            "",
+        ]
+    )
+    for index, filename in enumerate(packet.get("read_order") or [], start=1):
+        lines.append(f"{index}. `{filename}`")
+    lines.extend(["", "## Commands", ""])
+    for key, command in (packet.get("operational_commands") or {}).items():
+        lines.append(f"- {key}: `{command}`")
+    lines.extend(["", "## Optimization Notes", ""])
+    for note in packet.get("optimization_notes") or []:
+        lines.append(f"- {note}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_bridge_manifest(context: dict) -> dict:
     graph_files = KNOWLEDGE_GRAPH_FILES
     return {
@@ -927,6 +1066,8 @@ def build_bridge_manifest(context: dict) -> dict:
         "generated_at": datetime.now(tz=KST).isoformat(timespec="seconds"),
         "context_generated_at": context.get("generated_at"),
         "source_project": context.get("source_project"),
+        "first_read_file": FIRST_READ_MARKDOWN_FILE,
+        "first_read_json_file": FIRST_READ_JSON_FILE,
         "context_file": "investment_research_context.json",
         "markdown_file": "investment_research_context.md",
         "knowledge_graph_blueprint_file": "openclaw_knowledge_graph_blueprint.md",
@@ -934,21 +1075,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "knowledge_graph_files": graph_files,
         "status_file": "bridge_status.json",
         "readme_file": "README.md",
-        "read_order": [
-            "bridge_status.json",
-            "openclaw_bridge_manifest.json",
-            "investment_research_context.md",
-            "investment_research_context.json",
-            "openclaw_knowledge_graph_blueprint.md",
-            "openclaw_knowledge_graph_blueprint.json",
-            graph_files["nodes"],
-            graph_files["edges"],
-            graph_files["master_index"],
-            graph_files["glossary"],
-            graph_files["marginalia"],
-            "openclaw_bridge_completion_report.md",
-            "openclaw_bridge_completion_report.json",
-        ],
+        "read_order": build_openclaw_read_order(graph_files),
         "completion_report_file": "openclaw_bridge_completion_report.md",
         "completion_report_json_file": "openclaw_bridge_completion_report.json",
         "safe_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_investment_context.ps1",
@@ -975,6 +1102,8 @@ def write_context(context: dict, output_dir: Path) -> dict:
     kg_master_index_path = output_dir / KNOWLEDGE_GRAPH_FILES["master_index"]
     kg_glossary_path = output_dir / KNOWLEDGE_GRAPH_FILES["glossary"]
     kg_marginalia_path = output_dir / KNOWLEDGE_GRAPH_FILES["marginalia"]
+    first_read_json_path = output_dir / FIRST_READ_JSON_FILE
+    first_read_md_path = output_dir / FIRST_READ_MARKDOWN_FILE
     manifest_path = output_dir / "openclaw_bridge_manifest.json"
     json_path.write_text(json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(render_markdown(context), encoding="utf-8")
@@ -987,6 +1116,9 @@ def write_context(context: dict, output_dir: Path) -> dict:
     kg_master_index_path.write_text(render_knowledge_graph_master_index(graph_artifacts), encoding="utf-8")
     kg_glossary_path.write_text(render_knowledge_graph_glossary(graph_artifacts), encoding="utf-8")
     kg_marginalia_path.write_text(render_knowledge_graph_marginalia_queue(graph_artifacts), encoding="utf-8")
+    first_read_packet = build_first_read_packet(context)
+    first_read_json_path.write_text(json.dumps(first_read_packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    first_read_md_path.write_text(render_first_read_markdown(first_read_packet), encoding="utf-8")
     manifest_path.write_text(json.dumps(build_bridge_manifest(context), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
         "json_path": str(json_path),
@@ -998,6 +1130,8 @@ def write_context(context: dict, output_dir: Path) -> dict:
         "knowledge_graph_master_index_path": str(kg_master_index_path),
         "knowledge_graph_glossary_path": str(kg_glossary_path),
         "knowledge_graph_marginalia_path": str(kg_marginalia_path),
+        "first_read_json_path": str(first_read_json_path),
+        "first_read_markdown_path": str(first_read_md_path),
         "manifest_path": str(manifest_path),
     }
 
