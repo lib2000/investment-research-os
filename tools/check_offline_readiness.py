@@ -125,6 +125,7 @@ CHECKS = [
             "--json",
         ],
     ),
+    ("운영 스케줄 상태", ["tools/check_operational_schedule_status.py", "--json", "--allow-warnings"]),
     ("Telegram 즐겨찾기 인기글 dry-run", ["tools/check_telegram_favorite_posts.py", "--sample", "--enabled"]),
     ("Earnings Transcript payload", ["tools/check_earnings_transcript_collector.py"]),
     ("Portfolio Signal 통합 점수", ["tools/check_portfolio_signal_score.py"]),

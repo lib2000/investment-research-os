@@ -595,6 +595,7 @@ def build_context(project_root: Path) -> dict:
             "backend_watchdog_register_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
             "market_journal_linkage_command": "python tools\\check_market_journal_linkage.py --strict --json",
             "market_journal_linkage_backlog_command": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
+            "operational_schedule_status_command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
             "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
@@ -711,6 +712,7 @@ def render_markdown(context: dict) -> str:
             "- OpenClaw 답변 직전 fresh bootstrap은 `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`으로 확인합니다.",
             "- 시장일지 관심/보유 연결 현황은 `python tools\\check_market_journal_linkage.py --strict --json`으로 확인합니다.",
             "- 시장일지 미연결 우선 보강 큐는 `python tools\\check_market_journal_linkage.py --strict --write-backlog --json`으로 생성합니다.",
+            "- 07:20/08:00/22:00 백엔드 운영 스케줄 상태는 `python tools\\check_operational_schedule_status.py --json --allow-warnings`로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",
@@ -1218,6 +1220,7 @@ def build_first_read_packet(context: dict) -> dict:
             "backend_watchdog_register": openclaw_usage.get("backend_watchdog_register_command"),
             "market_journal_linkage": openclaw_usage.get("market_journal_linkage_command"),
             "market_journal_linkage_backlog": openclaw_usage.get("market_journal_linkage_backlog_command"),
+            "operational_schedule_status": openclaw_usage.get("operational_schedule_status_command"),
             "offline_readiness": openclaw_usage.get("offline_readiness_command"),
         },
         "optimization_notes": [
@@ -1347,6 +1350,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "backend_watchdog_register_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
         "market_journal_linkage_command": "python tools\\check_market_journal_linkage.py --strict --json",
         "market_journal_linkage_backlog_command": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
+        "operational_schedule_status_command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
         "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
         "sanitization": context.get("sanitization"),
         "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),

@@ -555,6 +555,18 @@ def load_telegram_favorite_posts_check_tool():
     return module
 
 
+def load_operational_schedule_status_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_operational_schedule_status.py"
+    spec = spec_from_file_location("check_operational_schedule_status", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_write_actions_smoke_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1140,6 +1152,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("시장일지 관심/보유 연결", checks)
         self.assertEqual(checks["시장일지 관심/보유 연결"], ["tools/check_market_journal_linkage.py", "--strict"])
+
+    def test_offline_readiness_checks_operational_schedule_status(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("운영 스케줄 상태", checks)
+        self.assertEqual(
+            checks["운영 스케줄 상태"],
+            ["tools/check_operational_schedule_status.py", "--json", "--allow-warnings"],
+        )
 
     def test_offline_readiness_checks_local_ai_survival_mode(self):
         tool = load_offline_readiness_tool()
@@ -4398,6 +4421,64 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["never_run"])
+
+    def test_operational_schedule_status_summarizes_backend_daily_gates(self):
+        tool = load_operational_schedule_status_tool()
+        today = date(2026, 7, 6)
+
+        with TemporaryDirectory() as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            system_dir = vault_dir / "_system"
+            system_dir.mkdir(parents=True)
+            records = []
+            for market in ("KR", "US"):
+                for rank in range(1, 4):
+                    records.append(
+                        {
+                            "record_id": f"{today}-{market}-{rank}",
+                            "recommendation_date": today.isoformat(),
+                            "market": market,
+                            "rank": rank,
+                            "ticker": f"{market}{rank}",
+                            "company_name": f"{market} Company {rank}",
+                        }
+                    )
+            (system_dir / "daily_recommendations.json").write_text(
+                json.dumps(
+                    {
+                        "latest_recommendation_date": today.isoformat(),
+                        "updated_at": "2026-07-06T08:01:00+09:00",
+                        "records": records,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            settings = tool.Settings(
+                research_vault_dir=str(vault_dir),
+                telegram_market_close_auto_journal=True,
+                telegram_market_close_journal_time="07:20",
+                daily_recommendations_enabled=True,
+                daily_recommendations_time="08:00",
+                telegram_favorite_posts_enabled=True,
+                telegram_favorite_posts_time="22:00",
+                telegram_favorite_channels_json='["https://t.me/kwusa"]',
+            )
+
+            with patch.object(tool, "current_storage_date", return_value=today), patch.object(
+                tool,
+                "current_storage_datetime",
+                return_value=datetime(2026, 7, 6, 5, 30),
+            ), patch.object(tool, "current_storage_timestamp", return_value="2026-07-06T05:30:00+09:00"):
+                result = tool.build_status(settings)
+
+        checks = {item["id"]: item for item in result["checks"]}
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(checks["daily_recommendations"]["status"], "ok")
+        self.assertEqual(checks["daily_recommendations"]["today_count"], 6)
+        self.assertEqual(checks["telegram_us_market_close_journal"]["scheduler"], "backend_daily_gate")
+        self.assertEqual(checks["telegram_favorite_posts"]["configured_channel_count"], 1)
+        self.assertIn("telegram_us_market_close_journal", "\n".join(result["warnings"]))
 
 
 class PortfolioReportAlertPostrunTests(unittest.TestCase):
@@ -19646,6 +19727,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
                             "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
                             "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
+                            "operational_schedule_status": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -19799,6 +19881,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"wsl_fresh_bootstrap_command"', manifest_text)
         self.assertIn('"market_journal_linkage_command"', manifest_text)
         self.assertIn('"market_journal_linkage_backlog_command"', manifest_text)
+        self.assertIn('"operational_schedule_status_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
@@ -19828,6 +19911,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"market_journal_linkage_command": "python tools\\\\check_market_journal_linkage.py --strict --json"', exported_text)
         self.assertIn('"market_journal_linkage_backlog_command": "python tools\\\\check_market_journal_linkage.py --strict --write-backlog --json"', exported_text)
+        self.assertIn('"operational_schedule_status_command": "python tools\\\\check_operational_schedule_status.py --json --allow-warnings"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"today_work_report"', exported_text)
         self.assertIn('"next_schedule"', exported_text)
@@ -19865,6 +19949,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', manifest_text)
         self.assertIn('"market_journal_linkage_command": "python tools\\\\check_market_journal_linkage.py --strict --json"', manifest_text)
         self.assertIn('"market_journal_linkage_backlog_command": "python tools\\\\check_market_journal_linkage.py --strict --write-backlog --json"', manifest_text)
+        self.assertIn('"operational_schedule_status_command": "python tools\\\\check_operational_schedule_status.py --json --allow-warnings"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
         self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
@@ -19874,6 +19959,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn("show_openclaw_bridge_status.py --json", markdown_text)
         self.assertIn("check_market_journal_linkage.py --strict --json", markdown_text)
         self.assertIn("check_market_journal_linkage.py --strict --write-backlog --json", markdown_text)
+        self.assertIn("check_operational_schedule_status.py --json --allow-warnings", markdown_text)
         self.assertIn("AI 반도체 2차 병목", exported_text)
 
 
@@ -20082,6 +20168,9 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run sync_openclaw_wsl_investment_context.ps1\n"
                 "run check_openclaw_wsl_answer_context.py --json\n"
                 "run check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json\n"
+                "run check_market_journal_linkage.py --strict --json\n"
+                "run check_market_journal_linkage.py --strict --write-backlog --json\n"
+                "run check_operational_schedule_status.py --json --allow-warnings\n"
                 "run check_offline_readiness.py --json\n"
             )
             (root / "AGENTS.md").write_text(startup_note, encoding="utf-8")
@@ -20753,6 +20842,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "backend_watchdog_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
                 "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
                 "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
+                "operational_schedule_status": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20794,6 +20884,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("backend_watchdog_register", json_payload["operational_commands"])
         self.assertIn("market_journal_linkage", json_payload["operational_commands"])
         self.assertIn("market_journal_linkage_backlog", json_payload["operational_commands"])
+        self.assertIn("operational_schedule_status", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20840,6 +20931,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- backend_watchdog_register: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1`", markdown)
         self.assertIn("- market_journal_linkage: `python tools\\check_market_journal_linkage.py --strict --json`", markdown)
         self.assertIn("- market_journal_linkage_backlog: `python tools\\check_market_journal_linkage.py --strict --write-backlog --json`", markdown)
+        self.assertIn("- operational_schedule_status: `python tools\\check_operational_schedule_status.py --json --allow-warnings`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
