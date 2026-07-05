@@ -168,6 +168,7 @@ from research_os.telegram_market_journal import (
     telegram_market_close_source_metadata,
     telegram_us_market_close_candidates,
 )
+from research_os.agent_operating_foundation import build_agent_operating_foundation_status
 from research_os.llm_bridge_status import build_llm_bridge_storage_status
 from research_os.local_ai_survival import build_local_ai_survival_status
 from research_os.regional_sources import (
@@ -11527,6 +11528,14 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
 )
 def read_local_ai_survival_status(settings: Settings = Depends(get_settings)) -> dict:
     return build_local_ai_survival_status(settings)
+
+
+@app.get(
+    "/api/v1/system/agent-operating-foundation",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_agent_operating_foundation_status(settings: Settings = Depends(get_settings)) -> dict:
+    return build_agent_operating_foundation_status(settings)
 
 
 def _read_openclaw_json(path: Path) -> dict:

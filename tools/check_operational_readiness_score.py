@@ -475,6 +475,27 @@ def local_ai_survival_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def agent_operating_foundation_signal(root: Path) -> dict[str, Any]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+
+    from research_os.agent_operating_foundation import build_agent_operating_foundation_status
+    from research_os.settings import Settings
+
+    payload = build_agent_operating_foundation_status(Settings(research_vault_dir=str(root / "research_vault")))
+    return signal(
+        "agent_operating_foundation",
+        "에이전트 운영 기반",
+        float(payload.get("score") or 0.0),
+        (
+            f"점수 {payload.get('score')}, "
+            f"핵심 {payload.get('critical_ready_count')}/{payload.get('critical_check_count')} ready"
+        ),
+        "python tools\\check_agent_operating_foundation.py --json --strict",
+    )
+
+
 def openclaw_bridge_signal(root: Path) -> dict[str, Any]:
     tools_dir = root / "tools"
     if str(tools_dir) not in sys.path:
@@ -590,6 +611,7 @@ def build_result(
         nps_allocation_signal(root, system_dir, enforce=enforce_nps_allocation),
         investment_insight_hub_signal(root),
         local_ai_survival_signal(root),
+        agent_operating_foundation_signal(root),
         openclaw_bridge_signal(root),
         openclaw_completion_signal(root),
         openclaw_status_summary_signal(root),

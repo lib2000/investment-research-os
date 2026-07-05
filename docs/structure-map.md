@@ -40,6 +40,7 @@
 |---|---|---|
 | `backend\research_os\analysis_context.py` | 저장 리포트, 논거 스냅샷, RAG 검색 결과를 분석 입력 context로 주입하는 helper | `BackendModuleBoundaryTests` |
 | `backend\research_os\analysis_labels.py` | 분석 출력 출처/데이터/매매스타일 표시 라벨과 분석 저장 키 생성 helper | `BackendModuleBoundaryTests` |
+| `backend\research_os\agent_operating_foundation.py` | 에이전트 운영 기반 8개 축(맥락, 기억, 도구, 안전, 평가, 관측, 자동화, 로컬 AI 생존성) readiness 요약 | `check_agent_operating_foundation.py` |
 | `backend\research_os\classification.py` | 자동 분류 시스템 태그, 출처 유형 태그, 범위/근거 태그 표준화 | `check_classification_quality.py` |
 | `backend\research_os\brokerage.py` | 증권사 연동 공통 클라이언트/상태 추상화 | `BackendModuleBoundaryTests` |
 | `backend\research_os\customs_trade.py` | 관세청 수출입 스냅샷 구성, 마크다운 렌더링, 일일 참고자료, 빈 응답 비저장 품질 판정 | `CustomsTradeDataQualityTests` |

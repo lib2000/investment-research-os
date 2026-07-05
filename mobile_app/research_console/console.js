@@ -32,6 +32,7 @@
   fetchTickerRegistryCache,
   fetchLlmBridgeStorageStatus,
   fetchLocalAiSurvivalStatus,
+  fetchAgentOperatingFoundationStatus,
   fetchLatestDataSnapshot,
   verifyTickerSymbol,
   deleteTickerRegistryCacheEntry,
@@ -107,7 +108,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=df8da4d2877d";
+} from "./api.js?v=50a789681bc8";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -257,6 +258,7 @@ const elements = {
   dailyRecommendationRepairQueueExecuteButton: document.querySelector("#dailyRecommendationRepairQueueExecuteButton"),
   portfolioReportAlertStatusButton: document.querySelector("#portfolioReportAlertStatusButton"),
   localAiSurvivalStatusButton: document.querySelector("#localAiSurvivalStatusButton"),
+  agentOperatingFoundationButton: document.querySelector("#agentOperatingFoundationButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -6037,6 +6039,10 @@ function summarizeSystemCheckValue(label, value) {
     const ready = value?.local_operation_ready ? "운영 가능" : "확인 필요";
     return `${ready} · 핵심 ${value?.critical_ready_count ?? 0}/${value?.critical_check_count ?? 0} · 외부 고급 AI ${value?.retail_advanced_ai_dependency || "optional"}`;
   }
+  if (label.includes("에이전트 운영 기반")) {
+    const ready = value?.foundation_ready ? "준비됨" : "확인 필요";
+    return `${ready} · 점수 ${value?.score ?? "n/a"} · 핵심 ${value?.critical_ready_count ?? 0}/${value?.critical_check_count ?? 0}`;
+  }
   if (label.includes("대표 대시보드")) {
     return `${value.ticker || "대상 미확인"} · 저장 데이터 ${value.file_count || 0}개 · 경고 ${(value.data_warnings || []).length}개`;
   }
@@ -6053,6 +6059,7 @@ function formatConsoleSystemCheckResult(payload) {
   const telegramBriefDeliveryCheck = checks.find((item) => item.label.includes("텔레그램 중요 브리프"));
   const portfolioReportAlertCheck = checks.find((item) => item.label.includes("보유 리포트 알림"));
   const localAiSurvivalCheck = checks.find((item) => item.label.includes("로컬 AI 생존"));
+  const agentFoundationCheck = checks.find((item) => item.label.includes("에이전트 운영 기반"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
@@ -6066,6 +6073,7 @@ function formatConsoleSystemCheckResult(payload) {
   const portfolioAlertTask = portfolioReportAlert.alert?.task || {};
   const portfolioPostrunTask = portfolioReportAlert.postrun?.task || {};
   const localAiSurvival = localAiSurvivalCheck?.value || {};
+  const agentFoundation = agentFoundationCheck?.value || {};
   const okCount = checks.length - failed.length;
   const ocrLimits = ocrCheck?.value?.limits || {};
   return [
@@ -6158,6 +6166,9 @@ function formatConsoleSystemCheckResult(payload) {
     localAiSurvival.next_actions?.length
       ? `- **다음 조치:** ${localAiSurvival.next_actions.slice(0, 3).join(" / ")}`
       : "",
+    agentFoundationCheck
+      ? `- **에이전트 운영 기반:** ${agentFoundationCheck.status} · 점수 ${agentFoundation.score ?? "n/a"} · 핵심 ${formatNumber(agentFoundation.critical_ready_count || 0)}/${formatNumber(agentFoundation.critical_check_count || 0)}`
+      : `- **에이전트 운영 기반:** 점검 결과를 불러오지 못했습니다.`,
     `- **실패 상세:** ${
       dartFailures.length
         ? dartFailures
@@ -6274,6 +6285,7 @@ async function runConsoleSystemCheck() {
     runCheck("텔레그램 중요 브리프 delivery", () => fetchTelegramBriefDeliveryStatus(token())),
     runCheck("보유 리포트 알림 07:00/07:10", () => fetchPortfolioReportAlertStatus(token())),
     runCheck("로컬 AI 생존 모드", () => fetchLocalAiSurvivalStatus(token())),
+    runCheck("에이전트 운영 기반", () => fetchAgentOperatingFoundationStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
     runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token())),
   ]);
@@ -13820,6 +13832,7 @@ const MEMORY_ACTION_MESSAGES = {
   dailyRecommendationRepairQueueExecuteButton: "추천 근거 보강 큐 상위 항목을 안전 실행합니다.",
   portfolioReportAlertStatusButton: "보유 종목 신규 리포트 알림 상태를 조회합니다.",
   localAiSurvivalStatusButton: "외부 고급 AI 제한 시 로컬 생존 모드를 점검합니다.",
+  agentOperatingFoundationButton: "에이전트 운영 기반 readiness를 점검합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
@@ -14389,6 +14402,22 @@ elements.localAiSurvivalStatusButton?.addEventListener("click", async () => {
   try {
     const result = await fetchLocalAiSurvivalStatus(token());
     setOutput(result || "로컬 AI 생존 모드 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.agentOperatingFoundationButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("에이전트 운영 기반 점검 중", [
+    "목표/맥락 패킷과 OpenClaw first-read 확인",
+    "장기 기억/RAG/포트폴리오/추천 저장소 확인",
+    "도구 계약, 안전 기본값, 평가 게이트 확인",
+    "관측 가능성과 자동화 주기 확인",
+  ]);
+  try {
+    const result = await fetchAgentOperatingFoundationStatus(token());
+    setOutput(result || "에이전트 운영 기반 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -15927,6 +15956,47 @@ function formatLocalAiSurvivalStatus(value) {
   ].join("\n");
 }
 
+function formatAgentOperatingFoundationStatus(value) {
+  const statusLabel = {
+    ok: "준비됨",
+    needs_attention: "확인 필요",
+    error: "오류",
+  };
+  const checkRows = (value.checks || []).map((item) =>
+    [
+      "|",
+      item.ready ? "정상" : "확인 필요",
+      "|",
+      markdownOutputCell(item.label || item.key || "-"),
+      "|",
+      markdownOutputCell(item.score ?? "n/a"),
+      "|",
+      markdownOutputCell(item.evidence || "-"),
+      "|",
+      markdownOutputCell(item.critical ? "핵심" : "선택"),
+      "|",
+    ].join(" ")
+  );
+  return [
+    `### 에이전트 운영 기반`,
+    ``,
+    `- **전체 상태:** ${statusLabel[value.status] || value.status || "미확인"}`,
+    `- **기반 점수:** ${value.score ?? "n/a"} / ${value.min_score ?? 95}`,
+    `- **핵심 준비도:** ${formatNumber(value.critical_ready_count || 0)}/${formatNumber(value.critical_check_count || 0)}`,
+    `- **선택 준비도:** ${formatNumber(value.optional_ready_count || 0)}/${formatNumber(value.optional_check_count || 0)}`,
+    ``,
+    `| 상태 | 항목 | 점수 | 근거 | 구분 |`,
+    `|---|---|---:|---|---|`,
+    ...(checkRows.length ? checkRows : ["| - | 점검 없음 | - | - | - |"]),
+    ``,
+    `### 운영 원칙`,
+    ...formatBulletList(value.operating_principles, (item) => compactOutputText(item, 180), "운영 원칙 정보가 없습니다."),
+    ``,
+    `### 다음 조치`,
+    ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180), "현재 추가 조치 없이 운영 가능합니다."),
+  ].join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -15947,6 +16017,10 @@ function formatKoreanResult(value) {
 
   if (value.module === "local_ai_survival_status") {
     return formatLocalAiSurvivalStatus(value);
+  }
+
+  if (value.module === "agent_operating_foundation_status") {
+    return formatAgentOperatingFoundationStatus(value);
   }
 
   if (value.module === "news_inbox" || value.module === "news_promotion") {

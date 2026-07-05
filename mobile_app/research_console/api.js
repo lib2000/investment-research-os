@@ -195,6 +195,13 @@ export async function fetchLocalAiSurvivalStatus(accessToken) {
   });
 }
 
+export async function fetchAgentOperatingFoundationStatus(accessToken) {
+  return request("/api/v1/system/agent-operating-foundation", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchOpenClawStatus(accessToken) {
   try {
     return request("/api/v1/openclaw/status", {

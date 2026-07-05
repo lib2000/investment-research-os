@@ -119,6 +119,7 @@ CHECKS = [
     ("저장 자료 품질", ["tools/check_storage_quality_store.py", "--strict"]),
     ("자동 분류 태그/RAG 품질", ["tools/check_classification_quality.py", "--strict"]),
     ("저장/RAG 실패 진단", ["tools/check_rag_failure_diagnostics.py", "--strict"]),
+    ("에이전트 운영 기반", ["tools/check_agent_operating_foundation.py", "--json", "--strict"]),
     (
         "LLM/RAG 저장 상태",
         [

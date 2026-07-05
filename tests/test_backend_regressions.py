@@ -114,6 +114,18 @@ def load_local_ai_survival_check_tool():
     return module
 
 
+def load_agent_operating_foundation_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_agent_operating_foundation.py"
+    spec = spec_from_file_location("check_agent_operating_foundation", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_git_sync_status_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -934,6 +946,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
             ["tools/check_local_ai_survival.py", "--json", "--strict"],
         )
 
+    def test_offline_readiness_checks_agent_operating_foundation(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("에이전트 운영 기반", checks)
+        self.assertEqual(
+            checks["에이전트 운영 기반"],
+            ["tools/check_agent_operating_foundation.py", "--json", "--strict"],
+        )
+
     def test_operational_readiness_includes_local_ai_survival_signal(self):
         source = (PROJECT_ROOT / "tools" / "check_operational_readiness_score.py").read_text(encoding="utf-8")
 
@@ -941,6 +964,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertIn('"local_ai_survival_mode"', source)
         self.assertIn("check_local_ai_survival.py --json --strict", source)
         self.assertIn("local_ai_survival_signal(root)", source)
+
+    def test_operational_readiness_includes_agent_foundation_signal(self):
+        source = (PROJECT_ROOT / "tools" / "check_operational_readiness_score.py").read_text(encoding="utf-8")
+
+        self.assertIn("def agent_operating_foundation_signal", source)
+        self.assertIn('"agent_operating_foundation"', source)
+        self.assertIn("check_agent_operating_foundation.py --json --strict", source)
+        self.assertIn("agent_operating_foundation_signal(root)", source)
 
     def test_offline_readiness_checks_portfolio_report_alert(self):
         tool = load_offline_readiness_tool()
@@ -4814,6 +4845,103 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(payload["retail_advanced_ai_dependency"], "optional")
         self.assertGreaterEqual(payload["critical_ready_count"], 6)
         self.assertIn("규칙 기반 분석 엔진", json.dumps(payload, ensure_ascii=False))
+        lowered = json.dumps(payload, ensure_ascii=False).lower()
+        self.assertNotIn("api_key", lowered)
+        self.assertNotIn("secret", lowered)
+        self.assertNotIn("token", lowered)
+
+    def test_agent_operating_foundation_status_scores_ready_foundation(self):
+        from research_os.agent_operating_foundation import build_agent_operating_foundation_status
+        from research_os.rag_memory import connect_rag_db, initialize_rag_db
+        from research_os.settings import Settings
+
+        with TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            root = Path(tmp)
+            vault_dir = root / "research_vault"
+            system_dir = vault_dir / "_system"
+            openclaw_dir = system_dir / "openclaw_integration"
+            openclaw_dir.mkdir(parents=True)
+            required_files = [
+                "docs/operations-readiness.md",
+                "docs/openclaw-investment-research-bridge.md",
+                "docs/structure-map.md",
+                "backend/research_os/llm_bridge_status.py",
+                "backend/research_os/rag_synthesis.py",
+                "backend/research_os/daily_recommendations.py",
+                "backend/research_os/investment_insight_hub.py",
+                "backend/research_os/market_signal_graph_pipeline_contract.py",
+                "backend/research_os/system_health.py",
+                "backend/research_os/code_knowledge.py",
+                "tools/check_offline_readiness.py",
+                "tools/check_public_repo_safety.py",
+                "tools/check_json_contracts.py",
+                "tools/check_operational_readiness_score.py",
+                "tools/check_openclaw_quick_health.py",
+                "tools/check_local_ai_survival.py",
+                "tools/check_console_static_contract.py",
+                "tools/check_console_asset_and_js.py",
+                "tools/smoke_research_console_clicks.py",
+                "tools/check_backend_module_health.py",
+                "tools/build_code_knowledge_graph.py",
+                "tools/check_code_knowledge_graph.py",
+                "tools/show_openclaw_bridge_status.py",
+                "mobile_app/research_console/console.js",
+                "tests/test_backend_regressions.py",
+            ]
+            for relative in required_files:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# ready\n", encoding="utf-8")
+            (openclaw_dir / "openclaw_first_read.json").write_text("{}", encoding="utf-8")
+            (openclaw_dir / "investment_research_context.json").write_text("{}", encoding="utf-8")
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps({"context_generated_at": datetime.now(timezone.utc).isoformat()}),
+                encoding="utf-8",
+            )
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [{"type": "research-capture", "relative_path": "research_vault/005930/sample.md"}],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            system_dir.mkdir(exist_ok=True)
+            (system_dir / "user_portfolios.json").write_text(
+                json.dumps({"portfolios": {"default": {"holdings": [{"ticker": "005930", "quantity": 1}]}}}),
+                encoding="utf-8",
+            )
+            (system_dir / "daily_recommendations.json").write_text(
+                json.dumps({"records": [{"ticker": "005930", "rank": 1}]}),
+                encoding="utf-8",
+            )
+            initialize_rag_db(vault_dir)
+            with connect_rag_db(vault_dir) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO research_memory_documents (
+                        document_id,
+                        ticker,
+                        source_relative_path,
+                        tags_json,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "agent-foundation-doc",
+                        "005930",
+                        "research_vault/005930/sample.md",
+                        "[]",
+                        "2026-07-05T09:00:00+09:00",
+                    ),
+                )
+
+            payload = build_agent_operating_foundation_status(Settings(research_vault_dir=str(vault_dir)))
+
+        self.assertEqual(payload["module"], "agent_operating_foundation_status")
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(payload["foundation_ready"])
+        self.assertGreaterEqual(payload["score"], 95)
+        self.assertIn("목표/맥락 패킷", json.dumps(payload, ensure_ascii=False))
         lowered = json.dumps(payload, ensure_ascii=False).lower()
         self.assertNotIn("api_key", lowered)
         self.assertNotIn("secret", lowered)
@@ -15188,6 +15316,27 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('id="localAiSurvivalStatusButton"', index_html)
         self.assertIn('"/api/v1/system/local-ai-survival"', backend_source)
         self.assertIn("build_local_ai_survival_status", backend_source)
+
+    def test_console_exposes_agent_operating_foundation_status(self):
+        api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        index_html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(encoding="utf-8")
+        backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+
+        self.assertIn("export async function fetchAgentOperatingFoundationStatus", api_js)
+        self.assertIn('request("/api/v1/system/agent-operating-foundation"', api_js)
+        self.assertIn("fetchAgentOperatingFoundationStatus,", console_js)
+        self.assertIn(
+            'runCheck("에이전트 운영 기반", () => fetchAgentOperatingFoundationStatus(token()))',
+            console_js,
+        )
+        self.assertIn("formatAgentOperatingFoundationStatus", console_js)
+        self.assertIn("agentOperatingFoundationButton", console_js)
+        self.assertIn('id="agentOperatingFoundationButton"', index_html)
+        self.assertIn('"/api/v1/system/agent-operating-foundation"', backend_source)
+        self.assertIn("build_agent_operating_foundation_status", backend_source)
 
     def test_daily_recommendation_status_refreshes_dashboard_top_even_when_hidden(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
