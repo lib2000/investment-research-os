@@ -210,6 +210,15 @@ def load_openclaw_status_tool():
     return module
 
 
+def load_openclaw_consumer_smoke_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_consumer_smoke.py"
+    spec = spec_from_file_location("check_openclaw_consumer_smoke", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_refresh_portfolio_prices_tool():
     tool_path = PROJECT_ROOT / "tools" / "refresh_portfolio_prices.py"
     spec = spec_from_file_location("refresh_portfolio_prices", tool_path)
@@ -819,6 +828,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         )
         self.assertIn("OpenClaw 상태 요약", checks)
         self.assertEqual(checks["OpenClaw 상태 요약"], ["tools/show_openclaw_bridge_status.py", "--json"])
+        self.assertIn("OpenClaw 소비자 smoke", checks)
+        self.assertEqual(
+            checks["OpenClaw 소비자 smoke"],
+            ["tools/check_openclaw_consumer_smoke.py", "--max-age-hours", "24", "--json"],
+        )
 
     def test_offline_readiness_prints_nps_rebalance_plan(self):
         tool = load_offline_readiness_tool()
@@ -18043,6 +18057,124 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("US#1 AAA 미국1 score=98", rendered)
         self.assertEqual("failure", mismatch_summary["status"])
         self.assertIn("latest_recommendations count mismatch", mismatch_summary["errors"][0])
+
+    def test_openclaw_consumer_smoke_reads_bundle_in_consumer_order(self):
+        tool = load_openclaw_consumer_smoke_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            generated_at = "2026-07-05T07:00:00+09:00"
+            copied_at = tool.datetime.now(tool.timezone.utc).isoformat()
+            latest_rows = [
+                {
+                    "market": "KR",
+                    "rank": 1,
+                    "ticker": "001",
+                    "company_name": "한국1",
+                    "score": 99,
+                    "baseline_price": 1001,
+                    "currency": "KRW",
+                },
+                {
+                    "market": "US",
+                    "rank": 1,
+                    "ticker": "AAA",
+                    "company_name": "미국1",
+                    "score": 98,
+                    "baseline_price": 10.5,
+                    "currency": "USD",
+                },
+            ]
+            (openclaw_dir / "investment_research_context.md").write_text(
+                "# Investment Research OS Bridge\n\n"
+                "- latest recommendations:\n"
+                "  - KR#1 `001` 한국1 | score 99 | baseline 1001 KRW\n"
+                "  - US#1 `AAA` 미국1 | score 98 | baseline 10.5 USD\n"
+                "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "investment_research_context.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": generated_at,
+                        "current_state": {
+                            "daily_recommendations": {
+                                "latest_recommendation_date": "2026-07-05",
+                                "latest_market_counts": {"KR": 1, "US": 1},
+                                "latest_rows": latest_rows,
+                            },
+                            "news_and_telegram": {"telegram_favorite_posts": {"saved_count": 10}},
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "investment_research_openclaw_bridge_v1",
+                        "context_generated_at": generated_at,
+                        "read_order": tool.EXPECTED_READ_ORDER,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_completion_report.md").write_text(
+                "# OpenClaw Bridge Completion\n\n- completion_report_sha256: checked\n",
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_bridge_completion_report.json").write_text(
+                json.dumps({"status": "ok"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "bridge_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "copied_at": copied_at,
+                        "context_generated_at": generated_at,
+                        "source_git_branch": "main",
+                        "source_git_commit": "abc1234",
+                        "source_git_dirty": False,
+                        "secrets_excluded": True,
+                        "read_order": tool.EXPECTED_READ_ORDER,
+                        "latest_recommendations": latest_rows,
+                        "file_sha256": {
+                            "context_json": tool.sha256_hex(openclaw_dir / "investment_research_context.json"),
+                            "context_markdown": tool.sha256_hex(openclaw_dir / "investment_research_context.md"),
+                            "bridge_manifest": tool.sha256_hex(openclaw_dir / "openclaw_bridge_manifest.json"),
+                        },
+                        "completion_report_sha256": {
+                            "completion_report_json": tool.sha256_hex(openclaw_dir / "openclaw_bridge_completion_report.json"),
+                            "completion_report_markdown": tool.sha256_hex(openclaw_dir / "openclaw_bridge_completion_report.md"),
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir, max_age_hours=1, expected_latest_count=2)
+            rendered = tool.render_text(result)
+            context_payload = json.loads((openclaw_dir / "investment_research_context.json").read_text(encoding="utf-8"))
+            context_payload["current_state"]["daily_recommendations"]["latest_rows"] = []
+            (openclaw_dir / "investment_research_context.json").write_text(
+                json.dumps(context_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            mismatch = tool.build_result(openclaw_dir, max_age_hours=1, expected_latest_count=2)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(tool.EXPECTED_READ_ORDER, result["loaded_files"])
+        self.assertEqual(2, result["latest_recommendation_count"])
+        self.assertEqual({"KR": 1, "US": 1}, result["latest_market_counts"])
+        self.assertEqual("abc1234", result["source_git"]["commit"])
+        self.assertIn("OpenClaw consumer smoke: ok", rendered)
+        self.assertIn("KR#1 001 한국1 score=99", rendered)
+        self.assertEqual("failure", mismatch["status"])
+        self.assertTrue(any("latest recommendation count mismatch" in error for error in mismatch["errors"]))
 
     def test_completion_audit_writes_json_and_markdown_reports(self):
         tool = load_openclaw_bridge_completion_tool()

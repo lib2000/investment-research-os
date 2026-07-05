@@ -500,11 +500,13 @@ $contracts = @(
       'check_openclaw_investment_context.py',
       'check_openclaw_bridge_completion.py',
       'show_openclaw_bridge_status.py',
+      'check_openclaw_consumer_smoke.py',
       '--require-report-hashes',
       'check_daily_recommendations_store.py',
       'check_daily_recommendation_citations.py',
       'OpenClaw 투자리서치 브리지',
       'OpenClaw 상태 요약',
+      'OpenClaw 소비자 smoke',
       '저장/RAG 실패 진단',
       '매일 추천 RAG 근거 문서',
       'LLM/RAG 저장 상태',
@@ -1463,6 +1465,25 @@ $contracts = @(
       'latest_recommendations count mismatch',
       'telegram_saved_count',
       'final_completion_audit',
+      '--json'
+    )
+  },
+  @{
+    Path = "tools\check_openclaw_consumer_smoke.py"
+    Snippets = @(
+      'OpenClaw consumer smoke',
+      'EXPECTED_READ_ORDER',
+      'bridge_status.json',
+      'openclaw_bridge_manifest.json',
+      'investment_research_context.md',
+      'investment_research_context.json',
+      'openclaw_bridge_completion_report.md',
+      'openclaw_bridge_completion_report.json',
+      'completion_report_sha256',
+      'latest_recommendation_count',
+      'latest_recommendations',
+      'sensitive_markers_checked',
+      '--expected-latest-count',
       '--json'
     )
   },
