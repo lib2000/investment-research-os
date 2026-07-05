@@ -51,6 +51,7 @@ fi
 python3 "$wslProjectRoot/tools/check_openclaw_today_answer_readiness.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_today_answer_readiness.json
 python3 "$wslProjectRoot/tools/check_openclaw_question_read_order.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_question_read_order.json
 python3 "$wslProjectRoot/tools/check_openclaw_answer_samples.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_answer_samples.json
+python3 "$wslProjectRoot/tools/check_openclaw_actual_answer_capture_status.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_actual_answer_capture_status.json
 python3 "$wslProjectRoot/tools/check_openclaw_actual_answer_audit.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_actual_answer_audit.json
 python3 - <<'PY'
 import json, pathlib
@@ -58,6 +59,7 @@ for path in [
     '/tmp/openclaw_wsl_today_answer_readiness.json',
     '/tmp/openclaw_wsl_question_read_order.json',
     '/tmp/openclaw_wsl_answer_samples.json',
+    '/tmp/openclaw_wsl_actual_answer_capture_status.json',
     '/tmp/openclaw_wsl_actual_answer_audit.json',
 ]:
     p = pathlib.Path(path)

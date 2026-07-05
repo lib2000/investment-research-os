@@ -21,6 +21,7 @@ CHECK_MODULES = {
     "priority_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_priority_answer_quality.py",
     "answer_samples": PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py",
     "actual_answer_audit": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py",
+    "actual_answer_capture_status": PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_capture_status.py",
 }
 
 
@@ -224,6 +225,27 @@ def check_actual_answer_audit(openclaw_dir: Path) -> dict[str, Any]:
     }
 
 
+def check_actual_answer_capture_status(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool(
+        "check_openclaw_actual_answer_capture_status",
+        CHECK_MODULES["actual_answer_capture_status"],
+    )
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "actual_answer_capture_status", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "actual_answer_capture_status",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "capture_count": result.get("capture_count"),
+            "latest_capture": result.get("latest_capture"),
+            "route_counts": result.get("route_counts"),
+        },
+    }
+
+
 def build_result(
     *,
     project_root: Path = PROJECT_ROOT,
@@ -248,6 +270,7 @@ def build_result(
         lambda: check_priority_answer_quality(openclaw_dir),
         lambda: check_answer_samples(openclaw_dir),
         lambda: check_actual_answer_audit(openclaw_dir),
+        lambda: check_actual_answer_capture_status(openclaw_dir),
     ):
         try:
             result = check()

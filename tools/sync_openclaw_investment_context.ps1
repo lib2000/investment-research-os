@@ -78,6 +78,7 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 질문별 read-order 검증: python tools\check_openclaw_question_read_order.py --json",
     "- 질문별 답변 샘플 검증: python tools\check_openclaw_answer_samples.py --json",
     "- 실제 답변 캡처: python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json",
+    "- 실제 답변 캡처 상태: python tools\check_openclaw_actual_answer_capture_status.py --json",
     "- 실제 답변 사후감사: python tools\check_openclaw_actual_answer_audit.py --json",
     "- 답변 직전 fresh bootstrap 검증: python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
     "",
@@ -231,6 +232,7 @@ $operationalCommands = [ordered]@{
   answer_samples = "python tools\check_openclaw_answer_samples.py --json"
   actual_answer_audit = "python tools\check_openclaw_actual_answer_audit.py --json"
   actual_answer_capture = "python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json"
+  actual_answer_capture_status = "python tools\check_openclaw_actual_answer_capture_status.py --json"
   wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
   wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
   wsl_fresh_bootstrap = "python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"
@@ -361,6 +363,7 @@ $readme = @(
   "- question read-order smoke: ``python tools\check_openclaw_question_read_order.py --json``",
   "- answer samples smoke: ``python tools\check_openclaw_answer_samples.py --json``",
   "- actual answer capture: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``",
+  "- actual answer capture status: ``python tools\check_openclaw_actual_answer_capture_status.py --json``",
   "- actual answer audit: ``python tools\check_openclaw_actual_answer_audit.py --json``",
   "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
   "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
@@ -405,6 +408,7 @@ $startupLines = @(
   "- Question read-order smoke from ``$projectRoot``: ``python tools\check_openclaw_question_read_order.py --json``.",
   "- Answer samples smoke from ``$projectRoot``: ``python tools\check_openclaw_answer_samples.py --json``.",
   "- Actual answer capture from ``$projectRoot``: ``python tools\capture_openclaw_actual_answer.py --route-id today_work_report --answer-file <path> --audit --json``.",
+  "- Actual answer capture status from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_capture_status.py --json``.",
   "- Actual answer audit from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_audit.py --json``.",
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
