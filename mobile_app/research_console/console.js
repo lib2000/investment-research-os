@@ -1630,6 +1630,40 @@ function interestRegionGroupTitle(value, count) {
   return `${interestRegionLabel(value)} ${count}개`;
 }
 
+function interestTickerDisplayName(item = {}) {
+  return String(
+    item.companyName ||
+      item.company_name ||
+      item.verification?.company_name ||
+      item.name ||
+      item.ticker ||
+      ""
+  ).trim();
+}
+
+function sortInterestTickersForDisplay(rows = []) {
+  return [...rows].sort((a, b) => {
+    const regionA = normalizeInterestRegion(a.region || a.verification?.country || "KR");
+    const regionB = normalizeInterestRegion(b.region || b.verification?.country || "KR");
+    if (regionA !== regionB) {
+      return regionA === "KR" ? -1 : 1;
+    }
+    const locale = regionA === "US" ? "en-US" : "ko-KR";
+    const nameCompare = interestTickerDisplayName(a).localeCompare(
+      interestTickerDisplayName(b),
+      locale,
+      { numeric: true, sensitivity: "base" }
+    );
+    if (nameCompare) {
+      return nameCompare;
+    }
+    return String(a.ticker || "").localeCompare(String(b.ticker || ""), "en-US", {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
 function buildInterestRecommendationRecord(item = {}, { tickerCode = "", companyName = "", region = "KR" } = {}) {
   const priority = item.priority || "medium";
   const priorityLabel = interestPriorityLabel(priority);
@@ -4962,14 +4996,17 @@ function fillInterestsForm(response) {
   const tickers = response?.tickers || [];
   const sectors = response?.sectors || [];
   lastInterestList = response || { tickers, sectors };
-  renderInterestRowsByRegion(
-    elements.interestTickerEditor,
+  const displayTickers = sortInterestTickersForDisplay(
     tickers.map(({ verification, created_at, updated_at, ...item }) => ({
       ...item,
       region: normalizeInterestRegion(item.region || verification?.country || "KR"),
-      companyName: verification?.company_name || "",
+      companyName: verification?.company_name || item.companyName || item.company_name || item.ticker || "",
       verification,
-    })),
+    }))
+  );
+  renderInterestRowsByRegion(
+    elements.interestTickerEditor,
+    displayTickers,
     makeInterestTickerSummaryRow,
     "추가된 관심종목이 없습니다. 위 입력칸에서 1개씩 추가하세요."
   );

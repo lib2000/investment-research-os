@@ -148,8 +148,16 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       label: (section.querySelector(".interest-region-heading strong")?.textContent || "").trim(),
                       title: (section.querySelector(".interest-region-heading span")?.textContent || "").trim(),
                       rowCount: section.querySelectorAll(".interest-summary-row").length,
+                      names: [...section.querySelectorAll(".interest-summary-row summary strong")]
+                        .map((item) => (item.textContent || "").replace(/\\s+/g, " ").trim())
+                        .filter(Boolean),
                       hasEmptyState: Boolean(section.querySelector(".interest-region-empty")),
                     }));
+                  const sortedLike = (items, locale) => {
+                    const collator = new Intl.Collator(locale, {numeric: true, sensitivity: "base"});
+                    const sorted = [...items].sort((a, b) => collator.compare(a, b));
+                    return items.length <= 1 || items.every((item, index) => item === sorted[index]);
+                  };
                   const openFirstHolding = async () => {
                     document.querySelector('button.tab[data-tab="portfolio"]')?.click();
                     await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio active");
@@ -254,6 +262,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     sectorSummarySamples: sectorBefore.slice(0, 5),
                     tickerRegionGroups,
                     sectorRegionGroups,
+                    tickerRegionSortOk: tickerRegionGroups.every((item) =>
+                      sortedLike(item.names || [], item.label.includes("미국") ? "en-US" : "ko-KR")
+                    ),
                     tickerNameOnlyCount: tickerBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     sectorNameOnlyCount: sectorBefore.filter((item) => item.nameOnly && !item.hasMeta && !item.hasNote).length,
                     tickerDetailOpened: tickerOpen.opened && tickerOpen.hasDetailGrid,
@@ -318,6 +329,8 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("관심종목 한국/미국 구분 섹션이 모두 보이지 않습니다.")
     if "한국" not in sector_group_labels or "미국" not in sector_group_labels:
         errors.append("관심섹터 한국/미국 구분 섹션이 모두 보이지 않습니다.")
+    if not result.get("tickerRegionSortOk"):
+        errors.append("관심종목 지역별 정렬이 한국 가나다순/미국 알파벳순이 아닙니다.")
     if int(result.get("holdingCount") or 0) < 1:
         errors.append("보유 종목 행이 렌더링되지 않았습니다.")
     if not result.get("holdingDetailOpened"):
