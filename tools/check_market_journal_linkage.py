@@ -5,13 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TARGETS = PROJECT_ROOT / "research_vault" / "_system" / "interest_collection_targets.json"
+DEFAULT_BACKLOG = PROJECT_ROOT / "research_vault" / "_system" / "market_journal_linkage_backlog.json"
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -87,7 +88,81 @@ def summarize_group(group_rows: list[dict[str, Any]], *, sample_limit: int) -> d
     }
 
 
-def build_status(path: Path, *, sample_limit: int) -> dict[str, Any]:
+def int_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def backlog_score(row: dict[str, Any]) -> int:
+    priority = str(row.get("priority") or "").strip().lower()
+    source = str(row.get("source") or "").strip().lower()
+    score = 0
+    if priority == "high":
+        score += 60
+    elif priority == "medium":
+        score += 30
+    if source == "portfolio_holding":
+        score += 40
+    elif source == "interest_ticker":
+        score += 30
+    elif source:
+        score += 10
+    if bool(row.get("thesis_snapshot_connected")):
+        score += 10
+    if int_value(row.get("rag_document_count")) > 0:
+        score += 10
+    if int_value(row.get("recent_document_count")) > 0:
+        score += 5
+    return score
+
+
+def backlog_item(row: dict[str, Any]) -> dict[str, Any]:
+    keywords = [str(item).strip() for item in (row.get("keywords") or []) if str(item).strip()]
+    return {
+        "scope": row.get("scope") or "unknown",
+        "source": row.get("source") or "",
+        "ticker": row.get("ticker") or "",
+        "company_name": row.get("company_name") or row.get("name") or "",
+        "priority": row.get("priority") or "",
+        "country": row.get("country") or "",
+        "sector": row.get("sector") or "",
+        "score": backlog_score(row),
+        "recent_document_count": int_value(row.get("recent_document_count")),
+        "rag_document_count": int_value(row.get("rag_document_count")),
+        "thesis_snapshot_connected": bool(row.get("thesis_snapshot_connected")),
+        "recommended_query_terms": keywords[:8],
+        "next_action": row.get("next_action") or "시장일지 또는 저장 자료 수집 후보로 재점검하세요.",
+    }
+
+
+def build_backlog(group_rows: list[dict[str, Any]], *, limit: int) -> dict[str, Any]:
+    unlinked = [
+        backlog_item(row)
+        for row in group_rows
+        if not [item for item in row.get("market_journal_matches") or [] if isinstance(item, dict)]
+    ]
+    items = sorted(
+        unlinked,
+        key=lambda item: (
+            int(item.get("score") or 0),
+            int(item.get("rag_document_count") or 0),
+            str(item.get("ticker") or item.get("company_name") or ""),
+        ),
+        reverse=True,
+    )
+    return {
+        "count": len(items),
+        "items": items[: max(1, limit)],
+        "top_samples": [
+            " ".join(str(item.get(key) or "").strip() for key in ("ticker", "company_name")).strip()
+            for item in items[: min(10, max(1, limit))]
+        ],
+    }
+
+
+def build_status(path: Path, *, sample_limit: int, backlog_limit: int = 25) -> dict[str, Any]:
     root = read_json(path)
     payload = root.get("payload") if isinstance(root.get("payload"), dict) else root
     ticker_rows = rows(payload, "ticker_targets")
@@ -100,6 +175,7 @@ def build_status(path: Path, *, sample_limit: int) -> dict[str, Any]:
         "total": summarize_group(all_rows, sample_limit=sample_limit),
         "tickers": summarize_group(ticker_rows, sample_limit=sample_limit),
         "sectors": summarize_group(sector_rows, sample_limit=sample_limit),
+        "backlog": build_backlog(all_rows, limit=backlog_limit),
     }
 
 
@@ -144,22 +220,45 @@ def render_text(status: dict[str, Any]) -> str:
                 f"unlinked={sectors.get('unlinked_count')}"
             ),
             "- unlinked samples: " + ", ".join(str(item) for item in (total.get("unlinked_samples") or [])[:8]),
+            "- backlog priority: "
+            + f"{(status.get('backlog') or {}).get('count', 0)} items | "
+            + ", ".join(str(item) for item in ((status.get("backlog") or {}).get("top_samples") or [])[:5]),
         ]
     )
+
+
+def write_backlog(path: Path, status: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": "market_journal_linkage_backlog_v1",
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "targets_file": status.get("targets_file"),
+        "targets_updated_at": status.get("updated_at"),
+        "summary": {
+            "linked_ratio": (status.get("total") or {}).get("linked_ratio"),
+            "unlinked_count": (status.get("total") or {}).get("unlinked_count"),
+            "latest_session_date": (status.get("total") or {}).get("latest_session_date"),
+        },
+        "items": (status.get("backlog") or {}).get("items") or [],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check market-journal linkage coverage for collection targets.")
     parser.add_argument("--targets-file", type=Path, default=DEFAULT_TARGETS)
+    parser.add_argument("--backlog-file", type=Path, default=DEFAULT_BACKLOG)
     parser.add_argument("--sample-limit", type=int, default=10)
+    parser.add_argument("--backlog-limit", type=int, default=25)
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--write-backlog", action="store_true")
     parser.add_argument("--min-linked-ratio", type=float, default=0.45)
     parser.add_argument("--max-latest-age-days", type=int, default=7)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     path = args.targets_file if args.targets_file.is_absolute() else PROJECT_ROOT / args.targets_file
-    status = build_status(path, sample_limit=max(1, args.sample_limit))
+    status = build_status(path, sample_limit=max(1, args.sample_limit), backlog_limit=max(1, args.backlog_limit))
     errors = strict_errors(
         status,
         min_linked_ratio=args.min_linked_ratio,
@@ -168,6 +267,10 @@ def main() -> int:
     if args.strict and errors:
         status["status"] = "error"
     status["errors"] = errors if args.strict else []
+    if args.write_backlog:
+        backlog_path = args.backlog_file if args.backlog_file.is_absolute() else PROJECT_ROOT / args.backlog_file
+        write_backlog(backlog_path, status)
+        status["backlog_path"] = str(backlog_path)
     if args.json:
         print(json.dumps(status, ensure_ascii=False, indent=2))
     else:

@@ -14422,7 +14422,15 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
                                     "company_name": "Alpha",
                                     "market_journal_matches": [{"market": "US", "session_date": "2026-07-06"}],
                                 },
-                                {"ticker": "BBB", "company_name": "Beta", "market_journal_matches": []},
+                                {
+                                    "ticker": "BBB",
+                                    "company_name": "Beta",
+                                    "source": "portfolio_holding",
+                                    "priority": "high",
+                                    "keywords": ["BBB", "Beta"],
+                                    "rag_document_count": 3,
+                                    "market_journal_matches": [],
+                                },
                             ],
                             "sector_targets": [
                                 {
@@ -14444,7 +14452,48 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
         self.assertEqual(status["total"]["unlinked_count"], 1)
         self.assertEqual(status["total"]["market_counts"], {"KR": 1, "US": 1})
         self.assertIn("BBB Beta", status["total"]["unlinked_samples"])
+        self.assertEqual(status["backlog"]["count"], 1)
+        self.assertEqual(status["backlog"]["items"][0]["ticker"], "BBB")
+        self.assertGreater(status["backlog"]["items"][0]["score"], 100)
         self.assertEqual(tool.strict_errors(status, min_linked_ratio=0.5, max_latest_age_days=30), [])
+
+    def test_market_journal_linkage_writes_priority_backlog(self):
+        tool = load_market_journal_linkage_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            targets_file = Path(tmpdir) / "interest_collection_targets.json"
+            backlog_file = Path(tmpdir) / "market_journal_linkage_backlog.json"
+            targets_file.write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-06T00:00:00+09:00",
+                        "payload": {
+                            "ticker_targets": [
+                                {
+                                    "ticker": "AAA",
+                                    "company_name": "Alpha",
+                                    "source": "portfolio_holding",
+                                    "priority": "high",
+                                    "keywords": ["AAA", "Alpha"],
+                                    "market_journal_matches": [],
+                                }
+                            ],
+                            "sector_targets": [],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.build_status(targets_file, sample_limit=5, backlog_limit=10)
+            tool.write_backlog(backlog_file, status)
+            backlog = json.loads(backlog_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(backlog["schema"], "market_journal_linkage_backlog_v1")
+        self.assertEqual(backlog["summary"]["unlinked_count"], 1)
+        self.assertEqual(backlog["items"][0]["ticker"], "AAA")
+        self.assertIn("Alpha", backlog["items"][0]["recommended_query_terms"])
 
     def test_market_journal_linkage_strict_errors_on_low_coverage(self):
         tool = load_market_journal_linkage_tool()
