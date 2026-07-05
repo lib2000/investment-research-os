@@ -20,6 +20,8 @@
 - `DART_API_KEY`, `FINNHUB_API_KEY`, `TIINGO_API_KEY`, `ALPHA_VANTAGE_API_KEY`
 - `TAVILY_API_KEY`, `BRAVE_API_KEY`, `NPS_ODCLOUD_API_KEY`, `CUSTOMS_TRADE_API_KEY`
 - `KCIF_USERNAME`, `KCIF_PASSWORD`
+- `TELEGRAM_REPORT_ALERT_BOT_TOKEN`, `MARKET_SIGNAL_GRAPH_TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_REPORT_ALERT_CHAT_ID`, `MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID`, `TELEGRAM_CHAT_ID`
 - `SECRET_SALT`
 
 관세청 수출입은 같은 공공데이터 키를 쓰더라도 서비스별 활용 신청/승인이 다를 수 있습니다. `CUSTOMS_TRADE_API_URL`은 품목·국가별 실적용이고, `CUSTOMS_TRADE_TOTAL_API_URL`은 1일·11일·21일 잠정/총괄 수출입동향 확인용입니다. 총괄 API가 403을 반환하면 키 값 문제가 아니라 data.go.kr의 해당 서비스 권한 상태를 먼저 확인합니다.
@@ -79,3 +81,7 @@ KCIF 연동은 로그인 세션으로 볼 수 있는 상세 화면을 활용하�
 4. 프론트 코드와 `EXPO_PUBLIC_*`에는 secret을 넣지 않는다.
 5. 캐시 파일이 필요하면 `research_vault\_system\`처럼 Git 무시 경로를 사용한다.
 6. 테스트에 실제 키를 넣지 않는다.
+
+## 텔레그램 알림 원칙
+
+보유 종목 신규 리포트 알림은 `@lib20_bot` 표시명을 코드에 기록하지만, 실제 Bot API token과 chat id는 `backend\.env` 또는 Windows 작업 스케줄러 실행 환경에서만 주입합니다. `TELEGRAM_REPORT_ALERT_ENABLED=false`, `TELEGRAM_REPORT_ALERT_DRY_RUN=true`가 기본값이며, 실제 전송은 `--enabled --submit`과 token/chat id가 모두 준비된 경우에만 허용합니다. 테스트와 문서에는 token/chat id 원문을 넣지 않고 configured 여부만 확인합니다.

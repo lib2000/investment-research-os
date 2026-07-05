@@ -11,6 +11,8 @@
   [switch]$SkipTelegramBriefDelivery,
   [switch]$SubmitTelegramBriefDelivery,
   [switch]$EnableTelegramBriefCleanup,
+  [switch]$SkipPortfolioReportAlert,
+  [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
   [switch]$SkipOpenClawSync,
   [switch]$SkipVerification
@@ -126,6 +128,19 @@ if (-not $SkipTelegramBriefDelivery.IsPresent) {
       $telegramDeliveryArgs += "--cleanup-enabled"
     }
     python @telegramDeliveryArgs
+  }
+}
+
+if (-not $SkipPortfolioReportAlert.IsPresent) {
+  Invoke-DailyResearchStep "텔레그램 보유 종목 신규 리포트 알림 ledger 갱신" {
+    $portfolioReportAlertArgs = @(
+      "tools\check_portfolio_report_alert.py",
+      "--write-state"
+    )
+    if ($SubmitPortfolioReportAlert.IsPresent) {
+      $portfolioReportAlertArgs += @("--enabled", "--submit")
+    }
+    python @portfolioReportAlertArgs
   }
 }
 

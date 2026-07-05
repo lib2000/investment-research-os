@@ -93,6 +93,7 @@ CHECKS = [
     ("Portfolio Health 변화 감지", ["tools/check_portfolio_change_detection.py"]),
     ("Telegram Portfolio Brief dry-run", ["tools/check_telegram_brief_sender.py"]),
     ("Telegram Brief delivery dry-run", ["tools/check_telegram_brief_delivery.py", "--sample-state"]),
+    ("Telegram 보유 종목 리포트 알림 dry-run", ["tools/check_portfolio_report_alert.py", "--json"]),
     ("Telegram 즐겨찾기 인기글 dry-run", ["tools/check_telegram_favorite_posts.py", "--sample", "--enabled"]),
     ("Earnings Transcript payload", ["tools/check_earnings_transcript_collector.py"]),
     ("Portfolio Signal 통합 점수", ["tools/check_portfolio_signal_score.py"]),

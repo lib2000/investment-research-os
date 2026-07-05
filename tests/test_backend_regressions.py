@@ -342,6 +342,18 @@ def load_telegram_brief_delivery_check_tool():
     return module
 
 
+def load_portfolio_report_alert_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_portfolio_report_alert.py"
+    spec = spec_from_file_location("check_portfolio_report_alert", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_favorite_posts_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -687,6 +699,19 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--submit", script_source)
         self.assertIn("--cleanup-enabled", script_source)
 
+    def test_daily_research_operations_updates_portfolio_report_alert_ledger(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipPortfolioReportAlert", script_source)
+        self.assertIn("[switch]$SubmitPortfolioReportAlert", script_source)
+        self.assertIn("텔레그램 보유 종목 신규 리포트 알림 ledger 갱신", script_source)
+        self.assertIn("tools\\check_portfolio_report_alert.py", script_source)
+        self.assertIn("--write-state", script_source)
+        self.assertIn("--enabled", script_source)
+        self.assertIn("--submit", script_source)
+
     def test_daily_research_operations_continues_after_saved_state_timeouts(self):
         script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
             encoding="utf-8-sig"
@@ -861,6 +886,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
+
+    def test_offline_readiness_checks_portfolio_report_alert(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("Telegram 보유 종목 리포트 알림 dry-run", checks)
+        self.assertEqual(
+            checks["Telegram 보유 종목 리포트 알림 dry-run"],
+            ["tools/check_portfolio_report_alert.py", "--json"],
+        )
 
     def test_offline_readiness_checks_openclaw_investment_bridge(self):
         tool = load_offline_readiness_tool()
@@ -3500,6 +3536,244 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertIn("last_delivery_plan", state)
         self.assertEqual(state["last_delivery_plan"]["design"], "telegram_brief_delivery_v1")
         self.assertEqual(state["last_delivery_plan"]["planned_send_count"], 1)
+
+
+class PortfolioReportAlertTests(unittest.TestCase):
+    def test_portfolio_report_alert_selects_new_holding_reports(self):
+        from research_os.portfolio_report_alert import build_report_alert_payload, select_new_holding_reports
+
+        portfolios = {
+            "portfolios": {
+                "main": {
+                    "portfolio_name": "이형주",
+                    "holdings": [
+                        {"ticker": "ABSI", "name": "Absci Corporation", "market_value": 543350, "currency": "USD"},
+                        {"ticker": "005930", "name": "삼성전자", "market_value": 106800, "currency": "KRW"},
+                    ],
+                }
+            }
+        }
+        manifest = {
+            "items": [
+                {
+                    "ticker": "ABSI",
+                    "title": "Absci earnings report",
+                    "published_at": "2026-07-05",
+                    "source_provider": "Firecrawl IR",
+                    "detail_url": "https://ir.example.com/absi/report",
+                    "relative_path": "research_vault/ABSI/report.md",
+                },
+                {
+                    "ticker": "ABSI",
+                    "title": "Absci earnings report",
+                    "published_at": "2026-07-05",
+                    "source_provider": "Firecrawl IR",
+                    "detail_url": "https://ir.example.com/absi/report",
+                    "relative_path": "research_vault/ABSI/report-002.md",
+                },
+                {
+                    "ticker": "ZZZ",
+                    "title": "Ignored non-holding report",
+                    "published_at": "2026-07-05",
+                    "source_provider": "Firecrawl IR",
+                },
+                {
+                    "ticker": "005930",
+                    "title": "Old Samsung report",
+                    "published_at": "2026-06-20",
+                    "source_provider": "DART",
+                },
+            ]
+        }
+        company_ir_sources = {
+            "items": [
+                {
+                    "ticker": "005930",
+                    "title": "Samsung SEC filing",
+                    "published_at": "2026-07-04",
+                    "source_provider": "SEC",
+                    "detail_url": "https://sec.example.com/samsung",
+                }
+            ]
+        }
+
+        result = select_new_holding_reports(
+            portfolios=portfolios,
+            manifest=manifest,
+            company_ir_sources=company_ir_sources,
+            today=date(2026, 7, 5),
+            lookback_days=3,
+        )
+        payload = build_report_alert_payload(result, chat_id="12345")
+
+        self.assertEqual(result["design"], "portfolio_report_alert_v1")
+        self.assertEqual(result["holding_count"], 2)
+        self.assertEqual(result["candidate_count"], 2)
+        self.assertEqual({item["ticker"] for item in result["reports"]}, {"ABSI", "005930"})
+        self.assertEqual(payload["target_bot"], "@lib20_bot")
+        self.assertEqual(payload["send_time"], "07:00")
+        self.assertIn("Portfolio Report Alert", payload["text"])
+        self.assertIn("Absci Corporation", payload["text"])
+        self.assertIn("삼성전자", payload["text"])
+
+    def test_portfolio_report_alert_check_tool_is_safe_by_default(self):
+        tool = load_portfolio_report_alert_check_tool()
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            portfolios = temp_path / "portfolios.json"
+            manifest = temp_path / "manifest.json"
+            company_ir = temp_path / "company_ir.json"
+            state = temp_path / "state.json"
+            portfolios.write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "main": {
+                                "portfolio_name": "이형주",
+                                "holdings": [{"ticker": "ABSI", "name": "Absci Corporation"}],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "ticker": "ABSI",
+                                "title": "Absci investor report",
+                                "published_at": "2026-07-05",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            company_ir.write_text(json.dumps({"items": []}), encoding="utf-8")
+
+            argv = [
+                "check_portfolio_report_alert.py",
+                "--portfolios-json",
+                str(portfolios),
+                "--manifest-json",
+                str(manifest),
+                "--company-ir-sources-json",
+                str(company_ir),
+                "--state-file",
+                str(state),
+                "--as-of",
+                "2026-07-05",
+                "--json",
+            ]
+            with patch.dict(
+                os.environ,
+                {
+                    "TELEGRAM_REPORT_ALERT_BOT_TOKEN": "",
+                    "MARKET_SIGNAL_GRAPH_TELEGRAM_BOT_TOKEN": "",
+                    "TELEGRAM_BOT_TOKEN": "",
+                    "TELEGRAM_REPORT_ALERT_CHAT_ID": "",
+                    "MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID": "",
+                    "TELEGRAM_CHAT_ID": "",
+                },
+            ), patch.object(sys, "argv", argv), patch("builtins.print") as fake_print:
+                exit_code = tool.main()
+
+        output = json.loads(fake_print.call_args.args[0])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output["status"], "success")
+        self.assertFalse(output["enabled"])
+        self.assertTrue(output["dry_run"])
+        self.assertFalse(output["bot_token_configured"])
+        self.assertEqual(output["delivery"]["applied_send_count"], 0)
+
+    def test_portfolio_report_alert_check_tool_masks_chat_id_in_json_output(self):
+        tool = load_portfolio_report_alert_check_tool()
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            portfolios = temp_path / "portfolios.json"
+            manifest = temp_path / "manifest.json"
+            company_ir = temp_path / "company_ir.json"
+            state = temp_path / "state.json"
+            portfolios.write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "main": {
+                                "portfolio_name": "이형주",
+                                "holdings": [{"ticker": "ABSI", "name": "Absci Corporation"}],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "ticker": "ABSI",
+                                "title": "Absci investor report",
+                                "published_at": "2026-07-05",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            company_ir.write_text(json.dumps({"items": []}), encoding="utf-8")
+
+            argv = [
+                "check_portfolio_report_alert.py",
+                "--portfolios-json",
+                str(portfolios),
+                "--manifest-json",
+                str(manifest),
+                "--company-ir-sources-json",
+                str(company_ir),
+                "--state-file",
+                str(state),
+                "--as-of",
+                "2026-07-05",
+                "--chat-id",
+                "987654321",
+                "--json",
+            ]
+            with patch.object(sys, "argv", argv), patch("builtins.print") as fake_print:
+                exit_code = tool.main()
+
+        output_text = fake_print.call_args.args[0]
+        output = json.loads(output_text)
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(output["chat_id_configured"])
+        self.assertNotIn("987654321", output_text)
+        self.assertEqual(output["payload"]["messages"][0]["chat_id"], "configured")
+
+    def test_portfolio_report_alert_protects_telegram_cleanup(self):
+        from research_os.telegram_brief_delivery import build_telegram_delivery_plan
+
+        state = {
+            "sent_messages": [
+                {"chat_id": "12345", "message_id": 1, "text": "Portfolio Report Alert\nABSI new report"},
+                {"chat_id": "12345", "message_id": 2, "text": "routine dry-run status ok"},
+            ]
+        }
+
+        plan = build_telegram_delivery_plan(
+            {"messages": []},
+            state=state,
+            enabled=False,
+            dry_run=True,
+            cleanup_enabled=True,
+        )
+
+        self.assertEqual(plan["protected_message_count"], 1)
+        self.assertEqual(plan["delete_candidate_count"], 1)
+        self.assertEqual(plan["protected_messages"][0]["category"], "portfolio_report_alert")
 
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
