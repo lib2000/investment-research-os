@@ -19099,6 +19099,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "answer_samples": "python tools\\check_openclaw_answer_samples.py --json",
                             "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
+                            "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
                         },
                         "file_sha256": {
@@ -19168,6 +19169,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- answer samples smoke: `python tools\\check_openclaw_answer_samples.py --json`\n"
                 "- WSL sync: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`\n"
                 "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
+                "- WSL PA fresh bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
                 "- offline readiness: `python tools\\check_offline_readiness.py --json`\n"
                 "- secrets, broker tokens, raw DB files, and account-auth material are excluded.\n",
@@ -19228,6 +19230,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_samples_command"', manifest_text)
         self.assertIn('"wsl_refresh_command"', manifest_text)
         self.assertIn('"wsl_answer_context_command"', manifest_text)
+        self.assertIn('"wsl_fresh_bootstrap_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
         self.assertIn('"completion_report": "openclaw_bridge_completion_report.md"', exported_text)
         self.assertIn('"completion_report_json": "openclaw_bridge_completion_report.json"', exported_text)
@@ -19244,6 +19247,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_samples_command": "python tools\\\\check_openclaw_answer_samples.py --json"', exported_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', exported_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', exported_text)
+        self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"today_work_report"', exported_text)
@@ -19270,6 +19274,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"answer_samples_command": "python tools\\\\check_openclaw_answer_samples.py --json"', manifest_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', manifest_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
+        self.assertIn('"wsl_fresh_bootstrap_command": "python tools\\\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
         self.assertIn('"openclaw_knowledge_graph_blueprint"', exported_text)
         self.assertIn('"schema": "openclaw_personal_knowledge_graph_blueprint_v1"', exported_text)
@@ -19475,6 +19480,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run check_openclaw_answer_samples.py --json\n"
                 "run sync_openclaw_wsl_investment_context.ps1\n"
                 "run check_openclaw_wsl_answer_context.py --json\n"
+                "run check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json\n"
                 "run check_offline_readiness.py --json\n"
             )
             (root / "AGENTS.md").write_text(startup_note, encoding="utf-8")
@@ -19488,6 +19494,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "check_openclaw_today_answer_readiness.py --json\\n"
                 "check_openclaw_question_read_order.py --json\\n"
                 "check_openclaw_answer_samples.py --json\\n"
+                "check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json\\n"
                 "data/investment_research/bridge_status.json\\n"
                 "data/investment_research/openclaw_first_read.json\\n"
                 "source git main abc1234\\n",
@@ -20120,6 +20127,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "answer_samples": "python tools\\check_openclaw_answer_samples.py --json",
                 "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                 "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
+                "wsl_fresh_bootstrap": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
             },
         }
@@ -20146,6 +20154,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("answer_samples", json_payload["operational_commands"])
         self.assertIn("wsl_refresh", json_payload["operational_commands"])
         self.assertIn("wsl_answer_context", json_payload["operational_commands"])
+        self.assertIn("wsl_fresh_bootstrap", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
         self.assertIn("completion_report_markdown", status_payload["completion_report_sha256"])
         self.assertIn("OpenClaw Investment Research Bridge Completion Report", markdown)
@@ -20177,6 +20186,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- answer_samples: `python tools\\check_openclaw_answer_samples.py --json`", markdown)
         self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
         self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
+        self.assertIn("- wsl_fresh_bootstrap: `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
         self.assertIn("## File Hashes", markdown)
         self.assertIn("- context_json: `" + ("a" * 64) + "`", markdown)
@@ -20574,6 +20584,34 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
         self.assertIn("question read-order: ok", rendered)
         self.assertIn("answer samples: ok", rendered)
         self.assertIn("agent:pa:main2: systemSent=False hasSystemPromptReport=False", rendered)
+
+    def test_wsl_answer_context_can_require_fresh_bootstrap(self):
+        tool = load_openclaw_wsl_answer_context_tool()
+        payload = {
+            "status": "ok",
+            "workspace": "/home/lib2000/.openclaw/workspace",
+            "errors": [],
+            "today_answer": {"status": "ok", "today_commit_count": 120, "next_schedule_count": 6},
+            "question_read_order": {"status": "ok", "route_count": 4},
+            "answer_samples": {"status": "ok", "sample_count": 4},
+            "sessions": {
+                "items": {
+                    "agent:pa:main2": {"systemSent": False, "hasSystemPromptReport": False},
+                }
+            },
+        }
+        captured = {}
+
+        def fake_run_wsl_json(script):
+            captured["script"] = script
+            return payload
+
+        with patch.object(tool, "run_wsl_json", side_effect=fake_run_wsl_json):
+            result = tool.build_result(session_keys=["agent:pa:main2"], require_fresh_bootstrap=True)
+
+        self.assertEqual("ok", result["status"])
+        self.assertIn("require_fresh_bootstrap = True", captured["script"])
+        self.assertIn("systemPromptReport must be absent before next PA answer", captured["script"])
 
     def test_wsl_answer_context_fails_when_pa_session_keeps_system_prompt(self):
         tool = load_openclaw_wsl_answer_context_tool()

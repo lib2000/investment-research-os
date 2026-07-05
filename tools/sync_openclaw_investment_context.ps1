@@ -75,6 +75,7 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 검증 명령: python tools\check_openclaw_today_answer_readiness.py --json",
     "- 질문별 read-order 검증: python tools\check_openclaw_question_read_order.py --json",
     "- 질문별 답변 샘플 검증: python tools\check_openclaw_answer_samples.py --json",
+    "- 답변 직전 fresh bootstrap 검증: python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
     "",
     "## Required Read Order",
     "1. data/investment_research/bridge_status.json",
@@ -226,6 +227,7 @@ $operationalCommands = [ordered]@{
   answer_samples = "python tools\check_openclaw_answer_samples.py --json"
   wsl_refresh = "powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1"
   wsl_answer_context = "python tools\check_openclaw_wsl_answer_context.py --json"
+  wsl_fresh_bootstrap = "python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
 $fileSha256 = [ordered]@{
@@ -354,6 +356,7 @@ $readme = @(
   "- answer samples smoke: ``python tools\check_openclaw_answer_samples.py --json``",
   "- WSL sync: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``",
   "- WSL PA answer context: ``python tools\check_openclaw_wsl_answer_context.py --json``",
+  "- WSL PA fresh bootstrap: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
@@ -395,6 +398,7 @@ $startupLines = @(
   "- Answer samples smoke from ``$projectRoot``: ``python tools\check_openclaw_answer_samples.py --json``.",
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
+  "- WSL PA fresh bootstrap from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``.",
   "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",

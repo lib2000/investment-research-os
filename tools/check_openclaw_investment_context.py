@@ -127,6 +127,8 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include WSL refresh command")
     if usage.get("wsl_answer_context_command") != "python tools\\check_openclaw_wsl_answer_context.py --json":
         raise AssertionError("OpenClaw usage must include WSL answer context command")
+    if usage.get("wsl_fresh_bootstrap_command") != "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json":
+        raise AssertionError("OpenClaw usage must include WSL fresh bootstrap command")
     if usage.get("offline_readiness_command") != "python tools\\check_offline_readiness.py --json":
         raise AssertionError("OpenClaw usage must include offline readiness command")
     blueprint = payload.get("openclaw_knowledge_graph_blueprint")
@@ -294,6 +296,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "answer_samples_command",
         "wsl_refresh_command",
         "wsl_answer_context_command",
+        "wsl_fresh_bootstrap_command",
         "offline_readiness_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
@@ -383,6 +386,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "answer_samples": "answer_samples_command",
             "wsl_refresh": "wsl_refresh_command",
             "wsl_answer_context": "wsl_answer_context_command",
+            "wsl_fresh_bootstrap": "wsl_fresh_bootstrap_command",
             "offline_readiness": "offline_readiness_command",
         }
         for command_key, manifest_key in command_manifest_map.items():
@@ -458,6 +462,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
             "check_openclaw_answer_samples.py --json",
             "sync_openclaw_wsl_investment_context.ps1",
             "check_openclaw_wsl_answer_context.py --json",
+            "check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
             "hash_status=ok",
             "hash_checked_count=14",
             "hash_mismatches=[]",

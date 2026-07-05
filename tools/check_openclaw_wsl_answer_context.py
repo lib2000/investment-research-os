@@ -62,6 +62,7 @@ def build_result(
     today_tool: Path = TODAY_TOOL,
     question_read_order_tool: Path = QUESTION_READ_ORDER_TOOL,
     answer_samples_tool: Path = ANSWER_SAMPLES_TOOL,
+    require_fresh_bootstrap: bool = False,
 ) -> dict[str, Any]:
     session_keys = session_keys or list(DEFAULT_SESSION_KEYS)
     today_tool_wsl = windows_to_wsl_path(today_tool)
@@ -76,6 +77,7 @@ import sys
 workspace = pathlib.Path({wsl_workspace!r}).expanduser()
 session_keys = {session_keys!r}
 required_text = {REQUIRED_TEXT!r}
+require_fresh_bootstrap = {require_fresh_bootstrap!r}
 today_tool = pathlib.Path({today_tool_wsl!r})
 question_read_order_tool = pathlib.Path({question_read_order_tool_wsl!r})
 answer_samples_tool = pathlib.Path({answer_samples_tool_wsl!r})
@@ -171,6 +173,8 @@ else:
             }})
             if entry.get('systemSent') is False:
                 pass
+            elif require_fresh_bootstrap:
+                errors.append(f'session {{key}} systemPromptReport must be absent before next PA answer')
             elif 'systemPromptReport' not in entry:
                 errors.append(f'session {{key}} systemPromptReport missing after systemSent=true')
             else:
@@ -231,11 +235,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate WSL OpenClaw PA answer context and session bootstrap state.")
     parser.add_argument("--wsl-workspace", default="~/.openclaw/workspace")
     parser.add_argument("--session-key", action="append", dest="session_keys")
+    parser.add_argument(
+        "--require-fresh-bootstrap",
+        action="store_true",
+        help="Fail if a PA session has already sent its system prompt; use before asking OpenClaw for a fresh answer.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     try:
-        result = build_result(wsl_workspace=args.wsl_workspace, session_keys=args.session_keys)
+        result = build_result(
+            wsl_workspace=args.wsl_workspace,
+            session_keys=args.session_keys,
+            require_fresh_bootstrap=args.require_fresh_bootstrap,
+        )
     except AssertionError as exc:
         result = {"status": "failure", "errors": [str(exc)]}
     if args.json:

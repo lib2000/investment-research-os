@@ -579,6 +579,7 @@ def build_context(project_root: Path) -> dict:
             "knowledge_graph_validation_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
             "wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
             "wsl_answer_context_command": "python tools\\check_openclaw_wsl_answer_context.py --json",
+            "wsl_fresh_bootstrap_command": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
             "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
@@ -687,6 +688,7 @@ def render_markdown(context: dict) -> str:
             "- 질문별 read-order smoke는 `python tools\\check_openclaw_question_read_order.py --json`으로 확인합니다.",
             "- 질문별 답변 샘플 smoke는 `python tools\\check_openclaw_answer_samples.py --json`으로 확인합니다.",
             "- WSL PA 실제 답변 컨텍스트는 `python tools\\check_openclaw_wsl_answer_context.py --json`으로 확인합니다.",
+            "- OpenClaw 답변 직전 fresh bootstrap은 `python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json`으로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",
@@ -1179,6 +1181,7 @@ def build_first_read_packet(context: dict) -> dict:
             "final_completion_audit": openclaw_usage.get("final_completion_audit_command"),
             "wsl_refresh": openclaw_usage.get("wsl_refresh_command"),
             "wsl_answer_context": openclaw_usage.get("wsl_answer_context_command"),
+            "wsl_fresh_bootstrap": openclaw_usage.get("wsl_fresh_bootstrap_command"),
             "offline_readiness": openclaw_usage.get("offline_readiness_command"),
         },
         "optimization_notes": [
@@ -1293,6 +1296,7 @@ def build_bridge_manifest(context: dict) -> dict:
         "answer_samples_command": "python tools\\check_openclaw_answer_samples.py --json",
         "wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
         "wsl_answer_context_command": "python tools\\check_openclaw_wsl_answer_context.py --json",
+        "wsl_fresh_bootstrap_command": "python tools\\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
         "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
         "sanitization": context.get("sanitization"),
         "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),
