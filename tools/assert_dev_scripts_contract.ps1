@@ -1371,6 +1371,8 @@ $contracts = @(
       'latest recommendation date',
       'latest market counts',
       'latest_recommendations',
+      '$latestRecommendationReadmeLines',
+      '- latest recommendations:',
       'telegram favorite saved',
       'core file SHA256 hashes',
       'completion_report_sha256',

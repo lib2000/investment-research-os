@@ -683,6 +683,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--openclaw-dir $targetDir --json", script_source)
         self.assertIn("OpenClaw status summary failed", script_source)
         self.assertIn("--source-dir $sourceDir --skip-openclaw --max-age-hours $MaxAgeHours", script_source)
+        self.assertIn("$latestRecommendationReadmeLines", script_source)
+        self.assertIn("- latest recommendations:", script_source)
+        self.assertIn("baseline $($item.baseline_price) $($item.currency)", script_source)
 
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error

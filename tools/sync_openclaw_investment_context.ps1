@@ -135,6 +135,10 @@ foreach ($row in @($context.current_state.daily_recommendations.latest_rows)) {
     currency = $row.currency
   }
 }
+$latestRecommendationReadmeLines = @("- latest recommendations:")
+foreach ($item in @($latestRecommendations)) {
+  $latestRecommendationReadmeLines += "  - $($item.market)#$($item.rank) ``$($item.ticker)`` $($item.company_name) | score $($item.score) | baseline $($item.baseline_price) $($item.currency)"
+}
 $status = [ordered]@{
   status = "ok"
   copied_at = (Get-Date).ToString("o")
@@ -185,6 +189,9 @@ $readme = @(
   "- context generated at: ``$($context.generated_at)``",
   "- latest recommendation date: ``$($context.current_state.daily_recommendations.latest_recommendation_date)``",
   "- latest market counts: ``$($context.current_state.daily_recommendations.latest_market_counts | ConvertTo-Json -Compress)``",
+  ""
+) + $latestRecommendationReadmeLines + @(
+  "",
   "- telegram favorite saved: ``$($context.current_state.news_and_telegram.telegram_favorite_posts.saved_count)``",
   "- safe refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1``",
   "- final strict refresh: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_investment_context.ps1 -RequireCompletionAudit``",
