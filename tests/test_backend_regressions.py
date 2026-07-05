@@ -531,6 +531,18 @@ def load_portfolio_report_alert_postrun_tool():
     return module
 
 
+def load_market_journal_linkage_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_market_journal_linkage.py"
+    spec = spec_from_file_location("check_market_journal_linkage", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_favorite_posts_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1120,6 +1132,14 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
+
+    def test_offline_readiness_checks_market_journal_linkage(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("시장일지 관심/보유 연결", checks)
+        self.assertEqual(checks["시장일지 관심/보유 연결"], ["tools/check_market_journal_linkage.py", "--strict"])
 
     def test_offline_readiness_checks_local_ai_survival_mode(self):
         tool = load_offline_readiness_tool()
@@ -14386,6 +14406,62 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
 
 
 class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
+    def test_market_journal_linkage_summarizes_unlinked_targets(self):
+        tool = load_market_journal_linkage_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            targets_file = Path(tmpdir) / "interest_collection_targets.json"
+            targets_file.write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-06T00:00:00+09:00",
+                        "payload": {
+                            "ticker_targets": [
+                                {
+                                    "ticker": "AAA",
+                                    "company_name": "Alpha",
+                                    "market_journal_matches": [{"market": "US", "session_date": "2026-07-06"}],
+                                },
+                                {"ticker": "BBB", "company_name": "Beta", "market_journal_matches": []},
+                            ],
+                            "sector_targets": [
+                                {
+                                    "name": "AI",
+                                    "market_journal_matches": [{"market": "KR", "session_date": "2026-07-05"}],
+                                }
+                            ],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.build_status(targets_file, sample_limit=5)
+
+        self.assertEqual(status["total"]["target_count"], 3)
+        self.assertEqual(status["total"]["linked_count"], 2)
+        self.assertEqual(status["total"]["unlinked_count"], 1)
+        self.assertEqual(status["total"]["market_counts"], {"KR": 1, "US": 1})
+        self.assertIn("BBB Beta", status["total"]["unlinked_samples"])
+        self.assertEqual(tool.strict_errors(status, min_linked_ratio=0.5, max_latest_age_days=30), [])
+
+    def test_market_journal_linkage_strict_errors_on_low_coverage(self):
+        tool = load_market_journal_linkage_tool()
+
+        status = {
+            "total": {
+                "target_count": 2,
+                "linked_ratio": 0.25,
+                "latest_session_age_days": 10,
+            }
+        }
+
+        errors = tool.strict_errors(status, min_linked_ratio=0.5, max_latest_age_days=7)
+
+        self.assertTrue(any("linkage ratio" in error for error in errors))
+        self.assertTrue(any("stale" in error for error in errors))
+
     def test_macro_source_signal_linkage_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_macro_source_signal_linkage.py").read_text(encoding="utf-8")
 
