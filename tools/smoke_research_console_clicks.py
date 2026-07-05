@@ -2493,6 +2493,11 @@ def main() -> int:
         default=30.0,
         help="--progress 사용 시 브라우저 응답 대기 heartbeat 간격입니다.",
     )
+    parser.add_argument(
+        "--max-elapsed-seconds",
+        type=float,
+        help="click smoke가 지정한 시간을 넘기면 실패 처리합니다.",
+    )
     parser.add_argument("--list-stages", action="store_true", help="--stop-after에서 사용할 수 있는 부분 실행 단계를 출력합니다.")
     parser.add_argument(
         "--stop-after",
@@ -2516,6 +2521,25 @@ def main() -> int:
     except (AssertionError, RuntimeError, TimeoutError, OSError, ValueError) as exc:
         print(json.dumps({"status": "failure", "errorType": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2))
         return 1
+    elapsed_seconds = result.get("elapsedSeconds")
+    if args.max_elapsed_seconds is not None and isinstance(elapsed_seconds, (int, float)):
+        if elapsed_seconds > args.max_elapsed_seconds:
+            print(
+                json.dumps(
+                    {
+                        "status": "failure",
+                        "errorType": "ElapsedTimeExceeded",
+                        "message": (
+                            f"click smoke elapsed {elapsed_seconds}s exceeded "
+                            f"{args.max_elapsed_seconds}s"
+                        ),
+                        **result,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 1
     print(json.dumps({"status": "success", **result}, ensure_ascii=False, indent=2))
     return 0
 
