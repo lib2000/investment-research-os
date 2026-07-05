@@ -261,6 +261,16 @@ def load_openclaw_today_answer_tool():
     spec.loader.exec_module(module)
     return module
 
+
+def load_openclaw_today_answer_quality_tool():
+    tool_path = PROJECT_ROOT / "tools" / "check_openclaw_today_answer_quality.py"
+    spec = spec_from_file_location("check_openclaw_today_answer_quality", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_openclaw_wsl_answer_context_tool():
     tool_path = PROJECT_ROOT / "tools" / "check_openclaw_wsl_answer_context.py"
     spec = spec_from_file_location("check_openclaw_wsl_answer_context", tool_path)
@@ -1053,6 +1063,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["OpenClaw 오늘 작업 답변 준비"],
             ["tools/check_openclaw_today_answer_readiness.py", "--json"],
+        )
+        self.assertIn("OpenClaw 오늘 작업 답변 품질 smoke", checks)
+        self.assertEqual(
+            checks["OpenClaw 오늘 작업 답변 품질 smoke"],
+            ["tools/check_openclaw_today_answer_quality.py", "--json"],
         )
         self.assertIn("OpenClaw WSL PA 답변 컨텍스트", checks)
         self.assertEqual(
@@ -19035,6 +19050,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
                             "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                             "quick_health": "python tools\\check_openclaw_quick_health.py --json",
+                            "today_answer_quality": "python tools\\check_openclaw_today_answer_quality.py --json",
                             "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                             "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                             "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -19099,6 +19115,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 "- final completion audit: `python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes`\n"
                 "- status summary: `python tools\\show_openclaw_bridge_status.py --json`\n"
                 "- quick health: `python tools\\check_openclaw_quick_health.py --json`\n"
+                "- today answer quality smoke: `python tools\\check_openclaw_today_answer_quality.py --json`\n"
                 "- WSL sync: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`\n"
                 "- WSL PA answer context: `python tools\\check_openclaw_wsl_answer_context.py --json`\n"
                 "- expected status summary hashes: `hash_status=ok`, `hash_checked_count=14`, `hash_mismatches=[]`\n"
@@ -19154,6 +19171,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"knowledge_graph_validation_command"', manifest_text)
         self.assertIn('"final_completion_audit_command"', manifest_text)
         self.assertIn('"quick_health_command"', manifest_text)
+        self.assertIn('"today_answer_quality_command"', manifest_text)
         self.assertIn('"wsl_refresh_command"', manifest_text)
         self.assertIn('"wsl_answer_context_command"', manifest_text)
         self.assertIn('"status_file": "bridge_status.json"', exported_text)
@@ -19165,6 +19183,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"strict_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_investment_context.ps1 -RequireCompletionAudit"', exported_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', exported_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', exported_text)
+        self.assertIn('"today_answer_quality_command": "python tools\\\\check_openclaw_today_answer_quality.py --json"', exported_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', exported_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', exported_text)
         self.assertIn('"final_completion_audit_command": "python tools\\\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes"', exported_text)
@@ -19185,6 +19204,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"nodes": "openclaw_knowledge_graph_nodes.json"', manifest_text)
         self.assertIn('"status_summary_command": "python tools\\\\show_openclaw_bridge_status.py --json"', manifest_text)
         self.assertIn('"quick_health_command": "python tools\\\\check_openclaw_quick_health.py --json"', manifest_text)
+        self.assertIn('"today_answer_quality_command": "python tools\\\\check_openclaw_today_answer_quality.py --json"', manifest_text)
         self.assertIn('"wsl_refresh_command": "powershell.exe -ExecutionPolicy Bypass -File .\\\\tools\\\\sync_openclaw_wsl_investment_context.ps1"', manifest_text)
         self.assertIn('"wsl_answer_context_command": "python tools\\\\check_openclaw_wsl_answer_context.py --json"', manifest_text)
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', manifest_text)
@@ -19386,6 +19406,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "run show_openclaw_bridge_status.py --json\n"
                 "run check_openclaw_quick_health.py --json\n"
                 "run check_openclaw_today_answer_readiness.py --json\n"
+                "run check_openclaw_today_answer_quality.py --json\n"
                 "run sync_openclaw_wsl_investment_context.ps1\n"
                 "run check_openclaw_wsl_answer_context.py --json\n"
                 "run check_offline_readiness.py --json\n"
@@ -20025,6 +20046,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "status_summary": "python tools\\show_openclaw_bridge_status.py --json",
                 "quick_health": "python tools\\check_openclaw_quick_health.py --json",
                 "today_answer_readiness": "python tools\\check_openclaw_today_answer_readiness.py --json",
+                "today_answer_quality": "python tools\\check_openclaw_today_answer_quality.py --json",
                 "wsl_refresh": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1",
                 "wsl_answer_context": "python tools\\check_openclaw_wsl_answer_context.py --json",
                 "offline_readiness": "python tools\\check_offline_readiness.py --json",
@@ -20047,6 +20069,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("status_summary", json_payload["operational_commands"])
         self.assertIn("quick_health", json_payload["operational_commands"])
         self.assertIn("today_answer_readiness", json_payload["operational_commands"])
+        self.assertIn("today_answer_quality", json_payload["operational_commands"])
         self.assertIn("wsl_refresh", json_payload["operational_commands"])
         self.assertIn("wsl_answer_context", json_payload["operational_commands"])
         self.assertIn("report_sha256", paths)
@@ -20074,6 +20097,7 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
         self.assertIn("- status_summary: `python tools\\show_openclaw_bridge_status.py --json`", markdown)
         self.assertIn("- quick_health: `python tools\\check_openclaw_quick_health.py --json`", markdown)
         self.assertIn("- today_answer_readiness: `python tools\\check_openclaw_today_answer_readiness.py --json`", markdown)
+        self.assertIn("- today_answer_quality: `python tools\\check_openclaw_today_answer_quality.py --json`", markdown)
         self.assertIn("- wsl_refresh: `powershell.exe -ExecutionPolicy Bypass -File .\\tools\\sync_openclaw_wsl_investment_context.ps1`", markdown)
         self.assertIn("- wsl_answer_context: `python tools\\check_openclaw_wsl_answer_context.py --json`", markdown)
         self.assertIn("- offline_readiness: `python tools\\check_offline_readiness.py --json`", markdown)
@@ -20159,6 +20183,55 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
 
             with self.assertRaisesRegex(AssertionError, "has_implementation_today=true"):
                 tool.build_result(openclaw_dir)
+
+
+class OpenClawTodayAnswerQualityTests(unittest.TestCase):
+    def test_today_answer_quality_builds_safe_expected_answer(self):
+        tool = load_openclaw_today_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-05T18:00:00+09:00",
+                "today_work_report": {
+                    "has_implementation_today": True,
+                    "commit_count": 12,
+                    "summary": ["OpenClaw bridge sync reinforced", "Telegram pipeline quality guard added"],
+                },
+                "next_schedule": [
+                    {"time": "07:00", "task": "portfolio report alert", "status": "active"},
+                    {"time": "08:00", "task": "daily recommendations", "status": "active"},
+                ],
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual("generated_expected_answer", result["answer_source"])
+        self.assertIn("banned_stale_claims_absent=true", result["messages"])
+        self.assertIn("오늘 구현 작업 보고", result["answer_preview"])
+        self.assertIn("다음 스케줄", result["answer_preview"])
+
+    def test_today_answer_quality_rejects_stale_no_work_answer_file(self):
+        tool = load_openclaw_today_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            answer_file = openclaw_dir / "answer.md"
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "today_work_report": {"has_implementation_today": True, "commit_count": 12},
+                "next_schedule": [{"time": "07:00", "task": "portfolio report alert"}],
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            answer_file.write_text("오늘 구현 작업 없음\n다음 스케줄: 07:00\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(AssertionError, "banned stale claim"):
+                tool.build_result(openclaw_dir, answer_file)
+
+
 class OpenClawWslAnswerContextTests(unittest.TestCase):
     def test_wsl_answer_context_reports_pa_sessions_and_today_readiness(self):
         tool = load_openclaw_wsl_answer_context_tool()
@@ -20264,12 +20337,21 @@ class OpenClawQuickHealthTests(unittest.TestCase):
                 "today_categories": ["openclaw_bridge", "telegram_pipeline", "local_ai_agent_foundation"],
             }
         )
+        fake_today_answer_quality = SimpleNamespace(
+            build_result=lambda openclaw_dir: {
+                "status": "ok",
+                "today_commit_count": 12,
+                "next_schedule_count": 6,
+                "answer_source": "generated_expected_answer",
+            }
+        )
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
             "check_openclaw_bridge_completion": fake_completion,
             "check_openclaw_consumer_smoke": fake_consumer,
             "check_openclaw_today_answer_readiness": fake_today_answer,
+            "check_openclaw_today_answer_quality": fake_today_answer_quality,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):
@@ -20282,7 +20364,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(5, len(result["checks"]))
+        self.assertEqual(6, len(result["checks"]))
         self.assertEqual("ok", result["hash_status"])
         self.assertEqual(14, result["hash_checked_count"])
         self.assertEqual({"KR": 3, "US": 3}, result["latest_market_counts"])
@@ -20294,6 +20376,7 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         self.assertIn("status_summary: ok", rendered)
         self.assertIn("consumer_smoke: ok", rendered)
         self.assertIn("today_answer: ok", rendered)
+        self.assertIn("today_answer_quality: ok", rendered)
 
     def test_quick_health_fails_on_status_hash_mismatch(self):
         tool = load_openclaw_quick_health_tool()
@@ -20310,12 +20393,14 @@ class OpenClawQuickHealthTests(unittest.TestCase):
         fake_completion = SimpleNamespace(build_result=lambda **kwargs: {"status": "ok", "errors": []})
         fake_consumer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_today_answer = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
+        fake_today_answer_quality = SimpleNamespace(build_result=lambda *args, **kwargs: {"status": "ok", "errors": []})
         fake_modules = {
             "show_openclaw_bridge_status": fake_status,
             "check_openclaw_investment_context": fake_context,
             "check_openclaw_bridge_completion": fake_completion,
             "check_openclaw_consumer_smoke": fake_consumer,
             "check_openclaw_today_answer_readiness": fake_today_answer,
+            "check_openclaw_today_answer_quality": fake_today_answer_quality,
         }
 
         with patch.object(tool, "load_tool", side_effect=lambda name, _path: fake_modules[name]):

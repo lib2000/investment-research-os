@@ -16,6 +16,7 @@ CHECK_MODULES = {
     "completion_audit": PROJECT_ROOT / "tools" / "check_openclaw_bridge_completion.py",
     "consumer_smoke": PROJECT_ROOT / "tools" / "check_openclaw_consumer_smoke.py",
     "today_answer": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_readiness.py",
+    "today_answer_quality": PROJECT_ROOT / "tools" / "check_openclaw_today_answer_quality.py",
 }
 
 
@@ -130,6 +131,25 @@ def check_today_answer(openclaw_dir: Path) -> dict[str, Any]:
         },
     }
 
+
+def check_today_answer_quality(openclaw_dir: Path) -> dict[str, Any]:
+    module = load_tool("check_openclaw_today_answer_quality", CHECK_MODULES["today_answer_quality"])
+    try:
+        result = module.build_result(openclaw_dir)
+    except AssertionError as exc:
+        return {"label": "today_answer_quality", "status": "failure", "errors": [str(exc)], "summary": {}}
+    return {
+        "label": "today_answer_quality",
+        "status": result.get("status"),
+        "errors": list(result.get("errors") or []),
+        "summary": {
+            "today_commit_count": result.get("today_commit_count"),
+            "next_schedule_count": result.get("next_schedule_count"),
+            "answer_source": result.get("answer_source"),
+        },
+    }
+
+
 def build_result(
     *,
     project_root: Path = PROJECT_ROOT,
@@ -149,6 +169,7 @@ def build_result(
             expected_latest_count=expected_latest_count,
         ),
         lambda: check_today_answer(openclaw_dir),
+        lambda: check_today_answer_quality(openclaw_dir),
     ):
         try:
             result = check()
