@@ -90,6 +90,7 @@
 | `backend\research_os\kis_data_provider.py` | KIS 토큰/시세 client, 국내·해외 현재가 provider, 한국 종목코드 판정 helper | `check_backend_runtime_env.py` |
 | `backend\research_os\investment_calendar.py` | 투자 캘린더 JSON 로드, 한국/미국 월간·주간 일정, 보유/관심종목 실적발표 이벤트 병합 | `check_console_static_contract.py` |
 | `backend\research_os\llm_bridge_status.py` | LLM 응답 저장/RAG 연결 상태 요약 | `smoke_research_console_clicks.py` |
+| `backend\research_os\local_ai_survival.py` | 외부 고급 AI 접근 제한 시 로컬 저장/RAG/규칙 기반 엔진/수동 LLM 브리지 readiness를 secret-free로 요약 | `check_local_ai_survival.py` |
 | `backend\research_os\market_journal.py` | 네이버 마감 시황 시장일지 출처 메타데이터 | `NaverResearchIngestTests` |
 | `backend\research_os\market_journal_analysis.py` | 시장일지 텍스트 정리, 감정/리스크/태그/행동 가이드 helper | `MarketJournalAnalysisModuleTests` |
 | `backend\research_os\market_journal_patterns.py` | 시장일지 누적 패턴/반복 테마 요약 helper | `NewsMarketJournalModuleTests` |

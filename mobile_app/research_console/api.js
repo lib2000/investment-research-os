@@ -188,6 +188,13 @@ export async function fetchCodeKnowledgeGraph(accessToken) {
   });
 }
 
+export async function fetchLocalAiSurvivalStatus(accessToken) {
+  return request("/api/v1/system/local-ai-survival", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchOpenClawStatus(accessToken) {
   try {
     return request("/api/v1/openclaw/status", {

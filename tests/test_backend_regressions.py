@@ -102,6 +102,18 @@ def load_offline_readiness_tool():
     return module
 
 
+def load_local_ai_survival_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_local_ai_survival.py"
+    spec = spec_from_file_location("check_local_ai_survival", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_git_sync_status_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -910,6 +922,25 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("통합 투자 인사이트 허브", checks)
         self.assertEqual(checks["통합 투자 인사이트 허브"], ["tools/check_investment_insight_hub.py", "--strict"])
+
+    def test_offline_readiness_checks_local_ai_survival_mode(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("로컬 AI 생존 모드", checks)
+        self.assertEqual(
+            checks["로컬 AI 생존 모드"],
+            ["tools/check_local_ai_survival.py", "--json", "--strict"],
+        )
+
+    def test_operational_readiness_includes_local_ai_survival_signal(self):
+        source = (PROJECT_ROOT / "tools" / "check_operational_readiness_score.py").read_text(encoding="utf-8")
+
+        self.assertIn("def local_ai_survival_signal", source)
+        self.assertIn('"local_ai_survival_mode"', source)
+        self.assertIn("check_local_ai_survival.py --json --strict", source)
+        self.assertIn("local_ai_survival_signal(root)", source)
 
     def test_offline_readiness_checks_portfolio_report_alert(self):
         tool = load_offline_readiness_tool()
@@ -4697,6 +4728,96 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertIn("storage_quality_route", payload["checks"])
         self.assertNotIn("api_key", json.dumps(payload).lower())
         self.assertNotIn("token", json.dumps(payload).lower())
+
+    def test_local_ai_survival_status_is_secret_free_and_local_first(self):
+        from research_os.local_ai_survival import build_local_ai_survival_status
+        from research_os.rag_memory import connect_rag_db, initialize_rag_db
+        from research_os.settings import Settings
+
+        with TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            root = Path(tmp)
+            vault_dir = root / "research_vault"
+            system_dir = vault_dir / "_system"
+            system_dir.mkdir(parents=True)
+            for relative in [
+                "backend/research_os/llm_bridge_status.py",
+                "backend/research_os/rag_synthesis.py",
+                "backend/research_os/daily_recommendations.py",
+                "backend/research_os/investment_insight_hub.py",
+                "backend/research_os/market_signal_graph_pipeline_contract.py",
+                "tools/check_offline_readiness.py",
+                "tools/check_public_repo_safety.py",
+                "mobile_app/research_console/console.js",
+            ]:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# ready\n", encoding="utf-8")
+
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "type": "research-capture",
+                            "ticker": "005930",
+                            "relative_path": "research_vault/005930/sample.md",
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "user_portfolios.json").write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "default": {
+                                "holdings": [
+                                    {"ticker": "005930", "company_name": "삼성전자", "quantity": 1}
+                                ]
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (system_dir / "daily_recommendations.json").write_text(
+                json.dumps({"records": [{"ticker": "005930", "rank": 1}]}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            initialize_rag_db(vault_dir)
+            with connect_rag_db(vault_dir) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO research_memory_documents (
+                        document_id,
+                        ticker,
+                        source_relative_path,
+                        tags_json,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "local-ai-survival-doc",
+                        "005930",
+                        "research_vault/005930/sample.md",
+                        "[]",
+                        "2026-07-05T09:00:00+09:00",
+                    ),
+                )
+
+            payload = build_local_ai_survival_status(Settings(research_vault_dir=str(vault_dir)))
+
+        self.assertEqual(payload["module"], "local_ai_survival_status")
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(payload["local_operation_ready"])
+        self.assertEqual(payload["retail_advanced_ai_dependency"], "optional")
+        self.assertGreaterEqual(payload["critical_ready_count"], 6)
+        self.assertIn("규칙 기반 분석 엔진", json.dumps(payload, ensure_ascii=False))
+        lowered = json.dumps(payload, ensure_ascii=False).lower()
+        self.assertNotIn("api_key", lowered)
+        self.assertNotIn("secret", lowered)
+        self.assertNotIn("token", lowered)
 
     def test_llm_bridge_status_uses_rag_db_paths_not_search_result_window(self):
         from research_os.llm_bridge_status import build_llm_bridge_storage_status
@@ -15046,6 +15167,27 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('id="portfolioReportAlertStatusButton"', index_html)
         self.assertIn('"/api/v1/telegram/portfolio-report-alert/status"', backend_source)
         self.assertIn("def build_portfolio_report_alert_status", backend_source)
+
+    def test_console_exposes_local_ai_survival_status(self):
+        api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        index_html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(encoding="utf-8")
+        backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+
+        self.assertIn("export async function fetchLocalAiSurvivalStatus", api_js)
+        self.assertIn('request("/api/v1/system/local-ai-survival"', api_js)
+        self.assertIn("fetchLocalAiSurvivalStatus,", console_js)
+        self.assertIn(
+            'runCheck("로컬 AI 생존 모드", () => fetchLocalAiSurvivalStatus(token()))',
+            console_js,
+        )
+        self.assertIn("formatLocalAiSurvivalStatus", console_js)
+        self.assertIn("localAiSurvivalStatusButton", console_js)
+        self.assertIn('id="localAiSurvivalStatusButton"', index_html)
+        self.assertIn('"/api/v1/system/local-ai-survival"', backend_source)
+        self.assertIn("build_local_ai_survival_status", backend_source)
 
     def test_daily_recommendation_status_refreshes_dashboard_top_even_when_hidden(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(

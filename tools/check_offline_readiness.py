@@ -131,6 +131,7 @@ CHECKS = [
             "0",
         ],
     ),
+    ("로컬 AI 생존 모드", ["tools/check_local_ai_survival.py", "--json", "--strict"]),
     (
         "RAG 합성 저장 상태",
         [

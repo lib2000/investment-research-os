@@ -451,6 +451,30 @@ def investment_insight_hub_signal(root: Path) -> dict[str, Any]:
     )
 
 
+def local_ai_survival_signal(root: Path) -> dict[str, Any]:
+    backend_dir = root / "backend"
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+
+    from research_os.local_ai_survival import build_local_ai_survival_status
+    from research_os.settings import Settings
+
+    payload = build_local_ai_survival_status(Settings(research_vault_dir=str(root / "research_vault")))
+    critical_count = int(payload.get("critical_check_count") or 0)
+    critical_ready = int(payload.get("critical_ready_count") or 0)
+    score = 0.0 if not critical_count else critical_ready / critical_count * 100.0
+    return signal(
+        "local_ai_survival_mode",
+        "로컬 AI 생존 모드",
+        score,
+        (
+            f"핵심 {critical_ready}/{critical_count} ready, "
+            f"외부 고급 AI 의존도 {payload.get('retail_advanced_ai_dependency') or 'optional'}"
+        ),
+        "python tools\\check_local_ai_survival.py --json --strict",
+    )
+
+
 def openclaw_bridge_signal(root: Path) -> dict[str, Any]:
     tools_dir = root / "tools"
     if str(tools_dir) not in sys.path:
@@ -565,6 +589,7 @@ def build_result(
         portfolio_signal(system_dir),
         nps_allocation_signal(root, system_dir, enforce=enforce_nps_allocation),
         investment_insight_hub_signal(root),
+        local_ai_survival_signal(root),
         openclaw_bridge_signal(root),
         openclaw_completion_signal(root),
         openclaw_status_summary_signal(root),

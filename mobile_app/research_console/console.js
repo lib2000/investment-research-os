@@ -31,6 +31,7 @@
   fetchTickerDiagnostics,
   fetchTickerRegistryCache,
   fetchLlmBridgeStorageStatus,
+  fetchLocalAiSurvivalStatus,
   fetchLatestDataSnapshot,
   verifyTickerSymbol,
   deleteTickerRegistryCacheEntry,
@@ -106,7 +107,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=a6313cb0356e";
+} from "./api.js?v=df8da4d2877d";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -255,6 +256,7 @@ const elements = {
   dailyRecommendationRepairQueueButton: document.querySelector("#dailyRecommendationRepairQueueButton"),
   dailyRecommendationRepairQueueExecuteButton: document.querySelector("#dailyRecommendationRepairQueueExecuteButton"),
   portfolioReportAlertStatusButton: document.querySelector("#portfolioReportAlertStatusButton"),
+  localAiSurvivalStatusButton: document.querySelector("#localAiSurvivalStatusButton"),
   dailyRecommendationCards: document.querySelector("#dailyRecommendationCards"),
   investmentCalendarTitle: document.querySelector("#investmentCalendarTitle"),
   investmentCalendarMeta: document.querySelector("#investmentCalendarMeta"),
@@ -6031,6 +6033,10 @@ function summarizeSystemCheckValue(label, value) {
       value?.ready ? "" : `· 조치: ${value?.next_action || "Tesseract 설치 상태 확인"}`
     }`.trim();
   }
+  if (label.includes("로컬 AI 생존")) {
+    const ready = value?.local_operation_ready ? "운영 가능" : "확인 필요";
+    return `${ready} · 핵심 ${value?.critical_ready_count ?? 0}/${value?.critical_check_count ?? 0} · 외부 고급 AI ${value?.retail_advanced_ai_dependency || "optional"}`;
+  }
   if (label.includes("대표 대시보드")) {
     return `${value.ticker || "대상 미확인"} · 저장 데이터 ${value.file_count || 0}개 · 경고 ${(value.data_warnings || []).length}개`;
   }
@@ -6046,6 +6052,7 @@ function formatConsoleSystemCheckResult(payload) {
   const telegramMarketCheck = checks.find((item) => item.label.includes("텔레그램 미국 시장일지"));
   const telegramBriefDeliveryCheck = checks.find((item) => item.label.includes("텔레그램 중요 브리프"));
   const portfolioReportAlertCheck = checks.find((item) => item.label.includes("보유 리포트 알림"));
+  const localAiSurvivalCheck = checks.find((item) => item.label.includes("로컬 AI 생존"));
   const dartValue = dartCheck?.value || {};
   const dartDaily = dartValue.daily_check || {};
   const dartExcluded = dartDaily.excluded_tickers || dartValue.target_universe?.excluded_tickers || [];
@@ -6058,6 +6065,7 @@ function formatConsoleSystemCheckResult(payload) {
   const portfolioPostrunState = portfolioReportAlert.postrun?.state || {};
   const portfolioAlertTask = portfolioReportAlert.alert?.task || {};
   const portfolioPostrunTask = portfolioReportAlert.postrun?.task || {};
+  const localAiSurvival = localAiSurvivalCheck?.value || {};
   const okCount = checks.length - failed.length;
   const ocrLimits = ocrCheck?.value?.limits || {};
   return [
@@ -6135,6 +6143,20 @@ function formatConsoleSystemCheckResult(payload) {
       : "",
     portfolioReportAlert.next_action
       ? `- **보유 리포트 알림 다음 조치:** ${portfolioReportAlert.next_action}`
+      : "",
+    ``,
+    `## 로컬 AI 생존 모드`,
+    localAiSurvivalCheck
+      ? `- **현재 상태:** ${localAiSurvivalCheck.status} · ${localAiSurvivalCheck.summary}`
+      : `- **현재 상태:** 로컬 AI 생존 모드 점검 결과를 불러오지 못했습니다.`,
+    localAiSurvivalCheck
+      ? `- **핵심 준비도:** ${formatNumber(localAiSurvival.critical_ready_count || 0)}/${formatNumber(localAiSurvival.critical_check_count || 0)} · 외부 고급 AI 의존도 ${localAiSurvival.retail_advanced_ai_dependency || "optional"}`
+      : "",
+    localAiSurvival.optional_local_model
+      ? `- **로컬 모델 endpoint:** ${localAiSurvival.optional_local_model.configured ? "설정됨" : "선택 미설정"} · 핵심 운영은 규칙/RAG 기반으로 계속`
+      : "",
+    localAiSurvival.next_actions?.length
+      ? `- **다음 조치:** ${localAiSurvival.next_actions.slice(0, 3).join(" / ")}`
       : "",
     `- **실패 상세:** ${
       dartFailures.length
@@ -6251,6 +6273,7 @@ async function runConsoleSystemCheck() {
     runCheck("텔레그램 미국 시장일지 자동 반영", () => fetchTelegramMarketCloseTaskStatus(token())),
     runCheck("텔레그램 중요 브리프 delivery", () => fetchTelegramBriefDeliveryStatus(token())),
     runCheck("보유 리포트 알림 07:00/07:10", () => fetchPortfolioReportAlertStatus(token())),
+    runCheck("로컬 AI 생존 모드", () => fetchLocalAiSurvivalStatus(token())),
     runCheck("리서치 자동화 상태", () => fetchResearchAutomationStatus(token())),
     runCheck("일일 브리핑", () => fetchLatestDailyBriefing(token())),
   ]);
@@ -13796,6 +13819,7 @@ const MEMORY_ACTION_MESSAGES = {
   dailyRecommendationRepairQueueButton: "추천 근거 보강 큐 dry-run을 실행합니다.",
   dailyRecommendationRepairQueueExecuteButton: "추천 근거 보강 큐 상위 항목을 안전 실행합니다.",
   portfolioReportAlertStatusButton: "보유 종목 신규 리포트 알림 상태를 조회합니다.",
+  localAiSurvivalStatusButton: "외부 고급 AI 제한 시 로컬 생존 모드를 점검합니다.",
   researchAutomationButton: "전체 자동화를 시작했습니다.",
   researchAutomationStatusButton: "자동화 상태 점검을 시작했습니다.",
   codeKnowledgeGraphButton: "시스템 구조 맵을 조회합니다.",
@@ -14349,6 +14373,22 @@ elements.portfolioReportAlertStatusButton?.addEventListener("click", async () =>
   try {
     const result = await fetchPortfolioReportAlertStatus(token());
     setOutput(result || "보유 리포트 알림 상태를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.localAiSurvivalStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("로컬 AI 생존 모드 점검 중", [
+    "포트폴리오/추천 저장소 확인",
+    "RAG/저장 리서치 색인 확인",
+    "수동 LLM 브리지와 규칙 기반 엔진 확인",
+    "OpenClaw 로컬 컨텍스트 번들 확인",
+  ]);
+  try {
+    const result = await fetchLocalAiSurvivalStatus(token());
+    setOutput(result || "로컬 AI 생존 모드 상태를 확인하지 못했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -15847,6 +15887,46 @@ function formatPortfolioReportAlertStatus(value) {
   ].filter(Boolean).join("\n");
 }
 
+function formatLocalAiSurvivalStatus(value) {
+  const statusLabel = {
+    ok: "운영 가능",
+    needs_attention: "확인 필요",
+    error: "오류",
+  };
+  const checkRows = (value.checks || []).map((item) =>
+    [
+      "|",
+      item.ready ? "정상" : "확인 필요",
+      "|",
+      markdownOutputCell(item.label || item.key || "-"),
+      "|",
+      markdownOutputCell(item.evidence || "-"),
+      "|",
+      markdownOutputCell(item.critical ? "핵심" : "선택"),
+      "|",
+    ].join(" ")
+  );
+  return [
+    `### 로컬 AI 생존 모드`,
+    ``,
+    `- **전체 상태:** ${statusLabel[value.status] || value.status || "미확인"}`,
+    `- **운영 모드:** ${value.mode || "local_first"} · 외부 고급 AI 의존도 ${value.retail_advanced_ai_dependency || "optional"}`,
+    `- **핵심 준비도:** ${formatNumber(value.critical_ready_count || 0)}/${formatNumber(value.critical_check_count || 0)}`,
+    `- **선택 준비도:** ${formatNumber(value.optional_ready_count || 0)}/${formatNumber(value.optional_check_count || 0)}`,
+    `- **로컬 모델 endpoint:** ${value.optional_local_model?.configured ? "설정됨" : "미설정"} · 없어도 규칙/RAG 기반 운영은 계속`,
+    ``,
+    `| 상태 | 항목 | 근거 | 구분 |`,
+    `|---|---|---|---|`,
+    ...(checkRows.length ? checkRows : ["| - | 점검 없음 | - | - |"]),
+    ``,
+    `### fallback 계층`,
+    ...formatBulletList(value.fallback_layers, (item) => compactOutputText(item, 180), "fallback 계층 정보가 없습니다."),
+    ``,
+    `### 다음 조치`,
+    ...formatBulletList(value.next_actions, (item) => compactOutputText(item, 180), "현재 추가 조치 없이 로컬 운영 가능합니다."),
+  ].join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -15863,6 +15943,10 @@ function formatKoreanResult(value) {
 
   if (value.module === "portfolio_report_alert_console_status") {
     return formatPortfolioReportAlertStatus(value);
+  }
+
+  if (value.module === "local_ai_survival_status") {
+    return formatLocalAiSurvivalStatus(value);
   }
 
   if (value.module === "news_inbox" || value.module === "news_promotion") {

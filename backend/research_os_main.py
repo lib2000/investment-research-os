@@ -169,6 +169,7 @@ from research_os.telegram_market_journal import (
     telegram_us_market_close_candidates,
 )
 from research_os.llm_bridge_status import build_llm_bridge_storage_status
+from research_os.local_ai_survival import build_local_ai_survival_status
 from research_os.regional_sources import (
     fetch_regional_business_sources,
     match_regional_business_items_to_targets,
@@ -11518,6 +11519,14 @@ def read_data_provider_status(settings: Settings = Depends(get_settings)) -> dic
 @app.get("/api/v1/system/health")
 def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
+
+
+@app.get(
+    "/api/v1/system/local-ai-survival",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_local_ai_survival_status(settings: Settings = Depends(get_settings)) -> dict:
+    return build_local_ai_survival_status(settings)
 
 
 def _read_openclaw_json(path: Path) -> dict:

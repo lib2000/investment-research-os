@@ -21,6 +21,7 @@
 - 해외 종목: 원통화 기준 수익률을 우선 저장하고, 화면에는 USD/KRW 환율 반영 필요 여부를 함께 표시한다.
 
 - LLM/RAG 저장 상태: `python tools\check_llm_bridge_store.py --require-active-rag`로 LLM 연동 응답의 원 프롬프트, 응답 본문, Markdown/JSON 저장 파일, RAG 색인 연결을 백엔드 없이 확인한다.
+- 로컬 AI 생존 모드: 고급 외부 AI 모델 접근이 리테일 레벨에서 제한되는 상황을 대비해 `python tools\check_local_ai_survival.py --json --strict`로 포트폴리오 저장소, 리서치 manifest, RAG 색인, 오늘 추천 저장/추적, 규칙 기반 분석 엔진, 수동/로컬 LLM 브리지, OpenClaw 로컬 컨텍스트 번들을 secret-free로 점검한다. OpenAI/DeepSeek 등 외부 모델은 필수 의존성이 아니라 보강 계층이며, 로컬 모델 endpoint가 없어도 규칙/RAG 기반 핵심 운영은 계속되어야 한다.
 - 저장/RAG 실패 진단: `python tools\check_rag_failure_diagnostics.py --strict`로 활성 리서치 문서의 저장 파일, RAG 색인, 검색 가능 본문 길이, 자동 분류 근거를 한 번에 확인한다.
 - 국민연금 국내주식 14%: 기본 운영 점검과 전체 오프라인 readiness는 현재 비중과 리밸런싱 후보를 출력한다. 초과/미달을 운영 게이트 실패로 막아야 할 때는 `python tools\check_operational_readiness_score.py --strict --min-score 95 --enforce-nps-allocation` 또는 `python tools\check_nps_domestic_equity_allocation.py --fail-on-breach`를 사용한다.
 - 통합 투자 인사이트 허브: `python tools\check_investment_insight_hub.py --strict`는 저장된 포트폴리오, 시장일지/투자심리, DART 공시, 뉴스 인박스, 정책·법령·규제 자료를 합성해 투자 판단용 인사이트가 실제로 생성되는지 확인한다. 운영 완성도 점수와 전체 오프라인 readiness에 포함되어, 어느 한 소스 패밀리가 비면 실패로 처리한다.
@@ -117,6 +118,7 @@ python tools\check_earnings_transcript_collector.py
 python tools\check_portfolio_signal_score.py
 python tools\check_portfolio_brief_contract.py
 python tools\check_market_signal_graph_pipeline_contract.py
+python tools\check_local_ai_survival.py --json --strict
 python tools\check_rag_failure_diagnostics.py --strict
 python tools\check_llm_bridge_store.py --require-active-rag
 python tools\check_investment_insight_hub.py --strict
