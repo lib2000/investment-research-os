@@ -40,31 +40,33 @@ TELEGRAM_FAVORITE_POSTS_MIN_VIEWS=0
 """
 
 
-def sample_posts(**_kwargs):
+def sample_posts(**kwargs):
+    channel_username = str(kwargs.get("channel_username") or "sample_channel").strip() or "sample_channel"
+    base_url = f"https://t.me/{channel_username}"
     return (
         [
             TelegramMarketPost(
-                message_id="sample_channel/101",
+                message_id=f"{channel_username}/101",
                 post_id="101",
-                url="https://t.me/sample_channel/101",
+                url=f"{base_url}/101",
                 title="AI 전력망 인기글",
                 text="AI 데이터센터 전력망 병목과 변압기 공급 이슈",
                 published_at="2026-07-05T11:00:00+00:00",
                 view_count=1800,
             ),
             TelegramMarketPost(
-                message_id="sample_channel/102",
+                message_id=f"{channel_username}/102",
                 post_id="102",
-                url="https://t.me/sample_channel/102",
+                url=f"{base_url}/102",
                 title="반도체 장비 인기글",
                 text="HBM 테스트 장비 수요와 후공정 병목",
                 published_at="2026-07-05T12:00:00+00:00",
                 view_count=1200,
             ),
             TelegramMarketPost(
-                message_id="sample_channel/103",
+                message_id=f"{channel_username}/103",
                 post_id="103",
-                url="https://t.me/sample_channel/103",
+                url=f"{base_url}/103",
                 title="낮은 조회수",
                 text="최소 조회수 기준 미달",
                 published_at="2026-07-05T13:00:00+00:00",

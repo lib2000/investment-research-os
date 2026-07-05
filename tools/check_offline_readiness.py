@@ -183,6 +183,8 @@ def checks_for_root(root: Path) -> list[tuple[str, list[str]]]:
                     "tools/check_telegram_favorite_posts.py",
                     "--env-file",
                     str(TELEGRAM_FAVORITE_LOCAL_ENV),
+                    "--state-file",
+                    "tmp/telegram_favorite_posts_local_env_check_state.json",
                     "--enabled",
                     "--min-channel-count",
                     "18",
