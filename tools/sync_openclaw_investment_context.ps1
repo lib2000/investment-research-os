@@ -277,6 +277,7 @@ $readme = @(
   "- knowledge graph validation: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``",
   "- final completion audit: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``",
   "- status summary: ``python tools\show_openclaw_bridge_status.py --json``",
+  "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
   ""
@@ -304,6 +305,7 @@ $startupLines = @(
   "- Knowledge graph validation from ``$projectRoot``: ``python tools\check_openclaw_knowledge_graph.py --max-age-hours 24``.",
   "- Final completion audit from ``$projectRoot``: ``python tools\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes``.",
   "- Status summary from ``$projectRoot``: ``python tools\show_openclaw_bridge_status.py --json``.",
+  "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
   "- Treat the bridge as decision-support context only; do not place trades from it."
