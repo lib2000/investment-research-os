@@ -101,6 +101,8 @@ def validate_graph_bundle(directory: Path, *, max_age_hours: float | None = None
         raise AssertionError("knowledge graph nodes must be a non-empty list")
     if not isinstance(edges, list) or not edges:
         raise AssertionError("knowledge graph edges must be a non-empty list")
+    rec_state = ((context.get("current_state") or {}).get("daily_recommendations") or {})
+    latest_rows = rec_state.get("latest_rows") if isinstance(rec_state.get("latest_rows"), list) else []
 
     allowed_node_types = set(blueprint.get("node_types") or [])
     allowed_edge_types = set(blueprint.get("edge_types") or [])
@@ -140,6 +142,31 @@ def validate_graph_bundle(directory: Path, *, max_age_hours: float | None = None
         if target not in node_ids and not target.startswith(external_placeholder_prefixes):
             raise AssertionError(f"knowledge graph edge target is unresolved: {target}")
 
+    recommendation_nodes = [
+        node
+        for node in nodes
+        if isinstance(node, dict) and str(node.get("id") or "").startswith("topic.today_recommendation.")
+    ]
+    if len(latest_rows) >= 6 and len(recommendation_nodes) < 6:
+        raise AssertionError(f"knowledge graph recommendation nodes are incomplete: {len(recommendation_nodes)} < 6")
+    for required_node in (
+        "project.investment_research_os.daily_recommendations",
+        "source.nps.public_rebalancing_context",
+        "source.firecrawl.monitoring_status",
+    ):
+        if required_node not in node_ids:
+            raise AssertionError(f"knowledge graph missing investment research node: {required_node}")
+    direction_nodes = [
+        node
+        for node in nodes
+        if isinstance(node, dict) and str(node.get("id") or "").startswith("concept.investment_direction.")
+    ]
+    if latest_rows and not direction_nodes:
+        raise AssertionError("knowledge graph missing investment direction concept nodes")
+    based_on_edges = [edge for edge in edges if isinstance(edge, dict) and edge.get("type") == "based_on"]
+    if latest_rows and len(based_on_edges) < len(latest_rows):
+        raise AssertionError("knowledge graph recommendation evidence edges are incomplete")
+
     master_index = load_text(directory / GRAPH_FILES["master_index"])
     glossary = load_text(directory / GRAPH_FILES["glossary"])
     marginalia = load_text(directory / GRAPH_FILES["marginalia"])
@@ -147,12 +174,17 @@ def validate_graph_bundle(directory: Path, *, max_age_hours: float | None = None
         combined = "\n".join([master_index, glossary, marginalia])
         if required not in combined:
             raise AssertionError(f"knowledge graph markdown missing node id: {required}")
+    if latest_rows and "topic.today_recommendation." not in master_index:
+        raise AssertionError("knowledge graph master index missing today recommendation nodes")
+    if latest_rows and "concept.investment_direction." not in glossary:
+        raise AssertionError("knowledge graph glossary missing investment direction concepts")
     if "ReLU" not in glossary or "definition:" not in glossary:
         raise AssertionError("knowledge graph glossary missing ReLU definition")
     if "unverified" not in marginalia:
         raise AssertionError("knowledge graph marginalia queue missing unverified status")
     return [
         f"generated_at={context.get('generated_at')} nodes={len(nodes)} edges={len(edges)} "
+        f"recommendations={len(recommendation_nodes)} "
         f"age_hours={age_hours:.3f}"
     ]
 

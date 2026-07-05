@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from datetime import datetime
@@ -39,6 +40,23 @@ def safe_text(value: object, limit: int = 220) -> str:
 
 def top_items(items: list, limit: int) -> list:
     return [item for item in items if item is not None][:limit]
+
+
+def graph_id_segment(value: object, *, fallback: str = "item") -> str:
+    text = safe_text(value, 80).lower()
+    normalized = []
+    for char in text:
+        if char.isascii() and char.isalnum():
+            normalized.append(char)
+        elif char in ("-", "_", "."):
+            normalized.append("-")
+        elif char.isspace():
+            normalized.append("-")
+    slug = "-".join("".join(normalized).split("-"))
+    if slug:
+        return slug[:48]
+    digest = hashlib.sha1(str(value or fallback).encode("utf-8")).hexdigest()[:10]
+    return f"{fallback}-{digest}"
 
 
 def build_recommendation_state(store: dict) -> dict:
@@ -572,24 +590,200 @@ def render_knowledge_graph_blueprint_markdown(blueprint: dict) -> str:
     return "\n".join(lines)
 
 
-def build_personal_knowledge_graph_artifacts(blueprint: dict) -> dict:
-    nodes = []
-    for item in blueprint.get("seed_nodes", []):
-        if not isinstance(item, dict):
-            continue
-        node = dict(item)
+def build_personal_knowledge_graph_artifacts(blueprint: dict, context: dict | None = None) -> dict:
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    node_ids: set[str] = set()
+    edge_keys: set[tuple[str, str, str]] = set()
+
+    def add_node(node: dict) -> None:
+        node_id = str(node.get("id") or "")
+        if not node_id or node_id in node_ids:
+            return
         node.setdefault("source", "openclaw_knowledge_graph_blueprint")
         node.setdefault("raw_source_excluded", True)
         node.setdefault("graph_layer", "personal_knowledge_graph")
         nodes.append(node)
-    edges = []
+        node_ids.add(node_id)
+
+    def add_edge(from_id: str, to_id: str, edge_type: str, **extra: object) -> None:
+        if not from_id or not to_id or not edge_type:
+            return
+        key = (from_id, to_id, edge_type)
+        if key in edge_keys:
+            return
+        edge = {"from": from_id, "to": to_id, "type": edge_type}
+        edge.update(extra)
+        edge.setdefault("source", "openclaw_knowledge_graph_builder")
+        edge.setdefault("raw_source_excluded", True)
+        edges.append(edge)
+        edge_keys.add(key)
+
+    for item in blueprint.get("seed_nodes", []):
+        if not isinstance(item, dict):
+            continue
+        node = dict(item)
+        add_node(node)
     for item in blueprint.get("seed_edges", []):
         if not isinstance(item, dict):
             continue
-        edge = dict(item)
-        edge.setdefault("source", "openclaw_knowledge_graph_blueprint")
-        edge.setdefault("raw_source_excluded", True)
-        edges.append(edge)
+        add_edge(str(item.get("from") or ""), str(item.get("to") or ""), str(item.get("type") or ""), source="openclaw_knowledge_graph_blueprint")
+
+    context = context or {}
+    state = context.get("current_state") if isinstance(context.get("current_state"), dict) else {}
+    recommendations = ((state.get("daily_recommendations") or {}).get("latest_rows") or [])
+    recommendation_date = (state.get("daily_recommendations") or {}).get("latest_recommendation_date")
+    project_node_id = "project.investment_research_os.daily_recommendations"
+    add_node(
+        {
+            "id": project_node_id,
+            "type": "project",
+            "title": "Investment Research OS daily recommendations",
+            "status": "active_research",
+            "generated_at": context.get("generated_at"),
+            "recommendation_date": recommendation_date,
+            "description": "한국/미국 오늘의 추천 1~3위와 관련 근거를 OpenClaw 지식 그래프로 연결합니다.",
+            "source": "investment_research_context",
+        }
+    )
+
+    for item in recommendations:
+        if not isinstance(item, dict):
+            continue
+        market = graph_id_segment(item.get("market"), fallback="market")
+        rank = graph_id_segment(item.get("rank"), fallback="rank")
+        ticker = graph_id_segment(item.get("ticker"), fallback="ticker")
+        rec_node_id = f"topic.today_recommendation.{market}.{rank}.{ticker}"
+        add_node(
+            {
+                "id": rec_node_id,
+                "type": "topic",
+                "title": f"{item.get('market')}#{item.get('rank')} {item.get('ticker')} {item.get('company_name')}",
+                "status": "active_research",
+                "market": item.get("market"),
+                "rank": item.get("rank"),
+                "ticker": item.get("ticker"),
+                "company_name": item.get("company_name"),
+                "score": item.get("score"),
+                "baseline_price": item.get("baseline_price"),
+                "currency": item.get("currency"),
+                "recommendation_date": recommendation_date,
+                "master_index_path": ["Investment Research", "Daily Recommendations", str(item.get("market") or "UNKNOWN")],
+                "source": "daily_recommendations.latest_rows",
+            }
+        )
+        add_edge(rec_node_id, project_node_id, "part_of", reason="today recommendation belongs to daily recommendation run")
+
+        for label in item.get("investment_direction_labels") or []:
+            concept_id = f"concept.investment_direction.{graph_id_segment(label, fallback='direction')}"
+            add_node(
+                {
+                    "id": concept_id,
+                    "type": "concept",
+                    "term": label,
+                    "definition": f"투자리서치 시스템에서 추천 종목을 해석할 때 사용하는 투자 방향 라벨: {label}",
+                    "domain": ["investment_direction", "portfolio_theme"],
+                    "status": "active_research",
+                    "confidence": "medium",
+                    "source": "daily_recommendations.investment_direction_labels",
+                }
+            )
+            add_edge(rec_node_id, concept_id, "related_to", reason="recommendation carries investment direction label")
+
+        for index, reason in enumerate(item.get("reasons") or [], start=1):
+            source_id = f"source.recommendation_reason.{market}.{rank}.{ticker}.{index}"
+            add_node(
+                {
+                    "id": source_id,
+                    "type": "source",
+                    "title": f"{item.get('ticker')} recommendation reason {index}",
+                    "summary": safe_text(reason, 220),
+                    "source_family": "recommendation_reason",
+                    "status": "verified",
+                    "source": "daily_recommendations.reasons",
+                }
+            )
+            add_edge(rec_node_id, source_id, "based_on", reason="recommendation reason")
+
+        for signal in item.get("signal_breakdown") or []:
+            if not isinstance(signal, dict):
+                continue
+            signal_key = graph_id_segment(signal.get("key") or signal.get("label"), fallback="signal")
+            source_id = f"source.recommendation_signal.{market}.{rank}.{ticker}.{signal_key}"
+            add_node(
+                {
+                    "id": source_id,
+                    "type": "source",
+                    "title": signal.get("label") or signal.get("key") or "recommendation signal",
+                    "summary": signal.get("summary"),
+                    "source_family": "recommendation_signal",
+                    "score_applied": signal.get("score_applied"),
+                    "status": "verified" if signal.get("score_applied") else "active_research",
+                    "source": "daily_recommendations.signal_breakdown",
+                }
+            )
+            add_edge(rec_node_id, source_id, "based_on", reason="recommendation signal breakdown")
+
+    telegram = ((state.get("news_and_telegram") or {}).get("telegram_favorite_posts") or {})
+    top_posts = telegram.get("top_posts") if isinstance(telegram.get("top_posts"), list) else []
+    for index, post in enumerate(top_posts[:10], start=1):
+        if not isinstance(post, dict):
+            continue
+        post_id = f"source.telegram_favorite_popular_post.{index}"
+        add_node(
+            {
+                "id": post_id,
+                "type": "source",
+                "title": post.get("title") or f"Telegram favorite popular post {index}",
+                "summary": post.get("title"),
+                "url": post.get("url"),
+                "channel_label": post.get("channel_label"),
+                "view_count": post.get("view_count"),
+                "published_at": post.get("published_at"),
+                "source_family": "telegram_favorite_popular_post",
+                "status": "active_research",
+                "source": "news_and_telegram.telegram_favorite_posts.top_posts",
+            }
+        )
+        add_edge(project_node_id, post_id, "based_on", reason="telegram market sentiment input")
+
+    nps = state.get("nps_rebalancing") or {}
+    if nps:
+        nps_id = "source.nps.public_rebalancing_context"
+        add_node(
+            {
+                "id": nps_id,
+                "type": "source",
+                "title": "NPS domestic equity 14 percent public-source monitor",
+                "summary": "; ".join(nps.get("notes") or []),
+                "status": nps.get("status") or "active_research",
+                "as_of": nps.get("as_of"),
+                "public_sources_only": nps.get("public_sources_only"),
+                "url": nps.get("primary_article_url"),
+                "source_family": "nps_public_rebalancing",
+                "source": "nps_rebalancing",
+            }
+        )
+        add_edge(project_node_id, nps_id, "based_on", reason="portfolio allocation policy context")
+
+    firecrawl = state.get("firecrawl_monitoring") or {}
+    if firecrawl:
+        firecrawl_id = "source.firecrawl.monitoring_status"
+        add_node(
+            {
+                "id": firecrawl_id,
+                "type": "source",
+                "title": "Firecrawl monitoring safety and webhook status",
+                "summary": f"ready={firecrawl.get('webhook_ready')} last={firecrawl.get('last_webhook_status')}",
+                "status": "verified",
+                "webhook_ready": firecrawl.get("webhook_ready"),
+                "safety_defaults": firecrawl.get("safety_defaults"),
+                "source_family": "firecrawl_monitoring",
+                "source": "firecrawl_monitoring",
+            }
+        )
+        add_edge(project_node_id, firecrawl_id, "depends_on", reason="web monitoring safety status gates live collection")
+
     return {
         "schema": "openclaw_personal_knowledge_graph_artifacts_v1",
         "source_schema": blueprint.get("schema"),
@@ -749,7 +943,7 @@ def write_context(context: dict, output_dir: Path) -> dict:
     json_path.write_text(json.dumps(context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     md_path.write_text(render_markdown(context), encoding="utf-8")
     blueprint = context.get("openclaw_knowledge_graph_blueprint") or {}
-    graph_artifacts = build_personal_knowledge_graph_artifacts(blueprint)
+    graph_artifacts = build_personal_knowledge_graph_artifacts(blueprint, context)
     kg_json_path.write_text(json.dumps(blueprint, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     kg_md_path.write_text(render_knowledge_graph_blueprint_markdown(blueprint), encoding="utf-8")
     kg_nodes_path.write_text(json.dumps(graph_artifacts["nodes"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
