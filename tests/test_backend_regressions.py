@@ -19076,6 +19076,23 @@ class InvestmentInsightHubTests(unittest.TestCase):
 
 
 class OpenClawInvestmentContextTests(unittest.TestCase):
+    def test_today_work_report_classifies_interest_console_ui_commits(self):
+        export_tool = load_openclaw_context_export_tool()
+        commits = [
+            {
+                "commit": "abc1234",
+                "committed_at": "2026-07-06T01:39:00+09:00",
+                "subject": "Sort interest summaries by market locale",
+            }
+        ]
+
+        with patch.object(export_tool, "_git_log_since_today", return_value=commits):
+            report = export_tool.build_today_work_report(PROJECT_ROOT)
+
+        self.assertEqual(report["commit_count"], 1)
+        self.assertIn("관심종목/관심섹터 콘솔 UI 정렬과 클릭 상세 표시", report["summary"])
+        self.assertIn("interest_console_ui", [item["key"] for item in report["categories"]])
+
     def test_openclaw_context_export_and_validation_exclude_sensitive_raw_state(self):
         export_tool = load_openclaw_context_export_tool()
         check_tool = load_openclaw_context_check_tool()

@@ -470,6 +470,7 @@ def build_today_work_report(project_root: Path) -> dict:
         ("recommendation_insights", ("recommendation", "recommendations", "sentiment", "insight"), "오늘 추천, 텔레그램 심리, 통합 투자 인사이트 반영"),
         ("firecrawl_monitor", ("Firecrawl", "firecrawl"), "Firecrawl IR/Monitor 안전 기본값, dry-run, 운영 preflight"),
         ("local_ai_agent_foundation", ("local AI", "agent operating", "survival", "foundation"), "고급 AI 제한 대비 로컬 AI 생존 모드와 에이전트 운영 기반 readiness"),
+        ("interest_console_ui", ("interest", "summaries", "locale"), "관심종목/관심섹터 콘솔 UI 정렬과 클릭 상세 표시"),
         ("console_backend_ops", ("console", "backend", "restart", "status"), "연구 콘솔/API 상태 노출, 백엔드 재시작 guard, 운영 상태 검증"),
         ("portfolio_reports", ("portfolio", "report alert", "holding"), "포트폴리오/보유 종목 리포트 알림과 상태 점검"),
         ("calendar_readiness", ("calendar", "earnings"), "투자 캘린더와 실적 일정 readiness"),
