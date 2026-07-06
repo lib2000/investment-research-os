@@ -5776,6 +5776,109 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         self.assertEqual(overseas.sync_checked_at, "2026-05-26T10:00:00+09:00")
         self.assertIsNone(domestic.sync_status)
 
+    def test_portfolio_holding_research_context_enriches_response_fields(self):
+        import research_os_main as main
+        from research_os.models import PortfolioHolding, SavedPortfolio
+        from research_os.settings import Settings
+
+        with TemporaryDirectory() as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            state_dir = vault_dir / "_system"
+            state_dir.mkdir(parents=True)
+            (vault_dir / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "ticker": "003230",
+                            "title": "삼양식품 수출 성장 리포트",
+                            "summary": "불닭볶음면 해외 매출과 마진 개선을 점검",
+                            "type": "broker-report",
+                            "date": "2026-07-01",
+                            "file_name": "2026-07-01-003230-report.md",
+                            "relative_path": "research_vault/003230/2026-07-01-003230-report.md",
+                            "ticker_verification": {
+                                "verified": True,
+                                "official_symbol": "003230",
+                            },
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (state_dir / "market_close_journal.json").write_text(
+                json.dumps(
+                    {
+                        "entries": [
+                            {
+                                "market": "KR",
+                                "session_date": "2026-07-02",
+                                "raw_summary": "삼양식품과 음식료 수출주가 강세를 보였습니다.",
+                                "key_drivers": ["삼양식품 수출 성장"],
+                                "sector_implications": ["음식료"],
+                                "interest_implications": ["삼양식품 추적"],
+                                "tags": ["삼양식품", "음식료"],
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (state_dir / "dart_filing_watch_cache.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-02T08:00:00+09:00",
+                        "entries": {
+                            "003230-1": {
+                                "ticker": "003230",
+                                "importance": "높음",
+                                "action": "정기보고서 내용을 실적 가정에 반영",
+                                "tags": ["earnings", "financials"],
+                                "detected_at": "2026-07-02T08:00:00+09:00",
+                                "filing": {
+                                    "receipt_date": "20260702",
+                                    "report_name": "반기보고서",
+                                    "source_url": "https://dart.fss.or.kr/",
+                                },
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            settings = Settings(research_vault_dir=str(vault_dir))
+            portfolio = SavedPortfolio(
+                portfolio_name="테스트",
+                holdings=[
+                    PortfolioHolding(
+                        ticker="003230",
+                        name="삼양식품",
+                        quantity=1,
+                        average_cost=100000,
+                        current_price=120000,
+                        market_value=120000,
+                        currency="KRW",
+                        sector="음식료",
+                    )
+                ],
+            )
+
+            enriched = main.sort_and_weight_portfolio(
+                portfolio,
+                settings,
+                include_research_context=True,
+            )
+
+        holding = enriched.holdings[0]
+        self.assertTrue(holding.market_journal_matches)
+        self.assertIn("삼양식품", holding.market_journal_matches[0]["summary"])
+        self.assertTrue(holding.latest_reports)
+        self.assertEqual(holding.latest_reports[0].file_name, "2026-07-01-003230-report.md")
+        self.assertTrue(holding.filing_context)
+        self.assertEqual(holding.filing_context[0]["title"], "반기보고서")
+
     def test_portfolio_sync_module_summarizes_current_status_and_latest_apply(self):
         from research_os.models import PortfolioHolding, SavedPortfolio
         from research_os.portfolio_sync import portfolio_sync_status_summary

@@ -749,6 +749,9 @@ class PortfolioHolding(BaseModel):
     sync_source: Optional[str] = None
     sync_checked_at: Optional[str] = None
     sync_message: Optional[str] = None
+    market_journal_matches: List[dict] = Field(default_factory=list)
+    latest_reports: List[DashboardReportSummary] = Field(default_factory=list)
+    filing_context: List[dict] = Field(default_factory=list)
 
 
 class PortfolioRiskScanRequest(BaseModel):

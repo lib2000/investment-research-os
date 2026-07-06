@@ -5243,6 +5243,7 @@ def sort_and_weight_portfolio(
     *,
     refresh_prices: bool = False,
     force_price_refresh: bool = False,
+    include_research_context: bool = False,
 ) -> SavedPortfolio:
     enriched_holdings = [
         enrich_portfolio_holding(
@@ -5268,6 +5269,8 @@ def sort_and_weight_portfolio(
             )
         )
 
+    if include_research_context:
+        weighted_holdings = enrich_portfolio_holdings_with_research_context(weighted_holdings, settings)
     weighted_holdings.sort(
         key=lambda holding: (
             holding.market_value or 0,
@@ -5282,6 +5285,88 @@ def sort_and_weight_portfolio(
             "holding_count": len(weighted_holdings),
         }
     )
+
+
+def portfolio_holding_research_keywords(holding: PortfolioHolding, settings: Settings) -> list[str]:
+    ticker = normalize_ticker(holding.ticker)
+    profile = official_ticker_profile(ticker, settings, refresh_external=False) if ticker else {}
+    return target_keyword_candidates(
+        ticker,
+        holding.name,
+        holding.sector,
+        profile.get("company_name"),
+        profile.get("sector"),
+        profile.get("industry"),
+        profile.get("business_context"),
+        holding.theme_tags,
+    )
+
+
+def portfolio_holding_filing_context(ticker: str, settings: Settings) -> list[dict]:
+    normalized_ticker = normalize_ticker(ticker)
+    if not fullmatch(r"\d{6}", normalized_ticker):
+        return []
+    try:
+        signal = build_dart_filing_signal(normalized_ticker, settings)
+    except Exception:
+        return []
+    rows: list[dict] = []
+    for entry in (signal.get("recent_entries") or [])[:3]:
+        if not isinstance(entry, dict):
+            continue
+        filing = entry.get("filing") or {}
+        rows.append(
+            {
+                "ticker": normalized_ticker,
+                "date": filing.get("receipt_date") or entry.get("detected_at") or "",
+                "title": filing.get("report_name") or "공시명 미확인",
+                "importance": entry.get("importance") or "보통",
+                "summary": entry.get("action") or signal.get("summary") or "",
+                "source_url": filing.get("source_url") or "https://dart.fss.or.kr/",
+            }
+        )
+    return rows
+
+
+def enrich_portfolio_holdings_with_research_context(
+    holdings: list[PortfolioHolding],
+    settings: Settings,
+) -> list[PortfolioHolding]:
+    if not holdings:
+        return holdings
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    try:
+        manifest_entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    except Exception:
+        manifest_entries = []
+    enriched: list[PortfolioHolding] = []
+    for holding in holdings:
+        ticker = normalize_ticker(holding.ticker)
+        if not ticker or ticker == "CASH":
+            enriched.append(holding)
+            continue
+        keywords = portfolio_holding_research_keywords(holding, settings)
+        ticker_entries = [
+            entry
+            for entry in manifest_entries
+            if normalize_ticker(str(entry.get("ticker") or "")) == ticker
+        ]
+        if not ticker_entries:
+            ticker_entries = manifest_entries_matching_keywords(manifest_entries, keywords, limit=12)
+        ticker_entries = sorted(ticker_entries, key=manifest_entry_sort_key, reverse=True)
+        latest_reports = build_dashboard_latest_reports(ticker_entries[:6], [])
+        market_matches = market_journal_matches_for_keywords(settings, keywords, limit=3)
+        filing_context = portfolio_holding_filing_context(ticker, settings)
+        enriched.append(
+            holding.model_copy(
+                update={
+                    "market_journal_matches": market_matches,
+                    "latest_reports": latest_reports,
+                    "filing_context": filing_context,
+                }
+            )
+        )
+    return enriched
 
 
 def normalize_saved_portfolio(
@@ -5337,7 +5422,12 @@ def normalize_saved_portfolio(
         created_at=(existing or {}).get("created_at", now),
         updated_at=now,
     )
-    return sort_and_weight_portfolio(saved, settings, refresh_prices=True)
+    return sort_and_weight_portfolio(
+        saved,
+        settings,
+        refresh_prices=True,
+        include_research_context=False,
+    )
 
 
 def portfolio_store_response(
@@ -5353,6 +5443,7 @@ def portfolio_store_response(
             SavedPortfolio.model_validate(item),
             settings,
             refresh_prices=False,
+            include_research_context=True,
         )
         for item in store.get("portfolios", {}).values()
     ]
@@ -5363,6 +5454,7 @@ def portfolio_store_response(
             settings,
             refresh_prices=active_refresh_prices,
             force_price_refresh=force_active_price_refresh,
+            include_research_context=True,
         )
     return PortfolioStoreResponse(
         portfolios=records,
