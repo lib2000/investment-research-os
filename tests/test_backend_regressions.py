@@ -13626,6 +13626,78 @@ class InterestAutomationModuleTests(unittest.TestCase):
         self.assertEqual(matches[0]["market"], "US")
         self.assertIn("소비", matches[0]["summary"])
 
+    def test_interest_automation_market_journal_expands_kr_industry_aliases(self):
+        from research_os import interest_automation
+
+        runtime = SimpleNamespace(
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {
+                        "market": "KR",
+                        "session_date": "2026-07-06",
+                        "raw_summary": "제약 임상 결과와 헬스케어 수요 회복으로 바이오 종목이 반등했습니다.",
+                        "sentiment": "혼합",
+                        "risk_level": "보통",
+                        "tags": ["헬스케어"],
+                    },
+                    {
+                        "market": "US",
+                        "session_date": "2026-07-05",
+                        "raw_summary": "소프트웨어 업종은 클라우드와 AI 수요 확인 후 낙폭을 줄였습니다.",
+                        "sentiment": "중립",
+                        "risk_level": "보통",
+                        "tags": ["소프트웨어"],
+                    },
+                ]
+            }
+        )
+
+        healthcare_matches = interest_automation.market_journal_matches_for_keywords(
+            runtime,
+            SimpleNamespace(),
+            ["의약품 제조업"],
+        )
+        software_matches = interest_automation.market_journal_matches_for_keywords(
+            runtime,
+            SimpleNamespace(),
+            ["소프트웨어 개발 및 공급업"],
+        )
+
+        self.assertEqual(len(healthcare_matches), 1)
+        self.assertEqual(healthcare_matches[0]["market"], "KR")
+        self.assertIn("바이오", healthcare_matches[0]["summary"])
+        self.assertEqual(len(software_matches), 1)
+        self.assertEqual(software_matches[0]["market"], "US")
+        self.assertIn("소프트웨어", software_matches[0]["summary"])
+
+    def test_interest_automation_market_journal_expands_specific_unclassified_company_alias(self):
+        from research_os import interest_automation
+
+        runtime = SimpleNamespace(
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {
+                        "market": "US",
+                        "session_date": "2026-07-06",
+                        "raw_summary": "반도체와 전자부품 소재 기업은 AI 인프라 수요 확인 후 강세였습니다.",
+                        "sentiment": "긍정",
+                        "risk_level": "보통",
+                        "tags": ["소재", "반도체"],
+                    }
+                ]
+            }
+        )
+
+        matches = interest_automation.market_journal_matches_for_keywords(
+            runtime,
+            SimpleNamespace(),
+            ["CPS Technologies Corp. - Common Stock"],
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["market"], "US")
+        self.assertIn("전자부품", matches[0]["summary"])
+
     def test_interest_automation_module_builds_board_from_interest_and_portfolio(self):
         from research_os import interest_automation
 
