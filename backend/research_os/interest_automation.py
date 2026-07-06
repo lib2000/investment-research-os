@@ -10,6 +10,45 @@ class InterestAutomationRuntime(Protocol):
     """Runtime callbacks supplied by research_os_main while this workflow is split out."""
 
 
+MARKET_JOURNAL_KEYWORD_ALIASES: dict[str, tuple[str, ...]] = {
+    "consumer staples": ("소비", "필수소비재", "음식료", "식음료", "유통"),
+    "consumer discretionary": ("소비", "경기소비재", "교육", "유통"),
+    "education services": ("교육", "에듀테크", "온라인 교육"),
+    "plant-based foods": ("식물성", "음식료", "식품", "대체식품"),
+    "industrials": ("산업재", "기계", "운송", "인프라"),
+    "technology": ("기술주", "테크", "AI", "소프트웨어", "반도체"),
+    "it services": ("IT 서비스", "클라우드", "소프트웨어"),
+    "semiconductor": ("반도체", "AI 반도체", "장비"),
+    "electronic components": ("전자부품", "부품", "PCB"),
+    "optical": ("광통신", "광트랜시버", "통신장비"),
+    "ev charging": ("전기차 충전", "충전 인프라", "EV"),
+    "advanced air mobility": ("항공", "UAM", "모빌리티"),
+    "airports": ("항공", "공항", "모빌리티"),
+    "real estate": ("부동산", "리츠", "REIT", "배당"),
+    "reits": ("부동산", "리츠", "REIT", "배당"),
+    "dividend": ("배당", "리츠", "방어주"),
+    "construction": ("건설", "주택", "인프라"),
+    "finance": ("금융", "은행", "증권"),
+    "financial": ("금융", "은행", "증권"),
+    "telecom": ("통신", "통신장비", "5G"),
+    "materials": ("소재", "화학", "배터리"),
+    "battery": ("배터리", "2차전지", "분리막"),
+    "부동산": ("부동산", "리츠", "REIT", "배당"),
+    "금융": ("금융", "은행", "증권"),
+    "건설": ("건설", "주택", "인프라"),
+    "통신": ("통신", "5G", "통신장비"),
+    "반도체": ("반도체", "AI 반도체", "장비"),
+    "전자부품": ("전자부품", "부품", "PCB"),
+    "배터리": ("배터리", "2차전지", "분리막"),
+    "전동기": ("전력", "전력기기", "변압기", "전기장비"),
+    "케이블": ("전력망", "전선", "케이블"),
+    "운송장비": ("운송", "방산", "철도", "기계"),
+    "종합 소매": ("소비", "유통", "소매"),
+    "식품": ("음식료", "식품", "소비"),
+    "교육": ("교육", "에듀테크", "온라인 교육"),
+}
+
+
 def compact_interest_text(value: object, max_length: int = 180) -> str:
     text = sub(r"\s+", " ", str(value or "")).strip()
     return text[:max_length].rstrip() + ("..." if len(text) > max_length else "")
@@ -37,6 +76,30 @@ def target_keyword_candidates(*values: object) -> list[str]:
     return keywords[:12]
 
 
+def expanded_market_journal_keywords(keywords: list[str]) -> list[str]:
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for keyword in keywords:
+        text = str(keyword or "").strip()
+        if not text:
+            continue
+        candidates = [text]
+        lower = text.lower()
+        for trigger, aliases in MARKET_JOURNAL_KEYWORD_ALIASES.items():
+            if trigger in lower:
+                candidates.extend(aliases)
+        for value in candidates:
+            normalized = sub(r"\s+", " ", str(value or "").strip())
+            if len(normalized) < 2:
+                continue
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            expanded.append(normalized)
+    return expanded[:30]
+
+
 def manifest_entries_matching_keywords(entries: list[dict], keywords: list[str], limit: int = 30) -> list[dict]:
     normalized_keywords = [keyword.lower() for keyword in keywords if keyword]
     matched: list[dict] = []
@@ -55,7 +118,7 @@ def manifest_entries_matching_keywords(entries: list[dict], keywords: list[str],
 
 def market_journal_matches_for_keywords(runtime: InterestAutomationRuntime, settings, keywords: list[str], limit: int = 5) -> list[dict]:
     payload = runtime.read_market_close_journal(settings)
-    normalized_keywords = [keyword.lower() for keyword in keywords if keyword]
+    normalized_keywords = [keyword.lower() for keyword in expanded_market_journal_keywords(keywords) if keyword]
     results: list[dict] = []
     for item in sorted(
         [entry for entry in payload.get("entries", []) if isinstance(entry, dict)],

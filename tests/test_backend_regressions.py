@@ -13598,6 +13598,34 @@ class InterestAutomationModuleTests(unittest.TestCase):
         self.assertEqual(result[:4], ["AI/반도체", "AI", "반도체", "클라우드"])
         self.assertEqual(len(result), len(set(value.lower() for value in result)))
 
+    def test_interest_automation_market_journal_expands_sector_aliases(self):
+        from research_os import interest_automation
+
+        runtime = SimpleNamespace(
+            read_market_close_journal=lambda _settings: {
+                "entries": [
+                    {
+                        "market": "US",
+                        "session_date": "2026-07-06",
+                        "raw_summary": "방어주와 소비, 음식료 업종에 기관 수급이 유입되었습니다.",
+                        "sentiment": "중립",
+                        "risk_level": "보통",
+                        "tags": ["소비"],
+                    }
+                ]
+            }
+        )
+
+        matches = interest_automation.market_journal_matches_for_keywords(
+            runtime,
+            SimpleNamespace(),
+            ["Consumer Staples"],
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["market"], "US")
+        self.assertIn("소비", matches[0]["summary"])
+
     def test_interest_automation_module_builds_board_from_interest_and_portfolio(self):
         from research_os import interest_automation
 
