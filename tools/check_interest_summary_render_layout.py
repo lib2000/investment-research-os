@@ -111,7 +111,10 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     await sleep(400);
                     const currentRow = openedName
                       ? [...(root || document).querySelectorAll(selector)]
-                          .find((candidate) => (candidate.querySelector("summary strong")?.textContent || "").replace(/\\s+/g, " ").trim() === openedName)
+                          .find((candidate) =>
+                            visible(candidate) &&
+                            (candidate.querySelector("summary strong")?.textContent || "").replace(/\\s+/g, " ").trim() === openedName
+                          )
                       : row;
                     const currentDetails = currentRow?.querySelector("details.interest-card-details") || details;
                     if (currentDetails && !currentDetails.open) {
@@ -135,6 +138,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       hasRecommendationPanel: Boolean(recommendationPanel),
                       recommendationMetricCount: currentDetails?.querySelectorAll(".interest-recommendation-metrics span").length || 0,
                       recommendationEvidenceCount: currentDetails?.querySelectorAll(".interest-recommendation-evidence span").length || 0,
+                      recommendationMarketJournalCount: currentDetails?.querySelectorAll(".interest-recommendation-market-journal").length || 0,
+                      recommendationMarketJournalLabelVisible: [...(currentDetails?.querySelectorAll(".interest-recommendation-evidence b") || [])]
+                        .some((node) => /시장일지 근거/.test(node.textContent || "")),
                       recommendationSignalGridCount: currentDetails?.querySelectorAll(".daily-recommendation-signal-grid").length || 0,
                       recommendationQualityCount: currentDetails?.querySelectorAll(".daily-recommendation-quality").length || 0,
                       recommendationScoreChipCount: currentDetails?.querySelectorAll(".daily-recommendation-score em").length || 0,
@@ -282,7 +288,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       tickerOpen.recommendationSignalGridCount >= 1 &&
                       tickerOpen.recommendationQualityCount >= 1 &&
                       tickerOpen.recommendationScoreChipCount >= 4 &&
-                      tickerOpen.recommendationSectionLabelCount >= 3,
+                      tickerOpen.recommendationSectionLabelCount >= 4 &&
+                      tickerOpen.recommendationMarketJournalCount >= 1 &&
+                      tickerOpen.recommendationMarketJournalLabelVisible,
                     tickerRecommendationHorizontal:
                       tickerOpen.recommendationPanelDisplay === "grid" &&
                       tickerOpen.recommendationPanelColumnCount >= 3 &&
@@ -360,6 +368,11 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("tickerRecommendationDetailReady"):
         errors.append("관심종목 상세 추천 정보가 부족합니다.")
+    ticker_open = result.get("tickerOpen") if isinstance(result.get("tickerOpen"), dict) else {}
+    if not ticker_open.get("recommendationMarketJournalLabelVisible"):
+        errors.append("관심종목 상세 시장일지 근거 라벨이 표시되지 않습니다.")
+    if int(ticker_open.get("recommendationMarketJournalCount") or 0) < 1:
+        errors.append("관심종목 상세 시장일지 근거 항목이 표시되지 않습니다.")
     if not result.get("tickerRecommendationHorizontal"):
         errors.append("관심종목 상세 추천 정보가 가로 패널로 표시되지 않습니다.")
     if not result.get("sectorDetailOpened"):

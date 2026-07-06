@@ -147,6 +147,7 @@ REQUIRED_CSS_SNIPPETS = {
     "interest_region_grid": ".interest-region-grid",
     "interest_region_badge": ".interest-summary-meta b.interest-region",
     "interest_name_only_summary": "grid-template-columns: minmax(0, 1fr) auto;",
+    "interest_recommendation_market_journal": ".interest-recommendation-market-journal",
     "investment_calendar_grid": ".investment-calendar-grid",
     "investment_calendar_weekly": ".investment-calendar-weekly",
 }
@@ -219,6 +220,7 @@ REQUIRED_JS_SNIPPETS = {
     "interest_region_summary_kr": "한국 종목",
     "interest_region_summary_us": "미국 종목",
     "interest_region_label_helper": "interestRegionLabel",
+    "interest_recommendation_market_journal_label": "시장일지 근거",
     "recent_weekly_recommendation_linked_section": "추천 근거 연결 자료",
     "recent_weekly_latest_recommendation_linked_section": "오늘 추천 근거 연결 자료",
     "naver_pdf_import_failure_status": "PDF 런타임 실패 메모:",

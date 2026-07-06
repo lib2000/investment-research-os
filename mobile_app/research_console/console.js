@@ -1698,6 +1698,20 @@ function buildInterestRecommendationRecord(item = {}, { tickerCode = "", company
   const verified = Boolean(item.verification?.verified);
   const exchange = item.verification?.exchange || "";
   const updatedAt = item.updated_at || item.created_at || new Date().toISOString();
+  const marketJournalMatches = [
+    ...(Array.isArray(item.market_journal_matches) ? item.market_journal_matches : []),
+    ...(Array.isArray(item.collection_target?.market_journal_matches) ? item.collection_target.market_journal_matches : []),
+    ...(Array.isArray(item.research_target?.market_journal_matches) ? item.research_target.market_journal_matches : []),
+  ].filter(Boolean);
+  const marketJournalEvidenceDocuments = marketJournalMatches.slice(0, 3).map((match, index) => ({
+    title: match.title || match.summary || `${companyName || tickerCode || "관심종목"} 시장일지 연결 ${index + 1}`,
+    source_type: "market_journal",
+    report_type: "market_journal",
+    source_date: match.session_date || match.date || String(updatedAt).slice(0, 10),
+    citation_label: "시장일지",
+    matched_claims: [match.summary || match.title || "시장일지 연결 근거"],
+    source_relative_path: match.relative_path || match.path || "research_vault/_system/market_journal",
+  }));
   const evidenceDocuments = [
     {
       title: thesis || `${companyName || tickerCode || "관심종목"} 투자 논리 메모`,
@@ -1737,6 +1751,7 @@ function buildInterestRecommendationRecord(item = {}, { tickerCode = "", company
           source_relative_path: "research_vault/_system/interest_list.json",
         }
       : null,
+    ...marketJournalEvidenceDocuments,
   ].filter(Boolean);
   const scoreComponents = [
     { label: `${priorityLabel} 관심 우선순위`, points: priority === "high" ? 28 : priority === "low" ? 12 : 20 },
@@ -1744,6 +1759,7 @@ function buildInterestRecommendationRecord(item = {}, { tickerCode = "", company
     { label: thesis ? "투자 논리 메모" : "투자 논리 보강 필요", points: thesis ? 18 : 6 },
     { label: notes ? "추가 메모/조건" : "추가 조건 미입력", points: notes ? 10 : 3 },
     { label: tags.length ? "섹터/테마 태그" : "테마 태그 보강", points: tags.length ? Math.min(12, tags.length * 3) : 2 },
+    { label: marketJournalMatches.length ? "시장일지 연결" : "시장일지 연결 대기", points: marketJournalMatches.length ? 8 : 0 },
   ];
   const qualityFlags = [
     thesis ? "" : "투자 논리 메모 없음",
@@ -1766,6 +1782,9 @@ function buildInterestRecommendationRecord(item = {}, { tickerCode = "", company
     evidence_sources: [
       verified ? `공식 인증: ${companyName || tickerCode}${exchange ? ` · ${exchange}` : ""}` : "공식 티커 확인 필요",
       tags.length ? `태그: ${tags.slice(0, 4).join(", ")}` : "태그 보강 필요",
+      marketJournalMatches.length
+        ? `시장일지 연결: ${compactOutputText(marketJournalMatches[0].summary || marketJournalMatches[0].title || "시장일지 근거", 120)}`
+        : "시장일지 연결 대기",
       "저장 자료·뉴스·공시 스캔으로 추천 근거 확장 가능",
     ],
     score_components: scoreComponents,
@@ -1808,10 +1827,12 @@ function buildInterestRecommendationRecord(item = {}, { tickerCode = "", company
       {
         key: "market",
         label: "시장",
-        summary: `${interestRegionLabel(region)} 관심종목 · ${priorityLabel} 우선순위`,
-        count: 1,
+        summary: marketJournalMatches.length
+          ? `시장일지 ${formatNumber(marketJournalMatches.length)}건 연결 · ${interestRegionLabel(region)} 관심종목`
+          : `${interestRegionLabel(region)} 관심종목 · 시장일지 연결 대기`,
+        count: Math.max(1, marketJournalMatches.length),
         score_applied: true,
-        tone: "ok",
+        tone: marketJournalMatches.length ? "ok" : "reference",
       },
       {
         key: "filing",
@@ -1856,6 +1877,7 @@ function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", c
   const priorityLabel = interestPriorityLabel(item.priority || "medium");
   const verdict = interestPriorityVerdict(item.priority || "medium");
   const scoreComponents = (record.score_components || []).slice(0, 5);
+  const marketJournalRows = dailyRecommendationMarketJournalRows(record);
   const evidenceRows = dailyRecommendationEvidenceRows(record);
   const citationRows = dailyRecommendationCitationRows(record);
   const quality = dailyRecommendationEvidenceQualitySummary(record);
@@ -1892,6 +1914,10 @@ function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", c
       <small>${escapeHtml(`근거 품질: ${quality.grade || "-"} · ${quality.label || "미평가"} · 보강 ${formatNumber(quality.needs_review_count || 0)}건`)}</small>
     </div>
     <div class="interest-recommendation-evidence">
+      <b>시장일지 근거</b>
+      ${marketJournalRows.length
+        ? marketJournalRows.map((line) => `<span class="interest-recommendation-market-journal">${escapeHtml(line)}</span>`).join("")
+        : "<span class=\"interest-recommendation-market-journal muted\">시장일지 직접 연결은 자동수집 보드 갱신 후 표시됩니다.</span>"}
       <b>주요 근거</b>
       ${evidenceRows.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
       <b>근거 문서</b>

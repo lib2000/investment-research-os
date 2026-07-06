@@ -4037,6 +4037,22 @@ label {
   overflow-wrap: anywhere;
 }
 
+.interest-recommendation-evidence .interest-recommendation-market-journal {
+  color: #134e4a;
+  background: #f0fdfa;
+  border-color: #5eead4;
+  border-left: 4px solid #0f766e;
+  font-weight: 820;
+}
+
+.interest-recommendation-evidence .interest-recommendation-market-journal.muted {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #dbe4ef;
+  border-left-color: #94a3b8;
+  font-weight: 700;
+}
+
 .interest-recommendation-callout,
 .interest-recommendation-primary-reasons {
   min-width: 0;
