@@ -334,6 +334,7 @@ def build_result(
             "backend_watchdog_register": "powershell.exe -ExecutionPolicy Bypass -File .\\tools\\register_research_backend_watchdog_task.ps1",
             "market_journal_linkage": "python tools\\check_market_journal_linkage.py --strict --json",
             "market_journal_linkage_backlog": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
+            "recommendation_market_journal_quality": "python tools\\check_daily_recommendation_market_journal_quality.py --json",
             "operational_schedule_status": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
             "offline_readiness": "python tools\\check_offline_readiness.py --json",
         },
@@ -502,6 +503,7 @@ def render_markdown_report(result: dict) -> str:
         "backend_watchdog_register",
         "market_journal_linkage",
         "market_journal_linkage_backlog",
+        "recommendation_market_journal_quality",
         "operational_schedule_status",
         "offline_readiness",
     ):

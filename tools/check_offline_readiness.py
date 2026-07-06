@@ -69,6 +69,7 @@ CHECKS = [
     ("투자 캘린더/실적 일정", ["tools/check_investment_calendar_store.py", "--strict"]),
     ("리서치 소스 저장 상태", ["tools/check_research_source_store.py", "--strict"]),
     ("시장일지 관심/보유 연결", ["tools/check_market_journal_linkage.py", "--strict"]),
+    ("추천 시장일지 반영 품질", ["tools/check_daily_recommendation_market_journal_quality.py"]),
     ("매크로/지역 소스 연결 신호", ["tools/check_macro_source_signal_linkage.py", "--strict"]),
     ("저장 자료 중복 리뷰", ["tools/check_storage_duplicate_review.py", "--strict"]),
     ("뉴스 인박스 우선 분류", ["tools/check_news_inbox_priority_queue.py", "--strict"]),

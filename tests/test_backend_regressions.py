@@ -543,6 +543,18 @@ def load_market_journal_linkage_tool():
     return module
 
 
+def load_daily_recommendation_market_journal_quality_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_daily_recommendation_market_journal_quality.py"
+    spec = spec_from_file_location("check_daily_recommendation_market_journal_quality", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_favorite_posts_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1152,6 +1164,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         self.assertIn("시장일지 관심/보유 연결", checks)
         self.assertEqual(checks["시장일지 관심/보유 연결"], ["tools/check_market_journal_linkage.py", "--strict"])
+        self.assertIn("추천 시장일지 반영 품질", checks)
+        self.assertEqual(
+            checks["추천 시장일지 반영 품질"],
+            ["tools/check_daily_recommendation_market_journal_quality.py"],
+        )
 
     def test_offline_readiness_checks_operational_schedule_status(self):
         tool = load_offline_readiness_tool()
@@ -14691,6 +14708,124 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
 
         self.assertTrue(any("linkage ratio" in error for error in errors))
         self.assertTrue(any("stale" in error for error in errors))
+
+    def test_daily_recommendation_market_journal_quality_checks_latest_rows(self):
+        tool = load_daily_recommendation_market_journal_quality_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            store = root / "daily_recommendations.json"
+            targets = root / "interest_collection_targets.json"
+            store.write_text(
+                json.dumps(
+                    {
+                        "latest_recommendation_date": "2026-07-06",
+                        "records": [
+                            {
+                                "recommendation_date": "2026-07-06",
+                                "market": "KR",
+                                "rank": 1,
+                                "ticker": "005930",
+                                "company_name": "삼성전자",
+                                "score": 115,
+                                "score_components": [{"label": "시장일지 연결", "points": 3}],
+                                "evidence_sources": ["시장일지 마감 참고"],
+                            },
+                            {
+                                "recommendation_date": "2026-07-06",
+                                "market": "US",
+                                "rank": 1,
+                                "ticker": "ABSI",
+                                "company_name": "Absci",
+                                "score": 168,
+                                "score_components": [{"label": "RAG 연결 문서", "points": 15}],
+                                "evidence_sources": ["정책 신호 시장 참고 2건"],
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            targets.write_text(
+                json.dumps(
+                    {
+                        "payload": {
+                            "ticker_targets": [
+                                {
+                                    "ticker": "005930",
+                                    "company_name": "삼성전자",
+                                    "market_journal_matches": [{"market": "KR", "session_date": "2026-07-06"}],
+                                },
+                                {
+                                    "ticker": "ABSI",
+                                    "company_name": "Absci",
+                                    "market_journal_matches": [{"market": "US", "session_date": "2026-07-05"}],
+                                },
+                            ],
+                            "sector_targets": [],
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            status = tool.build_status(
+                store,
+                targets,
+                min_latest=2,
+                min_market_score_components=1,
+                min_market_references=2,
+            )
+
+        self.assertEqual(status["status"], "ok")
+        self.assertEqual(status["linked_recommendation_count"], 2)
+        self.assertEqual(status["market_score_component_count"], 1)
+        self.assertEqual(status["market_reference_count"], 2)
+
+    def test_daily_recommendation_market_journal_quality_flags_score_without_linkage(self):
+        tool = load_daily_recommendation_market_journal_quality_tool()
+
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            store = root / "daily_recommendations.json"
+            targets = root / "interest_collection_targets.json"
+            store.write_text(
+                json.dumps(
+                    {
+                        "latest_recommendation_date": "2026-07-06",
+                        "records": [
+                            {
+                                "recommendation_date": "2026-07-06",
+                                "market": "KR",
+                                "rank": 1,
+                                "ticker": "005930",
+                                "company_name": "삼성전자",
+                                "score_components": [{"label": "시장일지 연결", "points": 3}],
+                                "evidence_sources": ["시장일지 마감 참고"],
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            targets.write_text(
+                json.dumps({"payload": {"ticker_targets": [], "sector_targets": []}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            status = tool.build_status(
+                store,
+                targets,
+                min_latest=1,
+                min_market_score_components=1,
+                min_market_references=1,
+            )
+
+        self.assertEqual(status["status"], "error")
+        self.assertTrue(any("score without target linkage" in error for error in status["errors"]))
 
     def test_macro_source_signal_linkage_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_macro_source_signal_linkage.py").read_text(encoding="utf-8")
