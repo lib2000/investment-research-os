@@ -189,6 +189,15 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     await sleep(100);
                     summary?.click();
                     await sleep(300);
+                    const evidencePanel = details?.querySelector(".holding-evidence-panel");
+                    const evidenceStyle = evidencePanel ? getComputedStyle(evidencePanel) : null;
+                    const evidenceColumnsText = evidenceStyle?.getPropertyValue("grid-template-columns") || evidenceStyle?.gridTemplateColumns || "";
+                    const evidenceColumnCount = !evidenceColumnsText || evidenceColumnsText === "none"
+                      ? 0
+                      : evidenceColumnsText.trim().split(/\\s+/).length;
+                    const evidenceLabels = [...(evidencePanel?.querySelectorAll(".holding-evidence-column b") || [])]
+                      .map((node) => (node.textContent || "").replace(/\\s+/g, " ").trim())
+                      .filter(Boolean);
                     return {
                       portfolioName: portfolioOption.value,
                       holdingCount: document.querySelectorAll("#holdingsEditor .holding-row").length,
@@ -196,6 +205,13 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       opened: Boolean(details?.open),
                       hasDetailGrid: Boolean(details?.querySelector(".holding-detail-grid")),
                       overviewChipCount: details?.querySelectorAll(".holding-detail-overview span").length || 0,
+                      hasEvidencePanel: Boolean(evidencePanel),
+                      evidenceLabelCount: evidenceLabels.length,
+                      evidenceLabels,
+                      evidenceItemCount: evidencePanel?.querySelectorAll(".holding-evidence-column span").length || 0,
+                      evidenceMarketJournalCount: evidencePanel?.querySelectorAll(".holding-evidence-market-journal").length || 0,
+                      evidencePanelDisplay: evidenceStyle?.getPropertyValue("display") || evidenceStyle?.display || "",
+                      evidencePanelColumnCount: evidenceColumnCount,
                       actionLabels: [...(details?.querySelectorAll("[data-holding-action]") || [])]
                         .map((button) => (button.textContent || "").trim())
                         .filter(Boolean),
@@ -355,6 +371,18 @@ def strict_errors(result: dict) -> list[str]:
     holding_open = result.get("holdingOpen") if isinstance(result.get("holdingOpen"), dict) else {}
     if int(holding_open.get("overviewChipCount") or 0) < 6:
         errors.append("보유 종목 상세 판단 요약이 부족합니다.")
+    if not holding_open.get("hasEvidencePanel"):
+        errors.append("보유 종목 상세 근거 패널이 표시되지 않습니다.")
+    holding_evidence_labels = " ".join(holding_open.get("evidenceLabels") or [])
+    for label in ["시장일지 근거", "리포트/자료", "공시/이벤트", "후속 확인"]:
+        if label not in holding_evidence_labels:
+            errors.append(f"보유 종목 상세 근거 라벨 누락: {label}")
+    if int(holding_open.get("evidenceItemCount") or 0) < 4:
+        errors.append("보유 종목 상세 근거 항목이 부족합니다.")
+    if int(holding_open.get("evidenceMarketJournalCount") or 0) < 1:
+        errors.append("보유 종목 상세 시장일지 근거 항목이 표시되지 않습니다.")
+    if holding_open.get("evidencePanelDisplay") != "grid" or int(holding_open.get("evidencePanelColumnCount") or 0) < 4:
+        errors.append("보유 종목 상세 근거 패널이 가로 구성으로 표시되지 않습니다.")
     holding_actions = " ".join(holding_open.get("actionLabels") or [])
     for label in ["저장", "분석", "차트", "자료", "리스크"]:
         if label not in holding_actions:

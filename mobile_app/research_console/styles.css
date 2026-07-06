@@ -2761,6 +2761,59 @@ label {
   white-space: nowrap;
 }
 
+.holding-evidence-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 0 4px;
+}
+
+.holding-evidence-column {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 9px;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 7px;
+}
+
+.holding-evidence-column b {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.holding-evidence-column span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.holding-evidence-column span.muted {
+  color: #64748b;
+  font-weight: 720;
+}
+
+.holding-evidence-market-journal {
+  padding: 4px 6px;
+  color: #0f766e !important;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  border-radius: 6px;
+}
+
+.holding-evidence-market-journal.muted {
+  color: #64748b !important;
+  background: #f1f5f9;
+  border-color: #dbe4ef;
+}
+
 .holding-row label {
   display: flex;
   min-height: calc(var(--holding-control-height) + 16px);
@@ -5941,7 +5994,8 @@ pre {
   .holding-card-summary,
   .holding-summary-metrics,
   .holding-detail-grid,
-  .holding-detail-overview {
+  .holding-detail-overview,
+  .holding-evidence-panel {
     grid-template-columns: 1fr;
   }
 

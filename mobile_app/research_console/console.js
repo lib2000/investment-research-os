@@ -1929,6 +1929,112 @@ function renderInterestTickerRecommendationPanel(item = {}, { tickerCode = "", c
   return panel;
 }
 
+function firstArrayValue(...values) {
+  return values.find((value) => Array.isArray(value) && value.length) || [];
+}
+
+function holdingMarketJournalRows(holding = {}) {
+  const rows = firstArrayValue(
+    holding.market_journal_matches,
+    holding.collection_target?.market_journal_matches,
+    holding.research_target?.market_journal_matches
+  );
+  return rows
+    .map((match, index) => {
+      const date = match.session_date || match.date || match.source_date || "";
+      const text = match.summary || match.title || match.matched_claim || match.reason || "";
+      return compactOutputText(
+        [date, text || `${holding.name || holding.ticker || "보유 종목"} 시장일지 연결 ${index + 1}`]
+          .filter(Boolean)
+          .join(" · "),
+        108
+      );
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function holdingReportRows(holding = {}) {
+  const rows = firstArrayValue(
+    holding.latest_reports,
+    holding.reports,
+    holding.linked_reports,
+    holding.recent_reports,
+    holding.rag_documents
+  );
+  return rows
+    .map((item) => {
+      const date = item.source_date || item.published_at || item.date || item.created_at || "";
+      const title = item.title || item.report_title || item.name || item.summary || "";
+      const source = item.source || item.publisher || item.broker || item.source_type || "";
+      return compactOutputText([date, source, title].filter(Boolean).join(" · "), 108);
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function holdingFilingRows(holding = {}) {
+  const rows = firstArrayValue(
+    holding.filing_context,
+    holding.filings,
+    holding.dart_filings,
+    holding.sec_filings,
+    holding.dart_filing_signal?.entries,
+    holding.event_context
+  );
+  return rows
+    .map((item) => {
+      const date = item.rcept_dt || item.filing_date || item.date || item.source_date || "";
+      const title = item.report_nm || item.title || item.event || item.summary || item.name || "";
+      return compactOutputText([date, title].filter(Boolean).join(" · "), 108);
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function renderPortfolioHoldingEvidencePanel(holding = {}) {
+  const panel = document.createElement("section");
+  panel.className = "holding-evidence-panel";
+  const marketRows = holdingMarketJournalRows(holding);
+  const reportRows = holdingReportRows(holding);
+  const filingRows = holdingFilingRows(holding);
+  const ticker = holding.ticker || "티커 미확인";
+  const themeTags = splitTags(holding.theme_tags);
+  const reportFallback = "자료 버튼으로 저장 리포트/RAG 검색을 실행하세요.";
+  const filingFallback = `${ticker} 공시/이벤트는 분석 또는 리스크 스캔에서 확인하세요.`;
+  const followups = [
+    "분석 버튼으로 종목 대시보드와 추천 판단을 연결",
+    "자료 버튼으로 저장 리포트/RAG 검색",
+    "리스크 버튼으로 포트폴리오 노출과 손실 기여도 확인",
+    themeTags.length ? `테마 확인: ${themeTags.slice(0, 3).join(" · ")}` : "",
+  ].filter(Boolean);
+  const renderRows = (rows, fallback, rowClass = "") => {
+    const classes = (hasRows) => [rowClass, hasRows ? "" : "muted"].filter(Boolean).join(" ");
+    return (rows.length ? rows : [fallback])
+      .map((line) => `<span class="${escapeHtml(classes(rows.length > 0))}">${escapeHtml(line)}</span>`)
+      .join("");
+  };
+  panel.innerHTML = `
+    <div class="holding-evidence-column">
+      <b>시장일지 근거</b>
+      ${renderRows(marketRows, "시장일지 직접 연결은 자동수집 보드 갱신 후 표시됩니다.", "holding-evidence-market-journal")}
+    </div>
+    <div class="holding-evidence-column">
+      <b>리포트/자료</b>
+      ${renderRows(reportRows, reportFallback)}
+    </div>
+    <div class="holding-evidence-column">
+      <b>공시/이벤트</b>
+      ${renderRows(filingRows, filingFallback)}
+    </div>
+    <div class="holding-evidence-column">
+      <b>후속 확인</b>
+      ${followups.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+    </div>
+  `;
+  return panel;
+}
+
 function makePortfolioHoldingRow(holding = {}) {
   const row = document.createElement("div");
   row.className = "editor-row holding-row";
@@ -1974,6 +2080,7 @@ function makePortfolioHoldingRow(holding = {}) {
   `;
   detailBody.append(
     detailOverview,
+    renderPortfolioHoldingEvidencePanel(holding),
     createInput({
       name: "name",
       label: "회사명",
