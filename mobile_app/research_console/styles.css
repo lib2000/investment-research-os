@@ -4733,6 +4733,22 @@ label {
   padding: 4px 6px;
 }
 
+.daily-recommendation-evidence .daily-recommendation-market-journal {
+  color: #134e4a;
+  background: #f0fdfa;
+  border: 1px solid #5eead4;
+  border-left: 4px solid #0f766e;
+  font-weight: 750;
+}
+
+.daily-recommendation-evidence .daily-recommendation-market-journal.muted {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #dbe4ef;
+  border-left-color: #94a3b8;
+  font-weight: 650;
+}
+
 .daily-recommendation-milestones {
   display: flex;
   flex-wrap: wrap;

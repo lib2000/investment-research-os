@@ -9569,6 +9569,52 @@ function dailyRecommendationCitationRows(record) {
     .filter(Boolean);
 }
 
+function dailyRecommendationMarketJournalRows(record) {
+  const rows = [];
+  const seen = new Set();
+  const addRow = (value, limit = 126) => {
+    const text = compactOutputText(value || "", limit);
+    const key = text.toLowerCase();
+    if (text && !seen.has(key)) {
+      seen.add(key);
+      rows.push(text);
+    }
+  };
+  (record?.score_components || [])
+    .filter((component) => /시장일지|마감|장세|시장 참고|정책 신호 시장/i.test(String(component?.label || "")))
+    .slice(0, 3)
+    .forEach((component) => {
+      const points = Number(component.points || 0);
+      addRow(`${component.label}${points ? ` +${formatNumber(points)}점` : ""}`, 96);
+    });
+  (record?.evidence_sources || [])
+    .filter((source) => /시장일지|마감|장세|market journal|market close/i.test(String(source || "")))
+    .slice(0, 4)
+    .forEach((source) => addRow(source));
+  (record?.evidence_documents || [])
+    .filter((source) => {
+      const text = [
+        source?.title,
+        source?.report_type,
+        source?.source_type,
+        source?.citation_label,
+        source?.source_relative_path,
+        ...(Array.isArray(source?.matched_claims) ? source.matched_claims : []),
+      ].join(" ");
+      return /시장일지|마감|장세|market journal|market close/i.test(text);
+    })
+    .slice(0, 4)
+    .forEach((source) => {
+      const title = source.title || source.source_relative_path || "시장일지 연결 자료";
+      const date = source.source_date ? `${source.source_date} · ` : "";
+      const claims = Array.isArray(source.matched_claims) && source.matched_claims.length
+        ? ` · ${compactOutputText(source.matched_claims[0], 54)}`
+        : "";
+      addRow(`${date}${title}${claims}`, 132);
+    });
+  return rows.slice(0, 5);
+}
+
 function dailyRecommendationChangeText(milestone, currency = "KRW") {
   if (!milestone || milestone.price === null || milestone.price === undefined) {
     return "가격 대기";
@@ -10169,6 +10215,7 @@ function renderDailyRecommendationCards(payload) {
       const milestones = (record.tracking_milestones || []).slice(0, 5);
       const categories = dailyRecommendationEvidenceCategories(record);
       const weeklyEvidenceRows = dailyRecommendationWeeklyEvidenceRows(record);
+      const marketJournalRows = dailyRecommendationMarketJournalRows(record);
       const evidenceRows = dailyRecommendationEvidenceRows(record);
       const citationRows = dailyRecommendationCitationRows(record);
       const evidenceQuality = dailyRecommendationEvidenceQualitySummary(record);
@@ -10266,6 +10313,10 @@ function renderDailyRecommendationCards(payload) {
               </section>
               <section class="daily-recommendation-detail-column evidence-column">
                 <div class="daily-recommendation-evidence">
+                  <b>시장일지 근거</b>
+                  ${marketJournalRows.length
+                    ? marketJournalRows.map((item) => `<span class="daily-recommendation-market-journal">${escapeHtml(item)}</span>`).join("")
+                    : "<span class=\"daily-recommendation-market-journal muted\">시장일지 직접 연결은 다음 추천 갱신부터 표시됩니다.</span>"}
                   <b>최근 1주 자료 묶음</b>
                   ${weeklyEvidenceRows.length
                     ? weeklyEvidenceRows.map((item) => `<span>${escapeHtml(item)}</span>`).join("")

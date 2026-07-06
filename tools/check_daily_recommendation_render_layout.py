@@ -127,6 +127,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   let horizontalEvidenceLayout = false;
                   let readableDetailWidth = false;
                   let openedDetailSignalGridCount = 0;
+                  let marketJournalEvidenceCount = 0;
+                  let marketJournalLabelVisible = false;
                   if (topRankCard) {
                     topRankCard.click();
                     const openedCard = await waitFor(() => {
@@ -148,6 +150,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const detailColumns = openedDetail?.querySelector(".daily-recommendation-detail-columns");
                     const detailContentColumns = [...(openedDetail?.querySelectorAll(".daily-recommendation-detail-column") || [])];
                     const evidence = openedDetail?.querySelector(".daily-recommendation-evidence");
+                    marketJournalEvidenceCount = [...(openedDetail?.querySelectorAll(".daily-recommendation-market-journal") || [])].filter(visible).length;
+                    marketJournalLabelVisible = [...(openedDetail?.querySelectorAll(".daily-recommendation-evidence b") || [])]
+                      .some((node) => /시장일지 근거/.test(node.textContent || ""));
                     openedDetailSignalGridCount = [...(openedDetail?.querySelectorAll(".daily-recommendation-signal-grid") || [])].filter(visible).length;
                     const detailStyle = openedDetail ? getComputedStyle(openedDetail) : null;
                     const detailColumnsStyle = detailColumns ? getComputedStyle(detailColumns) : null;
@@ -202,6 +207,8 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     detailWidth,
                     detailHeight,
                     openedDetailSignalGridCount,
+                    marketJournalEvidenceCount,
+                    marketJournalLabelVisible,
                     horizontalDetailLayout,
                     horizontalEvidenceLayout,
                     readableDetailWidth,
@@ -270,6 +277,10 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("추천 근거 묶음이 가로 카드형으로 표시되지 않습니다.")
     if int(result.get("openedDetailSignalGridCount") or 0) < 1:
         errors.append("추천 상세 화면에 시장/공시/정책/뉴스/심리 신호가 표시되지 않습니다.")
+    if not result.get("marketJournalLabelVisible"):
+        errors.append("추천 상세 화면에 시장일지 근거 라벨이 표시되지 않습니다.")
+    if int(result.get("marketJournalEvidenceCount") or 0) < 1:
+        errors.append("추천 상세 화면에 시장일지 근거 항목이 표시되지 않습니다.")
     clipped = result.get("clippedTextElements") if isinstance(result.get("clippedTextElements"), list) else []
     if clipped:
         errors.append(f"추천 결과 텍스트 클리핑 {len(clipped)}개")
