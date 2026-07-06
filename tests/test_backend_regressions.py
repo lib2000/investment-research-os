@@ -4645,7 +4645,29 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             state_file = temp_path / "portfolio_report_alert_state.json"
-            state_file.write_text("{}", encoding="utf-8")
+            state_file.write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-07-06T07:00:03",
+                        "target_bot": "@my_claw_lib2000_bot",
+                        "send_time": "07:00",
+                        "last_plan": {
+                            "candidate_count": 1,
+                            "message_count": 1,
+                            "chat_id_configured": True,
+                            "delivered": True,
+                        },
+                        "sent_messages": [
+                            {
+                                "chat_id": "987654321",
+                                "message_id": 740,
+                                "sent_at": "2026-07-05T22:00:02+00:00",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             args = SimpleNamespace(
                 task_name="InvestmentJournalApp OpenClaw Portfolio Report Alert",
                 state_file=state_file,
@@ -4680,6 +4702,10 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
                 result = tool.build_result(args)
 
         self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["receipt"]["status"], "delivered")
+        self.assertEqual(result["receipt"]["target_bot"], "@my_claw_lib2000_bot")
+        self.assertEqual(result["receipt"]["latest_message_id"], 740)
+        self.assertEqual(result["updated_state"]["last_receipt"]["latest_message_id"], 740)
         self.assertFalse(result["payload"]["should_send"])
         self.assertEqual(result["payload"]["message_count"], 0)
         delivery.assert_called_once()

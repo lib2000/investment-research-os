@@ -58,7 +58,38 @@ def fingerprint(status: dict[str, Any]) -> str:
     return "::".join(parts)
 
 
-def build_alert_text(status: dict[str, Any]) -> str:
+def _safe_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def build_delivery_receipt(alert_state: dict[str, Any], *, configured_target_bot: str, state_file: Path) -> dict[str, Any]:
+    if not isinstance(alert_state, dict):
+        alert_state = {}
+    plan = alert_state.get("last_plan") if isinstance(alert_state.get("last_plan"), dict) else {}
+    sent_messages = [item for item in _safe_list(alert_state.get("sent_messages")) if isinstance(item, dict)]
+    message_ids = [item.get("message_id") for item in sent_messages if item.get("message_id") is not None]
+    latest_message = sent_messages[-1] if sent_messages else {}
+    state_target_bot = str(alert_state.get("target_bot") or configured_target_bot or "").strip() or configured_target_bot
+    return {
+        "status": "delivered" if plan.get("delivered") and message_ids else "delivered_no_message_id" if plan.get("delivered") else "not_delivered",
+        "state_file": str(state_file),
+        "state_updated_at": alert_state.get("updated_at"),
+        "send_time": alert_state.get("send_time") or "07:00",
+        "target_bot": state_target_bot,
+        "configured_target_bot": configured_target_bot,
+        "target_bot_matches_configured": state_target_bot == configured_target_bot,
+        "candidate_count": plan.get("candidate_count"),
+        "message_count": plan.get("message_count"),
+        "chat_id_configured": plan.get("chat_id_configured"),
+        "delivered": bool(plan.get("delivered")),
+        "sent_message_count": len(sent_messages),
+        "message_ids": message_ids[-5:],
+        "latest_message_id": latest_message.get("message_id"),
+        "latest_sent_at": latest_message.get("sent_at"),
+    }
+
+
+def build_alert_text(status: dict[str, Any], *, receipt: dict[str, Any] | None = None) -> str:
     task = status.get("task") if isinstance(status.get("task"), dict) else {}
     lines = [
         "보유 종목 리포트 알림 사후점검 (Portfolio Report Alert Post-run Check)",
@@ -70,6 +101,16 @@ def build_alert_text(status: dict[str, Any]) -> str:
         f"상태 파일 존재: {status.get('state_file_exists')}",
         f"상태 파일 경과시간: {status.get('state_file_age_hours')}",
     ]
+    if receipt:
+        lines.extend(
+            [
+                "수신 기록:",
+                f"- 대상 봇: {receipt.get('target_bot')}",
+                f"- 전송 여부: {receipt.get('delivered')}",
+                f"- 메시지 ID: {', '.join(str(item) for item in receipt.get('message_ids') or []) or '없음'}",
+                f"- state 갱신: {receipt.get('state_updated_at')}",
+            ]
+        )
     errors = [str(item) for item in status.get("errors") or []]
     warnings = [str(item) for item in status.get("warnings") or []]
     if errors:
@@ -81,9 +122,16 @@ def build_alert_text(status: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_payload(status: dict[str, Any], *, chat_id: str, target_bot: str, notify_ok: bool) -> dict[str, Any]:
+def build_payload(
+    status: dict[str, Any],
+    *,
+    chat_id: str,
+    target_bot: str,
+    notify_ok: bool,
+    receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     should_send = status.get("status") != "ok" or notify_ok
-    text = build_alert_text(status) if should_send else ""
+    text = build_alert_text(status, receipt=receipt) if should_send else ""
     messages = []
     if text:
         messages.append(
@@ -132,6 +180,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     chat_id, chat_id_source = default_chat_id()
     target_bot, target_bot_source = default_target_bot()
     effective_chat_id = args.chat_id if args.chat_id is not None else chat_id
+    alert_state = read_json(state_file, {})
+    if not isinstance(alert_state, dict):
+        alert_state = {}
+    receipt = build_delivery_receipt(alert_state, configured_target_bot=target_bot, state_file=state_file)
     enabled = bool(args.enabled or env_bool("TELEGRAM_REPORT_ALERT_POSTRUN_ENABLED", False))
     dry_run = True
     if args.submit:
@@ -144,7 +196,13 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"monitor state JSON object expected: {monitor_state_file}")
     current_fingerprint = fingerprint(status)
     already_sent = current_fingerprint in set(str(item) for item in monitor_state.get("sent_fingerprints") or [])
-    payload = build_payload(status, chat_id=effective_chat_id, target_bot=target_bot, notify_ok=args.notify_ok)
+    payload = build_payload(
+        status,
+        chat_id=effective_chat_id,
+        target_bot=target_bot,
+        notify_ok=args.notify_ok,
+        receipt=receipt,
+    )
     if already_sent and not args.repeat:
         payload = {**payload, "should_send": False, "message_count": 0, "messages": [], "text": ""}
 
@@ -169,6 +227,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "last_fingerprint": current_fingerprint,
         "last_should_send": payload.get("should_send"),
         "last_sent": sent,
+        "last_receipt": receipt,
         "sent_fingerprints": list(dict.fromkeys(sent_fingerprints))[-50:],
     }
     if delivery.get("updated_state"):
@@ -189,6 +248,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "target_bot_source": target_bot_source,
         "already_sent": already_sent,
         "fingerprint": current_fingerprint,
+        "receipt": redacted_for_output(receipt),
         "payload": redacted_for_output(payload),
         "delivery": redacted_for_output({key: value for key, value in delivery.items() if key != "updated_state"}),
         "monitor_state_file": str(monitor_state_file),
