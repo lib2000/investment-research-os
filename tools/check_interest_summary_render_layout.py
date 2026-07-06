@@ -234,11 +234,35 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       evidenceReportStructuredCount: reportCards.filter((card) =>
                         card.querySelector("small") && card.querySelector("strong") && card.querySelector("em")
                       ).length,
+                      evidenceReportClickableCount: reportCards.filter((card) =>
+                        card.matches("button[data-holding-action='memory']") && card.dataset.holdingReportQuery
+                      ).length,
                       evidencePanelDisplay: evidenceStyle?.getPropertyValue("display") || evidenceStyle?.display || "",
                       evidencePanelColumnCount: evidenceColumnCount,
-                      actionLabels: [...(details?.querySelectorAll("[data-holding-action]") || [])]
+                      actionLabels: [...(details?.querySelectorAll(".holding-actions [data-holding-action]") || [])]
                         .map((button) => (button.textContent || "").trim())
                         .filter(Boolean),
+                    };
+                  };
+                  const clickHoldingReportCard = async () => {
+                    document.querySelector('button.tab[data-tab="portfolio"]')?.click();
+                    await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio report tab active");
+                    const row = [...document.querySelectorAll("#holdingsEditor .holding-row")].find(visible);
+                    const details = row?.querySelector("details.holding-card-details");
+                    if (details) details.open = true;
+                    const card = details?.querySelector(".holding-evidence-report[data-holding-action='memory']");
+                    card?.scrollIntoView({block: "center", inline: "nearest"});
+                    await sleep(100);
+                    card?.click();
+                    const matched = await waitFor(() => {
+                      const memoryActive = document.querySelector("#memory")?.classList.contains("active") || false;
+                      const ragQuery = document.querySelector("#memoryForm input[name='ragQuery']")?.value || "";
+                      const outputText = document.querySelector("#output")?.innerText || "";
+                      return memoryActive && (/저장 데이터 검색|RAG|저장 데이터/.test(outputText) || ragQuery.length > 20);
+                    }, 20000, "holding report card action");
+                    return {
+                      ok: Boolean(card && matched),
+                      queryPreview: (document.querySelector("#memoryForm input[name='ragQuery']")?.value || "").replace(/\\s+/g, " ").trim().slice(0, 160),
                     };
                   };
                   const clickHoldingAction = async (label, expected) => {
@@ -247,7 +271,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const row = [...document.querySelectorAll("#holdingsEditor .holding-row")].find(visible);
                     const details = row?.querySelector("details.holding-card-details");
                     if (details) details.open = true;
-                    const button = [...(details?.querySelectorAll("[data-holding-action]") || [])]
+                    const button = [...(details?.querySelectorAll(".holding-actions [data-holding-action]") || [])]
                       .find((item) => (item.textContent || "").trim() === label);
                     button?.scrollIntoView({block: "center", inline: "nearest"});
                     await sleep(100);
@@ -295,6 +319,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const tickerOpen = await openFirst(".interest-ticker-summary-row");
                   const sectorOpen = await openFirst(".interest-sector-summary-row");
                   const holdingOpen = await openFirstHolding();
+                  const holdingReportCardFlow = await clickHoldingReportCard();
                   const holdingActionFlows = [
                     await clickHoldingAction("분석", "dashboard"),
                     await clickHoldingAction("차트", "chart"),
@@ -309,6 +334,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     portfolioStoreProbeCount: (portfolioStoreProbe?.portfolios || []).length,
                     holdingDetailOpened: holdingOpen.opened && holdingOpen.hasDetailGrid,
                     holdingOpen,
+                    holdingReportCardFlow,
                     holdingActionFlows,
                     tickerSummaryCount: tickerBefore.length,
                     sectorSummaryCount: sectorBefore.length,
@@ -413,6 +439,8 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("보유 종목 상세 리포트/자료 카드가 표시되지 않습니다.")
     if int(holding_open.get("evidenceReportStructuredCount") or 0) < 1:
         errors.append("보유 종목 상세 리포트/자료 카드가 날짜·제목·요약 구조로 표시되지 않습니다.")
+    if int(holding_open.get("evidenceReportClickableCount") or 0) < 1:
+        errors.append("보유 종목 상세 리포트/자료 카드가 저장 데이터 검색으로 연결되지 않습니다.")
     if holding_open.get("evidencePanelDisplay") != "grid" or int(holding_open.get("evidencePanelColumnCount") or 0) < 4:
         errors.append("보유 종목 상세 근거 패널이 가로 구성으로 표시되지 않습니다.")
     holding_actions = " ".join(holding_open.get("actionLabels") or [])
@@ -424,6 +452,8 @@ def strict_errors(result: dict) -> list[str]:
         flow = next((item for item in holding_action_flows if item.get("label") == label), None)
         if not flow or not flow.get("ok"):
             errors.append(f"보유 종목 상세 액션 흐름 실패: {label}")
+    if not result.get("holdingReportCardFlow", {}).get("ok"):
+        errors.append("보유 종목 리포트/자료 카드 클릭 흐름이 저장 데이터 검색으로 이동하지 않습니다.")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("tickerRecommendationDetailReady"):

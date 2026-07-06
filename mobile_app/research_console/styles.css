@@ -2803,10 +2803,22 @@ label {
 .holding-evidence-report {
   display: grid;
   gap: 3px;
+  width: 100%;
   padding: 6px 7px;
+  text-align: left;
   background: #ffffff;
   border: 1px solid #dbe4ef;
   border-radius: 7px;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+.holding-evidence-report:hover,
+.holding-evidence-report:focus-visible {
+  border-color: #0f766e;
+  background: #f8fffd;
+  outline: none;
 }
 
 .holding-evidence-report small {
@@ -2832,6 +2844,14 @@ label {
   font-weight: 720;
   line-height: 1.38;
   overflow-wrap: anywhere;
+}
+
+.holding-evidence-report-action {
+  justify-self: start;
+  margin-top: 1px;
+  color: #0f766e !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
 }
 
 .holding-evidence-report.muted {

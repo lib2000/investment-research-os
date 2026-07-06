@@ -1976,6 +1976,7 @@ function holdingReportRows(holding = {}) {
         source: compactOutputText(source || "저장 자료", 32),
         title: compactOutputText(title || summary, 74),
         summary: compactOutputText(summary || "대시보드 자료에서 원문을 확인하세요.", 92),
+        query: compactOutputText([title, summary, source, date].filter(Boolean).join(" "), 180),
       };
     })
     .filter(Boolean)
@@ -2025,15 +2026,21 @@ function renderPortfolioHoldingEvidencePanel(holding = {}) {
   };
   const renderReportRows = (rows) => {
     if (!rows.length) {
-      return `<span class="holding-evidence-report muted">${escapeHtml(reportFallback)}</span>`;
+      return `
+        <button class="holding-evidence-report muted" data-holding-action="memory" data-holding-report-query="${escapeHtml([ticker, reportFallback].join(" "))}" type="button">
+          <span>${escapeHtml(reportFallback)}</span>
+          <em>저장 데이터 열기</em>
+        </button>
+      `;
     }
     return rows
       .map((item) => `
-        <span class="holding-evidence-report">
+        <button class="holding-evidence-report" data-holding-action="memory" data-holding-report-query="${escapeHtml(item.query || item.title)}" type="button" title="이 자료로 저장 데이터 검색">
           <small>${escapeHtml(item.date)} · ${escapeHtml(item.source)}</small>
           <strong>${escapeHtml(item.title)}</strong>
           <em>${escapeHtml(item.summary)}</em>
-        </span>
+          <span class="holding-evidence-report-action">자료 열기</span>
+        </button>
       `)
       .join("");
   };
@@ -13529,8 +13536,10 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
       if (action === "chart") {
         await runChartAnalysisForTicker(ticker, { saveResult: !isClickSmokeMode() });
       } else if (action === "memory") {
+        const reportQuery = String(actionButton.dataset.holdingReportQuery || "").trim();
+        const baseQuery = buildInterestRagQuery(row, ticker, "ticker");
         await runInterestRagAction({
-          query: buildInterestRagQuery(row, ticker, "ticker"),
+          query: [reportQuery, baseQuery].filter(Boolean).join(" "),
           key: ticker,
           mode: "search",
         });
