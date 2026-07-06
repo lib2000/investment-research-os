@@ -267,6 +267,25 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       queryPreview: (document.querySelector("#memoryForm input[name='ragQuery']")?.value || "").replace(/\\s+/g, " ").trim().slice(0, 160),
                       previewTitle: (document.querySelector("#memoryPreviewTitle")?.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 120),
                       previewLength: (document.querySelector("#memoryPreviewContent")?.textContent || "").length,
+                      previewActionLabels: [...document.querySelectorAll("#memoryPreviewActions button")]
+                        .map((button) => (button.textContent || "").replace(/\\s+/g, " ").trim())
+                        .filter(Boolean),
+                    };
+                  };
+                  const clickPreviewMarketAction = async () => {
+                    const button = [...document.querySelectorAll("#memoryPreviewActions [data-memory-preview-action]")]
+                      .find((item) => /시장일지로 반영/.test(item.textContent || ""));
+                    button?.scrollIntoView({block: "center", inline: "nearest"});
+                    await sleep(100);
+                    button?.click();
+                    const matched = await waitFor(() => {
+                      const marketActive = document.querySelector("#marketClose")?.classList.contains("active") || false;
+                      const rawSummary = document.querySelector("#marketCloseForm textarea[name='rawSummary']")?.value || "";
+                      return marketActive && rawSummary.length > 80;
+                    }, 10000, "memory preview market action");
+                    return {
+                      ok: Boolean(button && matched),
+                      rawSummaryPreview: (document.querySelector("#marketCloseForm textarea[name='rawSummary']")?.value || "").replace(/\\s+/g, " ").trim().slice(0, 160),
                     };
                   };
                   const clickHoldingAction = async (label, expected) => {
@@ -324,6 +343,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   const sectorOpen = await openFirst(".interest-sector-summary-row");
                   const holdingOpen = await openFirstHolding();
                   const holdingReportCardFlow = await clickHoldingReportCard();
+                  const memoryPreviewMarketFlow = await clickPreviewMarketAction();
                   const holdingActionFlows = [
                     await clickHoldingAction("분석", "dashboard"),
                     await clickHoldingAction("차트", "chart"),
@@ -339,6 +359,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     holdingDetailOpened: holdingOpen.opened && holdingOpen.hasDetailGrid,
                     holdingOpen,
                     holdingReportCardFlow,
+                    memoryPreviewMarketFlow,
                     holdingActionFlows,
                     tickerSummaryCount: tickerBefore.length,
                     sectorSummaryCount: sectorBefore.length,
@@ -458,6 +479,12 @@ def strict_errors(result: dict) -> list[str]:
             errors.append(f"보유 종목 상세 액션 흐름 실패: {label}")
     if not result.get("holdingReportCardFlow", {}).get("ok"):
         errors.append("보유 종목 리포트/자료 카드 클릭 흐름이 저장 데이터 검색으로 이동하지 않습니다.")
+    preview_actions = " ".join(result.get("holdingReportCardFlow", {}).get("previewActionLabels") or [])
+    for label in ["대시보드 분석", "팀 리포트 실행", "시장일지로 반영"]:
+        if label not in preview_actions:
+            errors.append(f"저장 리포트 미리보기 후속 액션 누락: {label}")
+    if not result.get("memoryPreviewMarketFlow", {}).get("ok"):
+        errors.append("저장 리포트 미리보기 시장일지 반영 흐름이 동작하지 않습니다.")
     if not result.get("tickerDetailOpened"):
         errors.append("관심종목 요약 클릭 후 상세 정보가 열리지 않았습니다.")
     if not result.get("tickerRecommendationDetailReady"):

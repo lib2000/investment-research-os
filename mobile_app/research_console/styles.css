@@ -5565,6 +5565,30 @@ label {
   font-size: 18px;
 }
 
+.memory-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.memory-preview-actions button {
+  min-height: 36px;
+  padding: 7px 11px;
+  color: #0f766e;
+  background: #e6fffb;
+  border: 1px solid #99d5cb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.memory-preview-actions button:hover,
+.memory-preview-actions button:focus-visible {
+  background: #ccfbf1;
+  outline: none;
+}
+
 .memory-preview pre {
   min-height: 260px;
   max-height: 520px;

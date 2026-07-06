@@ -231,6 +231,7 @@ const elements = {
   memoryPreviewMeta: document.querySelector("#memoryPreviewMeta"),
   memoryPreviewTitle: document.querySelector("#memoryPreviewTitle"),
   memoryPreviewContent: document.querySelector("#memoryPreviewContent"),
+  memoryPreviewActions: document.querySelector("#memoryPreviewActions"),
   memorySupplementForm: document.querySelector("#memorySupplementForm"),
   memorySupplementHelp: document.querySelector("#memorySupplementHelp"),
   memorySupplementBody: document.querySelector("#memorySupplementBody"),
@@ -8968,6 +8969,30 @@ function renderMemorySupplementControls(file) {
   }
 }
 
+function renderMemoryPreviewActions(file) {
+  if (!elements.memoryPreviewActions) {
+    return;
+  }
+  const ticker = normalizeStorageKey(file?.ticker || activeTicker || "");
+  const canUseTickerActions = isTickerLikeMemoryKey(ticker);
+  const marketSummary = compactOutputText(
+    [file?.file_name, file?.summary, file?.source_url, cleanStoredReportContent(file?.content || "").slice(0, 420)]
+      .filter(Boolean)
+      .join("\n\n"),
+    720
+  );
+  elements.memoryPreviewActions.innerHTML = `
+    ${
+      canUseTickerActions
+        ? `<button data-memory-preview-action="dashboard" type="button">대시보드 분석</button>
+           <button data-memory-preview-action="team" type="button">팀 리포트 실행</button>`
+        : ""
+    }
+    <button data-memory-preview-action="market" data-market-summary="${escapeHtml(marketSummary)}" type="button">시장일지로 반영</button>
+    <button data-workflow-action="capture" type="button">새 정보로 보강</button>
+  `;
+}
+
 function renderMemoryPreview(file) {
   activeMemoryPreviewFile = file;
   elements.memoryPreview.hidden = false;
@@ -8979,6 +9004,7 @@ function renderMemoryPreview(file) {
   const extractionText = attachmentBadge ? ` · ${attachmentBadge.label}` : "";
   elements.memoryPreviewMeta.textContent = `${file.ticker} · ${file.status_label || status}${extractionText} · ${file.relative_path} · ${formatDateTime(file.modified_at)}`;
   elements.memoryPreviewContent.textContent = cleanStoredReportContent(file.content);
+  renderMemoryPreviewActions(file);
   renderMemorySupplementControls(file);
 }
 
@@ -11529,6 +11555,49 @@ elements.dashboardCards.addEventListener("keydown", (event) => {
 });
 
 window.__researchConsoleWorkflowReady = true;
+
+async function handleMemoryPreviewAction(button) {
+  const file = activeMemoryPreviewFile;
+  if (!file) {
+    throw new Error("후속 작업을 실행할 미리보기 파일이 없습니다.");
+  }
+  const action = button.dataset.memoryPreviewAction;
+  const ticker = normalizeStorageKey(file.ticker || activeTicker || "");
+  if (action === "dashboard") {
+    await openTickerWorkflow("dashboard", ticker);
+    return;
+  }
+  if (action === "team") {
+    await runTeamReportForTicker(ticker, `저장 리포트 미리보기 기반: ${file.file_name || "선택한 자료"}`);
+    return;
+  }
+  if (action === "market") {
+    activateTab("marketClose", { keepOutput: true });
+    const form = elements.marketCloseForm;
+    const rawSummary = button.dataset.marketSummary || file.summary || file.file_name || "";
+    if (form?.elements?.rawSummary) {
+      form.elements.rawSummary.value = rawSummary;
+    }
+    if (form?.elements?.sourceUrl && file.source_url) {
+      form.elements.sourceUrl.value = file.source_url;
+    }
+    setOutput(
+      "미리보기 중인 저장 리포트를 시장일지 입력칸에 반영했습니다.\n\n요약을 확인한 뒤 '시장 상황 평가 저장'을 누르면 누적 시장일지와 대시보드에 연결됩니다."
+    );
+  }
+}
+
+elements.memoryPreview?.addEventListener("click", (event) => {
+  const previewActionButton = event.target.closest("[data-memory-preview-action]");
+  if (!previewActionButton) {
+    return;
+  }
+  const message = `${previewActionButton.textContent?.trim() || "미리보기 후속"} 작업을 시작했습니다.`;
+  if (!registerActionClick(previewActionButton, message, event)) {
+    return;
+  }
+  handleMemoryPreviewAction(previewActionButton).catch(setError);
+});
 
 elements.memoryList.addEventListener("click", (event) => {
   const feedbackButton = event.target.closest(
