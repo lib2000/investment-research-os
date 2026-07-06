@@ -10797,7 +10797,12 @@ function buildInterestRagQuery(row, fallbackKey, mode = "ticker") {
     .trim();
 }
 
-async function runInterestRagAction({ query, key, mode }) {
+function firstOpenableRagDocument(searchResult) {
+  const documents = filteredRagDocuments(searchResult);
+  return documents.find((document) => document?.source_file_name);
+}
+
+async function runInterestRagAction({ query, key, mode, autoOpenFirstResult = false }) {
   const normalizedQuery = String(query || "").trim();
   if (!normalizedQuery) {
     throw new Error("검색할 관심 항목 내용을 확인하지 못했습니다.");
@@ -10849,6 +10854,15 @@ async function runInterestRagAction({ query, key, mode }) {
   }
   renderRagMemoryList(result);
   setOutput(result);
+  if (autoOpenFirstResult) {
+    const firstDocument = firstOpenableRagDocument(result);
+    if (firstDocument?.source_file_name) {
+      await openMemoryFile(
+        firstDocument.ticker || result.key || key || activeTicker,
+        firstDocument.source_file_name
+      );
+    }
+  }
   return result;
 }
 
@@ -13542,6 +13556,7 @@ elements.holdingsEditor.addEventListener("click", async (event) => {
           query: [reportQuery, baseQuery].filter(Boolean).join(" "),
           key: ticker,
           mode: "search",
+          autoOpenFirstResult: Boolean(reportQuery),
         });
       } else if (action === "risk") {
         startOutputLoading(`${ticker} 보유 종목 리스크 연결 중`, [

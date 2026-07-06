@@ -258,11 +258,15 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       const memoryActive = document.querySelector("#memory")?.classList.contains("active") || false;
                       const ragQuery = document.querySelector("#memoryForm input[name='ragQuery']")?.value || "";
                       const outputText = document.querySelector("#output")?.innerText || "";
-                      return memoryActive && (/저장 데이터 검색|RAG|저장 데이터/.test(outputText) || ragQuery.length > 20);
-                    }, 20000, "holding report card action");
+                      const previewVisible = document.querySelector("#memoryPreview")?.hidden === false;
+                      const previewText = document.querySelector("#memoryPreviewContent")?.textContent || "";
+                      return memoryActive && previewVisible && previewText.length > 80 && (/저장 리포트 본문|저장 데이터 검색|RAG|저장 데이터/.test(outputText) || ragQuery.length > 20);
+                    }, 30000, "holding report card action");
                     return {
                       ok: Boolean(card && matched),
                       queryPreview: (document.querySelector("#memoryForm input[name='ragQuery']")?.value || "").replace(/\\s+/g, " ").trim().slice(0, 160),
+                      previewTitle: (document.querySelector("#memoryPreviewTitle")?.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 120),
+                      previewLength: (document.querySelector("#memoryPreviewContent")?.textContent || "").length,
                     };
                   };
                   const clickHoldingAction = async (label, expected) => {
