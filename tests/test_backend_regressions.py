@@ -4287,6 +4287,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 json.dumps(
                     {
                         "updated_at": "2026-07-06T07:00:05",
+                        "target_bot": "@my_claw_lib2000_bot",
                         "last_plan": {
                             "candidate_count": 2,
                             "message_count": 1,
@@ -4294,6 +4295,13 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                             "chat_id_configured": True,
                         },
                         "sent_report_keys": ["a", "b"],
+                        "sent_messages": [
+                            {
+                                "chat_id": "987654321",
+                                "message_id": 740,
+                                "sent_at": "2026-07-05T22:00:02+00:00",
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -4324,6 +4332,8 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
         self.assertEqual(payload["alert"]["state"]["message_count"], 1)
         self.assertTrue(payload["alert"]["state"]["delivered"])
         self.assertEqual(payload["postrun"]["state"]["last_status"], "ok")
+        self.assertEqual(payload["receipt"]["latest_message_id"], 740)
+        self.assertEqual(payload["receipt"]["target_bot"], "@my_claw_lib2000_bot")
         self.assertNotIn("987654321", json.dumps(payload))
 
     def test_task_status_allows_registered_task_before_first_run(self):
@@ -16377,6 +16387,8 @@ class ConsoleAssetHashTests(unittest.TestCase):
             console_js,
         )
         self.assertIn("formatPortfolioReportAlertStatus", console_js)
+        self.assertIn("최근 수신 기록", console_js)
+        self.assertIn("target_bot_matches_configured", console_js)
         self.assertIn("portfolioReportAlertStatusButton", console_js)
         self.assertIn('id="portfolioReportAlertStatusButton"', index_html)
         self.assertIn('"/api/v1/telegram/portfolio-report-alert/status"', backend_source)

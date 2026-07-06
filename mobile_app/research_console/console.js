@@ -16254,6 +16254,7 @@ function formatInvestmentInsightHub(value) {
 function formatPortfolioReportAlertStatus(value) {
   const alert = value.alert || {};
   const postrun = value.postrun || {};
+  const receipt = value.receipt || {};
   const alertState = alert.state || {};
   const postrunState = postrun.state || {};
   const alertTask = alert.task || {};
@@ -16304,6 +16305,13 @@ function formatPortfolioReportAlertStatus(value) {
     `### 상태 파일`,
     `- 07:00 상태: ${alertState.state_exists ? "있음" : "첫 실행 전"} · ${alertState.state_file || "경로 미확인"}`,
     `- 07:10 점검: ${postrunState.state_exists ? "있음" : "첫 실행 전"} · ${postrunState.state_file || "경로 미확인"}`,
+    ``,
+    `### 최근 수신 기록`,
+    `- **전송 상태:** ${receipt.status || "미확인"} · delivered=${receipt.delivered === true ? "true" : "false"}`,
+    `- **대상 봇:** ${receipt.target_bot || "미확인"}${receipt.configured_target_bot ? ` / 현재 설정 ${receipt.configured_target_bot}` : ""}`,
+    `- **메시지 ID:** ${(receipt.message_ids || []).length ? receipt.message_ids.join(", ") : receipt.latest_message_id || "없음"}`,
+    `- **state 갱신:** ${receipt.state_updated_at ? formatDateTime(receipt.state_updated_at) : "미확인"}`,
+    receipt.target_bot_matches_configured === false ? `- **주의:** 마지막 state 대상 봇과 현재 설정 봇이 다릅니다.` : "",
     ``,
     `### 오류/경고`,
     ...[

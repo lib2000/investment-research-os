@@ -139,6 +139,49 @@ def _alert_state_status(state: dict[str, Any], *, state_path: Path) -> dict[str,
     }
 
 
+def _delivery_receipt(alert_state: dict[str, Any], postrun_state: dict[str, Any], *, state_path: Path) -> dict[str, Any]:
+    explicit = postrun_state.get("last_receipt") if isinstance(postrun_state.get("last_receipt"), dict) else {}
+    if explicit:
+        return {
+            "status": explicit.get("status"),
+            "state_file": explicit.get("state_file") or str(state_path),
+            "state_updated_at": explicit.get("state_updated_at"),
+            "send_time": explicit.get("send_time") or "07:00",
+            "target_bot": explicit.get("target_bot") or _safe_text(alert_state.get("target_bot")) or _target_bot_username(),
+            "configured_target_bot": explicit.get("configured_target_bot") or _target_bot_username(),
+            "target_bot_matches_configured": explicit.get("target_bot_matches_configured"),
+            "candidate_count": explicit.get("candidate_count"),
+            "message_count": explicit.get("message_count"),
+            "delivered": explicit.get("delivered"),
+            "sent_message_count": explicit.get("sent_message_count"),
+            "message_ids": explicit.get("message_ids") or [],
+            "latest_message_id": explicit.get("latest_message_id"),
+            "latest_sent_at": explicit.get("latest_sent_at"),
+        }
+    plan = alert_state.get("last_plan") if isinstance(alert_state.get("last_plan"), dict) else {}
+    sent_messages = [item for item in (alert_state.get("sent_messages") or []) if isinstance(item, dict)]
+    message_ids = [item.get("message_id") for item in sent_messages if item.get("message_id") is not None]
+    latest_message = sent_messages[-1] if sent_messages else {}
+    target_bot = _safe_text(alert_state.get("target_bot")) or _target_bot_username()
+    configured_target_bot = _target_bot_username()
+    return {
+        "status": "delivered" if plan.get("delivered") and message_ids else "delivered_no_message_id" if plan.get("delivered") else "not_delivered",
+        "state_file": str(state_path),
+        "state_updated_at": alert_state.get("updated_at"),
+        "send_time": alert_state.get("send_time") or "07:00",
+        "target_bot": target_bot,
+        "configured_target_bot": configured_target_bot,
+        "target_bot_matches_configured": target_bot == configured_target_bot,
+        "candidate_count": plan.get("candidate_count"),
+        "message_count": plan.get("message_count"),
+        "delivered": bool(plan.get("delivered")),
+        "sent_message_count": len(sent_messages),
+        "message_ids": message_ids[-5:],
+        "latest_message_id": latest_message.get("message_id"),
+        "latest_sent_at": latest_message.get("sent_at"),
+    }
+
+
 def _postrun_state_status(state: dict[str, Any], *, state_path: Path) -> dict[str, Any]:
     return {
         "state_file": str(state_path),
@@ -147,6 +190,7 @@ def _postrun_state_status(state: dict[str, Any], *, state_path: Path) -> dict[st
         "last_status": state.get("last_status"),
         "last_should_send": state.get("last_should_send"),
         "last_sent": state.get("last_sent"),
+        "last_receipt": state.get("last_receipt") if isinstance(state.get("last_receipt"), dict) else {},
         "sent_fingerprint_count": len(state.get("sent_fingerprints") or []),
     }
 
@@ -178,8 +222,11 @@ def build_portfolio_report_alert_console_status(
         expected_time="07:10",
         required_marker="run_openclaw_portfolio_report_alert_postrun.ps1",
     )
-    alert_state = _alert_state_status(read_json_object(alert_state_path), state_path=alert_state_path)
-    postrun_state = _postrun_state_status(read_json_object(postrun_state_path), state_path=postrun_state_path)
+    raw_alert_state = read_json_object(alert_state_path)
+    raw_postrun_state = read_json_object(postrun_state_path)
+    alert_state = _alert_state_status(raw_alert_state, state_path=alert_state_path)
+    postrun_state = _postrun_state_status(raw_postrun_state, state_path=postrun_state_path)
+    receipt = _delivery_receipt(raw_alert_state, raw_postrun_state, state_path=alert_state_path)
     alert_status = _section_status(alert_task, alert_state)
     postrun_status = _section_status(postrun_task, postrun_state)
     statuses = {alert_status, postrun_status}
@@ -205,5 +252,6 @@ def build_portfolio_report_alert_console_status(
         "checked_at": (now or datetime.now()).isoformat(timespec="seconds"),
         "alert": {"status": alert_status, "task": alert_task, "state": alert_state},
         "postrun": {"status": postrun_status, "task": postrun_task, "state": postrun_state},
+        "receipt": receipt,
         "next_action": next_action,
     }
