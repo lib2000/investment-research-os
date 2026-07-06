@@ -276,6 +276,7 @@ $operationalCommands = [ordered]@{
   backend_watchdog_register = "powershell.exe -ExecutionPolicy Bypass -File .\tools\register_research_backend_watchdog_task.ps1"
   market_journal_linkage = "python tools\check_market_journal_linkage.py --strict --json"
   market_journal_linkage_backlog = "python tools\check_market_journal_linkage.py --strict --write-backlog --json"
+  recommendation_market_journal_quality = "python tools\check_daily_recommendation_market_journal_quality.py --json"
   operational_schedule_status = "python tools\check_operational_schedule_status.py --json --allow-warnings"
   offline_readiness = "python tools\check_offline_readiness.py --json"
 }
@@ -420,6 +421,7 @@ $readme = @(
   "- backend watchdog register: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\register_research_backend_watchdog_task.ps1``",
   "- market journal linkage: ``python tools\check_market_journal_linkage.py --strict --json``",
   "- market journal linkage backlog: ``python tools\check_market_journal_linkage.py --strict --write-backlog --json``",
+  "- recommendation market journal quality: ``python tools\check_daily_recommendation_market_journal_quality.py --json``",
   "- operational schedule status: ``python tools\check_operational_schedule_status.py --json --allow-warnings``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
@@ -472,9 +474,10 @@ $startupLines = @(
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
   "- WSL PA fresh bootstrap from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``.",
-  "- Market journal linkage from ``$projectRoot``: ``python tools\check_market_journal_linkage.py --strict --json``.",
-  "- Market journal linkage backlog from ``$projectRoot``: ``python tools\check_market_journal_linkage.py --strict --write-backlog --json``.",
-  "- Operational schedule status from ``$projectRoot``: ``python tools\check_operational_schedule_status.py --json --allow-warnings``.",
+"- Market journal linkage from ``$projectRoot``: ``python tools\check_market_journal_linkage.py --strict --json``.",
+"- Market journal linkage backlog from ``$projectRoot``: ``python tools\check_market_journal_linkage.py --strict --write-backlog --json``.",
+"- Recommendation market journal quality from ``$projectRoot``: ``python tools\check_daily_recommendation_market_journal_quality.py --json``.",
+"- Operational schedule status from ``$projectRoot``: ``python tools\check_operational_schedule_status.py --json --allow-warnings``.",
   "- Expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``.",
   "- Offline readiness from ``$projectRoot``: ``python tools\check_offline_readiness.py --json``.",
   "- Never request, expose, or transmit broker tokens, API keys, raw DB files, or account-auth material.",
