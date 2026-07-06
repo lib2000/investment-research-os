@@ -4403,6 +4403,50 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertTrue(any("-Enabled" in error and "-Submit" in error for error in result["errors"]))
 
+    def test_task_status_warns_when_target_bot_changed_since_last_state(self):
+        tool = load_portfolio_report_alert_task_status_tool()
+        task = {
+            "found": True,
+            "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+            "Execute": "powershell.exe",
+            "Arguments": (
+                "-NoProfile -ExecutionPolicy Bypass -File "
+                '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
+                '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
+                "-WriteState -Enabled -Submit"
+            ),
+            "LastRunTime": "2026-07-06T07:00:10+09:00",
+            "LastTaskResult": 0,
+            "NextRunTime": "2026-07-07T07:00:00+09:00",
+            "NumberOfMissedRuns": 0,
+            "Trigger": "2026-07-05T07:00:00+09:00",
+        }
+
+        with TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "portfolio_report_alert_state.json"
+            state_file.write_text(json.dumps({"target_bot": "@lib20_bot"}), encoding="utf-8")
+            with patch.object(
+                tool,
+                "telegram_env_status",
+                return_value={"token_configured": True, "chat_id_configured": True},
+            ), patch.object(
+                tool,
+                "telegram_target_bot_status",
+                return_value={"target_bot": "@my_claw_lib2000_bot", "target_bot_source": "TELEGRAM_BOT_USERNAME"},
+            ):
+                result = tool.evaluate_task_status(
+                    task,
+                    state_file=state_file,
+                    max_state_age_hours=36,
+                    require_state_fresh=True,
+                    now=datetime(2026, 7, 6, 8, 0, tzinfo=tool.LOCAL_TIMEZONE),
+                )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["state_target_bot"], "@lib20_bot")
+        self.assertEqual(result["target_bot"]["target_bot"], "@my_claw_lib2000_bot")
+        self.assertTrue(any("target bot changed" in warning for warning in result["warnings"]))
+
     def test_task_status_supports_postrun_monitor_task_contract(self):
         tool = load_portfolio_report_alert_task_status_tool()
         task = {

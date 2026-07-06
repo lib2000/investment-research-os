@@ -20,10 +20,18 @@ LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
 SUCCESS_RESULT_CODES = {0, 267009, 267011}
 DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState", "-Enabled", "-Submit")
+DEFAULT_TARGET_BOT = "@lib20_bot"
 
 
 def _safe_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _normalize_bot_username(value: Any) -> str:
+    text = _safe_text(value) or DEFAULT_TARGET_BOT
+    if not text.startswith("@"):
+        text = "@" + text
+    return text
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -80,6 +88,67 @@ def _configured_env(name: str) -> dict[str, Any]:
         "user": bool(user),
         "machine": bool(machine),
     }
+
+
+def _read_windows_env_pair(name: str) -> tuple[str, str]:
+    current = os.getenv(name, "").strip()
+    user = ""
+    machine = ""
+    try:
+        command = (
+            "[Environment]::GetEnvironmentVariable('{0}', 'User');"
+            "[Environment]::GetEnvironmentVariable('{0}', 'Machine')"
+        ).format(name)
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = [line.strip() for line in (completed.stdout or "").splitlines()]
+        user = lines[0] if len(lines) >= 1 else ""
+        machine = lines[1] if len(lines) >= 2 else ""
+    except OSError:
+        pass
+    value = current or user or machine
+    source = "current_process" if current else "user" if user else "machine" if machine else "default"
+    return value, source
+
+
+def telegram_target_bot_status() -> dict[str, Any]:
+    variables: list[dict[str, Any]] = []
+    selected_value = ""
+    selected_source = "default"
+    for name in ("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", "TELEGRAM_BOT_USERNAME"):
+        value, scope = _read_windows_env_pair(name)
+        variables.append(
+            {
+                "name": name,
+                "configured": bool(value),
+                "selected_scope": scope if value else "none",
+            }
+        )
+        if value and not selected_value:
+            selected_value = value
+            selected_source = name
+    return {
+        "target_bot": _normalize_bot_username(selected_value),
+        "target_bot_source": selected_source,
+        "variables": variables,
+    }
+
+
+def _read_state_target_bot(path: Path) -> str:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return _normalize_bot_username(data.get("target_bot")) if data.get("target_bot") else ""
 
 
 def telegram_env_status() -> dict[str, Any]:
@@ -191,12 +260,19 @@ def evaluate_task_status(
         errors.append(f"scheduled task missed runs: {missed}")
 
     env_status = telegram_env_status()
+    target_bot_status = telegram_target_bot_status()
     if require_telegram_env and not env_status["token_configured"]:
         errors.append("Telegram bot token is not configured for scheduled task runtime")
     if require_telegram_env and not env_status["chat_id_configured"]:
         errors.append("Telegram chat id is not configured for scheduled task runtime")
 
     state_age = _age_hours(state_file, now=now)
+    state_target_bot = _read_state_target_bot(state_file)
+    configured_target_bot = str(target_bot_status.get("target_bot") or DEFAULT_TARGET_BOT)
+    if state_target_bot and state_target_bot != configured_target_bot:
+        warnings.append(
+            f"portfolio report alert target bot changed: state={state_target_bot}, configured={configured_target_bot}"
+        )
     if state_age is None:
         if require_state_fresh:
             errors.append("portfolio report alert state file is missing")
@@ -218,6 +294,8 @@ def evaluate_task_status(
         "info": info,
         "task": task,
         "env": env_status,
+        "target_bot": target_bot_status,
+        "state_target_bot": state_target_bot,
         "state_file": str(state_file),
         "state_file_exists": state_age is not None,
         "state_file_age_hours": state_age,
@@ -236,6 +314,8 @@ def render_text(result: dict[str, Any]) -> str:
         f"- last_result: {task.get('LastTaskResult')}",
         f"- token_configured: {((result.get('env') or {}).get('token_configured'))}",
         f"- chat_id_configured: {((result.get('env') or {}).get('chat_id_configured'))}",
+        f"- target_bot: {((result.get('target_bot') or {}).get('target_bot'))}",
+        f"- state_target_bot: {result.get('state_target_bot')}",
         f"- state_file_exists: {result.get('state_file_exists')}",
         f"- state_file_age_hours: {result.get('state_file_age_hours')}",
     ]
