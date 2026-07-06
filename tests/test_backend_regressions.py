@@ -4002,7 +4002,7 @@ class TelegramBriefSenderTests(unittest.TestCase):
 
 class PortfolioReportAlertTests(unittest.TestCase):
     def test_portfolio_report_alert_selects_new_holding_reports(self):
-        from research_os.portfolio_report_alert import build_report_alert_payload, select_new_holding_reports
+        from research_os.portfolio_report_alert import build_report_alert_payload, select_new_holding_reports, state_after_plan
 
         portfolios = {
             "portfolios": {
@@ -4085,6 +4085,11 @@ class PortfolioReportAlertTests(unittest.TestCase):
         self.assertIn("Absci Corporation", payload["text"])
         self.assertIn("삼성전자", payload["text"])
 
+        configured_payload = build_report_alert_payload(result, chat_id="12345", target_bot="my_claw_lib2000_bot")
+        configured_state = state_after_plan({}, configured_payload, delivered=True)
+        self.assertEqual(configured_payload["target_bot"], "@my_claw_lib2000_bot")
+        self.assertEqual(configured_state["target_bot"], "@my_claw_lib2000_bot")
+
     def test_portfolio_report_alert_check_tool_is_safe_by_default(self):
         tool = load_portfolio_report_alert_check_tool()
 
@@ -4146,6 +4151,7 @@ class PortfolioReportAlertTests(unittest.TestCase):
                     "TELEGRAM_REPORT_ALERT_CHAT_ID": "",
                     "MARKET_SIGNAL_GRAPH_TELEGRAM_CHAT_ID": "",
                     "TELEGRAM_CHAT_ID": "",
+                    "TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME": "my_claw_lib2000_bot",
                 },
             ), patch.object(sys, "argv", argv), patch("builtins.print") as fake_print:
                 exit_code = tool.main()
@@ -4156,6 +4162,8 @@ class PortfolioReportAlertTests(unittest.TestCase):
         self.assertFalse(output["enabled"])
         self.assertTrue(output["dry_run"])
         self.assertFalse(output["bot_token_configured"])
+        self.assertEqual(output["target_bot"], "@my_claw_lib2000_bot")
+        self.assertEqual(output["payload"]["target_bot"], "@my_claw_lib2000_bot")
         self.assertEqual(output["delivery"]["applied_send_count"], 0)
 
     def test_portfolio_report_alert_check_tool_masks_chat_id_in_json_output(self):

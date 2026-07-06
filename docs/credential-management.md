@@ -84,4 +84,4 @@ KCIF 연동은 로그인 세션으로 볼 수 있는 상세 화면을 활용하�
 
 ## 텔레그램 알림 원칙
 
-보유 종목 신규 리포트 알림은 `@lib20_bot` 표시명을 코드에 기록하지만, 실제 Bot API token과 chat id는 `backend\.env` 또는 Windows 작업 스케줄러 실행 환경에서만 주입합니다. `TELEGRAM_REPORT_ALERT_ENABLED=false`, `TELEGRAM_REPORT_ALERT_DRY_RUN=true`가 기본값이며, 실제 전송은 `--enabled --submit`과 token/chat id가 모두 준비된 경우에만 허용합니다. 테스트와 문서에는 token/chat id 원문을 넣지 않고 configured 여부만 확인합니다.
+보유 종목 신규 리포트 알림은 `TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME` 표시명을 상태/콘솔에 기록합니다. 기본값은 `@lib20_bot`이며, 공용 `TELEGRAM_BOT_TOKEN`이 다른 봇(예: `@my_claw_lib2000_bot`)을 가리키면 이 표시명도 함께 맞춰야 합니다. 실제 Bot API token과 chat id는 `backend\.env` 또는 Windows 작업 스케줄러 실행 환경에서만 주입합니다. `TELEGRAM_REPORT_ALERT_ENABLED=false`, `TELEGRAM_REPORT_ALERT_DRY_RUN=true`가 기본값이며, 실제 전송은 `--enabled --submit`과 token/chat id가 모두 준비된 경우에만 허용합니다. 테스트와 문서에는 token/chat id 원문을 넣지 않고 configured 여부만 확인합니다.

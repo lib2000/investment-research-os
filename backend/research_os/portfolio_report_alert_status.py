@@ -13,10 +13,19 @@ from typing import Any
 ALERT_TASK_NAME = "InvestmentJournalApp OpenClaw Portfolio Report Alert"
 POSTRUN_TASK_NAME = "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun"
 NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
+DEFAULT_TARGET_BOT = "@lib20_bot"
 
 
 def _safe_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _target_bot_username() -> str:
+    for name in ("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", "TELEGRAM_BOT_USERNAME"):
+        value = _safe_text(os.getenv(name))
+        if value:
+            return value if value.startswith("@") else "@" + value
+    return DEFAULT_TARGET_BOT
 
 
 def read_json_object(path: Path) -> dict[str, Any]:
@@ -113,11 +122,14 @@ def _task_status(task: dict[str, Any], *, expected_time: str, required_marker: s
 
 def _alert_state_status(state: dict[str, Any], *, state_path: Path) -> dict[str, Any]:
     plan = state.get("last_plan") if isinstance(state.get("last_plan"), dict) else {}
+    configured_target_bot = _target_bot_username()
+    state_target_bot = _safe_text(state.get("target_bot"))
     return {
         "state_file": str(state_path),
         "state_exists": state_path.exists(),
         "updated_at": state.get("updated_at"),
-        "target_bot": state.get("target_bot") or "@lib20_bot",
+        "target_bot": configured_target_bot,
+        "last_state_target_bot": state_target_bot or configured_target_bot,
         "send_time": state.get("send_time") or "07:00",
         "candidate_count": plan.get("candidate_count"),
         "message_count": plan.get("message_count"),
@@ -187,7 +199,7 @@ def build_portfolio_report_alert_console_status(
         "status": status,
         "module": "portfolio_report_alert_console_status",
         "design": "portfolio_report_alert_console_status_v1",
-        "target_bot": "@lib20_bot",
+        "target_bot": alert_state.get("target_bot") or _target_bot_username(),
         "alert_time": "07:00",
         "postrun_time": "07:10",
         "checked_at": (now or datetime.now()).isoformat(timespec="seconds"),

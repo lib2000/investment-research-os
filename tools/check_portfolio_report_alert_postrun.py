@@ -18,7 +18,14 @@ for candidate in (BACKEND_DIR, TOOLS_DIR):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from check_portfolio_report_alert import default_bot_token, default_chat_id, read_json, redacted_for_output, write_json  # noqa: E402
+from check_portfolio_report_alert import (  # noqa: E402
+    default_bot_token,
+    default_chat_id,
+    default_target_bot,
+    read_json,
+    redacted_for_output,
+    write_json,
+)
 from check_portfolio_report_alert_task_status import (  # noqa: E402
     DEFAULT_STATE_FILE,
     DEFAULT_TASK_NAME,
@@ -74,7 +81,7 @@ def build_alert_text(status: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_payload(status: dict[str, Any], *, chat_id: str, notify_ok: bool) -> dict[str, Any]:
+def build_payload(status: dict[str, Any], *, chat_id: str, target_bot: str, notify_ok: bool) -> dict[str, Any]:
     should_send = status.get("status") != "ok" or notify_ok
     text = build_alert_text(status) if should_send else ""
     messages = []
@@ -91,7 +98,7 @@ def build_payload(status: dict[str, Any], *, chat_id: str, notify_ok: bool) -> d
     return {
         "design": DESIGN_NAME,
         "message_type": "portfolio_report_alert_postrun",
-        "target_bot": "@lib20_bot",
+        "target_bot": target_bot,
         "should_send": should_send,
         "chat_id_configured": bool(chat_id),
         "message_count": len(messages),
@@ -123,6 +130,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         status["status"] = "error" if status.get("errors") else "ok"
     bot_token, bot_token_source = default_bot_token()
     chat_id, chat_id_source = default_chat_id()
+    target_bot, target_bot_source = default_target_bot()
     effective_chat_id = args.chat_id if args.chat_id is not None else chat_id
     enabled = bool(args.enabled or env_bool("TELEGRAM_REPORT_ALERT_POSTRUN_ENABLED", False))
     dry_run = True
@@ -136,7 +144,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"monitor state JSON object expected: {monitor_state_file}")
     current_fingerprint = fingerprint(status)
     already_sent = current_fingerprint in set(str(item) for item in monitor_state.get("sent_fingerprints") or [])
-    payload = build_payload(status, chat_id=effective_chat_id, notify_ok=args.notify_ok)
+    payload = build_payload(status, chat_id=effective_chat_id, target_bot=target_bot, notify_ok=args.notify_ok)
     if already_sent and not args.repeat:
         payload = {**payload, "should_send": False, "message_count": 0, "messages": [], "text": ""}
 
@@ -177,6 +185,8 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "bot_token_source": bot_token_source if bot_token else "none",
         "chat_id_configured": bool(effective_chat_id),
         "chat_id_source": "cli" if args.chat_id is not None and args.chat_id else chat_id_source,
+        "target_bot": target_bot,
+        "target_bot_source": target_bot_source,
         "already_sent": already_sent,
         "fingerprint": current_fingerprint,
         "payload": redacted_for_output(payload),

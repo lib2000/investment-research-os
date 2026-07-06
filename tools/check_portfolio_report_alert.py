@@ -19,6 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.portfolio_report_alert import (  # noqa: E402
     DESIGN_NAME,
     build_report_alert_payload,
+    normalize_target_bot_username,
     select_new_holding_reports,
     state_after_plan,
 )
@@ -62,6 +63,14 @@ def default_chat_id() -> tuple[str, str]:
     return "", "none"
 
 
+def default_target_bot() -> tuple[str, str]:
+    for name in ("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", "TELEGRAM_BOT_USERNAME"):
+        value = os.getenv(name, "").strip()
+        if value:
+            return normalize_target_bot_username(value), name
+    return normalize_target_bot_username("@lib20_bot"), "default"
+
+
 def read_json(path: Path, default: Any) -> Any:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -94,6 +103,7 @@ def redacted_for_output(value: Any) -> Any:
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
     env_chat_id, chat_id_source = default_chat_id()
     bot_token, bot_token_source = default_bot_token()
+    target_bot, target_bot_source = default_target_bot()
     effective_chat_id = args.chat_id if args.chat_id is not None else env_chat_id
     enabled = bool(args.enabled or env_bool("TELEGRAM_REPORT_ALERT_ENABLED", False))
     dry_run = True
@@ -120,6 +130,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     payload = build_report_alert_payload(
         selection,
         chat_id=effective_chat_id,
+        target_bot=target_bot,
         max_message_chars=args.max_message_chars,
         max_items=args.max_items,
         send_empty=args.send_empty,
@@ -142,7 +153,8 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "design": DESIGN_NAME,
         "status": "success" if delivery.get("status") == "success" else "failure",
         "errors": delivery.get("errors") or [],
-        "target_bot": "@lib20_bot",
+        "target_bot": target_bot,
+        "target_bot_source": target_bot_source,
         "send_time": "07:00",
         "enabled": enabled,
         "dry_run": dry_run,

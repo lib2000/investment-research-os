@@ -10,6 +10,7 @@ from typing import Any
 
 DESIGN_NAME = "portfolio_report_alert_v1"
 REPORT_ALERT_TITLE = "보유 종목 리포트 알림 (Portfolio Report Alert)"
+DEFAULT_TARGET_BOT = "@lib20_bot"
 REPORT_KEYWORDS = (
     "report",
     "리포트",
@@ -25,6 +26,13 @@ EXCLUDED_REPORT_CATEGORIES = ("rag-query-synthesis", "recommendation")
 
 def _safe_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def normalize_target_bot_username(value: Any) -> str:
+    text = _safe_text(value) or DEFAULT_TARGET_BOT
+    if not text.startswith("@"):
+        text = "@" + text
+    return text
 
 
 def _upper_ticker(value: Any) -> str:
@@ -264,6 +272,7 @@ def build_report_alert_payload(
     result: dict[str, Any],
     *,
     chat_id: str = "",
+    target_bot: str = DEFAULT_TARGET_BOT,
     max_message_chars: int = 3600,
     max_items: int = 8,
     send_empty: bool = False,
@@ -287,7 +296,7 @@ def build_report_alert_payload(
         "status": "success",
         "message_type": "portfolio_report_alert",
         "send_time": "07:00",
-        "target_bot": "@lib20_bot",
+        "target_bot": normalize_target_bot_username(target_bot),
         "chat_id_configured": bool(chat_id),
         "message_count": len(messages),
         "candidate_count": len(reports),
@@ -304,7 +313,7 @@ def state_after_plan(state: dict[str, Any], payload: dict[str, Any], *, delivere
     return {
         **state,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
-        "target_bot": "@lib20_bot",
+        "target_bot": normalize_target_bot_username(payload.get("target_bot")),
         "send_time": "07:00",
         "last_plan": {
             "candidate_count": payload.get("candidate_count"),
