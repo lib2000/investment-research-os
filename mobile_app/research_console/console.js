@@ -1965,9 +1965,18 @@ function holdingReportRows(holding = {}) {
   return rows
     .map((item) => {
       const date = item.source_date || item.published_at || item.date || item.created_at || "";
-      const title = item.title || item.report_title || item.name || item.summary || "";
-      const source = item.source || item.publisher || item.broker || item.source_type || "";
-      return compactOutputText([date, source, title].filter(Boolean).join(" · "), 108);
+      const title = item.title || item.report_title || item.name || item.file_name || item.summary || "";
+      const source = item.source || item.publisher || item.broker || item.type || item.source_type || "";
+      const summary = item.summary || item.impact_reason || item.tooltip || "";
+      if (!title && !summary) {
+        return null;
+      }
+      return {
+        date: compactOutputText(date || "날짜 미확인", 28),
+        source: compactOutputText(source || "저장 자료", 32),
+        title: compactOutputText(title || summary, 74),
+        summary: compactOutputText(summary || "대시보드 자료에서 원문을 확인하세요.", 92),
+      };
     })
     .filter(Boolean)
     .slice(0, 3);
@@ -2014,6 +2023,20 @@ function renderPortfolioHoldingEvidencePanel(holding = {}) {
       .map((line) => `<span class="${escapeHtml(classes(rows.length > 0))}">${escapeHtml(line)}</span>`)
       .join("");
   };
+  const renderReportRows = (rows) => {
+    if (!rows.length) {
+      return `<span class="holding-evidence-report muted">${escapeHtml(reportFallback)}</span>`;
+    }
+    return rows
+      .map((item) => `
+        <span class="holding-evidence-report">
+          <small>${escapeHtml(item.date)} · ${escapeHtml(item.source)}</small>
+          <strong>${escapeHtml(item.title)}</strong>
+          <em>${escapeHtml(item.summary)}</em>
+        </span>
+      `)
+      .join("");
+  };
   panel.innerHTML = `
     <div class="holding-evidence-column">
       <b>시장일지 근거</b>
@@ -2021,7 +2044,7 @@ function renderPortfolioHoldingEvidencePanel(holding = {}) {
     </div>
     <div class="holding-evidence-column">
       <b>리포트/자료</b>
-      ${renderRows(reportRows, reportFallback)}
+      ${renderReportRows(reportRows)}
     </div>
     <div class="holding-evidence-column">
       <b>공시/이벤트</b>

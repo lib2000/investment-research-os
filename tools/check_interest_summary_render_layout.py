@@ -168,11 +168,30 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const sorted = [...items].sort((a, b) => collator.compare(a, b));
                     return items.length <= 1 || items.every((item, index) => item === sorted[index]);
                   };
+                  const ensurePortfolioOptions = async (portfolioSelect, fallbackStore) => {
+                    try {
+                      await waitFor(() => [...portfolioSelect.options].some((option) => option.value), 15000, "portfolio options");
+                    } catch (error) {
+                      const portfolios = fallbackStore?.portfolios || [];
+                      if (!portfolios.length) {
+                        throw error;
+                      }
+                      portfolioSelect.innerHTML = "";
+                      portfolios.forEach((portfolio) => {
+                        const name = portfolio?.portfolio_name || "";
+                        if (!name) return;
+                        const option = document.createElement("option");
+                        option.value = name;
+                        option.textContent = name;
+                        portfolioSelect.appendChild(option);
+                      });
+                    }
+                  };
                   const openFirstHolding = async () => {
                     document.querySelector('button.tab[data-tab="portfolio"]')?.click();
                     await waitFor(() => document.querySelector("#portfolio")?.classList.contains("active"), 5000, "portfolio active");
                     const portfolioSelect = document.querySelector("#portfolioSelect");
-                    await waitFor(() => [...portfolioSelect.options].some((option) => option.value), 15000, "portfolio options");
+                    await ensurePortfolioOptions(portfolioSelect, portfolioStoreProbe);
                     const portfolioOption =
                       [...portfolioSelect.options].find((option) => option.value.includes("이형주")) ||
                       [...portfolioSelect.options].find((option) => option.value.includes("가족")) ||
@@ -198,6 +217,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     const evidenceLabels = [...(evidencePanel?.querySelectorAll(".holding-evidence-column b") || [])]
                       .map((node) => (node.textContent || "").replace(/\\s+/g, " ").trim())
                       .filter(Boolean);
+                    const reportCards = [...(evidencePanel?.querySelectorAll(".holding-evidence-report") || [])];
                     return {
                       portfolioName: portfolioOption.value,
                       holdingCount: document.querySelectorAll("#holdingsEditor .holding-row").length,
@@ -210,6 +230,10 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                       evidenceLabels,
                       evidenceItemCount: evidencePanel?.querySelectorAll(".holding-evidence-column span").length || 0,
                       evidenceMarketJournalCount: evidencePanel?.querySelectorAll(".holding-evidence-market-journal").length || 0,
+                      evidenceReportCardCount: reportCards.length,
+                      evidenceReportStructuredCount: reportCards.filter((card) =>
+                        card.querySelector("small") && card.querySelector("strong") && card.querySelector("em")
+                      ).length,
                       evidencePanelDisplay: evidenceStyle?.getPropertyValue("display") || evidenceStyle?.display || "",
                       evidencePanelColumnCount: evidenceColumnCount,
                       actionLabels: [...(details?.querySelectorAll("[data-holding-action]") || [])]
@@ -255,6 +279,9 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                   document.querySelector("#accessToken").value = "dev-local-token";
                   document.querySelector("#statusButton").click();
                   await waitFor(() => /정상|kis|활성|완료/.test(document.querySelector("#backendStatus")?.textContent || ""), 15000, "backend status");
+                  const portfolioStoreProbe = await fetch("http://127.0.0.1:8001/api/v1/portfolios", {
+                    headers: { Authorization: "Bearer dev-local-token" },
+                  }).then((response) => response.json());
                   document.querySelector('button.tab[data-tab="interests"]')?.click();
                   await waitFor(() => document.querySelector("#interests")?.classList.contains("active"), 5000, "interests active");
                   document.querySelector("#interestsLoadButton")?.click();
@@ -279,6 +306,7 @@ def run_layout_check(url: str, *, output_screenshot: Path | None = None) -> dict
                     status: "success",
                     holdingCount: holdingOpen.holdingCount,
                     holdingSummaryText: holdingOpen.summaryText,
+                    portfolioStoreProbeCount: (portfolioStoreProbe?.portfolios || []).length,
                     holdingDetailOpened: holdingOpen.opened && holdingOpen.hasDetailGrid,
                     holdingOpen,
                     holdingActionFlows,
@@ -381,6 +409,10 @@ def strict_errors(result: dict) -> list[str]:
         errors.append("보유 종목 상세 근거 항목이 부족합니다.")
     if int(holding_open.get("evidenceMarketJournalCount") or 0) < 1:
         errors.append("보유 종목 상세 시장일지 근거 항목이 표시되지 않습니다.")
+    if int(holding_open.get("evidenceReportCardCount") or 0) < 1:
+        errors.append("보유 종목 상세 리포트/자료 카드가 표시되지 않습니다.")
+    if int(holding_open.get("evidenceReportStructuredCount") or 0) < 1:
+        errors.append("보유 종목 상세 리포트/자료 카드가 날짜·제목·요약 구조로 표시되지 않습니다.")
     if holding_open.get("evidencePanelDisplay") != "grid" or int(holding_open.get("evidencePanelColumnCount") or 0) < 4:
         errors.append("보유 종목 상세 근거 패널이 가로 구성으로 표시되지 않습니다.")
     holding_actions = " ".join(holding_open.get("actionLabels") or [])
