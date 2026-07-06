@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -63,11 +64,40 @@ def default_chat_id() -> tuple[str, str]:
     return "", "none"
 
 
+def persisted_windows_env(name: str) -> str:
+    try:
+        command = (
+            "[Environment]::GetEnvironmentVariable('{0}', 'User');"
+            "[Environment]::GetEnvironmentVariable('{0}', 'Machine')"
+        ).format(name)
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return ""
+    if completed.returncode != 0:
+        return ""
+    for line in (completed.stdout or "").splitlines():
+        value = line.strip()
+        if value:
+            return value
+    return ""
+
+
 def default_target_bot() -> tuple[str, str]:
     for name in ("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", "TELEGRAM_BOT_USERNAME"):
         value = os.getenv(name, "").strip()
         if value:
             return normalize_target_bot_username(value), name
+        persisted = persisted_windows_env(name)
+        if persisted:
+            return normalize_target_bot_username(persisted), f"{name}:windows"
     return normalize_target_bot_username("@lib20_bot"), "default"
 
 

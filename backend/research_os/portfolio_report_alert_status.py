@@ -20,9 +20,35 @@ def _safe_text(value: Any) -> str:
     return " ".join(str(value or "").split())
 
 
+def _persisted_windows_env(name: str) -> str:
+    """Read non-secret Windows user/machine env values for detached backend processes."""
+    try:
+        command = (
+            "[Environment]::GetEnvironmentVariable('{0}', 'User');"
+            "[Environment]::GetEnvironmentVariable('{0}', 'Machine')"
+        ).format(name)
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", command],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return ""
+    if completed.returncode != 0:
+        return ""
+    for line in (completed.stdout or "").splitlines():
+        value = _safe_text(line)
+        if value:
+            return value
+    return ""
+
+
 def _target_bot_username() -> str:
     for name in ("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", "TELEGRAM_BOT_USERNAME"):
-        value = _safe_text(os.getenv(name))
+        value = _safe_text(os.getenv(name)) or _persisted_windows_env(name)
         if value:
             return value if value.startswith("@") else "@" + value
     return DEFAULT_TARGET_BOT

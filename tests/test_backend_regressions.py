@@ -849,12 +849,23 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("-RestartBackend -OpenConsole", readme_source)
 
     def test_research_backend_watchdog_scripts_restart_dead_console(self):
+        start_source = (PROJECT_ROOT / "scripts" / "start-research-backend.ps1").read_text(encoding="utf-8")
         ensure_source = (PROJECT_ROOT / "scripts" / "ensure-research-backend.ps1").read_text(encoding="utf-8")
         register_source = (PROJECT_ROOT / "tools" / "register_research_backend_watchdog_task.ps1").read_text(
             encoding="utf-8"
         )
+        alert_runner_source = (PROJECT_ROOT / "tools" / "run_openclaw_portfolio_report_alert.ps1").read_text(
+            encoding="utf-8"
+        )
+        postrun_runner_source = (
+            PROJECT_ROOT / "tools" / "run_openclaw_portfolio_report_alert_postrun.ps1"
+        ).read_text(encoding="utf-8")
         offline_source = (PROJECT_ROOT / "tools" / "check_offline_readiness.py").read_text(encoding="utf-8")
 
+        self.assertIn("Set-TelegramReportAlertTargetBotEnv", start_source)
+        self.assertIn("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", start_source)
+        self.assertIn("Set-TelegramReportAlertTargetBotEnv", alert_runner_source)
+        self.assertIn("Set-TelegramReportAlertTargetBotEnv", postrun_runner_source)
         self.assertIn("/api/v1/system/health", ensure_source)
         self.assertIn("/console/index.html", ensure_source)
         self.assertIn("restart-research-backend.ps1", ensure_source)
@@ -4165,6 +4176,18 @@ class PortfolioReportAlertTests(unittest.TestCase):
         self.assertEqual(output["target_bot"], "@my_claw_lib2000_bot")
         self.assertEqual(output["payload"]["target_bot"], "@my_claw_lib2000_bot")
         self.assertEqual(output["delivery"]["applied_send_count"], 0)
+
+    def test_portfolio_report_alert_prefers_persisted_windows_target_bot(self):
+        tool = load_portfolio_report_alert_check_tool()
+
+        completed = SimpleNamespace(returncode=0, stdout="my_claw_lib2000_bot\n\n", stderr="")
+        with patch.dict(os.environ, {"TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME": ""}, clear=False), patch.object(
+            tool.subprocess, "run", return_value=completed
+        ):
+            target_bot, source = tool.default_target_bot()
+
+        self.assertEqual(target_bot, "@my_claw_lib2000_bot")
+        self.assertEqual(source, "TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME:windows")
 
     def test_portfolio_report_alert_check_tool_masks_chat_id_in_json_output(self):
         tool = load_portfolio_report_alert_check_tool()

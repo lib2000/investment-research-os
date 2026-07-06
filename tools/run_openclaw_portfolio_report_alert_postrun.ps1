@@ -14,6 +14,26 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 
+function Set-TelegramReportAlertTargetBotEnv {
+  if (-not [string]::IsNullOrWhiteSpace($env:TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME)) {
+    return
+  }
+
+  foreach ($scope in @("User", "Machine")) {
+    $value = [Environment]::GetEnvironmentVariable("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", $scope)
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      $trimmed = $value.Trim()
+      if (-not $trimmed.StartsWith("@")) {
+        $trimmed = "@$trimmed"
+      }
+      $env:TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME = $trimmed
+      return
+    }
+  }
+}
+
+Set-TelegramReportAlertTargetBotEnv
+
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 Set-Location -LiteralPath $ProjectRootPath
 

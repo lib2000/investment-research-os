@@ -15,6 +15,26 @@ if (-not (Test-Path (Join-Path $BackendRoot "research_os_main.py"))) {
   throw "Research OS 백엔드 진입점을 찾을 수 없습니다: $BackendRoot"
 }
 
+function Set-TelegramReportAlertTargetBotEnv {
+  if (-not [string]::IsNullOrWhiteSpace($env:TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME)) {
+    return
+  }
+
+  foreach ($scope in @("User", "Machine")) {
+    $value = [Environment]::GetEnvironmentVariable("TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME", $scope)
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      $trimmed = $value.Trim()
+      if (-not $trimmed.StartsWith("@")) {
+        $trimmed = "@$trimmed"
+      }
+      $env:TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME = $trimmed
+      return
+    }
+  }
+}
+
+Set-TelegramReportAlertTargetBotEnv
+
 function Resolve-BackendPython {
   param([string]$RequestedPython)
 
