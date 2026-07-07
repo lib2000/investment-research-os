@@ -8749,6 +8749,36 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertIn("포함 섹션 4개", telegram_attempt)
         self.assertIn("MARKET-US-market-close-review-2026-06-18-003.md", telegram_attempt)
 
+    def test_research_source_store_treats_fresh_kr_attempt_as_source_constrained(self):
+        from tools import check_research_source_store
+
+        self.assertTrue(
+            check_research_source_store.market_journal_source_constrained(
+                market="KR",
+                latest_session_date="2026-06-29",
+                latest_session_age_days=8,
+                max_session_age_days=7,
+                market_close_state={
+                    "status": "success",
+                    "source_published_at": "2026-06-29",
+                    "last_attempt_at": "2026-07-07T23:00:05+09:00",
+                },
+                market_close_attempt_age_hours=0.1,
+                max_attempt_age_hours=72,
+            )
+        )
+        self.assertFalse(
+            check_research_source_store.market_journal_source_constrained(
+                market="US",
+                latest_session_date="2026-06-29",
+                latest_session_age_days=8,
+                max_session_age_days=7,
+                market_close_state={"status": "success", "source_published_at": "2026-06-29"},
+                market_close_attempt_age_hours=0.1,
+                max_attempt_age_hours=72,
+            )
+        )
+
     def test_research_source_store_detects_naver_pdf_import_failures(self):
         from tools import check_research_source_store
 

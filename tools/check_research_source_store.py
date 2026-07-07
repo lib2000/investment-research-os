@@ -281,6 +281,29 @@ def format_telegram_market_journal_attempt(state: dict[str, Any]) -> str:
     )
 
 
+def market_journal_source_constrained(
+    *,
+    market: str,
+    latest_session_date: str,
+    latest_session_age_days: int | None,
+    max_session_age_days: int,
+    market_close_state: dict[str, Any],
+    market_close_attempt_age_hours: float | None,
+    max_attempt_age_hours: float,
+) -> bool:
+    if normalize_market(market) != "KR":
+        return False
+    if latest_session_age_days is None or latest_session_age_days <= max(1, int(max_session_age_days)):
+        return False
+    source_published_at = str(market_close_state.get("source_published_at") or "").strip()[:10]
+    if not source_published_at or source_published_at != str(latest_session_date or "").strip()[:10]:
+        return False
+    status = str(market_close_state.get("status") or "").strip()
+    if status not in {"success", "stored", "skipped_duplicate"}:
+        return False
+    return market_close_attempt_age_hours is not None and market_close_attempt_age_hours <= max_attempt_age_hours
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="리서치 소스 캐시/상태 파일을 백엔드 없이 점검합니다.")
     parser.add_argument("--strict", action="store_true", help="경고가 있으면 실패 코드로 종료")
@@ -508,10 +531,22 @@ def main() -> int:
         )
         latest_session_date = str(summary.get("latest_session_date") or "").strip()
         latest_session_age_days = market_journal_session_age_days(latest_session_date)
+        source_constrained = market_journal_source_constrained(
+            market=market,
+            latest_session_date=latest_session_date,
+            latest_session_age_days=latest_session_age_days,
+            max_session_age_days=args.max_market_journal_session_age_days,
+            market_close_state=market_close_state,
+            market_close_attempt_age_hours=market_close_attempt_age,
+            max_attempt_age_hours=args.max_market_journal_attempt_age_hours,
+        )
         add_issue(
             issues,
             latest_session_age_days is None
-            or latest_session_age_days > max(1, int(args.max_market_journal_session_age_days)),
+            or (
+                latest_session_age_days > max(1, int(args.max_market_journal_session_age_days))
+                and not source_constrained
+            ),
             f"마감 시황 시장일지 {market} 최신 세션 확인 필요: {latest_session_date or '미확인'}",
         )
 
