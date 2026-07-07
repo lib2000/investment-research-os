@@ -13,8 +13,11 @@ from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
+TOOLS_DIR = PROJECT_ROOT / "tools"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 SYSTEM_DIR = PROJECT_ROOT / "research_vault" / "_system"
 DEFAULT_OUTPUT_DIR = SYSTEM_DIR / "openclaw_integration"
 KST = ZoneInfo("Asia/Seoul")
@@ -246,6 +249,30 @@ def build_telegram_authenticated_collector_state() -> dict:
         }
 
 
+def build_telegram_runtime_profile_state() -> dict:
+    try:
+        from check_telegram_runtime_profile import build_runtime_profile
+
+        profile = build_runtime_profile(project_root=PROJECT_ROOT)
+        return {
+            "design": profile.get("design"),
+            "status": profile.get("status"),
+            "generated_at": profile.get("generated_at"),
+            "environment": profile.get("environment"),
+            "channels": profile.get("channels"),
+            "warnings": [safe_text(item, 160) for item in top_items(profile.get("warnings") or [], 10)],
+            "errors": [safe_text(item, 160) for item in top_items(profile.get("errors") or [], 10)],
+            "secret_policy": profile.get("secret_policy"),
+        }
+    except Exception as exc:
+        return {
+            "design": "telegram_runtime_profile_v1",
+            "status": "unavailable",
+            "error": safe_text(f"{type(exc).__name__}: {exc}", 180),
+            "secret_policy": "No secret values exported.",
+        }
+
+
 def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
     items = [item for item in news_inbox.get("items", []) if isinstance(item, dict)]
     scope_counts = Counter(str(item.get("scope") or "UNKNOWN") for item in items)
@@ -310,6 +337,7 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
             },
             "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
         },
+        "telegram_runtime_profile": build_telegram_runtime_profile_state(),
         "telegram_authenticated_collector": build_telegram_authenticated_collector_state(),
     }
 
@@ -1265,6 +1293,14 @@ def build_first_read_packet(context: dict) -> dict:
             "priority_brief_design": (news.get("telegram_priority_brief") or {}).get("design"),
             "priority_delivery_design": (news.get("telegram_priority_brief") or {}).get("delivery_design"),
             "delivery_safe_defaults": (news.get("telegram_priority_brief") or {}).get("safe_defaults"),
+            "runtime_profile": {
+                "status": (news.get("telegram_runtime_profile") or {}).get("status"),
+                "target_bot": ((news.get("telegram_runtime_profile") or {}).get("environment") or {}).get("target_bot"),
+                "token_configured": ((news.get("telegram_runtime_profile") or {}).get("environment") or {}).get("token_configured"),
+                "chat_id_configured": ((news.get("telegram_runtime_profile") or {}).get("environment") or {}).get("chat_id_configured"),
+                "warnings": (news.get("telegram_runtime_profile") or {}).get("warnings"),
+                "secret_policy": (news.get("telegram_runtime_profile") or {}).get("secret_policy"),
+            },
             "authenticated_collector": {
                 "status": (news.get("telegram_authenticated_collector") or {}).get("status"),
                 "ready": (news.get("telegram_authenticated_collector") or {}).get("ready"),

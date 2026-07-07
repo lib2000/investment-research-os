@@ -579,6 +579,18 @@ def load_telegram_authenticated_collector_check_tool():
     return module
 
 
+def load_telegram_runtime_profile_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_runtime_profile.py"
+    spec = spec_from_file_location("check_telegram_runtime_profile", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_operational_schedule_status_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1209,6 +1221,11 @@ class OfflineReadinessToolTests(unittest.TestCase):
 
         checks = {label: args for label, args in tool.CHECKS}
 
+        self.assertIn("Telegram 런타임 프로파일", checks)
+        self.assertEqual(
+            checks["Telegram 런타임 프로파일"],
+            ["tools/check_telegram_runtime_profile.py", "--json"],
+        )
         self.assertIn("Telegram 인증 수집기 readiness", checks)
         self.assertEqual(
             checks["Telegram 인증 수집기 readiness"],
@@ -4953,6 +4970,83 @@ class TelegramAuthenticatedCollectorCheckToolTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(payload["collect_result"]["status"], "blocked")
         self.assertIn("live collection requires --allow-live", payload["errors"])
+
+
+class TelegramRuntimeProfileCheckToolTests(unittest.TestCase):
+    def test_runtime_profile_summarizes_live_delivery_without_secrets(self):
+        module = load_telegram_runtime_profile_check_tool()
+
+        now = datetime(2026, 7, 7, 23, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+        profile = module.build_runtime_profile(
+            now=now,
+            env_status={
+                "token_configured": True,
+                "chat_id_configured": True,
+                "token_variables": [{"name": "TELEGRAM_BOT_TOKEN", "configured": True}],
+                "chat_id_variables": [{"name": "TELEGRAM_CHAT_ID", "configured": True}],
+            },
+            target_bot={"target_bot": "@my_claw_lib2000_bot", "target_bot_source": "TELEGRAM_REPORT_ALERT_TARGET_BOT_USERNAME"},
+            alert_task={
+                "found": True,
+                "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
+                "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -Enabled -Submit -SendEmpty",
+                "Trigger": "2026-07-07T07:00:00+09:00",
+                "LastTaskResult": 0,
+                "LastRunTime": "2026-07-07T07:00:01+09:00",
+                "NextRunTime": "2026-07-08T07:00:00+09:00",
+                "NumberOfMissedRuns": 0,
+            },
+            postrun_task={
+                "found": True,
+                "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun",
+                "Arguments": "run_openclaw_portfolio_report_alert_postrun.ps1 -WriteState -Enabled -Submit",
+                "Trigger": "2026-07-07T07:10:00+09:00",
+                "LastTaskResult": 0,
+                "LastRunTime": "2026-07-07T07:10:01+09:00",
+                "NextRunTime": "2026-07-08T07:10:00+09:00",
+                "NumberOfMissedRuns": 0,
+            },
+            brief_state={
+                "updated_at": "2026-07-07T10:59:01+00:00",
+                "sent_messages": [{"message_id": 748}],
+                "last_delivery_plan": {
+                    "enabled": True,
+                    "dry_run": False,
+                    "live_ready": True,
+                    "planned_send_count": 1,
+                    "applied_send_count": 1,
+                },
+            },
+            alert_state={
+                "updated_at": "2026-07-07T19:51:03+09:00",
+                "target_bot": "@my_claw_lib2000_bot",
+                "sent_report_keys": ["a"],
+                "sent_messages": [{"message_id": 746, "sent_at": "2026-07-07T10:51:02+00:00"}],
+                "last_plan": {"candidate_count": 2, "message_count": 1, "delivered": True},
+            },
+            postrun_state={
+                "updated_at": "2026-07-07T19:58:01+09:00",
+                "last_status": "ok",
+                "last_sent": True,
+                "last_receipt": {"status": "delivered", "delivered": True, "latest_message_id": 746},
+            },
+            auth_collector={
+                "status": "not_ready",
+                "ready": False,
+                "enabled": False,
+                "dry_run": True,
+                "blockers": ["TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED=false"],
+            },
+        )
+        serialized = json.dumps(profile, ensure_ascii=False)
+
+        self.assertEqual(profile["status"], "ok")
+        self.assertEqual(profile["environment"]["target_bot"], "@my_claw_lib2000_bot")
+        self.assertTrue(profile["channels"]["portfolio_report_alert"]["task"]["live_submit_configured"])
+        self.assertEqual(profile["channels"]["priority_brief"]["last_applied_send_count"], 1)
+        self.assertIn("authenticated collector is optional and not ready", profile["warnings"])
+        self.assertNotIn("123456", serialized)
+        self.assertNotIn("0123456789abcdef", serialized)
 
 
 class EarningsTranscriptCollectorTests(unittest.TestCase):
@@ -20591,6 +20685,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"next_schedule"', exported_text)
         self.assertIn('"telegram_authenticated_collector"', exported_text)
         self.assertIn('"design": "telegram_authenticated_collector_v1"', exported_text)
+        self.assertIn('"telegram_runtime_profile"', exported_text)
+        self.assertIn('"design": "telegram_runtime_profile_v1"', exported_text)
         self.assertIn('"secret_policy": "API hash, session file contents, bot tokens, chat IDs are excluded from OpenClaw exports."', exported_text)
         self.assertIn("오늘 구현 작업 없음이라고 답하면 안 됩니다", exported_text)
         self.assertIn("Today Implementation Report", first_read_text)
@@ -20600,6 +20696,7 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn("question_routes", first_read_payload)
         self.assertIn("authenticated_collector", first_read_payload["telegram"])
         self.assertIn("secret_policy", first_read_payload["telegram"]["authenticated_collector"])
+        self.assertIn("runtime_profile", first_read_payload["telegram"])
         self.assertIsInstance(first_read_payload["today_work_report"].get("commit_count"), int)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)

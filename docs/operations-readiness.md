@@ -1,6 +1,6 @@
 # 투자 리서치 OS 운영 점검 노트
 
-최종 갱신: 2026-07-05
+최종 갱신: 2026-07-07
 
 ## 매일 한국/미국 추천 1~3위
 
@@ -56,6 +56,7 @@
 - Market Signal Graph pipeline contract: `market_signal_graph_pipeline_contract_v1`은 Firecrawl IR payload, Firecrawl earnings payload, earnings transcript payload, DeepSeek IR analysis payload, portfolio brief payload, IR/Earnings/SEC/DART 통합 점수, portfolio health 변화 감지, Telegram brief dry-run을 하나의 offline contract로 묶는다. 외부 RPC, Firecrawl, DeepSeek, Telegram 전송은 호출하지 않고 shape/count/status drift만 검증한다. source payload 중복은 `(source_platform, external_id)`를 우선 보고, fallback으로 `(source_platform, canonical_hash)`를 검사한다.
 - 텔레그램 즐겨찾기 인기글 수집 v1은 기본값 `TELEGRAM_FAVORITE_POSTS_ENABLED=false`, 실행 시각 `TELEGRAM_FAVORITE_POSTS_TIME=22:00`이다. `TELEGRAM_FAVORITE_CHANNELS_JSON`에 공개 채널 목록을 명시하면 t.me/s 공개 preview의 제목, 링크, 조회수, 짧은 자체 메모만 뉴스 인박스에 `telegram_favorite` 태그로 반영한다.
 - 텔레그램 인증 수집기 v1은 공개 preview가 `View in Telegram` 안내만 반환하거나 파일형/제한 채널이 누락될 때 쓰는 선택 fallback이다. 기본값은 `TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED=false`, `TELEGRAM_AUTHENTICATED_COLLECTION_DRY_RUN=true`이며, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_FILE`, `TELEGRAM_AUTHENTICATED_CHANNELS_JSON`이 모두 준비되고 선택 의존성 `telethon`이 설치된 경우에만 live 수집 준비 상태가 된다. API hash와 session 파일은 commit 금지이며, readiness/status 출력은 설정 여부와 파일명만 보여주고 원문 secret은 출력하지 않는다. 실제 계정 세션 수집은 `python tools\check_telegram_authenticated_collector.py --env-file path\to\telegram-auth.env --enabled --no-dry-run --collect --allow-live --json`처럼 명시적 live 허용 플래그를 함께 줘야 한다.
+- 텔레그램 런타임 프로파일: `python tools\check_telegram_runtime_profile.py --json`은 중요 브리프, 보유 종목 리포트 07:00 알림, 07:10 사후점검, 인증 수집기 readiness를 secret-free로 한 번에 보여준다. Bot token/chat id/API hash/session 원문은 출력하지 않고, 설정 여부, 선택된 env source, 대상 봇, 예약작업 live submit 여부, 최신 message id/receipt만 보여준다. 일반 즐겨찾기/중요 브리프/보유 리포트 알림은 운영 채널이고, 인증 수집기는 optional fallback이므로 `not_ready`여도 전체 readiness를 막지 않지만 warnings에 남긴다.
 - 백엔드가 꺼진 상태에서는 `python tools\check_research_source_store.py --strict`로 KCIF, EMERiCs/CSF/KIEP, 네이버 리서치, 신한 리서치, 마감 시황 시장일지, 티커 레지스트리, 중복 Dossier 큐 캐시 상태를 먼저 확인한다. 이 점검은 마감 시황 자동 수집 시도 상태, 리서치 자동화 Dossier 갱신 상태, 시장일지 `KR`/`US` 각각의 저장 항목·자동 출처 항목·최신 세션일 경과도 함께 확인하며, 네이버 리서치 저장경로 누락은 기본 허용 0건으로 본다.
 - KCIF와 EMERiCs/CSF/KIEP 자료의 투자 연결 신호는 `python tools\check_macro_source_signal_linkage.py --strict`로 확인한다. 이 점검은 `matched_themes`, `target_matches`, `recommended_action`, KCIF 상세 신호 분석의 저작권 안전 플래그가 채워져 있는지 확인해, 시장일지/보유종목 리스크 메모에 연결 가능한 상태인지 본다.
 - 뉴스 인박스 우선 분류는 `python tools\check_news_inbox_priority_queue.py --strict`로 확인한다. 이 점검은 `research_vault\_system\news_inbox.json`에서 미승격 우선 뉴스, 정책·법령·규제 우선 뉴스, 타깃 매칭 뉴스, 품질 확인 건수를 출력하고, 상위 우선 뉴스의 제목·URL·scope가 운영 화면에 표시 가능한 상태인지 확인한다. 같은 보도자료가 날짜/페이지 조회 파라미터만 달리 들어온 경우 `우선 중복 후보`로 묶어 보여준다. 우선 뉴스가 남아 있다는 이유만으로 실패하지 않고, 운영자가 바로 확인할 수 없는 깨진 항목만 실패로 처리한다.
@@ -108,6 +109,7 @@ python tools\check_firecrawl_earnings_collector.py
 python tools\check_deepseek_ir_analysis.py
 python tools\check_portfolio_change_detection.py
 python tools\check_telegram_brief_sender.py
+python tools\check_telegram_runtime_profile.py --json
 python tools\check_portfolio_report_alert.py --json
 python tools\check_portfolio_report_alert_task_status.py --json
 python tools\check_portfolio_report_alert_task_status.py --task-name "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun" --expected-time 07:10 --required-arg run_openclaw_portfolio_report_alert_postrun.ps1 --required-arg=-WriteState --required-arg=-Enabled --required-arg=-Submit --json
