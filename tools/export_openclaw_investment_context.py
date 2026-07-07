@@ -1210,6 +1210,9 @@ def build_first_read_packet(context: dict) -> dict:
         "latest_recommendations": recommendations,
         "telegram": {
             "favorite_saved_count": (news.get("telegram_favorite_posts") or {}).get("saved_count"),
+            "favorite_candidate_count": (news.get("telegram_favorite_posts") or {}).get("candidate_count"),
+            "favorite_top_post_count": len((news.get("telegram_favorite_posts") or {}).get("top_posts") or []),
+            "favorite_news_inbox_count": (news.get("telegram_favorite_posts") or {}).get("news_inbox_count"),
             "priority_brief_design": (news.get("telegram_priority_brief") or {}).get("design"),
             "priority_delivery_design": (news.get("telegram_priority_brief") or {}).get("delivery_design"),
             "delivery_safe_defaults": (news.get("telegram_priority_brief") or {}).get("safe_defaults"),
@@ -1281,6 +1284,7 @@ def render_first_read_markdown(packet: dict) -> str:
         f"- latest recommendation date: `{packet.get('latest_recommendation_date')}`",
         f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
         f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",
+        f"- telegram favorite candidates: `{(packet.get('telegram') or {}).get('favorite_candidate_count')}`",
         f"- today implementation commits: `{today_report.get('commit_count', 0)}`",
         "",
         "## Answer Correction",

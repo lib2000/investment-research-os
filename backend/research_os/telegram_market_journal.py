@@ -86,6 +86,21 @@ def compact_telegram_text(text: str) -> str:
     return normalized.strip()
 
 
+def telegram_public_message_text(node) -> str:
+    text_node = node.select_one(".tgme_widget_message_text")
+    if text_node:
+        return compact_telegram_text(text_node.get_text("\n"))
+    document_title = node.select_one(".tgme_widget_message_document_title")
+    if document_title:
+        document_extra = node.select_one(".tgme_widget_message_document_extra")
+        parts = [
+            document_title.get_text(" ", strip=True),
+            document_extra.get_text(" ", strip=True) if document_extra else "",
+        ]
+        return compact_telegram_text("\n".join(part for part in parts if part))
+    return ""
+
+
 def parse_telegram_count(value: str | None) -> int | None:
     text = str(value or "").strip().replace(",", "")
     if not text:
@@ -116,8 +131,7 @@ def parse_telegram_public_channel_html(
         data_post = str(node.get("data-post") or "").strip()
         if not data_post:
             continue
-        text_node = node.select_one(".tgme_widget_message_text")
-        text = compact_telegram_text(text_node.get_text("\n") if text_node else "")
+        text = telegram_public_message_text(node)
         if not text:
             continue
         post_id = data_post.rsplit("/", 1)[-1]
@@ -141,6 +155,20 @@ def parse_telegram_public_channel_html(
             )
         )
     return posts
+
+
+def telegram_public_channel_empty_warning(html: str, *, final_url: str | None = None) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    page_text = compact_telegram_text(soup.get_text("\n", strip=True))
+    final_url_text = str(final_url or "")
+    if "If you have Telegram" in page_text and "View in Telegram" in page_text:
+        reason = "공개 게시글 목록(/s/) 대신 Telegram 앱 안내 페이지만 반환됐습니다."
+        if "/s/" not in final_url_text:
+            reason += " 최종 URL에 /s/ 경로가 없어 공개 히스토리 접근이 제한된 상태입니다."
+        return reason + " 계정 인증 기반 수집기가 필요합니다."
+    if soup.select_one(".tgme_page_context_link_wrap"):
+        return "공개 채널 미리보기는 열렸지만 게시글 목록이 포함되지 않았습니다. 공개 히스토리 제공 여부를 확인하세요."
+    return "텔레그램 공개 미리보기에서 게시글 본문을 찾지 못했습니다."
 
 
 def telegram_public_page_url(channel_url: str, before_post_id: int | None = None) -> str:
@@ -178,7 +206,7 @@ def fetch_telegram_public_channel_posts_page(
         base_url=base_url,
     )
     if not posts:
-        warnings.append("텔레그램 공개 미리보기에서 게시글 본문을 찾지 못했습니다.")
+        warnings.append(telegram_public_channel_empty_warning(response.text, final_url=str(response.url)))
     return posts, warnings
 
 

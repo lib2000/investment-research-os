@@ -58,6 +58,12 @@ def recommendation_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def build_expected_answer(payload: dict[str, Any]) -> str:
     rows = recommendation_rows(payload)
     telegram = payload.get("telegram") if isinstance(payload.get("telegram"), dict) else {}
+    favorite_message_count = int(
+        telegram.get("favorite_saved_count")
+        or telegram.get("favorite_candidate_count")
+        or telegram.get("favorite_top_post_count")
+        or 0
+    )
     lines = [
         "오늘 추천 종목",
         f"- 기준 파일: openclaw_first_read.json / bridge_status.json",
@@ -68,7 +74,7 @@ def build_expected_answer(payload: dict[str, Any]) -> str:
         [
             "",
             "중요 메시지",
-            f"- 텔레그램 즐겨찾기 수집: {telegram.get('favorite_saved_count')}건",
+            f"- 텔레그램 즐겨찾기 수집: {favorite_message_count}건",
             f"- 우선 브리프: {telegram.get('priority_brief_design') or 'n/a'}",
             f"- 전달 정책: {telegram.get('priority_delivery_design') or 'n/a'}",
         ]
@@ -81,16 +87,19 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
     rows = recommendation_rows(payload)
     telegram = payload.get("telegram") if isinstance(payload.get("telegram"), dict) else {}
     favorite_saved_count = int(telegram.get("favorite_saved_count") or 0)
-    if favorite_saved_count <= 0:
-        errors.append("telegram.favorite_saved_count must be positive")
+    favorite_candidate_count = int(telegram.get("favorite_candidate_count") or 0)
+    favorite_top_post_count = int(telegram.get("favorite_top_post_count") or 0)
+    favorite_message_count = favorite_saved_count or favorite_candidate_count or favorite_top_post_count
+    if favorite_message_count <= 0:
+        errors.append("telegram favorite message count must be positive")
 
     for banned in BANNED_ANSWER_FRAGMENTS:
         if banned in answer:
             errors.append(f"answer contains banned fragment: {banned}")
 
     required_fragments = ["오늘 추천 종목", "중요 메시지", "openclaw_first_read.json"]
-    if favorite_saved_count:
-        required_fragments.append(str(favorite_saved_count))
+    if favorite_message_count:
+        required_fragments.append(str(favorite_message_count))
     for row in rows:
         for key in ("market", "rank", "ticker", "company_name"):
             value = row.get(key)
@@ -108,6 +117,7 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
         f"kr_count={counts.get('KR', 0)}",
         f"us_count={counts.get('US', 0)}",
         f"telegram_saved_count={favorite_saved_count}",
+        f"telegram_candidate_count={favorite_candidate_count}",
         "banned_priority_answer_fragments_absent=true",
     ]
 
@@ -127,6 +137,7 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR, answer_file: Path | 
         "recommendation_count": len(rows),
         "latest_market_counts": dict(Counter(str(row.get("market") or "") for row in rows)),
         "telegram_saved_count": telegram.get("favorite_saved_count"),
+        "telegram_candidate_count": telegram.get("favorite_candidate_count"),
         "messages": messages,
         "answer_preview": answer[:1600],
     }
@@ -141,6 +152,7 @@ def render_text(result: dict[str, Any]) -> str:
         f"- recommendation_count: {result.get('recommendation_count')}",
         f"- latest_market_counts: {json.dumps(result.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}",
         f"- telegram_saved_count: {result.get('telegram_saved_count')}",
+        f"- telegram_candidate_count: {result.get('telegram_candidate_count')}",
     ]
     return "\n".join(lines)
 

@@ -8844,6 +8844,42 @@ class NaverResearchIngestTests(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         self.assertEqual(posts[0].view_count, 1200)
 
+    def test_telegram_public_channel_parser_reads_document_posts(self):
+        from research_os.telegram_market_journal import parse_telegram_public_channel_html
+
+        html = """
+        <div class="tgme_widget_message text_not_supported_wrap" data-post="reports/42">
+          <a class="tgme_widget_message_document_wrap" href="https://t.me/reports/42">
+            <div class="tgme_widget_message_document_title">삼성증권_반기전망.pdf</div>
+            <div class="tgme_widget_message_document_extra">2 MB</div>
+          </a>
+          <span class="tgme_widget_message_views">2.9K</span>
+          <a class="tgme_widget_message_date" href="https://t.me/reports/42"><time datetime="2026-07-07T04:31:00+00:00"></time></a>
+        </div>
+        """
+
+        posts = parse_telegram_public_channel_html(html, channel_username="reports", base_url="https://t.me/s/reports")
+
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].title, "삼성증권_반기전망.pdf")
+        self.assertIn("2 MB", posts[0].text)
+        self.assertEqual(posts[0].view_count, 2900)
+
+    def test_telegram_public_channel_empty_warning_explains_app_only_preview(self):
+        from research_os.telegram_market_journal import telegram_public_channel_empty_warning
+
+        html = """
+        <html><body>
+          <div>View in Telegram</div>
+          <div>If you have Telegram, you can view and join Sample right away.</div>
+        </body></html>
+        """
+
+        warning = telegram_public_channel_empty_warning(html, final_url="https://t.me/sample")
+
+        self.assertIn("공개 게시글 목록(/s/) 대신 Telegram 앱 안내 페이지만 반환", warning)
+        self.assertIn("계정 인증 기반 수집기", warning)
+
     def test_telegram_favorite_posts_syncs_popular_posts_to_news_inbox(self):
         from datetime import datetime
 
@@ -21644,6 +21680,27 @@ class OpenClawPriorityAnswerQualityTests(unittest.TestCase):
         self.assertIn("오늘 추천 종목", result["answer_preview"])
         self.assertIn("중요 메시지", result["answer_preview"])
         self.assertIn("AAA", result["answer_preview"])
+
+    def test_priority_answer_quality_accepts_duplicate_run_with_candidates(self):
+        tool = load_openclaw_priority_answer_quality_tool()
+        payload = self.sample_first_read_payload()
+        payload["telegram"]["favorite_saved_count"] = 0
+        payload["telegram"]["favorite_candidate_count"] = 10
+        payload["telegram"]["favorite_top_post_count"] = 10
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(0, result["telegram_saved_count"])
+        self.assertEqual(10, result["telegram_candidate_count"])
+        self.assertIn("텔레그램 즐겨찾기 수집: 10건", result["answer_preview"])
 
     def test_priority_answer_quality_rejects_missing_recommendation_answer_file(self):
         tool = load_openclaw_priority_answer_quality_tool()
