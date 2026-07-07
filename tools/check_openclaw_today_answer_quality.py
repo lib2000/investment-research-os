@@ -47,6 +47,12 @@ def compact_summary_items(today_report: dict[str, Any]) -> list[str]:
 def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
     generated_at = str(payload.get("generated_at") or "")
     generated_date = generated_at[:10]
+    today_report = payload.get("today_work_report")
+    operational_updates = []
+    if isinstance(today_report, dict):
+        raw_updates = today_report.get("operational_updates")
+        if isinstance(raw_updates, list):
+            operational_updates = [item for item in raw_updates if isinstance(item, dict)]
     latest_date = str(payload.get("latest_recommendation_date") or "")
     latest_recommendations = payload.get("latest_recommendations")
     if not isinstance(latest_recommendations, list):
@@ -78,12 +84,18 @@ def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
         and kr_count >= 3
         and us_count >= 3
     )
+    has_reported_operational_update = any(
+        str(item.get("date") or "").strip()[:10] == generated_date
+        for item in operational_updates
+    )
     return {
-        "has_operational_update_today": has_today_recommendations,
+        "has_operational_update_today": has_today_recommendations or has_reported_operational_update,
         "generated_date": generated_date,
         "latest_recommendation_date": latest_date,
         "recommendation_count": recommendation_count,
         "latest_market_counts": {"KR": kr_count, "US": us_count},
+        "operational_update_count": len(operational_updates),
+        "operational_updates": operational_updates,
     }
 
 
@@ -109,6 +121,10 @@ def build_expected_answer(payload: dict[str, Any]) -> str:
             f"- 최신 추천 기준일: {operational['latest_recommendation_date']}",
             f"- 오늘 추천 저장: {operational['recommendation_count']}개 (KR {counts['KR']} / US {counts['US']})",
         ]
+        for item in operational.get("operational_updates") or []:
+            label = item.get("label") or item.get("key") or "운영 데이터 갱신"
+            status = item.get("status") or "updated"
+            lines.append(f"- {label}: {status}")
     lines.extend(["", "다음 스케줄"])
     for item in schedule[:8]:
         if not isinstance(item, dict):
@@ -165,6 +181,7 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
         f"work_signal={'implementation' if has_implementation else 'operational_data'}",
         f"latest_recommendation_date={operational['latest_recommendation_date']}",
         f"recommendation_count={operational['recommendation_count']}",
+        f"operational_update_count={operational['operational_update_count']}",
         f"schedule_items={len(schedule)}",
         "banned_stale_claims_absent=true",
     ]

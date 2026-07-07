@@ -536,8 +536,69 @@ def _git_log_since_today(project_root: Path) -> list[dict]:
     return commits
 
 
+def _is_today_kst(value: object) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and text[:10] == _today_kst()
+
+
+def build_today_operational_updates(project_root: Path) -> list[dict]:
+    system_dir = project_root / "research_vault" / "_system"
+    updates: list[dict] = []
+    telegram_market = load_json(system_dir / "telegram_market_close_journal_state.json", {})
+    if _is_today_kst(telegram_market.get("last_attempt_date")) or _is_today_kst(telegram_market.get("updated_at")):
+        storage = telegram_market.get("storage") if isinstance(telegram_market.get("storage"), dict) else {}
+        updates.append(
+            {
+                "key": "telegram_us_market_journal",
+                "label": "미국 시장일지 자동 반영",
+                "date": telegram_market.get("last_attempt_date") or telegram_market.get("updated_at"),
+                "status": telegram_market.get("status"),
+                "evidence": storage.get("relative_path") or telegram_market.get("source_url"),
+            }
+        )
+
+    targets = load_json(system_dir / "interest_collection_targets.json", {})
+    if _is_today_kst(targets.get("updated_at")):
+        payload = targets.get("payload") if isinstance(targets.get("payload"), dict) else {}
+        updates.append(
+            {
+                "key": "interest_market_journal_linkage",
+                "label": "관심/보유 종목 시장일지 연결 보드 갱신",
+                "date": targets.get("updated_at"),
+                "status": payload.get("status"),
+                "evidence": f"targets={payload.get('target_count')} tickers={payload.get('ticker_target_count')} sectors={payload.get('sector_target_count')}",
+            }
+        )
+
+    report_alert = load_json(system_dir / "portfolio_report_alert_state.json", {})
+    if _is_today_kst(report_alert.get("state_updated_at")) or _is_today_kst(report_alert.get("updated_at")):
+        updates.append(
+            {
+                "key": "telegram_portfolio_report_alert",
+                "label": "OpenClaw 보유 종목 리포트 텔레그램 알림/사후점검",
+                "date": report_alert.get("state_updated_at") or report_alert.get("updated_at"),
+                "status": report_alert.get("status") or report_alert.get("last_status"),
+                "evidence": f"delivered={report_alert.get('delivered') or report_alert.get('receipt_delivered')} message_id={report_alert.get('latest_message_id') or report_alert.get('receipt_latest_message_id')}",
+            }
+        )
+
+    daily_state = load_json(system_dir / "daily_recommendations_state.json", {})
+    if _is_today_kst(daily_state.get("last_run_date")):
+        updates.append(
+            {
+                "key": "daily_recommendations",
+                "label": "한국/미국 오늘 추천 1~3위 생성/저장",
+                "date": daily_state.get("last_run_date"),
+                "status": daily_state.get("status") or daily_state.get("schedule_status"),
+                "evidence": f"selected={daily_state.get('selected_count')}",
+            }
+        )
+    return updates
+
+
 def build_today_work_report(project_root: Path) -> dict:
     commits = _git_log_since_today(project_root)
+    operational_updates = build_today_operational_updates(project_root)
     subjects = [str(item.get("subject") or "") for item in commits]
     category_rules = [
         ("openclaw_bridge", ("OpenClaw", "openclaw"), "OpenClaw 투자리서치 bridge, first-read, status summary, completion audit, hash 검증"),
@@ -557,12 +618,14 @@ def build_today_work_report(project_root: Path) -> dict:
             categories.append({"key": key, "label": label, "commit_count": count})
     return {
         "date": _today_kst(),
-        "source": "git_log_since_local_midnight",
+        "source": "git_log_since_local_midnight_and_operational_state",
         "commit_count": len(commits),
         "has_implementation_today": len(commits) > 0,
+        "has_operational_update_today": bool(operational_updates),
         "correction_for_openclaw": "오늘 구현 작업 없음이라고 답하면 안 됩니다. 이 today_work_report와 bridge_status source_git를 먼저 확인하세요.",
-        "summary": [item["label"] for item in categories[:8]],
+        "summary": [item["label"] for item in categories[:8]] or [item["label"] for item in operational_updates[:8]],
         "categories": categories,
+        "operational_updates": operational_updates,
         "latest_commits": commits[:16],
     }
 
