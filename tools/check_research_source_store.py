@@ -290,18 +290,56 @@ def market_journal_source_constrained(
     market_close_state: dict[str, Any],
     market_close_attempt_age_hours: float | None,
     max_attempt_age_hours: float,
+    latest_source_published_date: str | None = None,
 ) -> bool:
     if normalize_market(market) != "KR":
         return False
     if latest_session_age_days is None or latest_session_age_days <= max(1, int(max_session_age_days)):
         return False
-    source_published_at = str(market_close_state.get("source_published_at") or "").strip()[:10]
-    if not source_published_at or source_published_at != str(latest_session_date or "").strip()[:10]:
-        return False
     status = str(market_close_state.get("status") or "").strip()
     if status not in {"success", "stored", "skipped_duplicate"}:
         return False
-    return market_close_attempt_age_hours is not None and market_close_attempt_age_hours <= max_attempt_age_hours
+    fresh_attempt = market_close_attempt_age_hours is not None and market_close_attempt_age_hours <= max_attempt_age_hours
+    if not fresh_attempt:
+        return False
+    if status == "skipped_duplicate":
+        return bool(str(market_close_state.get("last_attempt_message") or "").strip())
+    state_source_published_at = str(market_close_state.get("source_published_at") or "").strip()[:10]
+    cache_source_published_at = str(latest_source_published_date or "").strip()[:10]
+    source_published_at = cache_source_published_at or state_source_published_at
+    return bool(source_published_at and source_published_at == str(latest_session_date or "").strip()[:10])
+
+
+def is_iso_date(value: str) -> bool:
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def latest_naver_kr_market_published_date(naver_cache: dict[str, Any]) -> str:
+    entries = naver_cache.get("entries")
+    rows = entries.values() if isinstance(entries, dict) else entries
+    latest = ""
+    if not isinstance(rows, list) and not hasattr(rows, "__iter__"):
+        return latest
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("category") or "").strip() != "시황정보":
+            continue
+        ticker = str(row.get("ticker") or "").strip().upper()
+        scope = str(row.get("scope") or "").strip().lower()
+        title = str(row.get("title") or "")
+        if ticker != "MARKET-KR" and scope != "market" and "국내" not in title:
+            continue
+        published_at = str(row.get("published_at") or "").strip()[:10]
+        if not is_iso_date(published_at):
+            continue
+        if published_at and published_at > latest:
+            latest = published_at
+    return latest
 
 
 def main() -> int:
@@ -425,6 +463,7 @@ def main() -> int:
     naver_pdf_import_failures = naver_pdf_import_failure_rows(naver_rows)
     naver_age = age_hours(naver.get("updated_at"))
     naver_category_counts = Counter(str(item.get("category") or "미확인") for item in naver_rows)
+    naver_latest_kr_market_published_date = latest_naver_kr_market_published_date(naver)
     add_issue(issues, len(naver_rows) < args.min_naver_reports, f"네이버 리서치 캐시 부족: {len(naver_rows)}개")
     naver_missing_storage = len(naver_rows) - len(naver_storage_rows)
     add_issue(issues, len(naver_complete_rows) != len(naver_rows), "네이버 리서치 메타데이터 누락")
@@ -539,6 +578,7 @@ def main() -> int:
             market_close_state=market_close_state,
             market_close_attempt_age_hours=market_close_attempt_age,
             max_attempt_age_hours=args.max_market_journal_attempt_age_hours,
+            latest_source_published_date=naver_latest_kr_market_published_date,
         )
         add_issue(
             issues,

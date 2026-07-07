@@ -8778,6 +8778,55 @@ class NaverResearchIngestTests(unittest.TestCase):
                 max_attempt_age_hours=72,
             )
         )
+        self.assertTrue(
+            check_research_source_store.market_journal_source_constrained(
+                market="KR",
+                latest_session_date="2026-06-29",
+                latest_session_age_days=8,
+                max_session_age_days=7,
+                market_close_state={
+                    "status": "skipped_duplicate",
+                    "source_published_at": "2026-05-22",
+                    "last_attempt_at": "2026-07-07T23:00:05+09:00",
+                    "last_attempt_message": "같은 네이버 국내 마감 시황 리포트라 중복 저장하지 않았습니다.",
+                },
+                market_close_attempt_age_hours=0.1,
+                max_attempt_age_hours=72,
+                latest_source_published_date="2026-06-29",
+            )
+        )
+
+    def test_research_source_store_reads_latest_kr_market_date_from_naver_cache(self):
+        from tools import check_research_source_store
+
+        latest = check_research_source_store.latest_naver_kr_market_published_date(
+            {
+                "entries": {
+                    "old": {
+                        "category": "시황정보",
+                        "ticker": "MARKET-KR",
+                        "published_at": "2026-06-28",
+                    },
+                    "latest": {
+                        "category": "시황정보",
+                        "ticker": "MARKET-KR",
+                        "published_at": "2026-06-29",
+                    },
+                    "us": {
+                        "category": "시황정보",
+                        "ticker": "MARKET-US",
+                        "published_at": "2026-07-06",
+                    },
+                    "bad_date": {
+                        "category": "시황정보",
+                        "ticker": "MARKET-KR",
+                        "published_at": "2026-50-20",
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(latest, "2026-06-29")
 
     def test_research_source_store_detects_naver_pdf_import_failures(self):
         from tools import check_research_source_store
