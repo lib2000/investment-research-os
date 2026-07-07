@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,9 @@ from zoneinfo import ZoneInfo
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 SYSTEM_DIR = PROJECT_ROOT / "research_vault" / "_system"
 DEFAULT_OUTPUT_DIR = SYSTEM_DIR / "openclaw_integration"
 KST = ZoneInfo("Asia/Seoul")
@@ -200,6 +204,48 @@ def build_portfolio_state(store: dict) -> dict:
     }
 
 
+def build_telegram_authenticated_collector_state() -> dict:
+    try:
+        from research_os.settings import Settings
+        from research_os.telegram_authenticated_collector import masked_collection_status, sample_limited_channel_status
+
+        settings = Settings(research_vault_dir=str(PROJECT_ROOT / "research_vault"))
+        collector = masked_collection_status(settings)
+        limited = sample_limited_channel_status(settings)
+        return {
+            "design": "telegram_authenticated_collector_v1",
+            "status": "ready" if collector.get("ready") else "not_ready",
+            "enabled": collector.get("enabled"),
+            "dry_run": collector.get("dry_run"),
+            "ready": collector.get("ready"),
+            "telethon_installed": (collector.get("dependency") or {}).get("telethon_installed"),
+            "api_id_configured": (collector.get("secrets") or {}).get("api_id_configured"),
+            "api_hash_configured": (collector.get("secrets") or {}).get("api_hash_configured"),
+            "session_file_exists": (collector.get("secrets") or {}).get("session_file_exists"),
+            "session_file_name": (collector.get("secrets") or {}).get("session_file_name"),
+            "channel_count": collector.get("channel_count"),
+            "limited_channel_count": limited.get("limited_channel_count"),
+            "limited_channels": [
+                {
+                    "username": item.get("username"),
+                    "label": item.get("label"),
+                    "requires_authenticated_fallback": item.get("requires_authenticated_fallback"),
+                }
+                for item in top_items(limited.get("limited_channels") or [], 10)
+            ],
+            "blockers": [safe_text(item, 120) for item in top_items(collector.get("blockers") or [], 8)],
+            "secret_policy": "API hash, session file contents, bot tokens, chat IDs are excluded from OpenClaw exports.",
+        }
+    except Exception as exc:
+        return {
+            "design": "telegram_authenticated_collector_v1",
+            "status": "unavailable",
+            "ready": False,
+            "error": safe_text(f"{type(exc).__name__}: {exc}", 180),
+            "secret_policy": "No secret values exported.",
+        }
+
+
 def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
     items = [item for item in news_inbox.get("items", []) if isinstance(item, dict)]
     scope_counts = Counter(str(item.get("scope") or "UNKNOWN") for item in items)
@@ -264,6 +310,7 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
             },
             "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
         },
+        "telegram_authenticated_collector": build_telegram_authenticated_collector_state(),
     }
 
 
@@ -656,6 +703,7 @@ def render_markdown(context: dict) -> str:
     rec = state["daily_recommendations"]
     telegram = state["news_and_telegram"]["telegram_favorite_posts"]
     telegram_priority = state["news_and_telegram"].get("telegram_priority_brief") or {}
+    telegram_auth = state["news_and_telegram"].get("telegram_authenticated_collector") or {}
     nps = state["nps_rebalancing"]
     firecrawl = state["firecrawl_monitoring"]
     kg = context.get("openclaw_knowledge_graph_blueprint") or {}
@@ -695,6 +743,7 @@ def render_markdown(context: dict) -> str:
         f"- 포트폴리오: {state['portfolios'].get('portfolio_count')}개 / 보유 종목 {state['portfolios'].get('total_holding_count')}개",
         f"- 뉴스 인박스: {state['news_and_telegram'].get('news_item_count')}개 / 텔레그램 인기글 {telegram.get('news_inbox_count')}개",
         f"- 텔레그램 발송 기준: {telegram_priority.get('mode')} / {telegram_priority.get('message_goal')}",
+        f"- 텔레그램 인증 fallback: {telegram_auth.get('status')} / 제한 채널 {telegram_auth.get('limited_channel_count')}개 / enabled={telegram_auth.get('enabled')} dry_run={telegram_auth.get('dry_run')}",
         f"- 국민연금 공개자료 스냅샷: {nps.get('status')} / 기준 {nps.get('as_of')}",
         f"- Firecrawl 웹훅: ready={firecrawl.get('webhook_ready')} / last={firecrawl.get('last_webhook_status')}",
         "",
@@ -1216,6 +1265,15 @@ def build_first_read_packet(context: dict) -> dict:
             "priority_brief_design": (news.get("telegram_priority_brief") or {}).get("design"),
             "priority_delivery_design": (news.get("telegram_priority_brief") or {}).get("delivery_design"),
             "delivery_safe_defaults": (news.get("telegram_priority_brief") or {}).get("safe_defaults"),
+            "authenticated_collector": {
+                "status": (news.get("telegram_authenticated_collector") or {}).get("status"),
+                "ready": (news.get("telegram_authenticated_collector") or {}).get("ready"),
+                "enabled": (news.get("telegram_authenticated_collector") or {}).get("enabled"),
+                "dry_run": (news.get("telegram_authenticated_collector") or {}).get("dry_run"),
+                "limited_channel_count": (news.get("telegram_authenticated_collector") or {}).get("limited_channel_count"),
+                "blockers": (news.get("telegram_authenticated_collector") or {}).get("blockers"),
+                "secret_policy": (news.get("telegram_authenticated_collector") or {}).get("secret_policy"),
+            },
         },
         "safety": {
             "secrets_excluded": True,

@@ -166,6 +166,14 @@ class Settings(BaseModel):
     telegram_favorite_posts_top_n: int = 10
     telegram_favorite_posts_min_views: int = 0
     telegram_favorite_posts_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    telegram_authenticated_collection_enabled: bool = False
+    telegram_authenticated_collection_dry_run: bool = True
+    telegram_authenticated_channels_json: str = ""
+    telegram_api_id: str = Field(default="")
+    telegram_api_hash: str = Field(default="")
+    telegram_session_file: str = "../research_vault/_private/telegram_user"
+    telegram_authenticated_max_posts: int = 30
+    telegram_authenticated_top_n: int = 10
     telegram_brief_delivery_enabled: bool = False
     telegram_brief_delivery_dry_run: bool = True
     telegram_brief_cleanup_enabled: bool = False
@@ -466,6 +474,28 @@ class Settings(BaseModel):
             telegram_favorite_posts_user_agent=os.getenv(
                 "TELEGRAM_FAVORITE_POSTS_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            telegram_authenticated_collection_enabled=_read_bool(
+                "TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED", False
+            ),
+            telegram_authenticated_collection_dry_run=_read_bool(
+                "TELEGRAM_AUTHENTICATED_COLLECTION_DRY_RUN", True
+            ),
+            telegram_authenticated_channels_json=os.getenv(
+                "TELEGRAM_AUTHENTICATED_CHANNELS_JSON",
+                os.getenv("TELEGRAM_FAVORITE_CHANNELS_JSON", ""),
+            ),
+            telegram_api_id=os.getenv("TELEGRAM_API_ID", ""),
+            telegram_api_hash=os.getenv("TELEGRAM_API_HASH", ""),
+            telegram_session_file=os.getenv(
+                "TELEGRAM_SESSION_FILE",
+                "../research_vault/_private/telegram_user",
+            ),
+            telegram_authenticated_max_posts=int(
+                os.getenv("TELEGRAM_AUTHENTICATED_MAX_POSTS", "30")
+            ),
+            telegram_authenticated_top_n=int(
+                os.getenv("TELEGRAM_AUTHENTICATED_TOP_N", "10")
             ),
             telegram_brief_delivery_enabled=_read_bool("TELEGRAM_BRIEF_DELIVERY_ENABLED", False),
             telegram_brief_delivery_dry_run=_read_bool("TELEGRAM_BRIEF_DELIVERY_DRY_RUN", True),

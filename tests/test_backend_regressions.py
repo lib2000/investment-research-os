@@ -567,6 +567,18 @@ def load_telegram_favorite_posts_check_tool():
     return module
 
 
+def load_telegram_authenticated_collector_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_authenticated_collector.py"
+    spec = spec_from_file_location("check_telegram_authenticated_collector", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_operational_schedule_status_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -1190,6 +1202,17 @@ class OfflineReadinessToolTests(unittest.TestCase):
         self.assertEqual(
             checks["운영 스케줄 상태"],
             ["tools/check_operational_schedule_status.py", "--json", "--allow-warnings"],
+        )
+
+    def test_offline_readiness_checks_telegram_authenticated_collector(self):
+        tool = load_offline_readiness_tool()
+
+        checks = {label: args for label, args in tool.CHECKS}
+
+        self.assertIn("Telegram 인증 수집기 readiness", checks)
+        self.assertEqual(
+            checks["Telegram 인증 수집기 readiness"],
+            ["tools/check_telegram_authenticated_collector.py", "--json"],
         )
 
     def test_offline_readiness_checks_local_ai_survival_mode(self):
@@ -4846,6 +4869,90 @@ class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
         self.assertTrue(payload["env_file_loaded"])
         self.assertEqual(payload["channel_count"], 1)
         self.assertEqual(payload["candidate_count"], 1)
+
+
+class TelegramAuthenticatedCollectorCheckToolTests(unittest.TestCase):
+    def test_authenticated_collector_is_safe_by_default(self):
+        module = load_telegram_authenticated_collector_check_tool()
+
+        with patch.object(sys, "argv", ["check_telegram_authenticated_collector.py", "--json"]):
+            with patch("builtins.print") as mock_print:
+                exit_code = module.main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertFalse(payload["collector"]["enabled"])
+        self.assertTrue(payload["collector"]["dry_run"])
+        self.assertIn("TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED=false", payload["collector"]["blockers"])
+        self.assertIn("TELEGRAM_AUTHENTICATED_COLLECTION_DRY_RUN=true", payload["collector"]["blockers"])
+
+    def test_authenticated_collector_env_template_uses_safe_defaults(self):
+        module = load_telegram_authenticated_collector_check_tool()
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            env_path = Path(temp_dir) / "telegram-auth.env"
+            with patch.object(
+                sys,
+                "argv",
+                ["check_telegram_authenticated_collector.py", "--write-env-template", str(env_path)],
+            ):
+                exit_code = module.main()
+
+            text = env_path.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED=false", text)
+        self.assertIn("TELEGRAM_AUTHENTICATED_COLLECTION_DRY_RUN=true", text)
+        self.assertIn("TELEGRAM_API_HASH=", text)
+        self.assertNotIn("0123456789abcdef", text)
+
+    def test_authenticated_collector_reads_env_without_printing_secret_values(self):
+        module = load_telegram_authenticated_collector_check_tool()
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        secret_hash = "0123456789abcdef0123456789abcdef"
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            env_path = Path(temp_dir) / "telegram-auth.env"
+            env_path.write_text(
+                "TELEGRAM_AUTHENTICATED_COLLECTION_ENABLED=true\n"
+                "TELEGRAM_AUTHENTICATED_COLLECTION_DRY_RUN=false\n"
+                "TELEGRAM_API_ID=12345\n"
+                f"TELEGRAM_API_HASH={secret_hash}\n"
+                f"TELEGRAM_SESSION_FILE={Path(temp_dir) / 'telegram_user'}\n"
+                'TELEGRAM_AUTHENTICATED_CHANNELS_JSON=[{"url":"https://t.me/DOC_POOL","label":"주식리포트 저장방","max_posts":5}]\n',
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                sys,
+                "argv",
+                ["check_telegram_authenticated_collector.py", "--env-file", str(env_path), "--json"],
+            ):
+                with patch("builtins.print") as mock_print:
+                    exit_code = module.main()
+
+        output = mock_print.call_args.args[0]
+        payload = json.loads(output)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertTrue(payload["collector"]["secrets"]["api_id_configured"])
+        self.assertTrue(payload["collector"]["secrets"]["api_hash_configured"])
+        self.assertEqual(payload["limited_channels"]["limited_channel_count"], 1)
+        self.assertNotIn(secret_hash, output)
+
+    def test_authenticated_collector_blocks_live_collection_without_allow_live(self):
+        module = load_telegram_authenticated_collector_check_tool()
+
+        with patch.object(sys, "argv", ["check_telegram_authenticated_collector.py", "--collect", "--json"]):
+            with patch("builtins.print") as mock_print:
+                exit_code = module.main()
+
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["collect_result"]["status"], "blocked")
+        self.assertIn("live collection requires --allow-live", payload["errors"])
 
 
 class EarningsTranscriptCollectorTests(unittest.TestCase):
@@ -20403,12 +20510,17 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"offline_readiness_command": "python tools\\\\check_offline_readiness.py --json"', exported_text)
         self.assertIn('"today_work_report"', exported_text)
         self.assertIn('"next_schedule"', exported_text)
+        self.assertIn('"telegram_authenticated_collector"', exported_text)
+        self.assertIn('"design": "telegram_authenticated_collector_v1"', exported_text)
+        self.assertIn('"secret_policy": "API hash, session file contents, bot tokens, chat IDs are excluded from OpenClaw exports."', exported_text)
         self.assertIn("오늘 구현 작업 없음이라고 답하면 안 됩니다", exported_text)
         self.assertIn("Today Implementation Report", first_read_text)
         self.assertIn("Next Schedule", first_read_text)
         self.assertIn("today_work_report", first_read_payload)
         self.assertIn("next_schedule", first_read_payload)
         self.assertIn("question_routes", first_read_payload)
+        self.assertIn("authenticated_collector", first_read_payload["telegram"])
+        self.assertIn("secret_policy", first_read_payload["telegram"]["authenticated_collector"])
         self.assertIsInstance(first_read_payload["today_work_report"].get("commit_count"), int)
         self.assertIn('"completion_report_file": "openclaw_bridge_completion_report.md"', manifest_text)
         self.assertIn('"completion_report_json_file": "openclaw_bridge_completion_report.json"', manifest_text)
