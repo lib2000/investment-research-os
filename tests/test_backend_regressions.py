@@ -21462,8 +21462,61 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
             )
             (openclaw_dir / "openclaw_first_read.md").write_text("# First Read\n", encoding="utf-8")
 
-            with self.assertRaisesRegex(AssertionError, "has_implementation_today=true"):
+            with self.assertRaisesRegex(AssertionError, "latest operational data"):
                 tool.build_result(openclaw_dir)
+
+    def test_today_answer_readiness_accepts_data_only_recommendation_update(self):
+        tool = load_openclaw_today_answer_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-07T17:00:00+09:00",
+                "latest_recommendation_date": "2026-07-07",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [
+                    {"market": "KR", "rank": 1, "ticker": "001"},
+                    {"market": "KR", "rank": 2, "ticker": "002"},
+                    {"market": "KR", "rank": 3, "ticker": "003"},
+                    {"market": "US", "rank": 1, "ticker": "AAA"},
+                    {"market": "US", "rank": 2, "ticker": "BBB"},
+                    {"market": "US", "rank": 3, "ticker": "CCC"},
+                ],
+                "today_work_report": {"has_implementation_today": False, "commit_count": 0},
+                "next_schedule": [
+                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:20", "title": "US market journal"},
+                    {"time": "08:00", "title": "daily recommendations"},
+                    {"time": "22:00", "title": "Telegram favorite posts"},
+                ],
+                "answer_correction": {
+                    "wrong_claim": "오늘 구현 작업 없음",
+                    "required_reply": "today_work_report 기준으로 오늘 운영 작업과 다음 스케줄을 답합니다.",
+                    "correct_basis": "openclaw_first_read.json today_work_report를 우선 확인해야 합니다.",
+                },
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# First Read\n\n## Answer Correction\n"
+                "- wrong claim to avoid: 오늘 구현 작업 없음\n"
+                "- correct basis: openclaw_first_read.json today_work_report\n\n"
+                "## Today Implementation Report\n"
+                "today_work_report 기준으로 오늘 운영 작업과 다음 스케줄을 답합니다.\n"
+                "## Latest Today Commits\n- data-only operational update\n"
+                "## Next Schedule\n- 07:00\n",
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(0, result["today_commit_count"])
+        self.assertIn("work_signal=operational_data", result["messages"])
+        self.assertIn("recommendation_count=6", result["messages"])
 
 
 class OpenClawTodayAnswerQualityTests(unittest.TestCase):
@@ -21511,6 +21564,43 @@ class OpenClawTodayAnswerQualityTests(unittest.TestCase):
 
             with self.assertRaisesRegex(AssertionError, "banned stale claim"):
                 tool.build_result(openclaw_dir, answer_file)
+
+    def test_today_answer_quality_accepts_data_only_recommendation_update(self):
+        tool = load_openclaw_today_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-07T17:00:00+09:00",
+                "latest_recommendation_date": "2026-07-07",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [
+                    {"market": "KR", "rank": 1, "ticker": "001"},
+                    {"market": "KR", "rank": 2, "ticker": "002"},
+                    {"market": "KR", "rank": 3, "ticker": "003"},
+                    {"market": "US", "rank": 1, "ticker": "AAA"},
+                    {"market": "US", "rank": 2, "ticker": "BBB"},
+                    {"market": "US", "rank": 3, "ticker": "CCC"},
+                ],
+                "today_work_report": {"has_implementation_today": False, "commit_count": 0},
+                "next_schedule": [
+                    {"time": "07:00", "task": "portfolio report alert", "status": "active"},
+                    {"time": "08:00", "task": "daily recommendations", "status": "active"},
+                ],
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(0, result["today_commit_count"])
+        self.assertIn("work_signal=operational_data", result["messages"])
+        self.assertIn("오늘 운영 작업 보고", result["answer_preview"])
+        self.assertIn("2026-07-07", result["answer_preview"])
 
 
 class OpenClawPriorityAnswerQualityTests(unittest.TestCase):

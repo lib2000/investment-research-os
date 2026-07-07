@@ -29,6 +29,48 @@ def load_markdown(path: Path) -> str:
     return path.read_text(encoding="utf-8-sig")
 
 
+def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
+    generated_at = str(payload.get("generated_at") or "")
+    generated_date = generated_at[:10]
+    latest_date = str(payload.get("latest_recommendation_date") or "")
+    latest_recommendations = payload.get("latest_recommendations")
+    if not isinstance(latest_recommendations, list):
+        latest_recommendations = []
+    latest_market_counts = payload.get("latest_market_counts")
+    if not isinstance(latest_market_counts, dict):
+        latest_market_counts = {}
+
+    if not latest_date:
+        current_state = payload.get("current_state")
+        if isinstance(current_state, dict):
+            daily = current_state.get("daily_recommendations")
+            if isinstance(daily, dict):
+                latest_date = str(daily.get("latest_recommendation_date") or "")
+                latest_rows = daily.get("latest_rows")
+                if not latest_recommendations and isinstance(latest_rows, list):
+                    latest_recommendations = latest_rows
+                counts = daily.get("latest_market_counts")
+                if not latest_market_counts and isinstance(counts, dict):
+                    latest_market_counts = counts
+
+    recommendation_count = len(latest_recommendations)
+    kr_count = int(latest_market_counts.get("KR") or 0)
+    us_count = int(latest_market_counts.get("US") or 0)
+    has_today_recommendations = (
+        bool(generated_date)
+        and latest_date == generated_date
+        and recommendation_count >= 6
+        and kr_count >= 3
+        and us_count >= 3
+    )
+    return {
+        "has_operational_update_today": has_today_recommendations,
+        "latest_recommendation_date": latest_date,
+        "recommendation_count": recommendation_count,
+        "latest_market_counts": {"KR": kr_count, "US": us_count},
+    }
+
+
 def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
     if payload.get("schema") != "openclaw_investment_research_first_read_v1":
         raise AssertionError("first-read schema mismatch")
@@ -36,26 +78,26 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
     today_report = payload.get("today_work_report")
     if not isinstance(today_report, dict):
         raise AssertionError("today_work_report missing from first-read payload")
-    if today_report.get("has_implementation_today") is not True:
-        raise AssertionError("today_work_report must mark has_implementation_today=true")
     commit_count = int(today_report.get("commit_count") or 0)
-    if commit_count <= 0:
-        raise AssertionError("today_work_report commit_count must be positive")
+    has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
+    operational = operational_update_signal(payload)
+    if not has_implementation and not operational["has_operational_update_today"]:
+        raise AssertionError("today_work_report or latest operational data must indicate today's work")
 
     categories = today_report.get("implemented_categories") or today_report.get("categories")
-    if not isinstance(categories, list) or not categories:
-        raise AssertionError("today_work_report categories must be non-empty")
+    if not isinstance(categories, list):
+        categories = []
     category_ids = {
         str(item.get("id") or item.get("key") or "")
         for item in categories
         if isinstance(item, dict)
     }
     category_ids.discard("")
-    if not category_ids:
+    if has_implementation and not category_ids:
         raise AssertionError("today_work_report categories must include id/key values")
 
     latest_commits = today_report.get("latest_commits")
-    if not isinstance(latest_commits, list) or not latest_commits:
+    if has_implementation and (not isinstance(latest_commits, list) or not latest_commits):
         raise AssertionError("today_work_report latest_commits must be non-empty")
 
     schedule = payload.get("next_schedule")
@@ -99,6 +141,9 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
 
     return [
         f"commit_count={commit_count}",
+        f"work_signal={'implementation' if has_implementation else 'operational_data'}",
+        f"latest_recommendation_date={operational['latest_recommendation_date']}",
+        f"recommendation_count={operational['recommendation_count']}",
         f"categories={len(category_ids)}",
         f"schedule_items={len(schedule)}",
     ]
@@ -112,6 +157,8 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
     messages = validate_payload(payload, markdown)
     today_report = payload.get("today_work_report") or {}
     schedule = payload.get("next_schedule") or []
+    commit_count = int(today_report.get("commit_count") or 0)
+    has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
     return {
         "status": "ok",
         "openclaw_dir": str(openclaw_dir),
@@ -126,7 +173,10 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "messages": messages,
         "expected_answer_summary": {
             "must_not_answer": "오늘 구현 작업 없음",
-            "must_include": ["오늘 구현 작업 보고", "다음 스케줄"],
+            "must_include": [
+                "오늘 구현 작업 보고" if has_implementation else "오늘 운영 작업 보고",
+                "다음 스케줄",
+            ],
         },
     }
 

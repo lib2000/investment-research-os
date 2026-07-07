@@ -44,17 +44,71 @@ def compact_summary_items(today_report: dict[str, Any]) -> list[str]:
     return items[:6]
 
 
+def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
+    generated_at = str(payload.get("generated_at") or "")
+    generated_date = generated_at[:10]
+    latest_date = str(payload.get("latest_recommendation_date") or "")
+    latest_recommendations = payload.get("latest_recommendations")
+    if not isinstance(latest_recommendations, list):
+        latest_recommendations = []
+    latest_market_counts = payload.get("latest_market_counts")
+    if not isinstance(latest_market_counts, dict):
+        latest_market_counts = {}
+
+    if not latest_date:
+        current_state = payload.get("current_state")
+        if isinstance(current_state, dict):
+            daily = current_state.get("daily_recommendations")
+            if isinstance(daily, dict):
+                latest_date = str(daily.get("latest_recommendation_date") or "")
+                latest_rows = daily.get("latest_rows")
+                if not latest_recommendations and isinstance(latest_rows, list):
+                    latest_recommendations = latest_rows
+                counts = daily.get("latest_market_counts")
+                if not latest_market_counts and isinstance(counts, dict):
+                    latest_market_counts = counts
+
+    recommendation_count = len(latest_recommendations)
+    kr_count = int(latest_market_counts.get("KR") or 0)
+    us_count = int(latest_market_counts.get("US") or 0)
+    has_today_recommendations = (
+        bool(generated_date)
+        and latest_date == generated_date
+        and recommendation_count >= 6
+        and kr_count >= 3
+        and us_count >= 3
+    )
+    return {
+        "has_operational_update_today": has_today_recommendations,
+        "generated_date": generated_date,
+        "latest_recommendation_date": latest_date,
+        "recommendation_count": recommendation_count,
+        "latest_market_counts": {"KR": kr_count, "US": us_count},
+    }
+
+
 def build_expected_answer(payload: dict[str, Any]) -> str:
     today_report = payload.get("today_work_report") or {}
     schedule = payload.get("next_schedule") or []
     commit_count = int(today_report.get("commit_count") or 0)
-    lines = [
-        "오늘 구현 작업 보고",
-        f"- 기준 파일: openclaw_first_read.json / bridge_status.json",
-        f"- 오늘 반영 커밋: {commit_count}건",
-    ]
-    for item in compact_summary_items(today_report):
-        lines.append(f"- {item}")
+    operational = operational_update_signal(payload)
+    has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
+    if has_implementation:
+        lines = [
+            "오늘 구현 작업 보고",
+            f"- 기준 파일: openclaw_first_read.json / bridge_status.json",
+            f"- 오늘 반영 커밋: {commit_count}건",
+        ]
+        for item in compact_summary_items(today_report):
+            lines.append(f"- {item}")
+    else:
+        counts = operational["latest_market_counts"]
+        lines = [
+            "오늘 운영 작업 보고",
+            f"- 기준 파일: openclaw_first_read.json / bridge_status.json",
+            f"- 최신 추천 기준일: {operational['latest_recommendation_date']}",
+            f"- 오늘 추천 저장: {operational['recommendation_count']}개 (KR {counts['KR']} / US {counts['US']})",
+        ]
     lines.extend(["", "다음 스케줄"])
     for item in schedule[:8]:
         if not isinstance(item, dict):
@@ -72,8 +126,10 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
     if not isinstance(today_report, dict):
         raise AssertionError("today_work_report missing from first-read payload")
     commit_count = int(today_report.get("commit_count") or 0)
-    if today_report.get("has_implementation_today") is not True or commit_count <= 0:
-        errors.append("today_work_report must indicate positive implementation work")
+    has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
+    operational = operational_update_signal(payload)
+    if not has_implementation and not operational["has_operational_update_today"]:
+        errors.append("today_work_report or latest operational data must indicate today's work")
 
     schedule = payload.get("next_schedule")
     if not isinstance(schedule, list) or not schedule:
@@ -83,11 +139,15 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
         if banned in answer:
             errors.append(f"answer contains banned stale claim: {banned}")
 
-    required_fragments = [
-        "오늘 구현 작업 보고",
-        "다음 스케줄",
-        str(commit_count),
-    ]
+    required_fragments = ["다음 스케줄"]
+    if has_implementation:
+        required_fragments.extend(["오늘 구현 작업 보고", str(commit_count)])
+    else:
+        required_fragments.extend([
+            "오늘 운영 작업 보고",
+            str(operational["latest_recommendation_date"]),
+            str(operational["recommendation_count"]),
+        ])
     for item in schedule[:4]:
         if isinstance(item, dict) and item.get("time"):
             required_fragments.append(str(item["time"]))
@@ -102,6 +162,9 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
         raise AssertionError("; ".join(errors))
     return [
         f"commit_count={commit_count}",
+        f"work_signal={'implementation' if has_implementation else 'operational_data'}",
+        f"latest_recommendation_date={operational['latest_recommendation_date']}",
+        f"recommendation_count={operational['recommendation_count']}",
         f"schedule_items={len(schedule)}",
         "banned_stale_claims_absent=true",
     ]
