@@ -3978,6 +3978,7 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertFalse(payload["cleanup_enabled"])
         self.assertEqual(payload["delete_candidate_count"], 1)
         self.assertEqual(payload["protected_message_count"], 1)
+        self.assertNotIn("12345", mock_print.call_args.args[0])
 
     def test_telegram_brief_delivery_check_tool_writes_last_plan_state(self):
         tool = load_telegram_brief_delivery_check_tool()
@@ -4284,7 +4285,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
             "found": True,
             "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
             "State": "Ready",
-            "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -Enabled -Submit",
+            "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -Enabled -Submit -SendEmpty",
             "LastRunTime": "2026-07-06T07:00:03+09:00",
             "LastTaskResult": 0,
             "NextRunTime": "2026-07-07T07:00:00+09:00",
@@ -4369,7 +4370,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
                 '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
-                "-WriteState -Enabled -Submit"
+                "-WriteState -Enabled -Submit -SendEmpty"
             ),
             "LastRunTime": "1999-11-30T00:00:00+09:00",
             "LastTaskResult": 267011,
@@ -4434,7 +4435,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 )
 
         self.assertEqual(result["status"], "error")
-        self.assertTrue(any("-Enabled" in error and "-Submit" in error for error in result["errors"]))
+        self.assertTrue(any("-Enabled" in error and "-Submit" in error and "-SendEmpty" in error for error in result["errors"]))
 
     def test_task_status_warns_when_target_bot_changed_since_last_state(self):
         tool = load_portfolio_report_alert_task_status_tool()
@@ -4446,7 +4447,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
                 '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
-                "-WriteState -Enabled -Submit"
+                "-WriteState -Enabled -Submit -SendEmpty"
             ),
             "LastRunTime": "2026-07-06T07:00:10+09:00",
             "LastTaskResult": 0,
@@ -4752,7 +4753,7 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
             "Arguments": (
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
-                "-WriteState -Enabled -Submit"
+                "-WriteState -Enabled -Submit -SendEmpty"
             ),
             "LastRunTime": "1999-11-30T00:00:00+09:00",
             "LastTaskResult": 267011,

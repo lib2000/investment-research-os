@@ -63,6 +63,20 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def redacted_for_output(value):
+    if isinstance(value, dict):
+        output = {}
+        for key, item in value.items():
+            if key == "chat_id" and item:
+                output[key] = "configured"
+            else:
+                output[key] = redacted_for_output(item)
+        return output
+    if isinstance(value, list):
+        return [redacted_for_output(item) for item in value]
+    return value
+
+
 def state_with_last_plan(state: dict, result: dict) -> dict:
     clean_result = {key: value for key, value in result.items() if key not in {"updated_state"}}
     return {
@@ -150,7 +164,7 @@ def main() -> int:
         result["state_written"] = False
 
     if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(redacted_for_output(result), ensure_ascii=False, indent=2))
     else:
         print(f"[{result.get('status')}] {DESIGN_NAME}")
         print(f"- enabled: {result.get('enabled')}")
