@@ -69,6 +69,12 @@ def build_today_work_answer(first_read: dict[str, Any], bridge_status: dict[str,
 def build_priority_answer(first_read: dict[str, Any]) -> str:
     rows = first_read.get("latest_recommendations") or []
     telegram = first_read.get("telegram") or {}
+    favorite_message_count = int(
+        telegram.get("favorite_saved_count")
+        or telegram.get("favorite_candidate_count")
+        or telegram.get("favorite_top_post_count")
+        or 0
+    )
     lines = [
         "오늘 추천 종목",
         "- 기준: bridge_status.json, openclaw_first_read.json, investment_research_context.json",
@@ -80,7 +86,7 @@ def build_priority_answer(first_read: dict[str, Any]) -> str:
         [
             "",
             "중요 메시지",
-            f"- 텔레그램 즐겨찾기 수집: {telegram.get('favorite_saved_count')}건",
+            f"- 텔레그램 즐겨찾기 수집: {favorite_message_count}건",
             f"- 우선 브리프: {telegram.get('priority_brief_design')}",
             f"- 전달 정책: {telegram.get('priority_delivery_design')}",
         ]
@@ -158,9 +164,16 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "bridge_status_completion": build_completion_answer(bridge_status, manifest),
         "knowledge_graph_context": build_knowledge_graph_answer(first_read, context),
     }
+    telegram = first_read.get("telegram") or {}
+    favorite_message_count = int(
+        telegram.get("favorite_saved_count")
+        or telegram.get("favorite_candidate_count")
+        or telegram.get("favorite_top_post_count")
+        or 0
+    )
     required_fragments = {
         "today_work_report": ["오늘 구현 작업 보고", "다음 스케줄", "today_work_report", str((first_read.get("today_work_report") or {}).get("commit_count"))],
-        "recommendations_priority": ["오늘 추천 종목", "중요 메시지", "KR#1", "US#1", str((first_read.get("telegram") or {}).get("favorite_saved_count"))],
+        "recommendations_priority": ["오늘 추천 종목", "중요 메시지", "KR#1", "US#1", str(favorite_message_count)],
         "bridge_status_completion": ["OpenClaw 연동 상태", "source git", "final audit", str(bridge_status.get("source_git_commit"))],
         "knowledge_graph_context": ["투자 방향과 지식 그래프 컨텍스트", "graph schema", "seed nodes", "시장별 추천"],
     }

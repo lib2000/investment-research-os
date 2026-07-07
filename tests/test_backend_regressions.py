@@ -21871,6 +21871,9 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
                 {"market": "US", "rank": 2, "ticker": "BBB", "company_name": "미국2", "score": 95, "baseline_price": 10.2, "currency": "USD"},
                 {"market": "US", "rank": 3, "ticker": "CCC", "company_name": "미국3", "score": 94, "baseline_price": 10.3, "currency": "USD"},
             ]
+            first_read["telegram"]["favorite_saved_count"] = 0
+            first_read["telegram"]["favorite_candidate_count"] = 10
+            first_read["telegram"]["favorite_top_post_count"] = 10
             (openclaw_dir / "openclaw_first_read.json").write_text(json.dumps(first_read, ensure_ascii=False), encoding="utf-8")
             status = json.loads((openclaw_dir / "bridge_status.json").read_text(encoding="utf-8"))
             status.update(
@@ -21912,6 +21915,7 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
         self.assertIn("recommendations_priority: ok", rendered)
         self.assertTrue(any("오늘 구현 작업 보고" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("오늘 추천 종목" in sample["answer_preview"] for sample in result["samples"]))
+        self.assertTrue(any("텔레그램 즐겨찾기 수집: 10건" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("hash status: checked 3 files" in sample["answer_preview"] for sample in result["samples"]))
 
     def test_answer_samples_rejects_stale_sample_claims(self):
