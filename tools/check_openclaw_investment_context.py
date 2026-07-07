@@ -82,7 +82,11 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     if sanitization.get("raw_tokens_excluded") is not True:
         raise AssertionError("raw token exclusion flag must be true")
     telegram = ((state.get("news_and_telegram") or {}).get("telegram_favorite_posts") or {})
-    if int(telegram.get("saved_count") or 0) <= 0:
+    telegram_saved_count = int(telegram.get("saved_count") or 0)
+    telegram_candidate_count = int(telegram.get("candidate_count") or 0)
+    telegram_top_post_count = len(telegram.get("top_posts") or []) if isinstance(telegram.get("top_posts"), list) else 0
+    telegram_news_inbox_count = int(telegram.get("news_inbox_count") or 0)
+    if max(telegram_saved_count, telegram_candidate_count, telegram_top_post_count, telegram_news_inbox_count) <= 0:
         raise AssertionError("telegram favorite posts are not reflected")
     nps = state.get("nps_rebalancing") or {}
     if nps.get("public_sources_only") is not True:
@@ -170,7 +174,7 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
             raise AssertionError(f"OpenClaw knowledge graph blueprint edge type is undeclared: {edge.get('type')}")
     messages.append(
         f"generated_at={payload.get('generated_at')} latest={rec.get('latest_recommendation_date')} "
-        f"rows={len(latest_rows)} telegram_saved={telegram.get('saved_count')}"
+        f"rows={len(latest_rows)} telegram_saved={telegram_saved_count} telegram_candidates={telegram_candidate_count}"
     )
     return messages
 
