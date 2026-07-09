@@ -33,6 +33,15 @@ def load_json(path: Path, default: Any) -> Any:
         return default
 
 
+def console_print(value: str = "") -> None:
+    try:
+        print(value, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_value = value.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_value, flush=True)
+
+
 def parse_date(value: Any) -> datetime | None:
     text = str(value or "").strip()
     if not text:
@@ -192,12 +201,12 @@ def main() -> int:
     readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
 
     if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        console_print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(f"프로젝트 루트: {root}")
-        print(f"포트폴리오: {payload.get('portfolio_name') or args.portfolio_name}")
-        print(f"헤드라인: {payload.get('headline') or '미확인'}")
-        print(
+        console_print(f"프로젝트 루트: {root}")
+        console_print(f"포트폴리오: {payload.get('portfolio_name') or args.portfolio_name}")
+        console_print(f"헤드라인: {payload.get('headline') or '미확인'}")
+        console_print(
             "커버리지: "
             f"시장 데이터 {int(coverage.get('market_data_items') or 0)} / "
             f"시장일지·심리 {int(coverage.get('market_journal_items') or 0)} / "
@@ -205,7 +214,7 @@ def main() -> int:
             f"뉴스 {int(coverage.get('news_items') or 0)} / "
             f"정책·법령 {int(coverage.get('policy_law_items') or 0)}"
         )
-        print(
+        console_print(
             "인사이트 준비도: "
             f"{float(readiness.get('coverage_score') or 0.0):.1f}% / "
             f"인사이트 {int(readiness.get('insight_count') or 0)}개 / "
@@ -213,7 +222,7 @@ def main() -> int:
         )
         for insight in (payload.get("insights") or [])[:5]:
             if isinstance(insight, dict):
-                print(
+                console_print(
                     "- "
                     f"{insight.get('severity') or '미확인'} | "
                     f"{insight.get('source_family') or 'source'} | "
@@ -226,11 +235,11 @@ def main() -> int:
         min_coverage_score=args.min_coverage_score,
     )
     if args.strict and errors:
-        print("통합 투자 인사이트 허브 점검 실패")
+        console_print("통합 투자 인사이트 허브 점검 실패")
         for error in errors:
-            print(f"- {error}")
+            console_print(f"- {error}")
         return 1
-    print("통합 투자 인사이트 허브 점검 정상")
+    console_print("통합 투자 인사이트 허브 점검 정상")
     return 0
 
 

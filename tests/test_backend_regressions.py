@@ -1946,6 +1946,13 @@ class RefreshPortfolioPricesToolTests(unittest.TestCase):
 
 
 class InvestmentInsightHubCheckToolTests(unittest.TestCase):
+    def test_check_tool_uses_console_safe_json_output(self):
+        source = (PROJECT_ROOT / "tools" / "check_investment_insight_hub.py").read_text(encoding="utf-8")
+
+        self.assertIn("def console_print", source)
+        self.assertIn("UnicodeEncodeError", source)
+        self.assertIn("console_print(json.dumps(payload", source)
+
     def test_strict_errors_require_market_filings_news_policy_and_sentiment(self):
         tool = load_investment_insight_hub_check_tool()
         payload = {
