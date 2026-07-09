@@ -3819,6 +3819,22 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertEqual(chat_id, "12345")
         self.assertEqual(source, "TELEGRAM_CHAT_ID")
 
+    def test_telegram_brief_check_tool_redacts_chat_id_in_diagnostics(self):
+        tool = load_telegram_brief_check_tool()
+
+        payload = {
+            "messages": [
+                {"chat_id": "12345", "text": "Investment Priority Brief"},
+                {"chat_id": "", "text": "No chat"},
+            ]
+        }
+
+        redacted = tool.redact_payload_for_diagnostics(payload)
+
+        self.assertEqual(redacted["messages"][0]["chat_id"], "configured")
+        self.assertEqual(redacted["messages"][1]["chat_id"], "")
+        self.assertEqual(payload["messages"][0]["chat_id"], "12345")
+
     def test_telegram_brief_sender_renders_portfolio_change_sections(self):
         from research_os.portfolio_change_detection import detect_portfolio_changes
         from research_os.telegram_brief_sender import build_telegram_brief_payload

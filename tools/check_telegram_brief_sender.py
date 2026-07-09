@@ -129,6 +129,14 @@ def read_json_value(path: Path, default: Any) -> Any:
         return default
 
 
+def redact_payload_for_diagnostics(payload: dict) -> dict:
+    redacted = json.loads(json.dumps(payload, ensure_ascii=False))
+    for message in redacted.get("messages") or []:
+        if isinstance(message, dict) and message.get("chat_id"):
+            message["chat_id"] = "configured"
+    return redacted
+
+
 def latest_recommendations(store: dict) -> list[dict]:
     records = [item for item in store.get("records") or [] if isinstance(item, dict)]
     if not records:
@@ -229,12 +237,13 @@ def main() -> int:
         today_recommendations=today_recommendations,
         portfolio_report_alert=report_alert,
     )
+    diagnostic_payload = redact_payload_for_diagnostics(payload)
     if args.output_json:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        output_path.write_text(json.dumps(diagnostic_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(diagnostic_payload, ensure_ascii=False, indent=2))
         return 0 if payload.get("status") == "success" and payload.get("text") else 1
 
     print(f"[{payload.get('status')}] {DESIGN_NAME}")
