@@ -19,7 +19,7 @@ DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "portfolio_re
 LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
 SUCCESS_RESULT_CODES = {0, 267009, 267011}
-DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState", "-Enabled", "-Submit", "-SendEmpty")
+DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState", "-SendEmpty")
 DEFAULT_TARGET_BOT = "@lib20_bot"
 
 
@@ -233,7 +233,10 @@ def evaluate_task_status(
     arguments = _safe_text(task.get("Arguments"))
     missing_args = [item for item in required_args if item not in arguments]
     if missing_args:
-        errors.append("scheduled task missing live alert arguments: " + ", ".join(missing_args))
+        errors.append("scheduled task missing required arguments: " + ", ".join(missing_args))
+    standalone_live_submit = "-Enabled" in arguments and "-Submit" in arguments
+    if task.get("found") and not standalone_live_submit:
+        info.append("standalone Telegram send is disabled; integrated Investment Priority Brief owns live delivery")
 
     trigger = _safe_text(task.get("Trigger") or task.get("NextRunTime"))
     if expected_time and expected_time not in trigger:
@@ -300,6 +303,7 @@ def evaluate_task_status(
         "state_file_exists": state_age is not None,
         "state_file_age_hours": state_age,
         "never_run": never_run,
+        "standalone_live_submit_configured": standalone_live_submit,
         "checked_at": now.isoformat(timespec="seconds"),
     }
 

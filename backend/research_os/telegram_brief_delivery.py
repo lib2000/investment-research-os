@@ -11,7 +11,7 @@ import httpx
 
 DESIGN_NAME = "telegram_brief_delivery_v1"
 DEFAULT_TELEGRAM_API_BASE_URL = "https://api.telegram.org"
-KEEP_MARKERS = ("Investment Priority Brief", "Today Recommendations", "Portfolio Report Alert")
+KEEP_MARKERS = ("Investment Priority Brief", "Today Recommendations", "Portfolio Report Alert", "Holding Reports")
 IMPORTANT_MARKERS = ("Portfolio Health", "Top Movers", "Watch Items")
 LOW_PRIORITY_CATEGORIES = {
     "routine_status_ok",
@@ -44,6 +44,8 @@ def classify_telegram_message(message: dict[str, Any]) -> dict[str, Any]:
         return {"priority": "must_keep", "category": "portfolio_report_alert_postrun"}
     if "Portfolio Report Alert" in text:
         return {"priority": "must_keep", "category": "portfolio_report_alert"}
+    if "Investment Priority Brief" in text and "Holding Reports" in text:
+        return {"priority": "must_keep", "category": "integrated_investment_brief"}
     if any(marker in text for marker in KEEP_MARKERS):
         return {"priority": "must_keep", "category": "today_recommendations"}
     if any(marker in text for marker in IMPORTANT_MARKERS):

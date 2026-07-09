@@ -6,7 +6,9 @@ import argparse
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,10 +17,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.portfolio_change_detection import detect_portfolio_changes  # noqa: E402
+from research_os.portfolio_report_alert import select_new_holding_reports  # noqa: E402
 from research_os.telegram_brief_sender import DESIGN_NAME, build_telegram_brief_payload  # noqa: E402
 
 
 DEFAULT_RECOMMENDATIONS_STORE = PROJECT_ROOT / "research_vault" / "_system" / "daily_recommendations.json"
+DEFAULT_PORTFOLIOS = PROJECT_ROOT / "research_vault" / "_system" / "user_portfolios.json"
+DEFAULT_MANIFEST = PROJECT_ROOT / "research_vault" / "manifest.json"
+DEFAULT_COMPANY_IR_SOURCES = PROJECT_ROOT / "research_vault" / "_system" / "company_ir_sources_watch.json"
+DEFAULT_REPORT_ALERT_STATE = PROJECT_ROOT / "research_vault" / "_system" / "portfolio_report_alert_state.json"
 
 
 def default_telegram_chat_id() -> tuple[str, str]:
@@ -88,11 +95,38 @@ def sample_today_recommendations() -> list[dict]:
     ]
 
 
+def sample_report_alert() -> dict:
+    return {
+        "design": "portfolio_report_alert_v1",
+        "status": "success",
+        "as_of": "2026-07-05",
+        "holding_count": 2,
+        "candidate_count": 1,
+        "reports": [
+            {
+                "ticker": "ABSI",
+                "holding_name": "Absci Corporation",
+                "title": "Absci earnings report",
+                "published_at": "2026-07-05",
+                "source_provider": "Firecrawl IR",
+                "report_key": "sample-absi-report",
+            }
+        ],
+    }
+
+
 def read_json(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise SystemExit(f"JSON object expected: {path}")
     return data
+
+
+def read_json_value(path: Path, default: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return default
 
 
 def latest_recommendations(store: dict) -> list[dict]:
@@ -120,6 +154,36 @@ def load_latest_recommendations(path: Path | None) -> list[dict]:
     return sample_today_recommendations()
 
 
+def load_portfolio_report_alert_selection(
+    *,
+    portfolios_path: Path,
+    manifest_path: Path,
+    company_ir_sources_path: Path,
+    state_path: Path,
+    as_of: date | None = None,
+    lookback_days: int = 3,
+    max_items: int = 8,
+    include_sample_if_missing: bool = False,
+) -> dict:
+    files_exist = portfolios_path.exists() or manifest_path.exists() or company_ir_sources_path.exists()
+    if include_sample_if_missing and not files_exist:
+        return sample_report_alert()
+    state = read_json_value(state_path, {"sent_report_keys": []})
+    if not isinstance(state, dict):
+        state = {"sent_report_keys": []}
+    selection = select_new_holding_reports(
+        portfolios=read_json_value(portfolios_path, {"portfolios": {}}),
+        manifest=read_json_value(manifest_path, []),
+        company_ir_sources=read_json_value(company_ir_sources_path, {"items": []}),
+        state=state,
+        today=as_of or date.today(),
+        lookback_days=lookback_days,
+        max_items=max_items,
+    )
+    selection["as_of"] = (as_of or date.today()).isoformat()
+    return selection
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Telegram portfolio brief payload를 dry-run으로 점검합니다.")
     parser.add_argument("--change-json", type=Path, help="portfolio_change_detection_v1 결과 JSON")
@@ -132,6 +196,13 @@ def main() -> int:
     )
     parser.add_argument("--chat-id", default=None, help="실제 전송 없이 payload에 넣을 chat id")
     parser.add_argument("--max-message-chars", type=int, default=3600)
+    parser.add_argument("--portfolios-json", type=Path, default=DEFAULT_PORTFOLIOS)
+    parser.add_argument("--manifest-json", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--company-ir-sources-json", type=Path, default=DEFAULT_COMPANY_IR_SOURCES)
+    parser.add_argument("--report-alert-state-file", type=Path, default=DEFAULT_REPORT_ALERT_STATE)
+    parser.add_argument("--report-alert-lookback-days", type=int, default=3)
+    parser.add_argument("--report-alert-max-items", type=int, default=8)
+    parser.add_argument("--skip-report-alerts", action="store_true", help="통합 브리프에서 보유 리포트 섹션을 제외합니다.")
     parser.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력합니다.")
     args = parser.parse_args()
 
@@ -140,11 +211,23 @@ def main() -> int:
     chat_id_source = "cli" if args.chat_id is not None and args.chat_id else env_chat_source
     change_result = read_json(args.change_json) if args.change_json else detect_portfolio_changes(sample_previous(), sample_current())
     today_recommendations = load_latest_recommendations(args.recommendations_json)
+    report_alert = None
+    if not args.skip_report_alerts:
+        report_alert = load_portfolio_report_alert_selection(
+            portfolios_path=args.portfolios_json,
+            manifest_path=args.manifest_json,
+            company_ir_sources_path=args.company_ir_sources_json,
+            state_path=args.report_alert_state_file,
+            lookback_days=args.report_alert_lookback_days,
+            max_items=args.report_alert_max_items,
+            include_sample_if_missing=True,
+        )
     payload = build_telegram_brief_payload(
         change_result,
         chat_id=effective_chat_id,
         max_message_chars=args.max_message_chars,
         today_recommendations=today_recommendations,
+        portfolio_report_alert=report_alert,
     )
     if args.output_json:
         output_path = args.output_json if args.output_json.is_absolute() else PROJECT_ROOT / args.output_json
@@ -161,10 +244,11 @@ def main() -> int:
     text = str(payload.get("text") or "")
     print(f"- text_chars: {len(text)}")
     print(f"- today_recommendation_count: {payload.get('today_recommendation_count')}")
+    print(f"- portfolio_report_alert_count: {payload.get('portfolio_report_alert_count')}")
     priority_filter = payload.get("priority_filter") if isinstance(payload.get("priority_filter"), dict) else {}
     print(f"- priority_filter_mode: {priority_filter.get('mode')}")
     print(f"- suppressed_low_priority_count: {priority_filter.get('suppressed_low_priority_count')}")
-    for marker in ["Investment Priority Brief", "Today Recommendations", "Portfolio Health", "Top Movers", "Watch Items"]:
+    for marker in ["Investment Priority Brief", "Today Recommendations", "Holding Reports", "Portfolio Health", "Top Movers", "Watch Items"]:
         print(f"- contains_{marker.replace(' ', '_').lower()}: {marker in text}")
     return 0 if payload.get("status") == "success" and text else 1
 

@@ -131,13 +131,62 @@ def _recommendation_section_lines(today_recommendations: list[dict[str, Any]], *
     return lines
 
 
+def _report_alert_section_lines(report_alert: dict[str, Any] | None, *, limit: int = 8) -> list[str]:
+    if not isinstance(report_alert, dict):
+        return []
+    reports = [item for item in report_alert.get("reports") or [] if isinstance(item, dict)]
+    candidate_count = len(reports)
+    if candidate_count <= 0:
+        try:
+            candidate_count = int(report_alert.get("candidate_count") or 0)
+        except (TypeError, ValueError):
+            candidate_count = 0
+    if candidate_count <= 0:
+        return []
+    lines = ["Holding Reports"]
+    as_of = _safe_text(report_alert.get("as_of"))
+    if as_of:
+        lines.append(f"As of: {as_of}")
+    lines.append(f"New reports/filings: {candidate_count}")
+    if not reports:
+        return lines
+    for item in reports[: max(1, limit)]:
+        ticker = _safe_text(item.get("ticker"))
+        company = _safe_text(item.get("holding_name") or item.get("company_name"))
+        title = _safe_text(item.get("title"))
+        published_at = _safe_text(item.get("published_at")) or "date n/a"
+        provider = _safe_text(item.get("source_provider") or item.get("category"))
+        label = f"{ticker} {company}".strip() or "UNKNOWN"
+        detail = " | ".join(part for part in [published_at, provider] if part)
+        lines.append(f"- {label}: {title}")
+        if detail:
+            lines.append(f"  {detail}")
+    return lines
+
+
+def _report_alert_count(report_alert: dict[str, Any] | None) -> int:
+    if not isinstance(report_alert, dict):
+        return 0
+    reports = [item for item in report_alert.get("reports") or [] if isinstance(item, dict)]
+    if reports:
+        return len(reports)
+    try:
+        return max(0, int(report_alert.get("candidate_count") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def build_priority_filter_summary(
     change_result: dict[str, Any],
     today_recommendations: list[dict[str, Any]] | None = None,
+    portfolio_report_alert: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     delivered_sections = ["portfolio_health"]
     if today_recommendations:
         delivered_sections.insert(0, "today_recommendations")
+    if _report_alert_count(portfolio_report_alert):
+        insert_at = 1 if "today_recommendations" in delivered_sections else 0
+        delivered_sections.insert(insert_at, "holding_reports")
     if change_result.get("top_movers"):
         delivered_sections.append("top_movers")
     if change_result.get("watch_items"):
@@ -182,6 +231,7 @@ def render_portfolio_telegram_brief(
     *,
     max_items: int = 5,
     today_recommendations: list[dict[str, Any]] | None = None,
+    portfolio_report_alert: dict[str, Any] | None = None,
 ) -> str:
     health = change_result.get("health_score") if isinstance(change_result.get("health_score"), dict) else {}
     counts = change_result.get("change_counts") if isinstance(change_result.get("change_counts"), dict) else {}
@@ -190,6 +240,8 @@ def render_portfolio_telegram_brief(
     lines = [
         "Investment Priority Brief",
         *_recommendation_section_lines(today_recommendations or []),
+        "",
+        *_report_alert_section_lines(portfolio_report_alert, limit=max_items),
         "",
         "Portfolio Health",
         f"As of: {_safe_text(change_result.get('current_as_of')) or 'n/a'}",
@@ -220,12 +272,15 @@ def build_telegram_brief_payload(
     max_items: int = 5,
     max_message_chars: int = DEFAULT_MAX_MESSAGE_CHARS,
     today_recommendations: list[dict[str, Any]] | None = None,
+    portfolio_report_alert: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     recommendations = [item for item in today_recommendations or [] if isinstance(item, dict)]
+    report_count = _report_alert_count(portfolio_report_alert)
     text = render_portfolio_telegram_brief(
         change_result,
         max_items=max_items,
         today_recommendations=recommendations,
+        portfolio_report_alert=portfolio_report_alert,
     )
     messages = chunk_telegram_message(text, max_chars=max_message_chars)
     payloads = [
@@ -233,6 +288,8 @@ def build_telegram_brief_payload(
             "chat_id": chat_id or "",
             "text": message,
             "disable_web_page_preview": True,
+            "priority": "must_keep",
+            "category": "integrated_investment_brief",
         }
         for message in messages
     ]
@@ -244,5 +301,6 @@ def build_telegram_brief_payload(
         "messages": payloads,
         "text": text,
         "today_recommendation_count": len(recommendations),
-        "priority_filter": build_priority_filter_summary(change_result, recommendations),
+        "portfolio_report_alert_count": report_count,
+        "priority_filter": build_priority_filter_summary(change_result, recommendations, portfolio_report_alert),
     }

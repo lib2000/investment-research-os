@@ -122,8 +122,6 @@ CHECKS = [
             "--required-arg",
             "run_openclaw_portfolio_report_alert_postrun.ps1",
             "--required-arg=-WriteState",
-            "--required-arg=-Enabled",
-            "--required-arg=-Submit",
             "--json",
         ],
     ),

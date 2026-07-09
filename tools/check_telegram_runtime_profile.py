@@ -80,7 +80,11 @@ def task_summary(task: dict[str, Any], *, expected_time: str, required_marker: s
     if task.get("found") and last_result not in {0, 267009, 267011}:
         errors.append(f"last task result: {last_result}")
     enabled_live = "-Enabled" in arguments and "-Submit" in arguments
-    if task.get("found") and not enabled_live:
+    integrated_delivery_expected = required_marker in {
+        "run_openclaw_portfolio_report_alert.ps1",
+        "run_openclaw_portfolio_report_alert_postrun.ps1",
+    }
+    if task.get("found") and not enabled_live and not integrated_delivery_expected:
         warnings.append("scheduled task is not configured for live submit")
     return {
         "status": "error" if errors else "ok",
@@ -88,6 +92,8 @@ def task_summary(task: dict[str, Any], *, expected_time: str, required_marker: s
         "task_name": task.get("TaskName"),
         "expected_time": expected_time,
         "live_submit_configured": enabled_live,
+        "standalone_live_submit_configured": enabled_live,
+        "integrated_delivery_expected": integrated_delivery_expected,
         "last_run_at": task.get("LastRunTime"),
         "next_run_at": task.get("NextRunTime"),
         "last_result": task.get("LastTaskResult"),

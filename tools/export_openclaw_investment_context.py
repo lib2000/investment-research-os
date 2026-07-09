@@ -311,6 +311,7 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
             "mode": "important_only",
             "include_sections": [
                 "today_recommendations_kr_us_top_3",
+                "holding_reports",
                 "portfolio_health",
                 "top_movers",
                 "watch_items",
@@ -335,7 +336,7 @@ def build_news_state(news_inbox: dict, telegram_state: dict) -> dict:
                 "live_send_switch": "-SubmitTelegramBriefDelivery",
                 "live_cleanup_switch": "-EnableTelegramBriefCleanup",
             },
-            "message_goal": "Send one concise Investment Priority Brief instead of routine operational noise.",
+            "message_goal": "Send one concise Investment Priority Brief that combines KR/US recommendations, new holding reports, portfolio health, movers, and watch items instead of split routine messages.",
         },
         "telegram_runtime_profile": build_telegram_runtime_profile_state(),
         "telegram_authenticated_collector": build_telegram_authenticated_collector_state(),
@@ -572,13 +573,21 @@ def build_today_operational_updates(project_root: Path) -> list[dict]:
 
     report_alert = load_json(system_dir / "portfolio_report_alert_state.json", {})
     if _is_today_kst(report_alert.get("state_updated_at")) or _is_today_kst(report_alert.get("updated_at")):
+        report_plan = report_alert.get("last_plan") if isinstance(report_alert.get("last_plan"), dict) else {}
+        integrated = report_alert.get("integrated_delivery") if isinstance(report_alert.get("integrated_delivery"), dict) else {}
+        sent_messages = [item for item in report_alert.get("sent_messages") or [] if isinstance(item, dict)]
+        latest_message = sent_messages[-1] if sent_messages else {}
         updates.append(
             {
                 "key": "telegram_portfolio_report_alert",
-                "label": "OpenClaw 보유 종목 리포트 텔레그램 알림/사후점검",
+                "label": "보유 리포트 알림을 Investment Priority Brief 통합 메시지로 반영",
                 "date": report_alert.get("state_updated_at") or report_alert.get("updated_at"),
-                "status": report_alert.get("status") or report_alert.get("last_status"),
-                "evidence": f"delivered={report_alert.get('delivered') or report_alert.get('receipt_delivered')} message_id={report_alert.get('latest_message_id') or report_alert.get('receipt_latest_message_id')}",
+                "status": "integrated_delivery" if integrated.get("delivered") else "ledger_ready",
+                "evidence": (
+                    f"delivered={report_plan.get('delivered')} "
+                    f"candidate_count={report_plan.get('candidate_count')} "
+                    f"message_id={latest_message.get('message_id')}"
+                ),
             }
         )
 
@@ -634,15 +643,15 @@ def build_next_schedule() -> list[dict]:
     return [
         {
             "time": "07:00",
-            "task": "OpenClaw 보유 종목 신규 리포트 알림",
-            "status": "scheduled/live submit, first run pending",
+            "task": "보유 종목 신규 리포트 스캔 및 통합 브리프 ledger 갱신",
+            "status": "scheduled/ledger-only; live send is owned by Investment Priority Brief",
             "scheduler": "windows_task",
             "command": "tools\\check_portfolio_report_alert_task_status.py --json",
         },
         {
             "time": "07:10",
             "task": "보유 종목 리포트 알림 사후점검",
-            "status": "scheduled",
+            "status": "scheduled/ledger-only postrun",
             "scheduler": "windows_task",
             "command": "tools\\check_portfolio_report_alert_task_status.py --task-name 'InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun' --json",
         },
@@ -775,7 +784,7 @@ def build_context(project_root: Path) -> dict:
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
                 "최신 추천/관심종목/텔레그램 인기글 요약 조회",
-                "텔레그램 발송은 오늘 추천과 주의 신호 중심의 Investment Priority Brief 1건으로 축약",
+                "텔레그램 발송은 오늘 추천, 신규 보유 리포트, 포트폴리오 주의 신호를 합친 Investment Priority Brief 1건으로 축약",
                 "일일 운영 루틴에서 텔레그램 delivery ledger dry-run 상태 확인",
                 "투자리서치 백엔드 health 확인",
                 "투자 판단 전 근거 문서와 최신성 점검 요청",

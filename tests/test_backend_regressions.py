@@ -1297,8 +1297,6 @@ class OfflineReadinessToolTests(unittest.TestCase):
                 "--required-arg",
                 "run_openclaw_portfolio_report_alert_postrun.ps1",
                 "--required-arg=-WriteState",
-                "--required-arg=-Enabled",
-                "--required-arg=-Submit",
                 "--json",
             ],
         )
@@ -3865,8 +3863,27 @@ class TelegramBriefSenderTests(unittest.TestCase):
                 "currency": "USD",
             },
         ]
+        portfolio_report_alert = {
+            "as_of": "2026-07-05",
+            "holding_count": 2,
+            "candidate_count": 1,
+            "reports": [
+                {
+                    "ticker": "ABSI",
+                    "holding_name": "Absci Corporation",
+                    "title": "Absci earnings report",
+                    "published_at": "2026-07-05",
+                    "source_provider": "Firecrawl IR",
+                }
+            ],
+        }
 
-        payload = build_telegram_brief_payload(change_result, chat_id="12345", today_recommendations=today_recommendations)
+        payload = build_telegram_brief_payload(
+            change_result,
+            chat_id="12345",
+            today_recommendations=today_recommendations,
+            portfolio_report_alert=portfolio_report_alert,
+        )
 
         self.assertEqual(payload["design"], "telegram_brief_sender_v1")
         self.assertTrue(payload["chat_id_configured"])
@@ -3875,15 +3892,21 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertIn("Today Recommendations", payload["text"])
         self.assertIn("SKIET", payload["text"])
         self.assertIn("Oatly Group AB", payload["text"])
+        self.assertIn("Holding Reports", payload["text"])
+        self.assertIn("Absci earnings report", payload["text"])
         self.assertIn("Portfolio Health", payload["text"])
         self.assertIn("Top Movers", payload["text"])
         self.assertIn("Watch Items", payload["text"])
         self.assertIn("PL Planet Labs", payload["text"])
         self.assertIn("JOBY Joby Aviation", payload["text"])
         self.assertEqual(payload["today_recommendation_count"], 2)
+        self.assertEqual(payload["portfolio_report_alert_count"], 1)
         self.assertEqual(payload["priority_filter"]["mode"], "important_only")
+        self.assertIn("holding_reports", payload["priority_filter"]["delivered_sections"])
         self.assertGreaterEqual(payload["priority_filter"]["suppressed_low_priority_count"], 1)
         self.assertEqual(payload["messages"][0]["chat_id"], "12345")
+        self.assertEqual(payload["messages"][0]["category"], "integrated_investment_brief")
+        self.assertEqual(payload["messages"][0]["priority"], "must_keep")
         self.assertTrue(payload["messages"][0]["disable_web_page_preview"])
 
     def test_telegram_brief_check_tool_loads_latest_recommendations(self):
@@ -3998,11 +4021,16 @@ class TelegramBriefSenderTests(unittest.TestCase):
         alert = classify_telegram_message(
             {"text": "보유 종목 리포트 알림 (Portfolio Report Alert)\n1. ABSI"}
         )
+        integrated = classify_telegram_message(
+            {"text": "Investment Priority Brief\nToday Recommendations\nHolding Reports\n- ABSI report"}
+        )
 
         self.assertEqual(postrun["priority"], "must_keep")
         self.assertEqual(postrun["category"], "portfolio_report_alert_postrun")
         self.assertEqual(alert["priority"], "must_keep")
         self.assertEqual(alert["category"], "portfolio_report_alert")
+        self.assertEqual(integrated["priority"], "must_keep")
+        self.assertEqual(integrated["category"], "integrated_investment_brief")
 
     def test_telegram_brief_delivery_check_tool_is_safe_by_default(self):
         tool = load_telegram_brief_delivery_check_tool()
@@ -4047,6 +4075,7 @@ class TelegramBriefSenderTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         payload = json.loads(mock_print.call_args.args[0])
         self.assertTrue(payload["state_written"])
+        self.assertFalse(payload["report_alert_state_written"])
         self.assertIn("last_delivery_plan", state)
         self.assertEqual(state["last_delivery_plan"]["design"], "telegram_brief_delivery_v1")
         self.assertEqual(state["last_delivery_plan"]["planned_send_count"], 1)
@@ -4410,7 +4439,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
                 '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
-                "-WriteState -Enabled -Submit -SendEmpty"
+                "-WriteState -SendEmpty"
             ),
             "LastRunTime": "1999-11-30T00:00:00+09:00",
             "LastTaskResult": 267011,
@@ -4440,7 +4469,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
         self.assertIn("scheduled task is registered and waiting for its first run", result["info"])
         self.assertIn("portfolio report alert state file will be written after the first run", result["info"])
 
-    def test_task_status_fails_when_live_submit_arguments_are_missing(self):
+    def test_task_status_allows_ledger_only_integrated_delivery(self):
         tool = load_portfolio_report_alert_task_status_tool()
         task = {
             "found": True,
@@ -4449,7 +4478,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
             "Arguments": (
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
-                "-ProjectRoot C:\\Users\\lib20\\InvestmentJournalApp -WriteState"
+                "-ProjectRoot C:\\Users\\lib20\\InvestmentJournalApp -WriteState -SendEmpty"
             ),
             "LastRunTime": "2026-07-06T07:00:10+09:00",
             "LastTaskResult": 0,
@@ -4474,8 +4503,9 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                     now=datetime(2026, 7, 6, 8, 0, tzinfo=tool.LOCAL_TIMEZONE),
                 )
 
-        self.assertEqual(result["status"], "error")
-        self.assertTrue(any("-Enabled" in error and "-Submit" in error and "-SendEmpty" in error for error in result["errors"]))
+        self.assertEqual(result["status"], "ok")
+        self.assertFalse(result["standalone_live_submit_configured"])
+        self.assertTrue(any("integrated Investment Priority Brief" in item for item in result["info"]))
 
     def test_task_status_warns_when_target_bot_changed_since_last_state(self):
         tool = load_portfolio_report_alert_task_status_tool()
@@ -4487,7 +4517,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
                 '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -LookbackDays 3 -MaxItems 8 '
-                "-WriteState -Enabled -Submit -SendEmpty"
+                "-WriteState -SendEmpty"
             ),
             "LastRunTime": "2026-07-06T07:00:10+09:00",
             "LastTaskResult": 0,
@@ -4531,7 +4561,7 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert_postrun.ps1" '
                 '-ProjectRoot "C:\\Users\\lib20\\InvestmentJournalApp" -MaxStateAgeHours 2 '
-                "-WriteState -Enabled -Submit"
+                "-WriteState"
             ),
             "LastRunTime": "1999-11-30T00:00:00+09:00",
             "LastTaskResult": 267011,
@@ -4556,8 +4586,6 @@ class PortfolioReportAlertTaskStatusTests(unittest.TestCase):
                     required_args=(
                         "run_openclaw_portfolio_report_alert_postrun.ps1",
                         "-WriteState",
-                        "-Enabled",
-                        "-Submit",
                     ),
                     now=datetime(2026, 7, 5, 16, 0, tzinfo=tool.LOCAL_TIMEZONE),
                 )
@@ -4634,7 +4662,7 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
             "Arguments": (
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
-                "-WriteState -Enabled -Submit"
+                "-WriteState"
             ),
             "LastRunTime": "2026-07-06T07:00:10+09:00",
             "LastTaskResult": 1,
@@ -4707,7 +4735,7 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
             "Arguments": (
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
-                "-WriteState -Enabled -Submit"
+                "-WriteState"
             ),
             "LastRunTime": "2026-07-06T07:00:10+09:00",
             "LastTaskResult": 0,
@@ -4793,7 +4821,7 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
             "Arguments": (
                 "-NoProfile -ExecutionPolicy Bypass -File "
                 '"C:\\Users\\lib20\\InvestmentJournalApp\\tools\\run_openclaw_portfolio_report_alert.ps1" '
-                "-WriteState -Enabled -Submit -SendEmpty"
+                "-WriteState -SendEmpty"
             ),
             "LastRunTime": "1999-11-30T00:00:00+09:00",
             "LastTaskResult": 267011,
@@ -4989,7 +5017,7 @@ class TelegramRuntimeProfileCheckToolTests(unittest.TestCase):
             alert_task={
                 "found": True,
                 "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert",
-                "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -Enabled -Submit -SendEmpty",
+                "Arguments": "run_openclaw_portfolio_report_alert.ps1 -WriteState -SendEmpty",
                 "Trigger": "2026-07-07T07:00:00+09:00",
                 "LastTaskResult": 0,
                 "LastRunTime": "2026-07-07T07:00:01+09:00",
@@ -4999,7 +5027,7 @@ class TelegramRuntimeProfileCheckToolTests(unittest.TestCase):
             postrun_task={
                 "found": True,
                 "TaskName": "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun",
-                "Arguments": "run_openclaw_portfolio_report_alert_postrun.ps1 -WriteState -Enabled -Submit",
+                "Arguments": "run_openclaw_portfolio_report_alert_postrun.ps1 -WriteState",
                 "Trigger": "2026-07-07T07:10:00+09:00",
                 "LastTaskResult": 0,
                 "LastRunTime": "2026-07-07T07:10:01+09:00",
@@ -5042,7 +5070,8 @@ class TelegramRuntimeProfileCheckToolTests(unittest.TestCase):
 
         self.assertEqual(profile["status"], "ok")
         self.assertEqual(profile["environment"]["target_bot"], "@my_claw_lib2000_bot")
-        self.assertTrue(profile["channels"]["portfolio_report_alert"]["task"]["live_submit_configured"])
+        self.assertFalse(profile["channels"]["portfolio_report_alert"]["task"]["standalone_live_submit_configured"])
+        self.assertTrue(profile["channels"]["portfolio_report_alert"]["task"]["integrated_delivery_expected"])
         self.assertEqual(profile["channels"]["priority_brief"]["last_applied_send_count"], 1)
         self.assertIn("authenticated collector is optional and not ready", profile["warnings"])
         self.assertNotIn("123456", serialized)
