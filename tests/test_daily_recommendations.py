@@ -1175,6 +1175,32 @@ class DailyRecommendationsTests(unittest.TestCase):
         self.assertEqual(finalized["score_explanation"]["top_component"]["label"], "보유")
         self.assertEqual(finalized["score_explanation"]["component_weights"][0]["weight_pct"], 66.7)
 
+    def test_finalize_daily_recommendation_candidate_preserves_scored_filing_evidence(self):
+        candidate = {
+            "score": 20,
+            "reasons": ["최근 1주 중요 공시 1건 확인"],
+            "evidence_sources": [
+                "정책 신호 시장 참고 3건",
+                "저장 품질: 활용 가능 29건",
+                "목표가/리포트 근거 12건",
+                "최근 근거 파일: report.md",
+                "대상 범위: 관심종목",
+                "RAG 연결 문서 454건",
+                "최신 투자 논거 스냅샷 연결",
+                "시장일지 연결",
+                "최근 1주 공시 브리프 반영",
+            ],
+            "risk_notes": [],
+            "score_penalties": [],
+            "quality_flags": [],
+            "score_components": [{"label": "최근 중요 공시 반영", "points": 5}],
+        }
+
+        finalized = finalize_daily_recommendation_candidate(candidate)
+
+        self.assertIn("최근 1주 공시 브리프 반영", finalized["evidence_sources"])
+        self.assertLessEqual(len(finalized["evidence_sources"]), 8)
+
     def test_daily_recommendation_schedule_uses_state_file(self):
         with TemporaryDirectory() as temp_dir:
             settings = Settings(
