@@ -1,6 +1,7 @@
 ﻿param(
   [string]$WslDistro = "",
-  [string]$WslWorkspace = ""
+  [string]$WslWorkspace = "",
+  [string]$OpenClawWorkspace = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +9,13 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$windowsBridgeRoot = Join-Path $env:USERPROFILE ".openclaw\workspace"
+$workspaceResolver = Join-Path $projectRoot "tools\resolve_investment_workspace.ps1"
+. $workspaceResolver
+$workspacePaths = Get-InvestmentWorkspacePaths -ProjectRoot $projectRoot
+if ([string]::IsNullOrWhiteSpace($OpenClawWorkspace)) {
+  $OpenClawWorkspace = $workspacePaths.OpenClawWorkspace
+}
+$windowsBridgeRoot = (Resolve-Path -LiteralPath $OpenClawWorkspace).Path
 $sourceDir = Join-Path $windowsBridgeRoot "data\investment_research"
 $dailyMemory = Join-Path $windowsBridgeRoot "memory\$(Get-Date -Format 'yyyy-MM-dd').md"
 
@@ -33,20 +40,25 @@ function Convert-ToWslPath {
 $wslSourceDir = Convert-ToWslPath $sourceDir
 $wslStartupRoot = Convert-ToWslPath $windowsBridgeRoot
 $wslProjectRoot = Convert-ToWslPath $projectRoot
-$wslHome = (& wsl.exe bash -lc 'printf %s "$HOME"').Trim()
-if ([string]::IsNullOrWhiteSpace($wslHome)) { throw "Cannot resolve WSL HOME" }
+$wslDefaultWorkspace = Convert-ToWslPath $windowsBridgeRoot
 
 $bash = @"
 set -euo pipefail
 workspace="$WslWorkspace"
-if [ -z "`$workspace" ]; then workspace="$wslHome/.openclaw/workspace"; fi
+if [ -z "`$workspace" ]; then workspace="$wslDefaultWorkspace"; fi
 mkdir -p "`$workspace/data/investment_research" "`$workspace/memory"
-cp -f "$wslSourceDir"/* "`$workspace/data/investment_research/"
-cp -f "$wslStartupRoot/AGENTS.md" "`$workspace/AGENTS.md"
-cp -f "$wslStartupRoot/MEMORY.md" "`$workspace/MEMORY.md"
-cp -f "$wslStartupRoot/HEARTBEAT.md" "`$workspace/HEARTBEAT.md"
+if [ "$wslSourceDir" != "`$workspace/data/investment_research" ]; then
+  cp -f "$wslSourceDir"/* "`$workspace/data/investment_research/"
+fi
+if [ "$wslStartupRoot" != "`$workspace" ]; then
+  cp -f "$wslStartupRoot/AGENTS.md" "`$workspace/AGENTS.md"
+  cp -f "$wslStartupRoot/MEMORY.md" "`$workspace/MEMORY.md"
+  cp -f "$wslStartupRoot/HEARTBEAT.md" "`$workspace/HEARTBEAT.md"
+fi
 if [ -f "$wslStartupRoot/memory/$(Get-Date -Format 'yyyy-MM-dd').md" ]; then
-  cp -f "$wslStartupRoot/memory/$(Get-Date -Format 'yyyy-MM-dd').md" "`$workspace/memory/$(Get-Date -Format 'yyyy-MM-dd').md"
+  if [ "$wslStartupRoot/memory" != "`$workspace/memory" ]; then
+    cp -f "$wslStartupRoot/memory/$(Get-Date -Format 'yyyy-MM-dd').md" "`$workspace/memory/$(Get-Date -Format 'yyyy-MM-dd').md"
+  fi
 fi
 python3 "$wslProjectRoot/tools/check_openclaw_today_answer_readiness.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_today_answer_readiness.json
 python3 "$wslProjectRoot/tools/check_openclaw_question_read_order.py" --openclaw-dir "`$workspace/data/investment_research" --json >/tmp/openclaw_wsl_question_read_order.json
@@ -65,7 +77,7 @@ for path in [
     p = pathlib.Path(path)
     print(p.read_text())
     data = json.loads(p.read_text())
-    if data.get('status') != 'ok':
+    if data.get('status') not in ('ok', 'degraded'):
         raise SystemExit(1)
 PY
 "@

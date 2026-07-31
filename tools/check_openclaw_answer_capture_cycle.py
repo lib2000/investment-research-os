@@ -7,9 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_answer_capture_cycle_state.json"
 TOOLS_DIR = Path(__file__).resolve().parent
 

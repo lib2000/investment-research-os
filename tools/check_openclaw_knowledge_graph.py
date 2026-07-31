@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_integration"
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 GRAPH_FILES = {
     "blueprint_json": "openclaw_knowledge_graph_blueprint.json",
     "blueprint_markdown": "openclaw_knowledge_graph_blueprint.md",

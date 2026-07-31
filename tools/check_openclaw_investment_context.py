@@ -7,10 +7,11 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from workspace_paths import openclaw_investment_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_integration"
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 KNOWLEDGE_GRAPH_FILES = {
     "nodes": "openclaw_knowledge_graph_nodes.json",
     "edges": "openclaw_knowledge_graph_edges.json",

@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$TaskName = "InvestmentJournalApp OpenClaw Portfolio Report Alert Postrun",
   [string]$At = "07:10",
   [int]$MaxStateAgeHours = 2,

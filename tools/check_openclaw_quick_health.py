@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 EXPECTED_HASH_COUNT = 14
 CHECK_MODULES = {
     "status_summary": PROJECT_ROOT / "tools" / "show_openclaw_bridge_status.py",

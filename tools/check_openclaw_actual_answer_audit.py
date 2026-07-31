@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 DEFAULT_ANSWERS_DIR_NAME = "actual_answers"
 TOOLS_DIR = Path(__file__).resolve().parent
 ROUTE_IDS = {
@@ -120,11 +121,11 @@ def required_fragments_for(
     bridge_status: dict[str, Any],
 ) -> list[str]:
     if route_id == "today_work_report":
-        return [
-            "오늘 구현 작업 보고",
-            "다음 스케줄",
-            str((first_read.get("today_work_report") or {}).get("commit_count")),
-        ]
+        today_report = first_read.get("today_work_report") or {}
+        commit_count = int(today_report.get("commit_count") or 0)
+        if today_report.get("has_implementation_today") is True and commit_count > 0:
+            return ["오늘 구현 작업 보고", "다음 스케줄", str(commit_count)]
+        return ["오늘 운영 작업 보고", "다음 스케줄"]
     if route_id == "recommendations_priority":
         return [
             "오늘 추천 종목",

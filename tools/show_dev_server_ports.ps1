@@ -10,13 +10,14 @@ $aiAppFolderName = -join @([char]0xC571, [char]0x0020, [char]0xC81C, [char]0xC79
 $aiAppRoot = Join-Path "C:\AI" $aiAppFolderName
 $monocutRoot = Join-Path $aiAppRoot "monocut"
 $monocutMobileRoot = Join-Path $aiAppRoot "monocut-mobile"
+$investmentResearchRoot = Split-Path -Parent $PSScriptRoot
 
 $registry = @(
-  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "research-api"; Port = 8001; Root = "C:\Users\lib20\InvestmentJournalApp" },
-  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-api"; Port = 8010; Root = "C:\Users\lib20\InvestmentJournalApp" },
-  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-api-fallback"; Port = 8020; Root = "C:\Users\lib20\InvestmentJournalApp" },
-  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "react-console"; Port = 5173; Root = "C:\Users\lib20\InvestmentJournalApp" },
-  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-web"; Port = 8085; Root = "C:\Users\lib20\InvestmentJournalApp" },
+  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "research-api"; Port = 8001; Root = $investmentResearchRoot },
+  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-api"; Port = 8010; Root = $investmentResearchRoot },
+  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-api-fallback"; Port = 8020; Root = $investmentResearchRoot },
+  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "react-console"; Port = 5173; Root = $investmentResearchRoot },
+  [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-web"; Port = 8085; Root = $investmentResearchRoot },
   [pscustomobject]@{ App = "SportsAnalysis"; Role = "api"; Port = 8101; Root = "C:\Users\lib20\projects\sports-analysis-platform" },
   [pscustomobject]@{ App = "SportsAnalysis"; Role = "web"; Port = 8181; Root = "C:\Users\lib20\projects\sports-analysis-platform" },
   [pscustomobject]@{ App = "SportsAnalysisWorktree"; Role = "api"; Port = 8102; Root = "C:\Users\lib20\projects\sports-analysis-platform-worktree" },

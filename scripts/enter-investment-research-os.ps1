@@ -3,7 +3,7 @@
   [switch]$OpenConsole
 )
 
-$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp"
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path -LiteralPath $ProjectRoot)) {
   throw "Investment Research OS 작업 루트를 찾을 수 없습니다: $ProjectRoot"
 }

@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 EXPECTED_READ_ORDER = [
     "bridge_status.json",
     "openclaw_first_read.md",

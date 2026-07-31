@@ -6,8 +6,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 FIRST_READ_JSON_FILE = "openclaw_first_read.json"
 EXPECTED_MARKET_COUNTS = {"KR": 3, "US": 3}
 BANNED_ANSWER_FRAGMENTS = [

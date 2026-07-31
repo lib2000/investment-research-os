@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [int[]]$Ports = @(8010, 8085),
   [switch]$DryRun,
   [int[]]$DefaultDevPorts = @(8010, 8085),

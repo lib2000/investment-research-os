@@ -7,7 +7,7 @@ $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir = Join-Path $ProjectRoot "backend"
 
 if ($ProjectRoot -match "\\OneDrive(\\|$)") {
-  throw "OneDrive 경로에서는 Research OS를 실행하지 않습니다. C:\Users\lib20\InvestmentJournalApp 에서 실행하세요."
+  throw "OneDrive 경로에서는 Research OS를 실행하지 않습니다. 프로젝트의 로컬 작업 경로에서 실행하세요."
 }
 
 if (-not (Test-Path $BackendDir)) {

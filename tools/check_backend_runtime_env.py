@@ -241,7 +241,7 @@ def main() -> int:
             if health_sandbox_blocked:
                 print(rf"{action_number}. 백엔드가 실제로 꺼졌다고 단정하지 말고 Windows PowerShell에서 `python tools\check_backend_runtime_env.py --strict`로 재확인하세요.")
             else:
-                print(rf"{action_number}. Windows PowerShell에서 `cd C:\Users\lib20\InvestmentJournalApp` 후 `.\scripts\restart-research-backend.ps1 -Port 8001`로 백엔드를 재시작 검증하세요.")
+                print(rf"{action_number}. Windows PowerShell에서 프로젝트 루트로 이동한 후 `.\scripts\restart-research-backend.ps1 -Port 8001`로 백엔드를 재시작 검증하세요.")
             action_number += 1
             print(rf"{action_number}. 재시작 후 `.\tools\status_research_console.ps1 -Strict`로 콘솔/추천/시장일지 상태를 확인하세요.")
             action_number += 1

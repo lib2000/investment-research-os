@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$ApiBaseUrl = "http://127.0.0.1:8010",
   [int]$ApiPort = 8010,
   [int[]]$FallbackApiPorts = @(8020, 8021, 8022),

@@ -8,11 +8,12 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from workspace_paths import openclaw_investment_dir, openclaw_workspace_root
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "research_vault" / "_system" / "openclaw_integration"
-DEFAULT_OPENCLAW_WORKSPACE = Path.home() / ".openclaw" / "workspace"
-DEFAULT_OPENCLAW_DIR = DEFAULT_OPENCLAW_WORKSPACE / "data" / "investment_research"
+DEFAULT_OPENCLAW_WORKSPACE = openclaw_workspace_root()
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 CHECK_CONTEXT_SCRIPT = PROJECT_ROOT / "tools" / "check_openclaw_investment_context.py"
 CHECK_KNOWLEDGE_GRAPH_SCRIPT = PROJECT_ROOT / "tools" / "check_openclaw_knowledge_graph.py"
 
