@@ -34,6 +34,8 @@ $argumentParts = @(
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($argumentParts -join " ")
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Environment]::UserName)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$settings.DisallowStartIfOnBatteries = $false
+$settings.StopIfGoingOnBatteries = $false
 $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
 Register-ScheduledTask `

@@ -36,6 +36,8 @@ $trigger = New-ScheduledTaskTrigger -Once -At $At `
   -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) `
   -RepetitionDuration (New-TimeSpan -Days 3650)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+$settings.DisallowStartIfOnBatteries = $false
+$settings.StopIfGoingOnBatteries = $false
 
 Register-ScheduledTask `
   -TaskName $TaskName `

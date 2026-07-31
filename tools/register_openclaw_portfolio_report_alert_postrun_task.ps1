@@ -40,6 +40,8 @@ if ($NotifyOk.IsPresent) {
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($argumentParts -join " ")
 $trigger = New-ScheduledTaskTrigger -Daily -At $At
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$settings.DisallowStartIfOnBatteries = $false
+$settings.StopIfGoingOnBatteries = $false
 
 Register-ScheduledTask `
   -TaskName $TaskName `
