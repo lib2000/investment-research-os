@@ -65,3 +65,10 @@ tmp/
 *.err.log
 .test-tmp/
 .codex_migration_backup_*/
+
+# Local migration evidence and recovery copies (kept on this PC, never committed)
+/backups/
+/completion_report.json
+/completion_report_sha256.txt
+*.bak
+tools/investment_research_credential.ps1
