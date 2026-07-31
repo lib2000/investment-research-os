@@ -6,8 +6,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 BRIDGE_STATUS_FILE = "bridge_status.json"
 FIRST_READ_JSON_FILE = "openclaw_first_read.json"
 MANIFEST_FILE = "openclaw_bridge_manifest.json"
@@ -136,8 +137,16 @@ def build_route_result(
     first_read_route_ids: set[str],
 ) -> dict[str, Any]:
     errors: list[str] = []
+    warnings: list[str] = []
     missing_files = [filename for filename in route.required_files if not (openclaw_dir / filename).exists()]
-    if missing_files:
+    completion_deferred = (
+        route.route_id == "bridge_status_completion"
+        and bridge_status.get("source_git_dirty") is True
+        and set(missing_files) == {"openclaw_bridge_completion_report.md", "openclaw_bridge_completion_report.json"}
+    )
+    if completion_deferred:
+        warnings.append("완료 감사는 미커밋 변경이 있어 보류되었습니다.")
+    elif missing_files:
         errors.append(f"missing route files: {', '.join(missing_files)}")
 
     status_read_order = bridge_status.get("read_order") if isinstance(bridge_status.get("read_order"), list) else []
@@ -166,8 +175,9 @@ def build_route_result(
     return {
         "id": route.route_id,
         "question": route.question,
-        "status": "ok" if not errors else "failure",
+        "status": "failure" if errors else "degraded" if warnings else "ok",
         "errors": errors,
+        "warnings": warnings,
         "required_files": list(route.required_files),
         "missing_files": missing_files,
         "required_payload_keys": list(route.required_payload_keys),
@@ -200,8 +210,9 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         for route in routes
         for error in route.get("errors") or []
     ]
+    has_degraded_route = any(route.get("status") == "degraded" for route in routes)
     return {
-        "status": "ok" if not errors else "failure",
+        "status": "failure" if errors else "degraded" if has_degraded_route else "ok",
         "errors": errors,
         "openclaw_dir": str(openclaw_dir),
         "route_count": len(routes),
@@ -247,7 +258,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_text(result))
-    return 0 if result.get("status") == "ok" else 1
+    return 0 if result.get("status") in {"ok", "degraded"} else 1
 
 
 if __name__ == "__main__":

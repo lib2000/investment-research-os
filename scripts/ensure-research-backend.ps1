@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [int]$Port = 8001,
   [string]$HostName = "127.0.0.1",
   [int]$WaitSeconds = 20,

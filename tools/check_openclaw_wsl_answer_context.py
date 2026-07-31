@@ -93,6 +93,7 @@ answer_samples_tool = pathlib.Path({answer_samples_tool_wsl!r})
 actual_answer_audit_tool = pathlib.Path({actual_answer_audit_tool_wsl!r})
 actual_answer_capture_status_tool = pathlib.Path({actual_answer_capture_status_tool_wsl!r})
 errors = []
+warnings = []
 startup = {{}}
 for name in ['AGENTS.md', 'MEMORY.md', 'HEARTBEAT.md']:
     path = workspace / name
@@ -121,7 +122,7 @@ except json.JSONDecodeError:
 if completed.returncode != 0 or today.get('status') != 'ok':
     errors.append('WSL today answer readiness failed')
 
-def run_bridge_tool(label, tool_path):
+def run_bridge_tool(label, tool_path, allowed_statuses=('ok',)):
     completed = subprocess.run(
         [sys.executable, str(tool_path), '--openclaw-dir', str(first_read_dir), '--json'],
         capture_output=True,
@@ -132,11 +133,13 @@ def run_bridge_tool(label, tool_path):
         payload = json.loads(completed.stdout) if completed.stdout else {{}}
     except json.JSONDecodeError:
         payload = {{'status': 'failure', 'errors': [f'invalid {{label}} JSON'], 'stdout': completed.stdout, 'stderr': completed.stderr}}
-    if completed.returncode != 0 or payload.get('status') != 'ok':
+    if completed.returncode != 0 or payload.get('status') not in allowed_statuses:
         errors.append(f'WSL {{label}} failed')
+    elif payload.get('status') != 'ok':
+        warnings.append(f'WSL {{label}}: {{payload.get("status")}}')
     return payload
 
-question_read_order = run_bridge_tool('question read-order', question_read_order_tool)
+question_read_order = run_bridge_tool('question read-order', question_read_order_tool, ('ok', 'degraded'))
 answer_samples = run_bridge_tool('answer samples', answer_samples_tool)
 actual_answer_audit = run_bridge_tool('actual answer audit', actual_answer_audit_tool)
 actual_answer_capture_status = run_bridge_tool('actual answer capture status', actual_answer_capture_status_tool)
@@ -207,8 +210,9 @@ else:
         sessions['items'][key] = item
 
 print(json.dumps({{
-    'status': 'ok' if not errors else 'failure',
+    'status': 'failure' if errors else 'warning' if warnings else 'ok',
     'errors': errors,
+    'warnings': warnings,
     'workspace': str(workspace),
     'startup': startup,
     'daily_memory': daily,
@@ -245,6 +249,10 @@ def render_text(result: dict[str, Any]) -> str:
         lines.append("- errors:")
         for error in result["errors"]:
             lines.append(f"  - {error}")
+    if result.get("warnings"):
+        lines.append("- warnings:")
+        for warning in result["warnings"]:
+            lines.append(f"  - {warning}")
     return "\n".join(lines)
 
 
@@ -272,7 +280,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_text(result))
-    return 0 if result.get("status") == "ok" else 1
+    return 0 if result.get("status") in {"ok", "warning"} else 1
 
 
 if __name__ == "__main__":

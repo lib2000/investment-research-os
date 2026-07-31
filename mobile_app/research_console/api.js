@@ -202,6 +202,44 @@ export async function fetchAgentOperatingFoundationStatus(accessToken) {
   });
 }
 
+export async function fetchTradingToolsStatus(accessToken) {
+  return request("/api/v1/system/trading-tools/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function startTradingTools(accessToken) {
+  return request("/api/v1/system/trading-tools/start", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 90000,
+  });
+}
+
+export async function refreshTradingToolSymbolMaster(accessToken) {
+  return request("/api/v1/system/trading-tools/symbol-master/refresh", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 150000,
+  });
+}
+
+export async function fetchBacktestRuns(accessToken, limit = 20) {
+  return request(`/api/v1/backtest-runs?limit=${encodeURIComponent(limit)}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function saveBacktestRun(payload, accessToken) {
+  return request("/api/v1/backtest-runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    accessToken,
+  });
+}
+
 export async function fetchOpenClawStatus(accessToken) {
   try {
     return request("/api/v1/openclaw/status", {

@@ -33,6 +33,11 @@
   fetchLlmBridgeStorageStatus,
   fetchLocalAiSurvivalStatus,
   fetchAgentOperatingFoundationStatus,
+  fetchTradingToolsStatus,
+  startTradingTools,
+  refreshTradingToolSymbolMaster,
+  fetchBacktestRuns,
+  saveBacktestRun,
   fetchLatestDataSnapshot,
   verifyTickerSymbol,
   deleteTickerRegistryCacheEntry,
@@ -108,7 +113,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=50a789681bc8";
+} from "./api.js?v=509c4b152945";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -126,6 +131,20 @@ const elements = {
   exportResultExcel: document.querySelector("#exportResultExcel"),
   dashboardForm: document.querySelector("#dashboardForm"),
   dashboardCards: document.querySelector("#dashboardCards"),
+  strategyBuilderLink: document.querySelector("#strategyBuilderLink"),
+  backtesterLink: document.querySelector("#backtesterLink"),
+  integratedToolsContext: document.querySelector("#integratedToolsContext"),
+  integratedWorkbench: document.querySelector("#integratedWorkbench"),
+  integratedWorkbenchFrame: document.querySelector("#integratedWorkbenchFrame"),
+  integratedWorkbenchTitle: document.querySelector("#integratedWorkbenchTitle"),
+  integratedWorkbenchStatus: document.querySelector("#integratedWorkbenchStatus"),
+  integratedWorkbenchReload: document.querySelector("#integratedWorkbenchReload"),
+  integratedWorkbenchClose: document.querySelector("#integratedWorkbenchClose"),
+  integratedServicesStatus: document.querySelector("#integratedServicesStatus"),
+  integratedServicesStart: document.querySelector("#integratedServicesStart"),
+  integratedSymbolMasterRefresh: document.querySelector("#integratedSymbolMasterRefresh"),
+  backtestRunHistory: document.querySelector("#backtestRunHistory"),
+  backtestRunHistoryRefresh: document.querySelector("#backtestRunHistoryRefresh"),
   teamForm: document.querySelector("#teamForm"),
   tradeForm: document.querySelector("#tradeForm"),
   chartForm: document.querySelector("#chartForm"),
@@ -283,6 +302,180 @@ const elements = {
   dashboardTickerOptions: document.querySelector("#dashboardTickerOptions"),
   dashboardTickerQuickList: document.querySelector("#dashboardTickerQuickList"),
 };
+
+function updateIntegratedToolLinks() {
+  const ticker = String(elements.dashboardForm?.elements?.ticker?.value || "").trim();
+  const resolvedTicker = String(elements.backendStatus?.textContent || "").match(/(?:^|\s|·)(\d{6})(?:$|\s)/)?.[1] || "";
+  const safeTicker = (resolvedTicker || ticker).slice(0, 40);
+  const params = new URLSearchParams({ source: "research-os" });
+  if (safeTicker) {
+    params.set("ticker", safeTicker);
+    params.set("market", /^\d{6}$/.test(safeTicker) ? "KR" : "AUTO");
+  }
+  const query = params.toString();
+  if (elements.strategyBuilderLink) {
+    elements.strategyBuilderLink.href = `http://127.0.0.1:3100/builder?${query}`;
+  }
+  if (elements.backtesterLink) {
+    elements.backtesterLink.href = `http://127.0.0.1:3200/backtest?${query}`;
+  }
+  if (elements.integratedToolsContext) {
+    elements.integratedToolsContext.textContent = safeTicker
+      ? `${safeTicker} 분석 컨텍스트를 전달합니다. 계좌·수량·인증정보는 포함하지 않습니다.`
+      : "대시보드에서 종목을 선택하면 두 도구에 분석 대상을 안전하게 전달합니다. 계좌·수량·인증정보는 전달하지 않습니다.";
+  }
+}
+
+elements.dashboardForm?.elements?.ticker?.addEventListener("input", updateIntegratedToolLinks);
+elements.dashboardForm?.elements?.ticker?.addEventListener("change", updateIntegratedToolLinks);
+if (elements.backendStatus) {
+  new MutationObserver(updateIntegratedToolLinks).observe(elements.backendStatus, { childList: true, subtree: true });
+}
+updateIntegratedToolLinks();
+
+function openIntegratedWorkbench(label, url) {
+  if (!elements.integratedWorkbench) return;
+  elements.integratedWorkbench.hidden = false;
+  if (elements.integratedWorkbenchFrame && url) {
+    elements.integratedWorkbenchFrame.dataset.toolUrl = url;
+    elements.integratedWorkbenchFrame.src = url;
+  }
+  if (elements.integratedWorkbenchTitle) elements.integratedWorkbenchTitle.textContent = label;
+  if (elements.integratedWorkbenchStatus) elements.integratedWorkbenchStatus.textContent = `${label} 불러오는 중`;
+  requestAnimationFrame(() => {
+    elements.integratedWorkbench.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+elements.strategyBuilderLink?.addEventListener("click", (event) => {
+  event.preventDefault();
+  openIntegratedWorkbench("전략 빌더", elements.strategyBuilderLink.href);
+});
+elements.backtesterLink?.addEventListener("click", (event) => {
+  event.preventDefault();
+  openIntegratedWorkbench("백테스터", elements.backtesterLink.href);
+});
+elements.integratedWorkbenchFrame?.addEventListener("load", () => {
+  if (elements.integratedWorkbenchStatus) {
+    elements.integratedWorkbenchStatus.textContent = "도구를 불러왔습니다. 분석과 시뮬레이션은 이 작업공간 안에서 진행됩니다.";
+  }
+});
+elements.integratedWorkbenchReload?.addEventListener("click", () => {
+  const toolUrl = elements.integratedWorkbenchFrame?.dataset.toolUrl;
+  if (elements.integratedWorkbenchFrame && toolUrl) {
+    elements.integratedWorkbenchFrame.src = toolUrl;
+  }
+});
+elements.integratedWorkbenchClose?.addEventListener("click", () => {
+  if (elements.integratedWorkbench) elements.integratedWorkbench.hidden = true;
+});
+
+function renderIntegratedServicesStatus(payload) {
+  if (!elements.integratedServicesStatus) return;
+  const services = Array.isArray(payload?.services) ? payload.services : [];
+  if (!services.length) {
+    elements.integratedServicesStatus.textContent = "서비스 상태를 확인하지 못했습니다.";
+    return;
+  }
+  const serviceBadges = services.map((service) => (
+    `<span class="service-status ${service.running ? "running" : "stopped"}">${escapeHtml(service.label)} ${service.running ? "실행 중" : "중지"}</span>`
+  ));
+  const auth = payload?.paper_auth;
+  if (auth?.available) {
+    serviceBadges.push(`<span class="service-status ${auth.authenticated ? "running" : "stopped"}">모의투자 ${auth.authenticated ? "인증됨" : "인증 필요"}</span>`);
+  }
+  elements.integratedServicesStatus.innerHTML = serviceBadges.join("");
+  if (elements.integratedServicesStart) {
+    elements.integratedServicesStart.disabled = Boolean(payload.all_running);
+    elements.integratedServicesStart.textContent = payload.all_running ? "분석 서비스 정상" : "중지된 서비스 시작";
+  }
+  const master = payload?.symbol_master;
+  if (elements.integratedSymbolMasterRefresh) {
+    const ready = Boolean(master?.available && !master?.needs_update && Number(master?.total_count) > 0);
+    elements.integratedSymbolMasterRefresh.textContent = ready
+      ? `종목 마스터 ${formatNumber(master.total_count)}개`
+      : "종목 마스터 갱신";
+    elements.integratedSymbolMasterRefresh.disabled = ready;
+  }
+}
+
+async function refreshIntegratedServicesStatus() {
+  try {
+    renderIntegratedServicesStatus(await fetchTradingToolsStatus(token()));
+  } catch (error) {
+    if (elements.integratedServicesStatus) elements.integratedServicesStatus.textContent = error?.message || "서비스 상태 확인 실패";
+  }
+}
+
+elements.integratedServicesStart?.addEventListener("click", async () => {
+  elements.integratedServicesStart.disabled = true;
+  elements.integratedServicesStart.textContent = "서비스 시작 중";
+  try {
+    const result = await startTradingTools(token());
+    renderIntegratedServicesStatus(result);
+  } catch (error) {
+    elements.integratedServicesStart.disabled = false;
+    elements.integratedServicesStart.textContent = "다시 시도";
+    if (elements.integratedServicesStatus) elements.integratedServicesStatus.textContent = error?.message || "서비스 시작 실패";
+  }
+});
+
+elements.integratedSymbolMasterRefresh?.addEventListener("click", async () => {
+  elements.integratedSymbolMasterRefresh.disabled = true;
+  elements.integratedSymbolMasterRefresh.textContent = "종목 마스터 갱신 중";
+  try {
+    renderIntegratedServicesStatus(await refreshTradingToolSymbolMaster(token()));
+  } catch (error) {
+    elements.integratedSymbolMasterRefresh.disabled = false;
+    elements.integratedSymbolMasterRefresh.textContent = "다시 시도";
+    if (elements.integratedServicesStatus) elements.integratedServicesStatus.textContent = error?.message || "종목 마스터 갱신 실패";
+  }
+});
+
+refreshIntegratedServicesStatus();
+
+function renderBacktestRuns(payload) {
+  if (!elements.backtestRunHistory) return;
+  const runs = Array.isArray(payload?.runs) ? payload.runs : [];
+  if (!runs.length) {
+    elements.backtestRunHistory.innerHTML = '<p class="backtest-run-empty">아직 저장된 백테스트 결과가 없습니다.</p>';
+    return;
+  }
+  elements.backtestRunHistory.innerHTML = runs.map((run) => `
+    <article class="backtest-run-card">
+      <div><strong>${escapeHtml(run.strategy_name || "전략")}</strong><span>${escapeHtml((run.symbols || []).join(", "))}</span></div>
+      <dl>
+        <div><dt>수익률</dt><dd>${formatNullable(run.total_return)}%</dd></div>
+        <div><dt>최대 낙폭</dt><dd>${formatNullable(run.max_drawdown)}%</dd></div>
+        <div><dt>승률</dt><dd>${formatNullable(run.win_rate)}%</dd></div>
+        <div><dt>거래</dt><dd>${formatNumber(run.trades_count)}회</dd></div>
+      </dl>
+      <small>${escapeHtml(run.start_date || "-")} ~ ${escapeHtml(run.end_date || "-")} · ${escapeHtml(formatDateTime(run.captured_at))}</small>
+    </article>`).join("");
+}
+
+async function refreshBacktestRuns() {
+  try {
+    renderBacktestRuns(await fetchBacktestRuns(token(), 20));
+  } catch (error) {
+    if (elements.backtestRunHistory) elements.backtestRunHistory.textContent = error?.message || "백테스트 결과 조회 실패";
+  }
+}
+
+elements.backtestRunHistoryRefresh?.addEventListener("click", refreshBacktestRuns);
+window.addEventListener("message", async (event) => {
+  if (!["http://127.0.0.1:3200", "http://localhost:3200"].includes(event.origin)) return;
+  if (event.source !== elements.integratedWorkbenchFrame?.contentWindow) return;
+  if (event.data?.type !== "research-os:backtest-result:v1" || typeof event.data?.payload !== "object") return;
+  try {
+    await saveBacktestRun(event.data.payload, token());
+    await refreshBacktestRuns();
+    if (elements.integratedWorkbenchStatus) elements.integratedWorkbenchStatus.textContent = "백테스트 완료 결과를 Research OS에 저장했습니다.";
+  } catch (error) {
+    if (elements.integratedWorkbenchStatus) elements.integratedWorkbenchStatus.textContent = error?.message || "백테스트 결과 저장 실패";
+  }
+});
+refreshBacktestRuns();
 
 const CHECKLIST_TOTAL = 16;
 const DEFAULT_TICKER = "";

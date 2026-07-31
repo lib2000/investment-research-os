@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$TaskName = "InvestmentJournalApp OpenClaw Answer Capture Cycle",
   [string]$At = "00:05",
   [int]$EveryMinutes = 15,

@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$TaskName = "InvestmentJournalApp Research Backend Watchdog",
   [string]$At = "00:02",
   [int]$EveryMinutes = 10,

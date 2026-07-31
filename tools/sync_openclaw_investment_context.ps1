@@ -1,5 +1,5 @@
 ﻿param(
-  [string]$OpenClawWorkspace = "$env:USERPROFILE\.openclaw\workspace",
+  [string]$OpenClawWorkspace = "",
   [double]$MaxAgeHours = 24,
   [switch]$SkipCopy,
   [switch]$SkipValidation,
@@ -14,6 +14,12 @@ $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+$workspaceResolver = Join-Path $projectRoot "tools\resolve_investment_workspace.ps1"
+. $workspaceResolver
+$workspacePaths = Get-InvestmentWorkspacePaths -ProjectRoot $projectRoot
+if ([string]::IsNullOrWhiteSpace($OpenClawWorkspace)) {
+  $OpenClawWorkspace = $workspacePaths.OpenClawWorkspace
+}
 $exportScript = Join-Path $projectRoot "tools\export_openclaw_investment_context.py"
 $checkScript = Join-Path $projectRoot "tools\check_openclaw_investment_context.py"
 $knowledgeGraphCheckScript = Join-Path $projectRoot "tools\check_openclaw_knowledge_graph.py"

@@ -49,6 +49,21 @@ def _promote_or_insert_text(items: list[str], marker: str, fallback: str) -> lis
 
 
 def _preserve_scored_public_ir_sec_context(candidate: dict[str, Any]) -> None:
+    if _has_score_component(candidate, "최근 중요 공시 반영"):
+        evidence_sources = daily_recommendation_evidence.unique_text_items(
+            candidate.get("evidence_sources"),
+            12,
+        )
+        evidence_sources = _promote_or_insert_text(
+            evidence_sources,
+            "최근 1주 공시",
+            "최근 1주 공시 브리프 반영",
+        )
+        candidate["evidence_sources"] = daily_recommendation_evidence.unique_text_items(
+            evidence_sources,
+            8,
+        )
+
     if _has_score_component(candidate, "최근 핵심 리포트 반영"):
         evidence_sources = daily_recommendation_evidence.unique_text_items(
             candidate.get("evidence_sources"),

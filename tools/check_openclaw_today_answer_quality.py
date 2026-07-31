@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 FIRST_READ_JSON_FILE = "openclaw_first_read.json"
 BANNED_STALE_CLAIMS = [
     "오늘 구현 작업 없음",

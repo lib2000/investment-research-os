@@ -1,11 +1,14 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [switch]$PassThru
 )
 
 $ErrorActionPreference = "Stop"
 
-$ExpectedRoot = "C:\Users\lib20\InvestmentJournalApp"
+$ExpectedRoot = (Split-Path -Parent $PSScriptRoot)
+if (-not $ProjectRoot.Trim()) {
+  $ProjectRoot = $ExpectedRoot
+}
 $resolved = Resolve-Path -LiteralPath $ProjectRoot -ErrorAction Stop
 $rootPath = $resolved.Path.TrimEnd("\")
 

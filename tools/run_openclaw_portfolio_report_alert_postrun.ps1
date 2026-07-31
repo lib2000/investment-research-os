@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [int]$MaxStateAgeHours = 2,
   [switch]$Enabled,
   [switch]$Submit,

@@ -1,5 +1,5 @@
 ﻿param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
   [int]$PortfolioRefreshTimeoutSeconds = 120,
@@ -188,7 +188,9 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
 
 if (-not $SkipOpenClawSync.IsPresent) {
   Invoke-DailyResearchStep "OpenClaw 투자리서치 브리지 동기화" {
-    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1") -RequireCompletionAudit
+    # Keep the decision-support bridge fresh even while normal development changes are uncommitted.
+    # The bridge itself marks completion audit as deferred in that state.
+    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1")
   }
 }
 

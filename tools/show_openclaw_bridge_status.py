@@ -6,8 +6,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from workspace_paths import openclaw_investment_dir
 
-DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw" / "workspace" / "data" / "investment_research"
+DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
 MODULE_NAME = "show_openclaw_bridge_status"
 EXPECTED_READ_ORDER = [
     "bridge_status.json",

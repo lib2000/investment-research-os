@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [int]$LookbackDays = 3,
   [int]$MaxItems = 8,
   [string]$ChatId = "",

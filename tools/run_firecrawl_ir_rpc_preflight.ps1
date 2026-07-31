@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [Parameter(Mandatory = $true)]
   [string]$EnvFile,
   [ValidateSet("Preflight", "Submit")]

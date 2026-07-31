@@ -1,5 +1,5 @@
 ﻿param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string]$ConsoleUrl = "http://127.0.0.1:8001/console/index.html?smoke=clicks",
   [switch]$SkipLiveSmoke,
   [switch]$SkipWriteSmoke,

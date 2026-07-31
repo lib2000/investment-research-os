@@ -1,7 +1,7 @@
 ﻿param(
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "dev-local-token",
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [string[]]$PortfolioNames = @(),
   [switch]$SkipCheck,
   [string]$ExpectedMainHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"

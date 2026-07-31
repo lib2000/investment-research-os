@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\InvestmentJournalApp",
+  [string]$ProjectRoot = "",
   [switch]$SkipExpoInstallCheck,
   [switch]$SkipPortRegistryCheck,
   [switch]$SkipLiveSmoke
