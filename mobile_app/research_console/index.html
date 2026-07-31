@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=be0f19e63fad" />
+    <link rel="stylesheet" href="./styles.css?v=7aa2b4b50136" />
   </head>
   <body>
     <main class="app-shell">
@@ -105,6 +105,70 @@
             <p>기준 리포트, 체크리스트, 매매 전략, 실적 분석을 순서대로 연결합니다.</p>
           </article>
         </div>
+        <section class="integrated-tools" aria-labelledby="integratedToolsTitle">
+          <div class="integrated-tools-heading">
+            <div>
+              <span class="eyebrow">분석 워크벤치</span>
+              <h2 id="integratedToolsTitle">전략 설계와 검증</h2>
+            </div>
+            <p>리서치 결과를 전략으로 정리하고 과거 데이터에서 먼저 검증합니다. 실제 주문은 실행하지 않습니다.</p>
+          </div>
+          <div class="integrated-tools-grid">
+            <article class="integrated-tool-card">
+              <span class="tool-kind">DESIGN</span>
+              <h3>전략 빌더</h3>
+              <p>진입·청산 조건과 위험관리 규칙을 조합하고 주문 전 설정을 검토합니다.</p>
+              <a id="strategyBuilderLink" class="tool-link" href="http://127.0.0.1:3100/builder" target="integratedWorkbenchFrame">이 화면에서 전략 설계</a>
+              <a class="tool-external-link" href="http://127.0.0.1:3100/builder" target="_blank" rel="noreferrer">새 탭으로 열기</a>
+              <small>로컬 서비스 · 포트 3100</small>
+            </article>
+            <article class="integrated-tool-card">
+              <span class="tool-kind">SIMULATE</span>
+              <h3>백테스터</h3>
+              <p>전략을 과거 데이터에 적용해 수익률, 낙폭, 거래 이력을 확인합니다.</p>
+              <a id="backtesterLink" class="tool-link secondary-link" href="http://127.0.0.1:3200/backtest" target="integratedWorkbenchFrame">이 화면에서 백테스트</a>
+              <a class="tool-external-link" href="http://127.0.0.1:3200/backtest" target="_blank" rel="noreferrer">새 탭으로 열기</a>
+              <small>로컬 서비스 · 포트 3200</small>
+            </article>
+          </div>
+          <div class="integrated-services-panel" aria-label="전략 분석 서비스 상태">
+            <div id="integratedServicesStatus" class="integrated-services-status" aria-live="polite">분석 서비스 상태 확인 중</div>
+            <div class="integrated-service-actions">
+              <button id="integratedSymbolMasterRefresh" class="secondary" type="button">종목 마스터 확인 중</button>
+              <button id="integratedServicesStart" class="secondary" type="button">서비스 상태 확인 중</button>
+            </div>
+          </div>
+          <p id="integratedToolsContext" class="integrated-tools-help">대시보드에서 종목을 선택하면 두 도구에 분석 대상을 안전하게 전달합니다. 계좌·수량·인증정보는 전달하지 않습니다.</p>
+          <section class="backtest-run-history" aria-labelledby="backtestRunHistoryTitle">
+            <div class="backtest-run-history-heading">
+              <div>
+                <span class="tool-kind">RESEARCH EVIDENCE</span>
+                <h3 id="backtestRunHistoryTitle">최근 백테스트 결과</h3>
+              </div>
+              <button id="backtestRunHistoryRefresh" class="secondary" type="button">결과 새로고침</button>
+            </div>
+            <div id="backtestRunHistory" class="backtest-run-history-list" aria-live="polite">저장된 백테스트 결과를 불러오는 중입니다.</div>
+          </section>
+          <div id="integratedWorkbench" class="integrated-workbench" hidden>
+            <div class="integrated-workbench-bar">
+              <div>
+                <span class="tool-kind">LOCAL ANALYSIS WORKSPACE</span>
+                <strong id="integratedWorkbenchTitle">분석 작업공간</strong>
+              </div>
+              <div class="integrated-workbench-actions">
+                <button id="integratedWorkbenchReload" class="secondary" type="button">도구 다시 열기</button>
+                <button id="integratedWorkbenchClose" class="secondary" type="button">작업공간 닫기</button>
+              </div>
+            </div>
+            <div id="integratedWorkbenchStatus" class="integrated-workbench-status" role="status">도구를 불러오는 중입니다.</div>
+            <iframe
+              id="integratedWorkbenchFrame"
+              name="integratedWorkbenchFrame"
+              title="전략 빌더와 백테스터 통합 작업공간"
+              loading="lazy"
+            ></iframe>
+          </div>
+        </section>
       </section>
 
       <section id="team" class="panel">
@@ -1142,6 +1206,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=e1f901c7e687"></script>
+  <script type="module" src="./console.js?v=9f5a63cabec3"></script>
 </body>
 </html>

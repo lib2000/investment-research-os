@@ -3,6 +3,9 @@ import hashlib
 import json
 import math
 import os
+import socket
+import subprocess
+import sys
 import threading
 import time
 from types import SimpleNamespace
@@ -21,6 +24,11 @@ from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
 from research_os.code_knowledge import build_code_knowledge_graph_payload
+
+TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+from workspace_paths import openclaw_investment_dir, trading_api_root
 from research_os.customs_trade import (
     aggregate_customs_trade_rows as _aggregate_customs_trade_rows,
     attach_customs_total_trend_diagnostic as _attach_customs_total_trend_diagnostic,
@@ -11650,6 +11658,207 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
 
 
+TRADING_TOOL_SERVICES = (
+    ("strategy_api", 8000, "전략 API"),
+    ("strategy_builder", 3100, "전략 빌더"),
+    ("backtester_api", 8002, "백테스터 API"),
+    ("backtester", 3200, "백테스터"),
+)
+BACKTEST_RUNS_LOCK = threading.Lock()
+
+
+def _backtest_runs_path(settings: Settings) -> Path:
+    return resolve_vault_dir(settings.research_vault_dir) / "_system" / "backtest_runs.json"
+
+
+def _finite_number(value: Any, *, name: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"{name} 값이 숫자가 아닙니다.") from exc
+    if not math.isfinite(number):
+        raise HTTPException(status_code=422, detail=f"{name} 값이 유한수가 아닙니다.")
+    return number
+
+
+def _read_backtest_runs(settings: Settings) -> list[dict[str, Any]]:
+    path = _backtest_runs_path(settings)
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def _local_port_is_listening(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.35):
+            return True
+    except OSError:
+        return False
+
+
+def _trading_tool_status_payload() -> dict:
+    services = [
+        {"id": service_id, "label": label, "port": port, "running": _local_port_is_listening(port)}
+        for service_id, port, label in TRADING_TOOL_SERVICES
+    ]
+    master: dict[str, Any] = {"available": False, "total_count": 0, "needs_update": True}
+    paper_auth: dict[str, Any] = {"available": False, "authenticated": False, "mode": "vps", "mode_display": "모의투자"}
+    if next((service["running"] for service in services if service["id"] == "backtester_api"), False):
+        try:
+            response = httpx.get("http://127.0.0.1:8002/api/symbols/status", timeout=3.0)
+            response.raise_for_status()
+            payload = response.json()
+            master = {
+                "available": True,
+                "total_count": int(payload.get("total_count") or 0),
+                "kospi_count": int(payload.get("kospi_count") or 0),
+                "kosdaq_count": int(payload.get("kosdaq_count") or 0),
+                "needs_update": bool(payload.get("needs_update", True)),
+                "updated_at": payload.get("kospi_updated") or payload.get("kosdaq_updated"),
+            }
+        except (httpx.HTTPError, ValueError, TypeError):
+            pass
+        try:
+            response = httpx.get("http://127.0.0.1:8002/api/auth/status", timeout=3.0)
+            response.raise_for_status()
+            payload = response.json()
+            paper_auth = {
+                "available": True,
+                "authenticated": bool(payload.get("authenticated")),
+                "mode": str(payload.get("mode") or "vps"),
+                "mode_display": str(payload.get("mode_display") or "모의투자"),
+            }
+        except (httpx.HTTPError, ValueError, TypeError):
+            pass
+    return {
+        "status": "success",
+        "all_running": all(service["running"] for service in services),
+        "services": services,
+        "symbol_master": master,
+        "paper_auth": paper_auth,
+    }
+
+
+@app.get(
+    "/api/v1/system/trading-tools/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_trading_tool_status() -> dict:
+    return _trading_tool_status_payload()
+
+
+@app.post(
+    "/api/v1/system/trading-tools/start",
+    dependencies=[Depends(verify_user_token)],
+)
+def start_trading_tools() -> dict:
+    current = _trading_tool_status_payload()
+    if current["all_running"]:
+        return {**current, "message": "전략 빌더와 백테스터가 이미 실행 중입니다."}
+
+    root = trading_api_root().resolve()
+    launcher = root / "investment-web.ps1"
+    if not launcher.is_file():
+        raise HTTPException(status_code=503, detail=f"로컬 분석 도구 실행기를 찾지 못했습니다: {launcher}")
+
+    try:
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(launcher),
+                "start",
+            ],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(status_code=503, detail=f"로컬 분석 도구 시작 실패: {exc}") from exc
+
+    result = _trading_tool_status_payload()
+    if completed.returncode != 0 or not result["all_running"]:
+        error_tail = (completed.stderr or completed.stdout or "실행 로그 없음").strip()[-1200:]
+        raise HTTPException(status_code=503, detail=f"로컬 분석 도구가 모두 시작되지 않았습니다: {error_tail}")
+    return {**result, "message": "전략 빌더와 백테스터를 시작했습니다."}
+
+
+@app.post(
+    "/api/v1/system/trading-tools/symbol-master/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_trading_tool_symbol_master() -> dict:
+    if not _local_port_is_listening(8002):
+        raise HTTPException(status_code=503, detail="백테스터 API가 실행 중이 아닙니다. 분석 서비스를 먼저 시작하세요.")
+    try:
+        response = httpx.post("http://127.0.0.1:8002/api/symbols/collect", timeout=120.0)
+        response.raise_for_status()
+        result = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=f"종목 마스터 갱신 실패: {exc}") from exc
+    return {"status": "success", "message": "종목 마스터를 갱신했습니다.", "result": result, **_trading_tool_status_payload()}
+
+
+@app.get(
+    "/api/v1/backtest-runs",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_backtest_runs(limit: int = Query(default=20, ge=1, le=100), settings: Settings = Depends(get_settings)) -> dict:
+    runs = _read_backtest_runs(settings)[:limit]
+    return {"status": "success", "count": len(runs), "runs": runs}
+
+
+@app.post(
+    "/api/v1/backtest-runs",
+    dependencies=[Depends(verify_user_token)],
+)
+def save_backtest_run(payload: dict = Body(...), settings: Settings = Depends(get_settings)) -> dict:
+    symbols = [str(value).strip().upper() for value in payload.get("symbols") or [] if str(value).strip()]
+    symbols = list(dict.fromkeys(symbols))[:20]
+    if not symbols or any(len(symbol) > 40 for symbol in symbols):
+        raise HTTPException(status_code=422, detail="유효한 백테스트 종목이 필요합니다.")
+    run_id = str(payload.get("run_id") or "").strip()[:100]
+    if not run_id:
+        raise HTTPException(status_code=422, detail="백테스트 run_id가 필요합니다.")
+    win_rate = _finite_number(payload.get("win_rate"), name="win_rate")
+    if abs(win_rate) <= 1:
+        win_rate *= 100
+    record = {
+        "run_id": run_id,
+        "captured_at": datetime.now(ZoneInfo("Asia/Seoul")).replace(microsecond=0).isoformat(),
+        "source": "integrated_backtester",
+        "symbols": symbols,
+        "strategy_name": str(payload.get("strategy_name") or "전략").strip()[:160],
+        "start_date": str(payload.get("start_date") or "")[:10],
+        "end_date": str(payload.get("end_date") or "")[:10],
+        "initial_capital": _finite_number(payload.get("initial_capital"), name="initial_capital"),
+        "final_capital": _finite_number(payload.get("final_capital"), name="final_capital"),
+        "total_return": _finite_number(payload.get("total_return"), name="total_return"),
+        "max_drawdown": _finite_number(payload.get("max_drawdown"), name="max_drawdown"),
+        "win_rate": win_rate,
+        "trades_count": max(0, int(payload.get("trades_count") or 0)),
+        "sharpe_ratio": _finite_number(payload.get("sharpe_ratio"), name="sharpe_ratio"),
+    }
+    path = _backtest_runs_path(settings)
+    with BACKTEST_RUNS_LOCK:
+        runs = [item for item in _read_backtest_runs(settings) if item.get("run_id") != run_id]
+        runs.insert(0, record)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(runs[:200], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(path)
+    return {"status": "success", "message": "백테스트 결과를 Research OS에 저장했습니다.", "run": record}
+
+
 @app.get(
     "/api/v1/system/local-ai-survival",
     dependencies=[Depends(verify_user_token)],
@@ -11738,7 +11947,7 @@ def _openclaw_hash_mismatches(bridge_dir: Path, status: dict) -> list[str]:
 
 
 def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
-    bridge_dir = openclaw_dir or (Path.home() / ".openclaw" / "workspace" / "data" / "investment_research")
+    bridge_dir = openclaw_dir or openclaw_investment_dir()
     result: dict[str, Any] = {
         "status": "error",
         "module": "openclaw_console_status",
@@ -11752,8 +11961,20 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         first_read = _read_openclaw_json(bridge_dir / "openclaw_first_read.json")
         manifest = _read_openclaw_json(bridge_dir / "openclaw_bridge_manifest.json")
         context = _read_openclaw_json(bridge_dir / "investment_research_context.json")
-        completion = _read_openclaw_json(bridge_dir / "openclaw_bridge_completion_report.json")
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        result["errors"].append(str(exc))
+        return result
+
+    completion: dict[str, Any] | None = None
+    try:
+        completion = _read_openclaw_json(bridge_dir / "openclaw_bridge_completion_report.json")
+    except FileNotFoundError:
+        if bridge_status.get("source_git_dirty") is True:
+            result["warnings"].append("완료 감사는 미커밋 변경이 있어 보류되었습니다.")
+        else:
+            result["errors"].append("OpenClaw 완료 감사 파일을 찾지 못했습니다.")
+            return result
+    except (ValueError, json.JSONDecodeError) as exc:
         result["errors"].append(str(exc))
         return result
 
@@ -11790,7 +12011,7 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
     consumer_smoke_errors: list[str] = []
     if bridge_status.get("status") != "ok":
         consumer_smoke_errors.append(f"bridge_status={bridge_status.get('status')}")
-    if completion.get("status") != "ok":
+    if completion is not None and completion.get("status") != "ok":
         consumer_smoke_errors.append(f"completion={completion.get('status')}")
     if bridge_status.get("source_git_dirty") is not False:
         consumer_smoke_errors.append("source_git_dirty")
@@ -11819,7 +12040,7 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         consumer_smoke_errors.append(f"first_read rows {len(first_read_rows)} != {len(latest_recommendations)}")
     if bridge_status.get("context_generated_at") != context.get("generated_at"):
         consumer_smoke_errors.append("context_generated_at mismatch")
-    hash_mismatches = _openclaw_hash_mismatches(bridge_dir, bridge_status)
+    hash_mismatches = _openclaw_hash_mismatches(bridge_dir, bridge_status) if completion is not None else []
     consumer_smoke_errors.extend(hash_mismatches[:3])
 
     copied_at = bridge_status.get("copied_at")
@@ -11836,7 +12057,7 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         {
             "status": "ok" if not consumer_smoke_errors else "warning",
             "bridge_status": bridge_status.get("status"),
-            "completion_status": completion.get("status"),
+            "completion_status": completion.get("status") if completion is not None else "deferred_dirty_worktree",
             "consumer_smoke_status": "ok" if not consumer_smoke_errors else "warning",
             "consumer_smoke_errors": consumer_smoke_errors,
             "hash_status": "ok" if not hash_mismatches else "warning",
