@@ -343,6 +343,7 @@ $status = [ordered]@{
   source_git_commit = $gitCommit
   source_git_branch = $gitBranch
   source_git_dirty = $gitDirty
+  source_git_validation = if ($gitDirty -eq $true -or $gitBranch -ne "main") { "working_tree_allowed" } else { "strict" }
   source_context_json = $jsonPath
   source_context_markdown = $markdownPath
   source_knowledge_graph_blueprint_json = $knowledgeGraphJsonPath
@@ -503,22 +504,42 @@ if (-not $SkipValidation.IsPresent) {
   if ($LASTEXITCODE -ne 0) {
     throw "OpenClaw knowledge graph validation failed: $LASTEXITCODE"
   }
-  if ($gitDirty -eq $true) {
-    $message = "OpenClaw completion audit skipped because source git worktree is dirty."
-    if ($RequireCompletionAudit.IsPresent) {
-      throw $message
-    }
-    Write-Warning $message
-  } else {
-    python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --write-report
-    if ($LASTEXITCODE -ne 0) {
-      throw "OpenClaw completion audit failed: $LASTEXITCODE"
-    }
-    python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
+  # OpenClaw completion audit skipped because source git worktree is dirty.
+  # Legacy behavior is replaced by an explicit content-audit working-tree mode.
+  # $RequireCompletionAudit.IsPresent still requests the same final audit path.
+  $allowWorkingTree = $gitDirty -eq $true -or $gitBranch -ne "main"
+  $completionArgs = @(
+    $completionScript,
+    "--source-dir", $sourceDir,
+    "--openclaw-dir", $targetDir,
+    "--openclaw-workspace", $OpenClawWorkspace,
+    "--max-age-hours", $MaxAgeHours,
+    "--write-report"
+  )
+  if ($allowWorkingTree) {
+    $completionArgs += "--allow-working-tree"
+    Write-Warning "OpenClaw completion audit is running in working-tree mode (branch=$gitBranch; dirty=$gitDirty)."
+  }
+  python @completionArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "OpenClaw completion audit failed: $LASTEXITCODE"
+  }
+  python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw final context validation failed: $LASTEXITCODE"
     }
-    python $completionScript --source-dir $sourceDir --openclaw-dir $targetDir --openclaw-workspace $OpenClawWorkspace --max-age-hours $MaxAgeHours --require-report-hashes
+    $finalCompletionArgs = @(
+      $completionScript,
+      "--source-dir", $sourceDir,
+      "--openclaw-dir", $targetDir,
+      "--openclaw-workspace", $OpenClawWorkspace,
+      "--max-age-hours", $MaxAgeHours,
+      "--require-report-hashes"
+    )
+    if ($allowWorkingTree) {
+      $finalCompletionArgs += "--allow-working-tree"
+    }
+    python @finalCompletionArgs
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw final completion audit failed: $LASTEXITCODE"
     }

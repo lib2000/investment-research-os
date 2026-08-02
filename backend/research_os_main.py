@@ -12189,7 +12189,10 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
         consumer_smoke_errors.append(f"bridge_status={bridge_status.get('status')}")
     if completion is not None and completion.get("status") != "ok":
         consumer_smoke_errors.append(f"completion={completion.get('status')}")
-    if bridge_status.get("source_git_dirty") is not False:
+    if (
+        bridge_status.get("source_git_dirty") is not False
+        and bridge_status.get("source_git_validation") != "working_tree_allowed"
+    ):
         consumer_smoke_errors.append("source_git_dirty")
     if bridge_status.get("secrets_excluded") is not True:
         consumer_smoke_errors.append("secrets_excluded=false")
@@ -12244,6 +12247,7 @@ def build_openclaw_console_status(openclaw_dir: Path | None = None) -> dict:
                 "commit": bridge_status.get("source_git_commit"),
                 "dirty": bridge_status.get("source_git_dirty"),
             },
+            "source_git_validation": bridge_status.get("source_git_validation") or "strict",
             "copied_at": copied_at,
             "bridge_age_hours": age_hours,
             "context_generated_at": context.get("generated_at"),

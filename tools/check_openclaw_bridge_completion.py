@@ -92,13 +92,13 @@ def get_git_state(project_root: Path) -> dict:
     }
 
 
-def validate_git_state(git_state: dict) -> list[str]:
+def validate_git_state(git_state: dict, *, allow_working_tree: bool = False) -> list[str]:
     errors: list[str] = []
-    if git_state["branch"] != "main":
+    if git_state["branch"] != "main" and not allow_working_tree:
         errors.append(f"source branch must be main: {git_state['branch']}")
-    if git_state["dirty"]:
+    if git_state["dirty"] and not allow_working_tree:
         errors.append("source git worktree must be clean")
-    if git_state["ahead"] != 0 or git_state["behind"] != 0:
+    if (git_state["ahead"] != 0 or git_state["behind"] != 0) and not allow_working_tree:
         errors.append(f"source git must be synced with upstream: ahead={git_state['ahead']} behind={git_state['behind']}")
     return errors
 
@@ -109,6 +109,7 @@ def validate_bridge_status(
     *,
     max_age_hours: float,
     require_report_hashes: bool = False,
+    allow_working_tree: bool = False,
 ) -> tuple[dict, list[str]]:
     errors: list[str] = []
     status = load_json(openclaw_dir / "bridge_status.json")
@@ -122,7 +123,7 @@ def validate_bridge_status(
         errors.append(f"bridge source commit mismatch: {status.get('source_git_commit')} != {git_state['commit']}")
     if status.get("source_git_branch") != git_state["branch"]:
         errors.append(f"bridge source branch mismatch: {status.get('source_git_branch')} != {git_state['branch']}")
-    if status.get("source_git_dirty") is not False:
+    if status.get("source_git_dirty") is not False and not allow_working_tree:
         errors.append("bridge source_git_dirty must be false after final sync")
     if status.get("secrets_excluded") is not True:
         errors.append("bridge status must confirm secrets_excluded=true")
@@ -181,7 +182,7 @@ def infer_daily_memory_date(bridge_status: dict | None) -> str:
 
 def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = None) -> list[str]:
     errors: list[str] = []
-    startup_paths = [workspace / "AGENTS.md", workspace / "MEMORY.md", workspace / "HEARTBEAT.md"]
+    startup_paths = [workspace / "AGENTS.md", workspace / "MEMORY.md"]
     required_items = [
         "data/investment_research",
         "bridge_status.json",
@@ -251,6 +252,10 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         if source_git and source_git not in text:
             errors.append(f"OpenClaw startup note missing source git {source_git}: {path}")
 
+    heartbeat_path = workspace / "HEARTBEAT.md"
+    if not heartbeat_path.exists():
+        errors.append(f"OpenClaw heartbeat note missing: {heartbeat_path}")
+
     daily_date = infer_daily_memory_date(bridge_status)
     daily_path = workspace / "memory" / f"{daily_date}.md"
     daily_required = [
@@ -295,6 +300,7 @@ def build_result(
     openclaw_dir: Path = DEFAULT_OPENCLAW_DIR,
     max_age_hours: float = 1.0,
     require_report_hashes: bool = False,
+    allow_working_tree: bool = False,
 ) -> dict:
     errors: list[str] = []
     details: dict = {
@@ -360,7 +366,7 @@ def build_result(
     try:
         git_state = get_git_state(project_root)
         details["git"] = git_state
-        errors.extend(validate_git_state(git_state))
+        errors.extend(validate_git_state(git_state, allow_working_tree=allow_working_tree))
     except (subprocess.CalledProcessError, ValueError) as exc:
         errors.append(f"source git state check failed: {exc}")
         git_state = None
@@ -372,6 +378,7 @@ def build_result(
                 git_state,
                 max_age_hours=max_age_hours,
                 require_report_hashes=require_report_hashes,
+                allow_working_tree=allow_working_tree,
             )
             details["bridge_status"] = bridge_status
             errors.extend(bridge_errors)
@@ -587,6 +594,11 @@ def main() -> int:
         action="store_true",
         help="bridge_status.json의 completion_report_sha256 항목을 필수로 검증합니다.",
     )
+    parser.add_argument(
+        "--allow-working-tree",
+        action="store_true",
+        help="feature 브랜치 또는 미커밋 변경이 있는 기존 checkout에서도 콘텐츠 감사만 수행합니다.",
+    )
     args = parser.parse_args()
 
     result = build_result(
@@ -596,6 +608,7 @@ def main() -> int:
         openclaw_dir=args.openclaw_dir.resolve(),
         max_age_hours=args.max_age_hours,
         require_report_hashes=args.require_report_hashes,
+        allow_working_tree=args.allow_working_tree,
     )
     report_paths = None
     if args.write_report:

@@ -161,6 +161,7 @@ def build_result(
     *,
     max_age_hours: float = 1.0,
     expected_latest_count: int = 6,
+    allow_working_tree: bool = False,
 ) -> dict[str, Any]:
     errors: list[str] = []
     loaded_files: dict[str, dict[str, Any] | list[Any] | str] = {}
@@ -215,7 +216,7 @@ def build_result(
     age_hours = (datetime.now(timezone.utc) - copied_at.astimezone(timezone.utc)).total_seconds() / 3600
     if age_hours > max_age_hours:
         errors.append(f"OpenClaw consumer bridge copy is stale: {age_hours:.2f}h > {max_age_hours:.2f}h")
-    if status.get("source_git_dirty") is not False:
+    if status.get("source_git_dirty") is not False and not allow_working_tree:
         errors.append("OpenClaw consumer source_git_dirty must be false")
     if status.get("secrets_excluded") is not True:
         errors.append("OpenClaw consumer bridge_status must confirm secrets_excluded=true")

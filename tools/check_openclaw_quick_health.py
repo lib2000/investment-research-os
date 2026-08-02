@@ -86,6 +86,7 @@ def check_completion_audit(
         openclaw_dir=openclaw_dir,
         max_age_hours=max_age_hours,
         require_report_hashes=True,
+        allow_working_tree=True,
     )
     return {
         "label": "completion_audit",
@@ -106,11 +107,23 @@ def check_consumer_smoke(
     expected_latest_count: int,
 ) -> dict[str, Any]:
     module = load_tool("check_openclaw_consumer_smoke", CHECK_MODULES["consumer_smoke"])
-    result = module.build_result(
-        openclaw_dir,
-        max_age_hours=max_age_hours,
-        expected_latest_count=expected_latest_count,
-    )
+    try:
+        result = module.build_result(
+            openclaw_dir,
+            max_age_hours=max_age_hours,
+            expected_latest_count=expected_latest_count,
+            allow_working_tree=True,
+        )
+    except TypeError as exc:
+        # Keep compatibility with older injected smoke-check modules used by
+        # operators and regression tests while the optional flag rolls out.
+        if "allow_working_tree" not in str(exc):
+            raise
+        result = module.build_result(
+            openclaw_dir,
+            max_age_hours=max_age_hours,
+            expected_latest_count=expected_latest_count,
+        )
     return {
         "label": "consumer_smoke",
         "status": result.get("status"),

@@ -1171,9 +1171,12 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
   const firstRead = status.first_read || {};
   const errors = Array.isArray(status.consumer_smoke_errors) ? status.consumer_smoke_errors : [];
   const hashCount = Number(status.hash_checked_count || Object.keys(status.completion_report_sha256 || {}).length);
+  const sourceNote = git.dirty && status.source_git_validation === "working_tree_allowed"
+    ? "소스 작업중 변경은 허용 모드로 기록"
+    : "first-read 패킷, read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
   const warningText = errors.length
     ? errors.slice(0, 3).join(" · ")
-    : "first-read 패킷, read_order 파일, 추천 6개, 완료 감사, 해시, 민감정보 제외 확인";
+    : sourceNote;
   return `
     <article class="dashboard-card ${escapeHtml(tone)} openclaw-status-card">
       <span>OpenClaw 연동</span>
