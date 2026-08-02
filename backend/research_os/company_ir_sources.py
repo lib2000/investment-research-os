@@ -25,6 +25,8 @@ ABSI_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001672688.json"
 RXRX_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001601830.json"
 OTLY_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001843586.json"
 CPSH_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0000814676.json"
+PL_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001836833.json"
+CHPT_SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK0001777393.json"
 DATE_PATTERN = re.compile(r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+20\d{2}|20\d{2}[-./]\d{1,2}[-./]\d{1,2}", re.IGNORECASE)
 SKIP_LINK_TEXTS = {
     "",
@@ -158,6 +160,22 @@ COMPANY_IR_SOURCES = [
         company_name="CPS Technologies",
         provider="SEC EDGAR",
         source_url=CPSH_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
+    ),
+    CompanyIrSource(
+        source_key="planet_sec_submissions",
+        ticker="PL",
+        company_name="Planet Labs PBC",
+        provider="SEC EDGAR",
+        source_url=PL_SEC_SUBMISSIONS_URL,
+        source_scope="sec_company_submissions",
+    ),
+    CompanyIrSource(
+        source_key="chargepoint_sec_submissions",
+        ticker="CHPT",
+        company_name="ChargePoint Holdings",
+        provider="SEC EDGAR",
+        source_url=CHPT_SEC_SUBMISSIONS_URL,
         source_scope="sec_company_submissions",
     ),
 ]
@@ -410,7 +428,6 @@ def fetch_company_ir_sources(
             source_results.append({key: value for key, value in result.items() if key != "items"})
             all_items.extend(result.get("items") or [])
         except Exception as exc:
-            warnings.append(f"{source.provider} 목록 확인 실패: {exc}")
             source_results.append(
                 {
                     "source_key": source.source_key,
@@ -423,6 +440,27 @@ def fetch_company_ir_sources(
                     "error": str(exc),
                 }
             )
+    successful_sec_tickers = {
+        str(result.get("ticker") or "").upper()
+        for result in source_results
+        if result.get("status") == "success"
+        and result.get("source_scope") == "sec_company_submissions"
+    }
+    for result in source_results:
+        if result.get("status") != "failed":
+            continue
+        ticker = str(result.get("ticker") or "").upper()
+        if (
+            ticker in successful_sec_tickers
+            and result.get("source_scope") != "sec_company_submissions"
+        ):
+            result["fallback_status"] = "success"
+            result["fallback_provider"] = "SEC EDGAR"
+            result["fallback_source_scope"] = "sec_company_submissions"
+            continue
+        warnings.append(
+            f"{result.get('provider') or '회사 IR'} 목록 확인 실패: {result.get('error') or '알 수 없는 오류'}"
+        )
     deduped = {str(item.get("item_id")): item for item in all_items if item.get("item_id")}
     items = sorted(deduped.values(), key=lambda item: str(item.get("published_at") or ""), reverse=True)
     return items[: max(1, limit)], warnings, source_results
