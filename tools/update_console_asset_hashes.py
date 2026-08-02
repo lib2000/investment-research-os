@@ -12,7 +12,16 @@ MAX_UPDATE_PASSES = 5
 
 
 def short_asset_hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    content = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    if path.name == "console.js":
+        # The API cache-busting query is generated from api.js and must not
+        # make console.js hash itself unstable across update passes.
+        content = re.sub(
+            r'(["\']\./api\.js)\?v=[^"\']*',
+            r"\1",
+            content,
+        )
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
 
 
 def versioned_ref(asset_name: str, version: str) -> str:

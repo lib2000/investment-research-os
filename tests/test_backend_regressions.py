@@ -11012,6 +11012,51 @@ class DailyRecommendationEvidenceModuleTests(unittest.TestCase):
             ["A", "B"],
         )
 
+    def test_daily_recommendation_evidence_batch_matches_single_queries(self):
+        import gc
+        import sqlite3
+
+        from research_os import daily_recommendation_evidence
+
+        with TemporaryDirectory() as temp_dir:
+            vault_dir = Path(temp_dir) / "research_vault"
+            system_dir = vault_dir / "_system"
+            system_dir.mkdir(parents=True)
+            columns = [
+                "ticker", "report_type", "title", "summary", "content_excerpt", "source_type",
+                "source_file_name", "source_relative_path", "json_relative_path", "source_date",
+                "confidence", "tags_json", "updated_at",
+            ]
+            connection = sqlite3.connect(system_dir / "research_memory.sqlite3")
+            try:
+                connection.execute(
+                    "CREATE TABLE research_memory_documents (" + ", ".join(f"{column} TEXT" for column in columns) + ")"
+                )
+                connection.executemany(
+                    "INSERT INTO research_memory_documents (" + ", ".join(columns) + ") VALUES (" + ",".join("?" for _ in columns) + ")",
+                    [
+                        ("AAA", "research-capture", "AAA 리포트", "요약", "목표가 120", "research", "aaa.md", "research_vault/AAA/aaa.md", "", "2026-08-01", "0.9", "[]", "2026-08-01T00:00:00"),
+                        ("BBB", "research-capture", "BBB 리포트", "요약", "목표가 80", "research", "bbb.md", "research_vault/BBB/bbb.md", "", "2026-08-01", "0.9", "[]", "2026-08-01T00:00:00"),
+                    ],
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            requests = {"AAA": (["목표가"], ["리포트"]), "BBB": (["목표가"], ["리포트"])}
+            batch = daily_recommendation_evidence.build_daily_recommendation_evidence_documents_batch(
+                vault_dir,
+                requests,
+            )
+            for ticker, (evidence_sources, reasons) in requests.items():
+                single = daily_recommendation_evidence.build_daily_recommendation_evidence_documents(
+                    vault_dir,
+                    ticker,
+                    evidence_sources,
+                    reasons,
+                )
+                self.assertEqual(batch[ticker], single)
+            gc.collect()
+
 
 class DailyRecommendationCandidateModuleTests(unittest.TestCase):
     def test_daily_recommendation_candidates_normalize_and_score_rows(self):

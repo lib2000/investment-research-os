@@ -122,6 +122,41 @@ def evidence_document_claims(document: dict[str, Any], claims: list[str]) -> lis
     return list(dict.fromkeys(matched))[:3]
 
 
+def _rank_evidence_rows(rows: list[Any], claims: list[str], limit: int) -> list[dict[str, Any]]:
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for row in rows:
+        payload = dict(row)
+        tags = [str(tag) for tag in json_list(payload.get("tags_json"))]
+        if "archived" in {tag.lower() for tag in tags}:
+            continue
+        report_type = str(payload.get("report_type") or "")
+        source_type = str(payload.get("source_type") or "")
+        matched_claims = evidence_document_claims(payload, claims)
+        priority = RAG_REPORT_TYPE_PRIORITY.get(report_type, RAG_REPORT_TYPE_PRIORITY.get(source_type, 55))
+        confidence = safe_float(payload.get("confidence"), 0.7)
+        claim_bonus = len(matched_claims) * 12
+        text_length_bonus = min(len(str(payload.get("content_excerpt") or "")) / 400, 6)
+        score = priority + (confidence * 10) + claim_bonus + text_length_bonus
+        scored.append(
+            (
+                score,
+                {
+                    "title": str(payload.get("title") or payload.get("source_file_name") or "").strip(),
+                    "source_relative_path": str(payload.get("source_relative_path") or "").strip(),
+                    "json_relative_path": str(payload.get("json_relative_path") or "").strip(),
+                    "source_date": str(payload.get("source_date") or "").strip(),
+                    "report_type": report_type,
+                    "source_type": source_type,
+                    "confidence": confidence,
+                    "citation_label": "RAG 근거 문서",
+                    "matched_claims": matched_claims,
+                },
+            )
+        )
+    scored.sort(key=lambda item: (item[0], item[1].get("source_date") or ""), reverse=True)
+    return normalize_evidence_documents([item for _, item in scored], limit=limit)
+
+
 def build_daily_recommendation_evidence_documents(
     vault_dir: Path,
     ticker: str,
@@ -156,35 +191,55 @@ def build_daily_recommendation_evidence_documents(
         return []
 
     claims = [str(item).strip() for item in [*(evidence_sources or []), *(reasons or [])] if str(item or "").strip()]
-    scored: list[tuple[float, dict[str, Any]]] = []
+    return _rank_evidence_rows(rows, claims, limit)
+
+
+def build_daily_recommendation_evidence_documents_batch(
+    vault_dir: Path,
+    requests: dict[str, tuple[list[str] | tuple[str, ...] | None, list[str] | tuple[str, ...] | None]],
+    limit: int = 5,
+) -> dict[str, list[dict[str, Any]]]:
+    """Load RAG evidence for many recommendation candidates with one SQLite read."""
+    normalized_requests = {
+        normalize_recommendation_ticker(ticker): (evidence_sources, reasons)
+        for ticker, (evidence_sources, reasons) in requests.items()
+        if normalize_recommendation_ticker(ticker)
+    }
+    if not normalized_requests:
+        return {}
+    db_path = vault_dir / "_system" / "research_memory.sqlite3"
+    if not db_path.exists():
+        return {ticker: [] for ticker in normalized_requests}
+    tickers = sorted(normalized_requests)
+    placeholders = ",".join("?" for _ in tickers)
+    rows_by_ticker: dict[str, list[Any]] = {ticker: [] for ticker in tickers}
+    try:
+        with sqlite3.connect(db_path, timeout=30) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA busy_timeout = 30000")
+            rows = connection.execute(
+                f"""
+                SELECT ticker, report_type, title, summary, content_excerpt, source_type,
+                       source_file_name, source_relative_path, json_relative_path,
+                       source_date, confidence, tags_json, updated_at
+                FROM research_memory_documents
+                WHERE upper(ticker) IN ({placeholders})
+                ORDER BY upper(ticker), source_date DESC, updated_at DESC
+                """,
+                tickers,
+            ).fetchall()
+    except sqlite3.Error:
+        return {ticker: [] for ticker in normalized_requests}
     for row in rows:
-        payload = dict(row)
-        tags = [str(tag) for tag in json_list(payload.get("tags_json"))]
-        if "archived" in {tag.lower() for tag in tags}:
-            continue
-        report_type = str(payload.get("report_type") or "")
-        source_type = str(payload.get("source_type") or "")
-        matched_claims = evidence_document_claims(payload, claims)
-        priority = RAG_REPORT_TYPE_PRIORITY.get(report_type, RAG_REPORT_TYPE_PRIORITY.get(source_type, 55))
-        confidence = safe_float(payload.get("confidence"), 0.7)
-        claim_bonus = len(matched_claims) * 12
-        text_length_bonus = min(len(str(payload.get("content_excerpt") or "")) / 400, 6)
-        score = priority + (confidence * 10) + claim_bonus + text_length_bonus
-        scored.append(
-            (
-                score,
-                {
-                    "title": str(payload.get("title") or payload.get("source_file_name") or "").strip(),
-                    "source_relative_path": str(payload.get("source_relative_path") or "").strip(),
-                    "json_relative_path": str(payload.get("json_relative_path") or "").strip(),
-                    "source_date": str(payload.get("source_date") or "").strip(),
-                    "report_type": report_type,
-                    "source_type": source_type,
-                    "confidence": confidence,
-                    "citation_label": "RAG 근거 문서",
-                    "matched_claims": matched_claims,
-                },
-            )
-        )
-    scored.sort(key=lambda item: (item[0], item[1].get("source_date") or ""), reverse=True)
-    return normalize_evidence_documents([item for _, item in scored], limit=limit)
+        ticker = normalize_recommendation_ticker(row["ticker"])
+        if ticker in rows_by_ticker and len(rows_by_ticker[ticker]) < 80:
+            rows_by_ticker[ticker].append(row)
+    results: dict[str, list[dict[str, Any]]] = {}
+    for ticker, (evidence_sources, reasons) in normalized_requests.items():
+        claims = [
+            str(item).strip()
+            for item in [*(evidence_sources or []), *(reasons or [])]
+            if str(item or "").strip()
+        ]
+        results[ticker] = _rank_evidence_rows(rows_by_ticker[ticker], claims, limit)
+    return results

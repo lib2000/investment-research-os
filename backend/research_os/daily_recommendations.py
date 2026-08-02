@@ -328,6 +328,18 @@ def build_daily_recommendation_evidence_documents(
         limit=limit,
     )
 
+
+def build_daily_recommendation_evidence_documents_batch(
+    vault_dir: Path,
+    requests: dict[str, tuple[list[str] | tuple[str, ...] | None, list[str] | tuple[str, ...] | None]],
+    limit: int = 5,
+) -> dict[str, list[dict[str, Any]]]:
+    return daily_recommendation_evidence.build_daily_recommendation_evidence_documents_batch(
+        vault_dir,
+        requests,
+        limit=limit,
+    )
+
 def unique_text_items(values: list | tuple | None, limit: int) -> list[str]:
     return daily_recommendation_evidence.unique_text_items(values, limit)
 

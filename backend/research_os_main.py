@@ -103,6 +103,7 @@ from research_os.daily_recommendations import (
     apply_daily_recommendation_recent_weekly_evidence as _apply_daily_recommendation_recent_weekly_evidence,
     apply_daily_recommendation_tracking_feedback as _apply_daily_recommendation_tracking_feedback,
     build_daily_recommendation_evidence_documents as _build_daily_recommendation_evidence_documents,
+    build_daily_recommendation_evidence_documents_batch as _build_daily_recommendation_evidence_documents_batch,
     build_policy_signal_index as _build_policy_signal_index,
     build_policy_signal_quality_dashboard as _build_policy_signal_quality_dashboard,
     build_daily_recommendation_tracking_feedback as _build_daily_recommendation_tracking_feedback,
@@ -16254,6 +16255,10 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             weekly_groups_by_ticker.get(ticker, []),
         )
 
+    evidence_requests: dict[
+        str,
+        tuple[list[str] | tuple[str, ...] | None, list[str] | tuple[str, ...] | None],
+    ] = {}
     for ticker, candidate in list(candidates_by_ticker.items()):
         _apply_daily_recommendation_storage_quality(candidate, manifest_quality_by_ticker.get(ticker))
         try:
@@ -16297,13 +16302,17 @@ def build_daily_recommendation_candidates(settings: Settings, *, limit: int = 3)
             ),
         )
         _apply_investment_direction_profile(candidate)
-
-        rag_evidence_documents = _build_daily_recommendation_evidence_documents(
-            vault_dir,
-            ticker,
+        evidence_requests[ticker] = (
             candidate.get("evidence_sources") or [],
             candidate.get("reasons") or [],
         )
+
+    rag_evidence_by_ticker = _build_daily_recommendation_evidence_documents_batch(
+        vault_dir,
+        evidence_requests,
+    )
+    for ticker, candidate in list(candidates_by_ticker.items()):
+        rag_evidence_documents = rag_evidence_by_ticker.get(ticker, [])
         _apply_daily_recommendation_evidence_documents(candidate, rag_evidence_documents)
         for evidence in telegram_sentiment_evidence:
             if evidence not in candidate.get("evidence_sources", []):
