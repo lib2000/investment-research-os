@@ -135,25 +135,39 @@ function Invoke-JsonStatus {
     [string]$Name,
     [string]$Path,
     [hashtable]$Headers = @{},
-    [bool]$Required = $true
+    [bool]$Required = $true,
+    [int]$TimeoutSec = 10,
+    [int]$RetryCount = 0,
+    [int]$RetryDelaySec = 1
   )
 
   $uri = "$BaseUrl$Path"
-  try {
-    $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $Headers -UseBasicParsing -TimeoutSec 10
-    Write-Host "정상 $Name - $uri"
-    return (Get-Utf8ResponseContent $response | ConvertFrom-Json)
-  } catch {
-    if ($Required) {
-      Write-Host "실패 $Name - $uri"
-      Write-Host "  $($_.Exception.Message)"
-      Add-StatusFailure "$Name 실패: $($_.Exception.Message)"
-    } else {
-      Write-Host "선택 건너뜀 $Name - $uri"
-      Write-Host "  $($_.Exception.Message)"
+  $attemptLimit = [Math]::Max(1, $RetryCount + 1)
+  for ($attempt = 1; $attempt -le $attemptLimit; $attempt++) {
+    try {
+      $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $Headers -UseBasicParsing -TimeoutSec $TimeoutSec
+      Write-Host "정상 $Name - $uri"
+      return (Get-Utf8ResponseContent $response | ConvertFrom-Json)
+    } catch {
+      if ($attempt -lt $attemptLimit) {
+        Write-Host "재시도 $Name ($attempt/$($attemptLimit - 1)) - $($_.Exception.Message)"
+        if ($RetryDelaySec -gt 0) {
+          Start-Sleep -Seconds $RetryDelaySec
+        }
+        continue
+      }
+      if ($Required) {
+        Write-Host "실패 $Name - $uri"
+        Write-Host "  $($_.Exception.Message)"
+        Add-StatusFailure "$Name 실패: $($_.Exception.Message)"
+      } else {
+        Write-Host "선택 건너뜀 $Name - $uri"
+        Write-Host "  $($_.Exception.Message)"
+      }
+      return $null
     }
-    return $null
   }
+  return $null
 }
 
 function Invoke-TextStatus {
@@ -189,7 +203,7 @@ $provider = Invoke-JsonStatus -Name "data providers" -Path "/api/v1/data-provide
 $ocr = Invoke-JsonStatus -Name "ocr status" -Path "/api/v1/ocr/status"
 $storageQuality = Invoke-JsonStatus -Name "storage quality" -Path "/api/v1/storage/quality-dashboard" -Headers $authHeaders
 $dailyRecommendations = Invoke-JsonStatus -Name "daily recommendations" -Path "/api/v1/daily-recommendations/status" -Headers $authHeaders
-$researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/v1/research-automation/status" -Headers $authHeaders
+$researchAutomation = Invoke-JsonStatus -Name "research automation" -Path "/api/v1/research-automation/status" -Headers $authHeaders -TimeoutSec 30 -RetryCount 1
 $publicIrSecStatus = Invoke-JsonStatus -Name "public IR/SEC status" -Path "/api/v1/public-ir-sec/status" -Headers $authHeaders
 $console = Invoke-TextStatus -Name "classic console" -Path "/console/index.html" -RequiredText "리서치 콘솔"
 $marketJournal = Read-OptionalJsonFile -Name "market close journal" -Path (Join-Path $ProjectRootPath "research_vault\_system\market_close_journal.json")

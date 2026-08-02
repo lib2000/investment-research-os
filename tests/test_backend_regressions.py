@@ -790,6 +790,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("추천 프리뷰 모드", script_source)
         self.assertIn("price_refresh_mode", script_source)
         self.assertIn("comparison_status", script_source)
+        self.assertIn("-TimeoutSec 30 -RetryCount 1", script_source)
+        self.assertIn("$attemptLimit", script_source)
         self.assertIn("news_duplicate_priority_group_count", script_source)
         self.assertIn("news_duplicate_priority_groups", script_source)
         self.assertIn("Limit-StatusText", script_source)
