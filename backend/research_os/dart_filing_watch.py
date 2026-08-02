@@ -161,7 +161,13 @@ def merge_dart_latest_earnings_calendar(
     *,
     refresh_if_stale: bool = True,
 ) -> dict:
-    if not settings or not profile or profile.get("country") != "KR":
+    asset_type = str((profile or {}).get("asset_type") or "equity").strip().lower()
+    if (
+        not settings
+        or not profile
+        or profile.get("country") != "KR"
+        or asset_type in {"cash", "etf", "fund", "infrastructure_fund", "mutual_fund"}
+    ):
         return profile
     normalized_ticker = runtime.normalize_ticker(ticker)
     if refresh_if_stale:

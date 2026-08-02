@@ -1395,7 +1395,7 @@ def parse_iso_datetime(value: object) -> datetime | None:
 def earnings_calendar_entry_has_usable_data(entry: dict | None) -> bool:
     if not isinstance(entry, dict):
         return False
-    if entry.get("status") == "success":
+    if entry.get("status") in {"success", "not_applicable"}:
         return True
     return bool(
         entry.get("latest_reported_earnings_date")
@@ -1554,7 +1554,151 @@ def fetch_finnhub_earnings_calendar_events(ticker: str, settings: Settings) -> t
     return sorted(events, key=lambda item: item.get("date") or ""), "Finnhub calendar/earnings"
 
 
+EARNINGS_CALENDAR_NON_APPLICABLE_ASSET_TYPES = {
+    "cash",
+    "etf",
+    "fund",
+    "infrastructure_fund",
+    "mutual_fund",
+}
+
+
+def earnings_calendar_policy(ticker: str, settings: Settings) -> dict:
+    """Classify a ticker before calling paid/limited earnings-calendar providers."""
+    normalized = normalize_ticker(ticker)
+    profile = OFFICIAL_TICKER_REGISTRY.get(normalized) or read_dynamic_ticker_registry(settings).get(normalized) or {}
+    country = str(profile.get("country") or "").strip().upper()
+    asset_type = str(profile.get("asset_type") or "equity").strip().lower()
+    if asset_type in EARNINGS_CALENDAR_NON_APPLICABLE_ASSET_TYPES:
+        return {
+            "kind": "not_applicable",
+            "ticker": normalized,
+            "country": country,
+            "asset_type": asset_type,
+            "reason": "ETF/펀드/현금성 자산은 개별 기업 실적 일정 대상이 아닙니다.",
+        }
+    if country == "KR" or fullmatch(r"\d{6}", normalized):
+        return {
+            "kind": "dart",
+            "ticker": normalized,
+            "country": country or "KR",
+            "asset_type": asset_type,
+            "reason": "한국 종목은 OpenDART 정기보고서 접수일을 실적 기준일로 사용합니다.",
+        }
+    return {
+        "kind": "provider",
+        "ticker": normalized,
+        "country": country,
+        "asset_type": asset_type,
+        "reason": "FMP/Finnhub 후 SEC·기업 IR 자료로 보강합니다.",
+    }
+
+
+def fetch_dart_earnings_calendar_events(ticker: str, settings: Settings) -> tuple[list[dict], str]:
+    """Build a calendar event from the latest cached periodic DART filing."""
+    # The daily DART universe may not include every portfolio ticker. Fetch a
+    # missing ticker once on demand before declaring the fallback unavailable.
+    try:
+        refresh_dart_filing_for_ticker_if_stale(ticker, settings)
+    except Exception:
+        pass
+    signal = build_dart_filing_signal(ticker, settings)
+    events: list[dict] = []
+    for entry in signal.get("recent_entries") or []:
+        filing = entry.get("filing") or {}
+        receipt_date = str(filing.get("receipt_date") or "")
+        report_name = str(filing.get("report_name") or "")
+        quarter_label = dart_periodic_quarter_label(report_name, receipt_date)
+        if not quarter_label or not fullmatch(r"\d{8}", receipt_date):
+            continue
+        events.append(
+            {
+                "date": datetime.strptime(receipt_date, "%Y%m%d").date().isoformat(),
+                "symbol": normalize_ticker(ticker),
+                "time": "",
+                "fiscal_date_ending": quarter_label,
+                "source_url": filing.get("source_url") or "https://dart.fss.or.kr/",
+                "report_name": report_name,
+            }
+        )
+    if not events:
+        raise RuntimeError("DART 최근 정기보고서 접수 자료가 없습니다.")
+    return sorted(events, key=lambda item: item.get("date") or ""), "OpenDART periodic filing"
+
+
+def build_earnings_calendar_entry_from_events(
+    ticker: str,
+    events: list[dict],
+    source: str,
+    settings: Settings,
+) -> dict:
+    today = current_storage_date()
+    dated_events = [(event_date_value(event), event) for event in events]
+    dated_events = [(event_date, event) for event_date, event in dated_events if event_date]
+    past = [(event_date, event) for event_date, event in dated_events if event_date <= today]
+    future = [(event_date, event) for event_date, event in dated_events if event_date > today]
+    latest = past[-1] if past else None
+    previous = past[-2] if len(past) >= 2 else None
+    next_event = future[0] if future else None
+    latest_event = latest[1] if latest else None
+    latest_date = latest[0].isoformat() if latest else None
+    latest_quarter = (
+        latest_event.get("fiscal_date_ending") if isinstance(latest_event, dict) else None
+    ) or (quarter_for_cached_earnings_date({}, latest_date) if latest_date else None)
+    if source == "OpenDART periodic filing" and latest_quarter:
+        previous_date, next_date = korean_earnings_neighbor_dates(latest_quarter)
+    else:
+        previous_date = previous[0].isoformat() if previous else None
+        next_date = next_event[0].isoformat() if next_event else None
+    return {
+        "ticker": normalize_ticker(ticker),
+        "status": "success",
+        "updated_at": current_storage_timestamp(),
+        "source": source,
+        "events": events[-12:],
+        "latest_reported_quarter": latest_quarter,
+        "latest_reported_earnings_date": latest_date,
+        "previous_earnings_date": previous_date,
+        "next_earnings_date": next_date,
+        "latest_earnings_profile": {
+            "quarter": latest_quarter,
+            "earnings_report_date": latest_date,
+            "eps_reported": latest_event.get("eps") if latest_event else None,
+            "eps_expected": latest_event.get("eps_estimated") if latest_event else None,
+            "revenue_reported": latest_event.get("revenue") if latest_event else None,
+            "revenue_expected": latest_event.get("revenue_estimated") if latest_event else None,
+            "source_url": (latest_event or {}).get("source_url") or source,
+        } if latest_event else {},
+    }
+
+
 def build_earnings_calendar_cache_entry(ticker: str, settings: Settings) -> dict:
+    policy = earnings_calendar_policy(ticker, settings)
+    if policy["kind"] == "not_applicable":
+        return {
+            "ticker": policy["ticker"],
+            "status": "not_applicable",
+            "updated_at": current_storage_timestamp(),
+            "source": "asset-type policy",
+            "events": [],
+            "refresh_status": "skipped",
+            "not_applicable_reason": policy["reason"],
+        }
+    if policy["kind"] == "dart":
+        try:
+            events, source = fetch_dart_earnings_calendar_events(policy["ticker"], settings)
+            return build_earnings_calendar_entry_from_events(policy["ticker"], events, source, settings)
+        except Exception as exc:
+            return {
+                "ticker": policy["ticker"],
+                "status": "fallback_unavailable",
+                "updated_at": current_storage_timestamp(),
+                "source": "OpenDART periodic filing",
+                "events": [],
+                "refresh_status": "fallback_unavailable",
+                "fallback": "DART",
+                "fallback_error": provider_error_message(exc, settings),
+            }
     profile = verified_profile_for_ticker(ticker, settings) or OFFICIAL_TICKER_REGISTRY.get(ticker, {})
     errors: list[str] = []
     try:
@@ -1566,37 +1710,7 @@ def build_earnings_calendar_cache_entry(ticker: str, settings: Settings) -> dict
         except Exception as fallback_exc:
             errors.append(f"Finnhub: {provider_error_message(fallback_exc, settings)}")
             raise RuntimeError("; ".join(errors)) from fallback_exc
-    today = current_storage_date()
-    dated_events = [(event_date_value(event), event) for event in events]
-    dated_events = [(event_date, event) for event_date, event in dated_events if event_date]
-    past = [(event_date, event) for event_date, event in dated_events if event_date <= today]
-    future = [(event_date, event) for event_date, event in dated_events if event_date > today]
-    latest = past[-1] if past else None
-    previous = past[-2] if len(past) >= 2 else None
-    next_event = future[0] if future else None
-    latest_event = latest[1] if latest else None
-    latest_date = latest[0].isoformat() if latest else None
-    latest_quarter = quarter_for_cached_earnings_date(profile, latest_date) if latest_date else None
-    return {
-        "ticker": ticker,
-        "status": "success",
-        "updated_at": current_storage_timestamp(),
-        "source": source,
-        "events": events[-12:],
-        "latest_reported_quarter": latest_quarter,
-        "latest_reported_earnings_date": latest_date,
-        "previous_earnings_date": previous[0].isoformat() if previous else None,
-        "next_earnings_date": next_event[0].isoformat() if next_event else None,
-        "latest_earnings_profile": {
-            "quarter": latest_quarter,
-            "earnings_report_date": latest_date,
-            "eps_reported": latest_event.get("eps") if latest_event else None,
-            "eps_expected": latest_event.get("eps_estimated") if latest_event else None,
-            "revenue_reported": latest_event.get("revenue") if latest_event else None,
-            "revenue_expected": latest_event.get("revenue_estimated") if latest_event else None,
-            "source_url": source,
-        } if latest_event else {},
-    }
+    return build_earnings_calendar_entry_from_events(ticker, events, source, settings)
 
 
 def refresh_earnings_calendar_for_ticker_if_stale(
@@ -1638,6 +1752,16 @@ def merge_cached_earnings_calendar(
     if not earnings_calendar_entry_has_usable_data(entry):
         return profile
     enriched = dict(profile)
+    if entry.get("status") == "not_applicable":
+        source = entry.get("source") or "asset-type policy"
+        enriched["earnings_calendar_source"] = f"{source} · 캐시 갱신 {entry.get('updated_at', '미확인')}"
+        limitations = [
+            item for item in enriched.get("data_limitations", [])
+            if "개별 기업 실적 일정 대상이 아닙니다" not in str(item)
+        ]
+        limitations.append(str(entry.get("not_applicable_reason") or "개별 기업 실적 일정 대상이 아닙니다."))
+        enriched["data_limitations"] = limitations
+        return enriched
     for key in [
         "latest_reported_quarter",
         "latest_reported_earnings_date",
@@ -1711,7 +1835,7 @@ def refresh_earnings_calendar_cache(settings: Settings, tickers: list[str] | Non
             entries[ticker] = failed_entry
             failed.append({"ticker": ticker, "error": provider_error_message(exc, settings)})
     cache["updated_at"] = current_storage_timestamp()
-    cache["source"] = "FMP/Finnhub earnings calendar"
+    cache["source"] = "asset-type policy + OpenDART periodic filings + FMP/Finnhub earnings calendar"
     cache_write_warning = None
     try:
         write_earnings_calendar_cache(settings, cache)
@@ -4537,7 +4661,12 @@ def with_earnings_calendar_defaults(ticker: str, profile: dict) -> dict:
     if not profile:
         return profile
     enriched = dict(profile)
-    if enriched.get("country") == "KR" and not enriched.get("latest_reported_quarter"):
+    asset_type = str(enriched.get("asset_type") or "equity").strip().lower()
+    if (
+        enriched.get("country") == "KR"
+        and asset_type not in EARNINGS_CALENDAR_NON_APPLICABLE_ASSET_TYPES
+        and not enriched.get("latest_reported_quarter")
+    ):
         defaults = korean_disclosure_earnings_defaults()
         for key, value in defaults.items():
             enriched.setdefault(key, value)
