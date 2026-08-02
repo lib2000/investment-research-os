@@ -19,7 +19,7 @@ DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "portfolio_re
 LOCAL_TIMEZONE = ZoneInfo("Asia/Seoul")
 NEVER_RUN_PREFIXES = ("1999-11-30", "0001-01-01")
 SUCCESS_RESULT_CODES = {0, 267009, 267011}
-DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState", "-SendEmpty")
+DEFAULT_REQUIRED_ARGS = ("run_openclaw_portfolio_report_alert.ps1", "-WriteState")
 DEFAULT_TARGET_BOT = "@lib20_bot"
 
 

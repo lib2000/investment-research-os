@@ -138,7 +138,7 @@ if (-not $SkipPortfolioReportAlert.IsPresent) {
       "--write-state"
     )
     if ($SubmitPortfolioReportAlert.IsPresent) {
-      $portfolioReportAlertArgs += @("--enabled", "--submit", "--send-empty")
+      $portfolioReportAlertArgs += @("--enabled", "--submit")
     }
     python @portfolioReportAlertArgs
   }

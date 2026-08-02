@@ -5,7 +5,8 @@ param(
   [int]$LookbackDays = 3,
   [int]$MaxItems = 8,
   [switch]$Enabled,
-  [switch]$Submit
+  [switch]$Submit,
+  [switch]$SendEmpty
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,9 +28,11 @@ $argumentParts = @(
   "$LookbackDays",
   "-MaxItems",
   "$MaxItems",
-  "-SendEmpty",
   "-WriteState"
 )
+if ($SendEmpty.IsPresent) {
+  $argumentParts += "-SendEmpty"
+}
 if ($Enabled.IsPresent) {
   $argumentParts += "-Enabled"
 }
@@ -48,11 +51,11 @@ Register-ScheduledTask `
   -Action $action `
   -Trigger $trigger `
   -Settings $settings `
-  -Description "OpenClaw sends Telegram alerts for current portfolio holding reports, including empty daily scan confirmations." `
+  -Description "OpenClaw sends Telegram alerts only when new current-portfolio holding reports are found." `
   -Force | Out-Null
 
 Write-Host "등록 완료: $TaskName"
 Write-Host "실행 시각: 매일 $At"
 Write-Host "실행 파일: $runner"
-Write-Host "빈 결과 알림: Enabled"
+Write-Host "빈 결과 알림: Enabled=$($SendEmpty.IsPresent)"
 Write-Host "실제 전송: Enabled=$($Enabled.IsPresent), Submit=$($Submit.IsPresent)"
