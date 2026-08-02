@@ -10205,6 +10205,20 @@ function dailyRecommendationPreviewMismatchSummary(candidatePreview = {}, previe
     : `${formatNumber(total)}개`;
 }
 
+function dailyRecommendationPreviewModeLabel(candidatePreview = {}) {
+  const mode = String(candidatePreview.preview_mode || "").trim().toLowerCase();
+  if (mode === "offline-preview") {
+    return "오프라인 프리뷰 · 저장 현재가만 사용";
+  }
+  if (mode === "live-production-like") {
+    return "운영 유사 프리뷰 · 누락 현재가 갱신";
+  }
+  if (candidatePreview.scope_note === "runtime_candidate_preview_only_no_store_write") {
+    return "오프라인 프리뷰 · 레거시 메타데이터";
+  }
+  return "프리뷰 모드 미확인";
+}
+
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
   const schedule = payload?.daily_time || "08:00";
   const records = dailyRecommendationTopRecords(payload || {});
@@ -10213,6 +10227,9 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
   const previewMismatches = Array.isArray(candidatePreview.stored_preview_mismatches)
     ? candidatePreview.stored_preview_mismatches
     : [];
+  const previewIsInformational = candidatePreview.comparison_status === "informational"
+    || (!candidatePreview.comparison_status && candidatePreview.scope_note === "runtime_candidate_preview_only_no_store_write");
+  const previewModeLabel = dailyRecommendationPreviewModeLabel(candidatePreview);
   const policyDriftRecords = Array.isArray(policyAlignment.review_hold_records)
     ? policyAlignment.review_hold_records
     : [];
@@ -10233,9 +10250,9 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
     : "";
   const previewMismatchSummary = dailyRecommendationPreviewMismatchSummary(candidatePreview, previewMismatches);
   const mismatchText = previewMismatches.length
-    ? ` · 저장/재계산 차이 ${previewMismatchSummary}`
+    ? ` · ${previewIsInformational ? "프리뷰 참고 차이" : "저장/재계산 차이"} ${previewMismatchSummary}`
     : "";
-  const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length || previewMismatches.length ? "warning" : "ok";
+  const tone = !payload || payload?.due_now || !records.length || policyDriftTickers.length || (previewMismatches.length && !previewIsInformational) ? "warning" : "ok";
   const marketGroups = dailyRecommendationMarketGroups(records);
   const marketRecordsByRank = new Map();
   marketGroups.forEach((group) => {
@@ -10303,15 +10320,15 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
     `;
   const mismatchAlert = previewMismatches.length
     ? `
-      <div class="daily-recommendation-preview-drift" role="note" aria-label="추천 저장과 재계산 프리뷰 차이">
-        <strong>재계산 프리뷰와 순위 차이 ${escapeHtml(previewMismatchSummary)}</strong>
+      <div class="daily-recommendation-preview-drift${previewIsInformational ? " is-informational" : ""}" role="note" aria-label="추천 저장과 재계산 프리뷰 차이">
+        <strong>${previewIsInformational ? "오프라인 프리뷰 참고 차이" : "재계산 프리뷰와 순위 차이"} ${escapeHtml(previewMismatchSummary)}</strong>
         <span>${escapeHtml(
           previewMismatches
             .slice(0, 4)
             .map(dailyRecommendationPreviewMismatchText)
             .join(" · ")
         )}${previewMismatches.length > 4 ? " · 외 추가 차이 있음" : ""}</span>
-        <small>${escapeHtml(candidatePreview.generated_at ? `프리뷰 ${formatDateTime(candidatePreview.generated_at)}` : "프리뷰 생성 시각 미확인")} · 오늘 추천은 저장값 기준, 다음 실행 전 재검토 대상</small>
+        <small>${escapeHtml(candidatePreview.generated_at ? `프리뷰 ${formatDateTime(candidatePreview.generated_at)}` : "프리뷰 생성 시각 미확인")} · ${escapeHtml(previewModeLabel)} · ${escapeHtml(candidatePreview.comparison_note || "저장 추천과 프리뷰의 입력 차이를 확인하세요.")}</small>
       </div>
     `
     : "";

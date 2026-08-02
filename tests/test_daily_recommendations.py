@@ -415,6 +415,10 @@ class DailyRecommendationsTests(unittest.TestCase):
         )
 
         self.assertEqual(result["scope_note"], "runtime_candidate_preview_only_no_store_write")
+        self.assertEqual(result["preview_mode"], "offline-preview")
+        self.assertEqual(result["price_refresh_mode"], "saved_portfolio_prices_only")
+        self.assertEqual(result["comparison_status"], "informational")
+        self.assertIn("참고용", result["comparison_note"])
         self.assertEqual(result["status"], "success")
         self.assertIn("generated_at", result)
         self.assertIn("stored_preview_mismatches", result)

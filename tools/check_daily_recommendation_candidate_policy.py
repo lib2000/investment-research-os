@@ -275,6 +275,9 @@ def candidate_policy_result(
     top_limit: int,
     expected_held_tickers: list[str] | None = None,
     require_hold_warning: bool = False,
+    preview_mode: str = "offline-preview",
+    price_refresh_mode: str = "saved_portfolio_prices_only",
+    comparison_status: str = "informational",
 ) -> dict[str, Any]:
     failures, details = validate_candidate_policy(
         payload,
@@ -291,6 +294,14 @@ def candidate_policy_result(
     return {
         "status": "failure" if failures else "success",
         "scope_note": "runtime_candidate_preview_only_no_store_write",
+        "preview_mode": preview_mode,
+        "price_refresh_mode": price_refresh_mode,
+        "comparison_status": comparison_status,
+        "comparison_note": (
+            "저장 추천과의 순위 차이는 저장 가격과 운영 실행 시점이 달라 참고용입니다."
+            if comparison_status == "informational"
+            else "운영 생성과 동일한 외부 가격 갱신 모드로 비교합니다."
+        ),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "failures": failures,
         "failure_count": len(failures),
@@ -323,6 +334,13 @@ def main() -> int:
         top_limit=max(1, args.top_limit),
         expected_held_tickers=args.expected_held_ticker,
         require_hold_warning=args.require_hold_warning,
+        preview_mode="live-production-like" if args.allow_rag_backfill else "offline-preview",
+        price_refresh_mode=(
+            "provider_refresh_on_missing_prices"
+            if args.allow_rag_backfill
+            else "saved_portfolio_prices_only"
+        ),
+        comparison_status="comparable" if args.allow_rag_backfill else "informational",
     )
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
@@ -335,6 +353,12 @@ def main() -> int:
     else:
         print("추천 후보 정책 가드:", "실패" if result["failures"] else "정상")
         print("범위: 저장된 최신 추천을 변경하지 않고 현재 런타임 후보 생성 정책만 재계산합니다.")
+        print(
+            "프리뷰 모드: {0} | 가격: {1}".format(
+                result["preview_mode"],
+                result["price_refresh_mode"],
+            )
+        )
         if result["stored_preview_mismatches"]:
             mismatch_label = ", ".join(
                 f"{item['market']} {item['rank']}위 저장 {item['stored_ticker'] or '-'}"
@@ -342,7 +366,7 @@ def main() -> int:
                 f"({item.get('preview_score') or '-'})"
                 for item in result["stored_preview_mismatches"][:6]
             )
-            print(f"저장 추천/재계산 차이: {mismatch_label}")
+            print(f"저장 추천/재계산 차이: {mismatch_label} ({result['comparison_note']})")
         else:
             print("저장 추천/재계산 차이: 없음")
         for candidate in result["top_candidates"]:

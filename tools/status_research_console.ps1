@@ -269,6 +269,24 @@ if ($dailyRecommendations) {
     }
   }
   if ($dailyCandidatePolicyPreview) {
+    $previewMode = if ($dailyCandidatePolicyPreview.preview_mode) {
+      [string]$dailyCandidatePolicyPreview.preview_mode
+    } elseif ($dailyCandidatePolicyPreview.scope_note -eq "runtime_candidate_preview_only_no_store_write") {
+      "offline-preview"
+    } else {
+      "unknown"
+    }
+    $priceRefreshMode = if ($dailyCandidatePolicyPreview.price_refresh_mode) {
+      [string]$dailyCandidatePolicyPreview.price_refresh_mode
+    } else {
+      "legacy-metadata"
+    }
+    $comparisonStatus = if ($dailyCandidatePolicyPreview.comparison_status) {
+      [string]$dailyCandidatePolicyPreview.comparison_status
+    } else {
+      "informational"
+    }
+    Write-Host "추천 프리뷰 모드: $previewMode, 가격 갱신: $priceRefreshMode, 비교 상태: $comparisonStatus"
     if ($dailyCandidatePolicyPreview.generated_at) {
       $previewAgeHours = Get-DateTimeAgeHours -DateTimeText $dailyCandidatePolicyPreview.generated_at
       $previewAgeLabel = if ($null -ne $previewAgeHours) { "{0:N1}시간 전" -f $previewAgeHours } else { "경과 미확인" }
@@ -300,7 +318,14 @@ if ($dailyRecommendations) {
     } else {
       "$($previewMismatchCount)건"
     }
-    Write-Host "추천 저장/재계산 차이 요약: $previewMismatchSummary"
+    $comparisonNote = if ($dailyCandidatePolicyPreview.comparison_note) {
+      [string]$dailyCandidatePolicyPreview.comparison_note
+    } elseif ($comparisonStatus -eq "informational") {
+      "저장 추천과 프리뷰의 입력 차이로 참고용 비교입니다."
+    } else {
+      "운영 생성과 동일한 모드로 비교합니다."
+    }
+    Write-Host "추천 저장/재계산 차이 요약: $previewMismatchSummary ($comparisonNote)"
     if ($previewMismatches.Count -gt 0) {
       $previewMismatchLabels = @()
       foreach ($item in ($previewMismatches | Select-Object -First 6)) {
