@@ -1569,6 +1569,30 @@ def earnings_calendar_policy(ticker: str, settings: Settings) -> dict:
     profile = OFFICIAL_TICKER_REGISTRY.get(normalized) or read_dynamic_ticker_registry(settings).get(normalized) or {}
     country = str(profile.get("country") or "").strip().upper()
     asset_type = str(profile.get("asset_type") or "equity").strip().lower()
+    if asset_type == "equity":
+        # Dynamic registries can label an ETF as a generic equity. Prefer the
+        # user's stored holding metadata when it explicitly identifies ETFs.
+        try:
+            store = read_portfolio_store(settings)
+            for portfolio in (store.get("portfolios") or {}).values():
+                for holding in (portfolio or {}).get("holdings") or []:
+                    if normalize_ticker(str((holding or {}).get("ticker") or "")) != normalized:
+                        continue
+                    holding_asset_type = str((holding or {}).get("asset_type") or "").strip().lower()
+                    holding_text = " ".join(
+                        [
+                            str((holding or {}).get("name") or ""),
+                            str((holding or {}).get("sector") or ""),
+                            " ".join(str(item) for item in (holding or {}).get("theme_tags") or []),
+                        ]
+                    ).lower()
+                    if holding_asset_type in EARNINGS_CALENDAR_NON_APPLICABLE_ASSET_TYPES:
+                        asset_type = holding_asset_type
+                    elif "etf" in holding_text or "etn" in holding_text:
+                        asset_type = "etf"
+                    break
+        except Exception:
+            pass
     if asset_type in EARNINGS_CALENDAR_NON_APPLICABLE_ASSET_TYPES:
         return {
             "kind": "not_applicable",
@@ -1602,28 +1626,51 @@ def fetch_dart_earnings_calendar_events(ticker: str, settings: Settings) -> tupl
         refresh_dart_filing_for_ticker_if_stale(ticker, settings)
     except Exception:
         pass
+
+    def periodic_events(filings: list[dict]) -> list[dict]:
+        events: list[dict] = []
+        for filing in filings:
+            filing = filing if isinstance(filing, dict) else {}
+            receipt_date = str(filing.get("receipt_date") or "")
+            report_name = str(filing.get("report_name") or "")
+            quarter_label = dart_periodic_quarter_label(report_name, receipt_date)
+            if not quarter_label or not fullmatch(r"\d{8}", receipt_date):
+                continue
+            events.append(
+                {
+                    "date": datetime.strptime(receipt_date, "%Y%m%d").date().isoformat(),
+                    "symbol": normalize_ticker(ticker),
+                    "time": "",
+                    "fiscal_date_ending": quarter_label,
+                    "source_url": filing.get("source_url") or "https://dart.fss.or.kr/",
+                    "report_name": report_name,
+                }
+            )
+        return events
+
     signal = build_dart_filing_signal(ticker, settings)
-    events: list[dict] = []
-    for entry in signal.get("recent_entries") or []:
-        filing = entry.get("filing") or {}
-        receipt_date = str(filing.get("receipt_date") or "")
-        report_name = str(filing.get("report_name") or "")
-        quarter_label = dart_periodic_quarter_label(report_name, receipt_date)
-        if not quarter_label or not fullmatch(r"\d{8}", receipt_date):
-            continue
-        events.append(
-            {
-                "date": datetime.strptime(receipt_date, "%Y%m%d").date().isoformat(),
-                "symbol": normalize_ticker(ticker),
-                "time": "",
-                "fiscal_date_ending": quarter_label,
-                "source_url": filing.get("source_url") or "https://dart.fss.or.kr/",
-                "report_name": report_name,
-            }
-        )
+    events = periodic_events([
+        (entry.get("filing") or {})
+        for entry in signal.get("recent_entries") or []
+        if isinstance(entry, dict)
+    ])
+    source = "OpenDART periodic filing"
+    if not events:
+        # The normal DART watch window is intentionally short. Earnings
+        # calendars need the last quarterly filing too, which can be older
+        # than the daily watch window (for example, Q1 filed in May).
+        client = OpenDartClient(settings)
+        if client.is_configured:
+            _, filings = client.fetch_recent_filings(
+                ticker,
+                lookback_days=max(int(settings.dart_filing_lookback_days), 180),
+                page_count=max(int(settings.dart_filing_max_items_per_ticker), 100),
+            )
+            events = periodic_events(filings)
+            source = "OpenDART periodic filing (extended lookback)"
     if not events:
         raise RuntimeError("DART 최근 정기보고서 접수 자료가 없습니다.")
-    return sorted(events, key=lambda item: item.get("date") or ""), "OpenDART periodic filing"
+    return sorted(events, key=lambda item: item.get("date") or ""), source
 
 
 def build_earnings_calendar_entry_from_events(
