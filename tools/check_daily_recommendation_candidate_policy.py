@@ -140,7 +140,8 @@ def existing_rag_document_counts_by_ticker(root: Path, tickers: list[str]) -> di
     with connect_rag_db(vault_dir) as connection:
         rows = connection.execute(
             f"""
-            SELECT *
+            SELECT ticker, report_type, summary, content_excerpt,
+                   confidence, metadata_json
             FROM research_memory_documents
             WHERE ticker IN ({placeholders})
             """,
@@ -204,6 +205,15 @@ def build_candidate_payload(root: Path, *, candidate_limit: int, skip_rag_backfi
         saved_prices = saved_portfolio_price_lookup(root)
         research_os_main.latest_provider_price = (
             lambda ticker, _settings, force_refresh=False: saved_prices.get(normalize_ticker(ticker), (None, None))
+        )
+        # Candidate policy checks are explicitly offline previews.  When a
+        # ticker has no saved portfolio price, the normal recommendation path
+        # may fall back to Naver's live quote provider; that would make a
+        # validation run network-bound and can spend one provider timeout per
+        # ticker.  Keep the preview's advertised saved-price-only contract by
+        # disabling that fallback in this process.
+        research_os_main._daily_recommendation_naver_domestic_price = (
+            lambda _ticker, _settings: (None, None)
         )
     return research_os_main.build_daily_recommendation_candidates(Settings.from_env(), limit=candidate_limit)
 

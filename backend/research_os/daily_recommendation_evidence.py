@@ -217,14 +217,29 @@ def build_daily_recommendation_evidence_documents_batch(
         with sqlite3.connect(db_path, timeout=30) as connection:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA busy_timeout = 30000")
+            # Ticker values are normalized to uppercase when documents are stored.
+            # Keep the predicate sargable so SQLite can use idx_rag_docs_ticker_date;
+            # the window limit also avoids loading every historical document for a
+            # ticker when the ranking only needs the same latest 80 rows as the
+            # single-ticker query.
             rows = connection.execute(
                 f"""
                 SELECT ticker, report_type, title, summary, content_excerpt, source_type,
                        source_file_name, source_relative_path, json_relative_path,
                        source_date, confidence, tags_json, updated_at
-                FROM research_memory_documents
-                WHERE upper(ticker) IN ({placeholders})
-                ORDER BY upper(ticker), source_date DESC, updated_at DESC
+                FROM (
+                    SELECT ticker, report_type, title, summary, content_excerpt, source_type,
+                           source_file_name, source_relative_path, json_relative_path,
+                           source_date, confidence, tags_json, updated_at,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY ticker
+                               ORDER BY source_date DESC, updated_at DESC
+                           ) AS row_number
+                    FROM research_memory_documents
+                    WHERE ticker IN ({placeholders})
+                )
+                WHERE row_number <= 80
+                ORDER BY ticker, source_date DESC, updated_at DESC
                 """,
                 tickers,
             ).fetchall()

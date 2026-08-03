@@ -706,7 +706,8 @@ def count_research_memory_documents_by_ticker(
     with connect_rag_db(vault_dir) as connection:
         rows = connection.execute(
             f"""
-            SELECT *
+            SELECT ticker, report_type, summary, content_excerpt,
+                   confidence, metadata_json
             FROM research_memory_documents
             WHERE ticker IN ({placeholders})
             """,
