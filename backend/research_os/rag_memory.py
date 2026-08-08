@@ -68,12 +68,12 @@ def _document_quality(payload: dict[str, Any]) -> dict[str, Any]:
     return rag_memory_utils.document_quality(payload)
 
 
-def _connect(vault_dir: Path) -> sqlite3.Connection:
+def _connect(vault_dir: Path, *, timeout: float = 30.0) -> sqlite3.Connection:
     path = rag_db_path(vault_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path, timeout=30)
+    connection = sqlite3.connect(path, timeout=timeout)
     connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA busy_timeout = 30000")
+    connection.execute(f"PRAGMA busy_timeout = {max(int(timeout * 1000), 0)}")
     return connection
 
 
@@ -82,8 +82,12 @@ def _is_sqlite_locked(exc: sqlite3.Error) -> bool:
 
 
 @contextmanager
-def connect_rag_db(vault_dir: Path) -> Iterator[sqlite3.Connection]:
-    connection = _connect(vault_dir)
+def connect_rag_db(
+    vault_dir: Path,
+    *,
+    timeout: float = 30.0,
+) -> Iterator[sqlite3.Connection]:
+    connection = _connect(vault_dir, timeout=timeout)
     try:
         with connection:
             yield connection
@@ -91,8 +95,8 @@ def connect_rag_db(vault_dir: Path) -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
-def initialize_rag_db(vault_dir: Path) -> None:
-    with connect_rag_db(vault_dir) as connection:
+def initialize_rag_db(vault_dir: Path, *, timeout: float = 30.0) -> None:
+    with connect_rag_db(vault_dir, timeout=timeout) as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS ticker_thesis_snapshots (
@@ -726,20 +730,37 @@ def count_research_memory_documents_by_ticker(
 
 
 def rag_memory_status(vault_dir: Path) -> dict[str, Any]:
-    initialize_rag_db(vault_dir)
-    with connect_rag_db(vault_dir) as connection:
-        row = connection.execute(
-            """
-            SELECT COUNT(*) AS snapshot_count, MAX(updated_at) AS latest_updated_at
-            FROM ticker_thesis_snapshots
-            """
-        ).fetchone()
-        document_row = connection.execute(
-            """
-            SELECT COUNT(*) AS document_count, MAX(updated_at) AS latest_document_updated_at
-            FROM research_memory_documents
-            """
-        ).fetchone()
+    # Status is read by health endpoints and must not wait behind a long
+    # running backfill or source refresh.  A short lock budget keeps the
+    # dashboard responsive; callers still receive an explicit warning when
+    # SQLite is temporarily busy instead of timing out the HTTP request.
+    status_timeout = 2.0
+    try:
+        initialize_rag_db(vault_dir, timeout=status_timeout)
+        with connect_rag_db(vault_dir, timeout=status_timeout) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS snapshot_count, MAX(updated_at) AS latest_updated_at
+                FROM ticker_thesis_snapshots
+                """
+            ).fetchone()
+            document_row = connection.execute(
+                """
+                SELECT COUNT(*) AS document_count, MAX(updated_at) AS latest_document_updated_at
+                FROM research_memory_documents
+                """
+            ).fetchone()
+    except sqlite3.OperationalError as exc:
+        if not _is_sqlite_locked(exc):
+            raise
+        return {
+            "status": "warning",
+            "schema_version": SCHEMA_VERSION,
+            "db_path": str(rag_db_path(vault_dir)),
+            "snapshot_count": 0,
+            "document_count": 0,
+            "warning": "RAG 색인 갱신이 진행 중이라 상태 조회를 잠시 미뤘습니다.",
+        }
     return {
         "status": "success",
         "schema_version": SCHEMA_VERSION,
