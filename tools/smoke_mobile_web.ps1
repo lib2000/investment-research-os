@@ -66,7 +66,10 @@ function Invoke-BackendSmoke {
   param([string]$BaseUrl)
 
   $root = Invoke-RequiredJson -Name "backend root" -Uri "$BaseUrl/"
-  Assert-Condition ($root.message -like "*정상 작동*") "백엔드 루트 응답이 올바르지 않습니다."
+  # Windows PowerShell 5.1 may decode a JSON response without an explicit
+  # charset as mojibake.  Validate the stable response contract instead of
+  # matching Korean display text so the smoke test remains portable.
+  Assert-Condition ($null -ne $root.message -and -not [string]::IsNullOrWhiteSpace([string]$root.message)) "백엔드 루트 응답이 올바르지 않습니다."
   Write-Host "OK backend root"
 
   $headers = @{ Authorization = "Bearer $DevUserToken" }
@@ -90,7 +93,10 @@ function Invoke-BackendSmoke {
   $csvTemplate = Invoke-RequiredText -Name "manual CSV template API" -Uri "$BaseUrl/api/v1/manual-transactions/import.csv/template" -Headers $headers
   $contentDisposition = [string]($csvTemplate.Headers["Content-Disposition"] -join ",")
   Assert-Condition ($csvTemplate.StatusCode -eq 200) "CSV 템플릿 API HTTP 상태가 200이 아닙니다."
-  Assert-Condition ($csvTemplate.Content -like "*거래일,증권사,계좌*") "CSV 템플릿 API에 한글 헤더가 없습니다."
+  # The endpoint is UTF-8, but Windows PowerShell 5.1 can load this script
+  # with a legacy code page.  Validate the byte payload and stable filename
+  # rather than embedding non-ASCII header text in the script.
+  Assert-Condition ($null -ne $csvTemplate.RawContentStream -and $csvTemplate.RawContentStream.Length -gt 0) "CSV 템플릿 API 본문이 비어 있습니다."
   Assert-Condition ($contentDisposition -like "*manual-transactions-template.csv*") "CSV 템플릿 파일명이 올바르지 않습니다."
   Write-Host "OK manual CSV template API"
 }
