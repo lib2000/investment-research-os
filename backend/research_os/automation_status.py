@@ -167,7 +167,11 @@ def build_research_automation_feature_status(runtime: AutomationStatusRuntime, s
         "storage_quality_dashboard": runtime.build_storage_quality_dashboard(settings),
     }
     try:
-        payload["dashboard_digest"] = build_research_automation_dashboard_digest(runtime, settings)
+        payload["dashboard_digest"] = build_research_automation_dashboard_digest(
+            runtime,
+            settings,
+            rag_status_payload=rag_status_payload,
+        )
     except Exception as exc:
         payload["dashboard_digest"] = {
             "status": "warning",
@@ -177,7 +181,12 @@ def build_research_automation_feature_status(runtime: AutomationStatusRuntime, s
     return payload
 
 
-def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime, settings) -> dict:
+def build_research_automation_dashboard_digest(
+    runtime: AutomationStatusRuntime,
+    settings,
+    *,
+    rag_status_payload: dict | None = None,
+) -> dict:
     vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
     latest_targets = runtime.read_json_store(runtime.interest_collection_targets_path(settings), {})
     board = latest_targets.get("payload") if isinstance(latest_targets, dict) else {}
@@ -194,7 +203,8 @@ def build_research_automation_dashboard_digest(runtime: AutomationStatusRuntime,
     brief_payload = latest_brief.get("payload") if isinstance(latest_brief, dict) else {}
     if not isinstance(brief_payload, dict):
         brief_payload = {}
-    rag_status_payload = safe_rag_memory_status(runtime, vault_dir)
+    if rag_status_payload is None:
+        rag_status_payload = safe_rag_memory_status(runtime, vault_dir)
 
     targets = automation_board_targets(board)
     priority_targets = select_priority_targets(targets)

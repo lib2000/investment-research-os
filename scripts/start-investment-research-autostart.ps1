@@ -29,12 +29,24 @@ try {
   }
   $credentialLoaded = $true
   $env:DEV_USER_TOKEN = $token
-  $openClawOutput = & wsl.exe -d $OpenClawWslDistro -- systemctl --user start openclaw-gateway.service 2>&1
+  $userBusReady = $false
+  for ($attempt = 1; $attempt -le 8; $attempt++) {
+    $userBusState = & wsl.exe -d $OpenClawWslDistro -- bash -lc 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user is-active default.target' 2>&1
+    if ($LASTEXITCODE -eq 0 -and "$userBusState" -match "(?m)^active\s*$") {
+      $userBusReady = $true
+      break
+    }
+    Start-Sleep -Seconds 2
+  }
+  if (-not $userBusReady) {
+    throw "WSL systemd 사용자 세션이 준비되지 않았습니다. 로그인 직후 사용자 버스가 늦게 올라왔을 수 있습니다."
+  }
+  $openClawOutput = & wsl.exe -d $OpenClawWslDistro -- bash -lc 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user start openclaw-gateway.service' 2>&1
   if ($LASTEXITCODE -ne 0) {
     throw "WSL OpenClaw 게이트웨이 사용자 서비스를 시작하지 못했습니다."
   }
-  $openClawState = & wsl.exe -d $OpenClawWslDistro -- systemctl --user is-active openclaw-gateway.service 2>$null
-  $openClawGatewayReady = $LASTEXITCODE -eq 0 -and "$openClawState".Trim() -eq "active"
+  $openClawState = & wsl.exe -d $OpenClawWslDistro -- bash -lc 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user is-active openclaw-gateway.service' 2>$null
+  $openClawGatewayReady = $LASTEXITCODE -eq 0 -and "$openClawState" -match "(?m)^active\s*$"
   if (-not $openClawGatewayReady) {
     throw "WSL OpenClaw 게이트웨이 사용자 서비스가 active 상태가 아닙니다."
   }

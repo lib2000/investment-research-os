@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   [int]$Port = 8001,
   [string]$HostName = "127.0.0.1",
   [int]$WaitSeconds = 20,
