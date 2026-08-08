@@ -20,7 +20,7 @@ if (-not (Test-Path -LiteralPath $TradingScript)) {
 function Read-WorkbenchStatus {
   try {
     return Invoke-RestMethod `
-      -Uri "http://127.0.0.1:8001/api/v1/system/investment-workbench" `
+      -Uri "http://127.0.0.1:8001/api/v1/system/workbench/status" `
       -Headers $Headers `
       -TimeoutSec 10
   } catch {
@@ -83,7 +83,9 @@ function Show-WorkbenchStatus {
     strategy_builder = "Strategy Builder"
     backtester = "Backtester"
     docker = "Docker/Lean Engine"
+    lean = "Lean Reference Data"
     lean_data = "Lean Reference Data"
+    kis = "KIS Paper Trading"
     kis_paper = "KIS Paper Trading"
     openclaw_mobile = "OpenClaw/iPhone"
     windows_autostart = "Windows Autostart"
