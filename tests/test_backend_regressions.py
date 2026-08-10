@@ -18500,7 +18500,12 @@ class PortfolioPerformanceTests(unittest.TestCase):
             patch.object(main, "write_json_store") as write_json_store,
             patch.object(main, "current_storage_timestamp", return_value="2026-05-19T09:00:00+09:00"),
         ):
-            result = main.get_portfolio("테스트", settings=settings)
+            result = main.get_portfolio(
+                "테스트",
+                refresh_prices=True,
+                persist_refresh=True,
+                settings=settings,
+            )
 
         latest_price.assert_called_once_with("003230", settings, force_refresh=True)
         self.assertEqual(result.active_portfolio.holdings[0].current_price, 120)
@@ -18561,6 +18566,49 @@ class PortfolioPerformanceTests(unittest.TestCase):
         self.assertEqual(by_ticker["JOBY"].sync_status, "manual_or_overseas_protected")
         self.assertEqual(by_ticker["JOBY"].sync_source, "portfolio_state_guard")
         self.assertIsNone(by_ticker["003230"].sync_status)
+
+    def test_portfolio_load_uses_stored_prices_by_default(self):
+        import research_os_main as main
+        from research_os.models import PortfolioHolding, SavedPortfolio
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio = SavedPortfolio(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(
+                    ticker="003230",
+                    name="삼양식품",
+                    quantity=10,
+                    current_price=100,
+                    market_value=1000,
+                    currency="KRW",
+                )
+            ],
+            portfolio_value=1000,
+        )
+        store = {
+            "portfolios": {
+                main.portfolio_store_key("테스트"): portfolio.model_dump(mode="json")
+            }
+        }
+
+        with (
+            patch.object(main, "read_portfolio_store", return_value=copy.deepcopy(store)),
+            patch.object(main, "latest_provider_price") as latest_price,
+            patch.object(
+                main,
+                "portfolio_store_response",
+                side_effect=lambda _settings, *, active_portfolio=None, **_kwargs: SimpleNamespace(
+                    active_portfolio=active_portfolio
+                ),
+            ),
+        ):
+            result = main.get_portfolio("테스트", settings=settings)
+
+        latest_price.assert_not_called()
+        self.assertEqual(result.active_portfolio.holdings[0].current_price, 100)
+        self.assertEqual(result.active_portfolio.holdings[0].market_value, 1000)
 
     def test_kiwoom_domestic_sync_updates_domestic_and_preserves_overseas(self):
         import research_os_main as main

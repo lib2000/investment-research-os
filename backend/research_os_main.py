@@ -16609,10 +16609,17 @@ def get_portfolio_performance(
 )
 def get_portfolio(
     portfolio_name: str,
-    refresh_prices: bool = True,
-    persist_refresh: bool = True,
+    refresh_prices: bool = False,
+    persist_refresh: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> PortfolioStoreResponse:
+    """Return the stored portfolio without doing live quote calls by default.
+
+    Price refreshes are intentionally opt-in.  The daily close operations run
+    ``tools/refresh_portfolio_prices.py`` with both query flags enabled, while
+    normal console reads use the last persisted end-of-day values and remain
+    available when a quote provider is slow or unavailable.
+    """
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)

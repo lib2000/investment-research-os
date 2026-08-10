@@ -3,8 +3,14 @@ export function createPortfolioApi(apiClient) {
     list() {
       return apiClient.request("/api/v1/portfolios");
     },
-    get(portfolioName) {
-      return apiClient.request(`/api/v1/portfolios/${encodeURIComponent(portfolioName)}`);
+    get(portfolioName, { refreshPrices = false, persistRefresh = false } = {}) {
+      const query = new URLSearchParams({
+        refresh_prices: String(Boolean(refreshPrices)),
+        persist_refresh: String(Boolean(persistRefresh)),
+      });
+      return apiClient.request(
+        `/api/v1/portfolios/${encodeURIComponent(portfolioName)}?${query.toString()}`
+      );
     },
     save({
       portfolioName,
