@@ -5088,13 +5088,13 @@ async function refreshPortfolioSmartTable({
   syncApiBaseUrl();
   if (!silent) {
     elements.portfolioSmartTable.innerHTML =
-      '<p class="empty-state">서버에서 최신 현재가와 계산 지표를 불러오는 중입니다...</p>';
+      '<p class="empty-state">저장된 장 마감 현재가와 계산 지표를 불러오는 중입니다...</p>';
   }
   try {
     const result = await fetchPortfolioIntelligentTable(token(), portfolioName, {
-      refreshPrices: true,
-      forcePriceRefresh,
-      persistRefresh,
+      refreshPrices: false,
+      forcePriceRefresh: false,
+      persistRefresh: false,
     });
     portfolioSmartRows = result?.holdings || [];
     renderPortfolioSmartChart(portfolioSmartRows);
@@ -5108,7 +5108,7 @@ async function refreshPortfolioSmartTable({
           `- 보유 종목: ${formatNumber(result?.holding_count || portfolioSmartRows.length)}개`,
           ...portfolioTableRefreshStatusLines(result),
           ...portfolioCurrencyDiagnosticLines(portfolioSmartRows),
-          "- 현재가, 평가금액, 52주 최고가 근접도, 목표주가 근접도, RAG/논거 준비도를 다시 계산했습니다.",
+          "- 저장 현재가, 평가금액, 52주 최고가 근접도, 목표주가 근접도, RAG/논거 준비도를 다시 계산했습니다.",
         ].join("\n")
       );
     }
@@ -11625,7 +11625,7 @@ attachButtonActionFeedback(elements.captureForm, {
 
 attachButtonActionFeedback(document.querySelector("#portfolio"), {
   submit: "포트폴리오 리스크 스캔을 시작했습니다.",
-  portfolioLoadButton: "포트폴리오 가격 갱신 불러오기를 시작했습니다.",
+  portfolioLoadButton: "저장된 장 마감 가격 불러오기를 시작했습니다.",
   portfolioKiwoomSyncButton: "키움 국내 수량 변경 예정 목록을 확인합니다.",
   portfolioKiwoomApplyButton: "확인한 키움 국내 수량 변경을 적용합니다.",
   portfolioKiwoomCancelButton: "키움 국내 수량 적용 대기를 취소합니다.",
@@ -12119,7 +12119,7 @@ elements.portfolioSelect?.addEventListener("change", async (event) => {
       `- 포트폴리오: ${selectedPortfolio.portfolio_name}`,
       `- 보유 종목: ${selectedPortfolio.holding_count ?? selectedPortfolio.holdings?.length ?? 0}개`,
       `- 총액: ${formatMoney(selectedPortfolio.portfolio_value, "KRW", "n/a")}`,
-      "- 최신 가격까지 다시 확인하려면 `포트폴리오 가격 갱신 불러오기`를 누르세요.",
+      "- 가격은 장 종료 후 일일 운영 루틴에서 갱신됩니다.",
     ].join("\n")
   );
 });
@@ -13503,56 +13503,30 @@ elements.portfolioLoadButton.addEventListener("click", async () => {
     return;
   }
   syncApiBaseUrl();
-  startOutputLoading("내 포트폴리오 가격 갱신 불러오기 중", [
+  startOutputLoading("내 포트폴리오 저장 가격 불러오기 중", [
     "저장 포트폴리오 조회",
-    "KIS/Finnhub/Tiingo 최신 현재가 조회",
-    "평가금액과 수익률 재계산",
+    "장 종료 후 저장된 현재가 확인",
+    "저장 평가금액과 수익률 재계산",
     "입력 폼과 그래프 테이블 갱신",
   ]);
   try {
-    let liveRefreshTimedOut = false;
-    let result = null;
-    try {
-      result = await fetchPortfolioWithAbortTimeout(
-        portfolioName,
-        {
-          refreshPrices: true,
-          persistRefresh: true,
-        },
-        45000
-      );
-    } catch (error) {
-      if (!isAbortTimeoutError(error)) {
-        throw error;
-      }
-      liveRefreshTimedOut = true;
-      result = await fetchPortfolio(token(), portfolioName, {
-        refreshPrices: false,
-        persistRefresh: false,
-      });
-    }
+    const result = await fetchPortfolio(token(), portfolioName, {
+      refreshPrices: false,
+      persistRefresh: false,
+    });
     fillPortfolioForm(result?.active_portfolio);
-    updatePortfolioLoadedAt(
-      result?.active_portfolio,
-      liveRefreshTimedOut ? "저장 데이터 우선 불러온" : "실시간 갱신 후 불러온"
-    );
+    updatePortfolioLoadedAt(result?.active_portfolio, "저장 장 마감 가격으로 불러온");
     const activePortfolio = result?.active_portfolio;
     setOutput(
       [
-        liveRefreshTimedOut
-          ? "# 포트폴리오 저장 데이터 우선 불러오기 완료"
-          : "# 포트폴리오 실시간 불러오기 완료",
+        "# 포트폴리오 저장 가격 불러오기 완료",
         "",
         `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
         `- 보유 종목: ${activePortfolio?.holding_count ?? activePortfolio?.holdings?.length ?? 0}개`,
         `- 총액: ${formatMoney(activePortfolio?.portfolio_value, "KRW", "n/a")}`,
         ...portfolioRefreshStatusLines(activePortfolio),
-        liveRefreshTimedOut
-          ? "- 실시간 가격 갱신이 45초를 넘겨 중단되어 저장된 현재가 기준 데이터를 먼저 표시했습니다."
-          : "- 저장된 현재가 캐시를 우회해 최신 데이터로 평가금액과 수익률을 다시 계산했습니다.",
-        liveRefreshTimedOut
-          ? "- 가격 제공자가 느릴 때도 선택한 포트폴리오와 보유 종목 수가 전체 포트폴리오로 바뀌지 않도록 보호했습니다."
-          : "",
+        "- 실시간 가격 제공자에는 연결하지 않고 저장된 장 마감 현재가만 사용했습니다.",
+        "- 다음 가격 갱신은 장 종료 후 일일 운영 루틴에서 수행됩니다.",
         "- 수량과 평단은 저장 포트폴리오 기준입니다. 실제 계좌 수량 자동 동기화는 아직 연결되지 않았습니다.",
         "- PL처럼 수량이 바뀐 종목은 해당 행의 수량 칸을 수정한 뒤 같은 행의 저장 버튼을 누르세요.",
       ].filter(Boolean).join("\n")
@@ -13713,7 +13687,7 @@ elements.portfolioSort?.addEventListener("change", () => {
 elements.portfolioSmartRefreshButton?.addEventListener("click", async () => {
   startOutputLoading("포트폴리오 지능형 테이블 계산 중", [
     "저장 포트폴리오 불러오기",
-    "최신 현재가 캐시 우회 조회",
+    "저장된 장 마감 현재가 사용",
     "52주 최고가 조회",
     "목표주가 근접도 계산",
     "그래프와 정렬 테이블 갱신",
