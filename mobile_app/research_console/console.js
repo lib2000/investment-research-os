@@ -182,6 +182,7 @@ const elements = {
   customsTradeSnapshotButton: document.querySelector("#customsTradeSnapshotButton"),
   portfolioForm: document.querySelector("#portfolioForm"),
   portfolioSelect: document.querySelector("#portfolioSelect"),
+  portfolioFamilyOverview: document.querySelector("#portfolioFamilyOverview"),
   portfolioLoadButton: document.querySelector("#portfolioLoadButton"),
   portfolioKiwoomSyncButton: document.querySelector("#portfolioKiwoomSyncButton"),
   portfolioKiwoomApplyButton: document.querySelector("#portfolioKiwoomApplyButton"),
@@ -4298,6 +4299,7 @@ function fillPortfolioForm(portfolio) {
     return;
   }
   activePortfolioSnapshot = portfolio;
+  renderPortfolioFamilyOverview(savedPortfolios, portfolio.portfolio_name || "");
   if (elements.portfolioSelect && portfolio.portfolio_name) {
     elements.portfolioSelect.value = portfolio.portfolio_name;
   }
@@ -5220,6 +5222,50 @@ function renderPortfolioOptions(portfolios = [], selectedName = "") {
   }
 }
 
+function renderPortfolioFamilyOverview(portfolios = [], selectedName = "") {
+  if (!elements.portfolioFamilyOverview) {
+    return;
+  }
+  const records = Array.isArray(portfolios) ? portfolios.filter(Boolean) : [];
+  if (!records.length) {
+    elements.portfolioFamilyOverview.innerHTML =
+      '<div class="portfolio-family-empty">저장된 가족별 포트폴리오가 없습니다.</div>';
+    return;
+  }
+  const selected = String(selectedName || elements.portfolioSelect?.value || "").trim();
+  const cards = records.map((portfolio) => {
+    const name = String(portfolio.portfolio_name || "이름 없는 포트폴리오").trim();
+    const holdings = Array.isArray(portfolio.holdings) ? portfolio.holdings : [];
+    const holdingNames = holdings
+      .map((holding) => holding.name || holding.ticker)
+      .filter(Boolean)
+      .slice(0, 7)
+      .map((value) => escapeHtml(String(value)))
+      .join(" · ");
+    const remaining = Math.max(holdings.length - 7, 0);
+    const holdingsText = holdingNames
+      ? `${holdingNames}${remaining ? ` · 외 ${formatNumber(remaining)}개` : ""}`
+      : "보유 종목 없음";
+    const isSelected = name === selected;
+    return `
+      <button class="portfolio-family-card${isSelected ? " selected" : ""}" type="button"
+        data-family-portfolio="${escapeHtml(name)}" aria-pressed="${isSelected ? "true" : "false"}">
+        <strong>${escapeHtml(name)}</strong>
+        <span class="portfolio-family-card-meta">
+          <span>보유 ${formatNumber(holdings.length)}개</span>
+          <span>${escapeHtml(formatMoney(portfolio.portfolio_value, "KRW", "총액 n/a"))}</span>
+        </span>
+        <span class="portfolio-family-card-holdings">${holdingsText}</span>
+      </button>`;
+  }).join("");
+  elements.portfolioFamilyOverview.innerHTML = `
+    <div class="portfolio-family-overview-head">
+      <strong>가족 개인별 보유 종목</strong>
+      <span>${formatNumber(records.length)}개 포트폴리오 · 카드를 누르면 전체 종목 확인</span>
+    </div>
+    <div class="portfolio-family-grid">${cards}</div>`;
+}
+
 function findSavedPortfolioByName(portfolioName = "") {
   const normalizedName = String(portfolioName || "").trim();
   if (!normalizedName) {
@@ -5334,6 +5380,7 @@ async function refreshPortfolioStore(keepOutput = true, preferredPortfolioName =
     fillPortfolioForm(portfolioToShow);
   } else {
     activePortfolioSnapshot = null;
+    renderPortfolioFamilyOverview(savedPortfolios);
     updatePortfolioLoadedAt(null);
   }
   if (lastDashboard) {
@@ -6691,6 +6738,7 @@ async function runConsoleSystemCheck() {
         String(a.portfolio_name || "").localeCompare(String(b.portfolio_name || ""), "ko-KR")
       );
       renderPortfolioOptions(savedPortfolios);
+      renderPortfolioFamilyOverview(savedPortfolios, activePortfolioSnapshot?.portfolio_name || "");
       if (savedPortfolios.length && !activePortfolioSnapshot) {
         fillPortfolioForm(savedPortfolios[0]);
       }
@@ -12110,6 +12158,7 @@ elements.portfolioSelect?.addEventListener("change", async (event) => {
     return;
   }
   fillPortfolioForm(selectedPortfolio);
+  renderPortfolioFamilyOverview(savedPortfolios, selectedPortfolio.portfolio_name);
   updatePortfolioLoadedAt(selectedPortfolio, "선택 후 불러온");
   await refreshPortfolioSmartTable({ silent: true });
   setOutput(
@@ -12120,6 +12169,31 @@ elements.portfolioSelect?.addEventListener("change", async (event) => {
       `- 보유 종목: ${selectedPortfolio.holding_count ?? selectedPortfolio.holdings?.length ?? 0}개`,
       `- 총액: ${formatMoney(selectedPortfolio.portfolio_value, "KRW", "n/a")}`,
       "- 가격은 장 종료 후 일일 운영 루틴에서 갱신됩니다.",
+    ].join("\n")
+  );
+});
+
+elements.portfolioFamilyOverview?.addEventListener("click", async (event) => {
+  const card = event.target.closest("[data-family-portfolio]");
+  if (!card) {
+    return;
+  }
+  const portfolioName = card.dataset.familyPortfolio || "";
+  const portfolio = findSavedPortfolioByName(portfolioName);
+  if (!portfolio) {
+    setError(new Error(`${portfolioName || "선택한"} 포트폴리오를 찾지 못했습니다.`));
+    return;
+  }
+  elements.portfolioSelect.value = portfolio.portfolio_name;
+  fillPortfolioForm(portfolio);
+  renderPortfolioFamilyOverview(savedPortfolios, portfolio.portfolio_name);
+  setOutput(
+    [
+      "# 가족 개인별 포트폴리오 선택 완료",
+      "",
+      `- 포트폴리오: ${portfolio.portfolio_name}`,
+      `- 보유 종목: ${portfolio.holding_count ?? portfolio.holdings?.length ?? 0}개`,
+      "- 아래 편집 표에서 선택한 개인의 전체 보유 종목을 확인할 수 있습니다.",
     ].join("\n")
   );
 });
