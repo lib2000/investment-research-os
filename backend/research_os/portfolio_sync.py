@@ -221,6 +221,128 @@ def apply_kiwoom_domestic_balance_to_portfolio(
     }
 
 
+def apply_toss_holdings_to_portfolio(
+    portfolio: SavedPortfolio,
+    balance: dict,
+    *,
+    checked_at: str,
+) -> tuple[SavedPortfolio, dict]:
+    """Apply read-only Toss KR/US holdings without creating new positions.
+
+    Existing holdings are updated only when their ticker is present in the
+    Toss response. Holdings absent from the response stay untouched and are
+    marked as ``toss_missing`` for review. Remote holdings that are not yet in
+    the selected saved portfolio are reported as ``untracked_remote`` rather
+    than silently added.
+    """
+    balance_by_ticker = {
+        normalize_import_ticker(item.get("ticker", "")): item
+        for item in balance.get("holdings", [])
+        if isinstance(item, dict) and item.get("ticker")
+    }
+    changes: list[dict] = []
+    skipped: list[dict] = []
+    synced_holdings: list[PortfolioHolding] = []
+    matched_tickers: set[str] = set()
+
+    for holding in portfolio.holdings:
+        ticker = normalize_import_ticker(holding.ticker)
+        source = balance_by_ticker.get(ticker)
+        if source:
+            matched_tickers.add(ticker)
+            update = {
+                "ticker": ticker,
+                "name": holding.name or source.get("name"),
+                "quantity": source.get("quantity") if source.get("quantity") is not None else holding.quantity,
+                "average_cost": source.get("average_cost") if source.get("average_cost") is not None else holding.average_cost,
+                "current_price": source.get("current_price") if source.get("current_price") is not None else holding.current_price,
+                "market_value": source.get("market_value") if source.get("market_value") is not None else holding.market_value,
+                "cost_basis": source.get("cost_basis") if source.get("cost_basis") is not None else holding.cost_basis,
+                "unrealized_gain": source.get("unrealized_gain") if source.get("unrealized_gain") is not None else holding.unrealized_gain,
+                "unrealized_return": source.get("unrealized_return") if source.get("unrealized_return") is not None else holding.unrealized_return,
+                "currency": source.get("currency") or holding.currency,
+                "price_source": "toss_holdings",
+                "price_refresh_status": "account_synced",
+                "price_checked_at": checked_at,
+                "sync_status": "account_synced",
+                "sync_source": "toss_holdings",
+                "sync_checked_at": checked_at,
+                "sync_message": "토스증권 보유자산과 매칭되어 수량/평단/평가금액을 갱신했습니다.",
+            }
+            synced = holding.model_copy(update=update)
+            synced_holdings.append(synced)
+            changes.append(
+                {
+                    "ticker": ticker,
+                    "name": synced.name or source.get("name") or ticker,
+                    "old_quantity": holding.quantity,
+                    "new_quantity": synced.quantity,
+                    "old_average_cost": holding.average_cost,
+                    "new_average_cost": synced.average_cost,
+                    "old_market_value": holding.market_value,
+                    "new_market_value": synced.market_value,
+                    "changed": (holding.quantity != synced.quantity)
+                    or (holding.average_cost != synced.average_cost)
+                    or (holding.market_value != synced.market_value),
+                }
+            )
+            continue
+
+        synced_holdings.append(
+            holding.model_copy(
+                update={
+                    "sync_status": "toss_missing",
+                    "sync_source": "toss_holdings",
+                    "sync_checked_at": checked_at,
+                    "sync_message": "토스증권 보유자산 응답에서 찾지 못해 기존 수량을 유지했습니다.",
+                }
+            )
+        )
+        skipped.append(
+            {
+                "ticker": ticker,
+                "name": holding.name or ticker,
+                "quantity": holding.quantity,
+                "reason": "toss_missing",
+            }
+        )
+
+    untracked_remote = [
+        {
+            "ticker": ticker,
+            "name": item.get("name") or ticker,
+            "quantity": item.get("quantity"),
+            "market_value": item.get("market_value"),
+            "currency": item.get("currency"),
+            "reason": "untracked_remote",
+        }
+        for ticker, item in balance_by_ticker.items()
+        if ticker not in matched_tickers
+    ]
+    synced_portfolio = portfolio.model_copy(
+        update={
+            "holdings": synced_holdings,
+            "updated_at": checked_at,
+            "holding_count": len(synced_holdings),
+        }
+    )
+    return synced_portfolio, {
+        "status": "success",
+        "broker": "TOSS",
+        "scope": "kr_us_holdings",
+        "api_id": balance.get("api_path", "/api/v1/holdings"),
+        "account_seq": balance.get("account_seq"),
+        "checked_at": checked_at,
+        "updated_count": sum(1 for item in changes if item.get("changed")),
+        "confirmed_count": sum(1 for item in changes if not item.get("changed")),
+        "skipped_count": len(skipped),
+        "changes": changes,
+        "skipped": skipped,
+        "untracked_remote": untracked_remote,
+        "message": "토스증권 보유자산과 매칭된 종목만 갱신했습니다. 미매칭 기존 종목은 보존하고 원격 신규 종목은 자동 추가하지 않았습니다.",
+    }
+
+
 def portfolio_sync_status_summary(
     portfolio: SavedPortfolio | None,
     history: list[dict],
@@ -232,6 +354,9 @@ def portfolio_sync_status_summary(
         "manual_or_overseas_protected": 0,
         "kiwoom_domestic_missing": 0,
         "kiwoom_not_configured": 0,
+        "toss_missing": 0,
+        "toss_not_configured": 0,
+        "toss_unavailable": 0,
         "unknown": 0,
     }
     latest_checked_at = ""

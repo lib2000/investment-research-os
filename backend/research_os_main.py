@@ -152,6 +152,7 @@ from research_os.kiwoom_interest import (
     read_kiwoom_interest_sync_history,
 )
 import research_os.dart_filing_watch as dart_filing_watch
+from research_os.toss_invest import TossApiError, TossClient, TossMaskedTokenStatus
 from research_os.investment_calendar import (
     build_investment_calendar_earnings_events as build_calendar_earnings_events,
     load_latest_calendar_file_payload,
@@ -347,6 +348,7 @@ from research_os.portfolio_store import (
 from research_os.portfolio_sync import (
     append_portfolio_sync_history,
     apply_kiwoom_domestic_balance_to_portfolio,
+    apply_toss_holdings_to_portfolio,
     portfolio_sync_history_path,
     portfolio_sync_status_summary,
     protect_manual_or_overseas_holding_sync_state,
@@ -5249,6 +5251,26 @@ def sync_saved_portfolio_with_kiwoom_domestic(
 ) -> tuple[SavedPortfolio, dict]:
     checked_at = current_storage_timestamp()
     synced_portfolio, sync_summary = apply_kiwoom_domestic_balance_to_portfolio(
+        portfolio,
+        balance,
+        checked_at=checked_at,
+    )
+    synced_portfolio = sort_and_weight_portfolio(synced_portfolio, settings, refresh_prices=False)
+    return synced_portfolio, sync_summary
+
+
+def fetch_toss_holdings(settings: Settings) -> dict:
+    """Fetch read-only KR/US holdings from Toss Securities."""
+    return TossClient(settings).fetch_holdings()
+
+
+def sync_saved_portfolio_with_toss(
+    portfolio: SavedPortfolio,
+    balance: dict,
+    settings: Settings,
+) -> tuple[SavedPortfolio, dict]:
+    checked_at = current_storage_timestamp()
+    synced_portfolio, sync_summary = apply_toss_holdings_to_portfolio(
         portfolio,
         balance,
         checked_at=checked_at,
@@ -13279,8 +13301,8 @@ def read_brokerage_status(settings: Settings = Depends(get_settings)) -> BrokerS
     return BrokerStatus(
         default_broker=Broker(settings.default_broker),
         first_integration_target=Broker.KIWOOM,
-        adapters_ready=[Broker.KIWOOM],
-        message="첫 증권사 연동 대상은 키움증권입니다. 한국투자증권은 후속 Adapter로 추가합니다.",
+        adapters_ready=[Broker.KIWOOM, Broker.KIS, Broker.TOSS],
+        message="키움·KIS 데이터 경로와 토스증권 읽기 전용 보유자산 Adapter가 준비되었습니다. 주문 API는 연결하지 않습니다.",
     )
 
 
@@ -13298,6 +13320,81 @@ def test_kiwoom_token_issue(
     보안상 실제 token 원문은 반환하지 않고 마스킹된 값만 반환합니다.
     """
     return KiwoomAuthClient(settings).issue_masked_token_status()
+
+
+@app.post(
+    "/api/v1/brokerage/toss/token-test",
+    response_model=TossMaskedTokenStatus,
+    dependencies=[Depends(verify_user_token)],
+)
+def test_toss_token_issue(
+    settings: Settings = Depends(get_settings),
+) -> TossMaskedTokenStatus:
+    """Issue/test a Toss OAuth token while returning only a masked token."""
+    try:
+        return TossClient(settings).issue_masked_token_status()
+    except ValueError as exc:
+        return TossMaskedTokenStatus(
+            status="not_configured",
+            base_url=settings.toss_base_url,
+            account_seq=settings.toss_account_seq or None,
+            source=str(exc),
+        )
+    except (TossApiError, httpx.HTTPError) as exc:
+        return TossMaskedTokenStatus(
+            status="unavailable",
+            base_url=settings.toss_base_url,
+            account_seq=settings.toss_account_seq or None,
+            source=str(exc),
+        )
+
+
+@app.get(
+    "/api/v1/brokerage/toss/accounts",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_toss_accounts(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Read Toss account metadata without exposing full account numbers."""
+    try:
+        accounts = TossClient(settings).fetch_accounts()
+    except ValueError as exc:
+        return {"status": "not_configured", "broker": "TOSS", "message": str(exc), "accounts": []}
+    except (TossApiError, httpx.HTTPError) as exc:
+        return {"status": "unavailable", "broker": "TOSS", "message": str(exc), "accounts": []}
+    safe_accounts = []
+    for account in accounts:
+        account_no = str(account.get("accountNo") or "")
+        safe_accounts.append(
+            {
+                "account_seq": account.get("accountSeq"),
+                "account_type": account.get("accountType"),
+                "account_no_masked": f"{account_no[:3]}****{account_no[-2:]}" if len(account_no) >= 5 else "********",
+            }
+        )
+    return {
+        "status": "success",
+        "broker": "TOSS",
+        "configured_account_seq": settings.toss_account_seq or None,
+        "accounts": safe_accounts,
+    }
+
+
+@app.get(
+    "/api/v1/brokerage/toss/holdings",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_toss_holdings(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Read normalized Toss holdings; no order endpoints are called."""
+    try:
+        return fetch_toss_holdings(settings)
+    except ValueError as exc:
+        return {"status": "not_configured", "broker": "TOSS", "message": str(exc), "holdings": []}
+    except (TossApiError, httpx.HTTPError) as exc:
+        return {"status": "unavailable", "broker": "TOSS", "message": str(exc), "holdings": []}
 
 
 @app.get(
@@ -14637,6 +14734,98 @@ def build_portfolio_kiwoom_domestic_sync_response(
         return result
 
     synced_portfolio, sync_summary = sync_saved_portfolio_with_kiwoom_domestic(
+        active_portfolio,
+        balance,
+        settings,
+    )
+    sync_summary["mode"] = "apply" if apply_changes else "preview"
+    if apply_changes:
+        store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
+        write_json_store(portfolio_store_path(settings), store)
+        append_portfolio_sync_history(
+            settings,
+            portfolio_name=synced_portfolio.portfolio_name,
+            summary=sync_summary,
+        )
+    response = portfolio_store_response(settings, active_portfolio=synced_portfolio)
+    result = response.model_dump(mode="json")
+    result["sync_summary"] = sync_summary
+    return result
+
+
+@app.post(
+    "/api/v1/portfolios/{portfolio_name}/sync/toss/preview",
+    dependencies=[Depends(verify_user_token)],
+)
+def preview_portfolio_toss_sync(
+    portfolio_name: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_portfolio_toss_sync_response(
+        portfolio_name,
+        settings,
+        apply_changes=False,
+    )
+
+
+@app.post(
+    "/api/v1/portfolios/{portfolio_name}/sync/toss",
+    dependencies=[Depends(verify_user_token)],
+)
+def sync_portfolio_toss(
+    portfolio_name: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_portfolio_toss_sync_response(
+        portfolio_name,
+        settings,
+        apply_changes=True,
+    )
+
+
+def build_portfolio_toss_sync_response(
+    portfolio_name: str,
+    settings: Settings,
+    *,
+    apply_changes: bool,
+) -> dict:
+    store = read_portfolio_store(settings)
+    key = portfolio_store_key(portfolio_name)
+    payload = store.get("portfolios", {}).get(key)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
+
+    active_portfolio = SavedPortfolio.model_validate(payload)
+    try:
+        balance = fetch_toss_holdings(settings)
+    except (ValueError, TossApiError, httpx.HTTPError) as exc:
+        status = "not_configured" if isinstance(exc, ValueError) else "toss_unavailable"
+        message = str(exc) if isinstance(exc, ValueError) else "토스증권 보유자산 API에 연결하지 못했습니다. 기존 수량은 변경하지 않았습니다."
+        response = portfolio_store_response(settings, active_portfolio=active_portfolio)
+        result = response.model_dump(mode="json")
+        result["sync_summary"] = {
+            "status": status,
+            "broker": "TOSS",
+            "scope": "kr_us_holdings",
+            "updated_count": 0,
+            "confirmed_count": 0,
+            "skipped_count": len(active_portfolio.holdings),
+            "changes": [],
+            "skipped": [
+                {
+                    "ticker": normalize_ticker(holding.ticker),
+                    "name": holding.name or normalize_ticker(holding.ticker),
+                    "quantity": holding.quantity,
+                    "reason": "toss_not_configured" if status == "not_configured" else "toss_unavailable",
+                }
+                for holding in active_portfolio.holdings
+            ],
+            "mode": "apply" if apply_changes else "preview",
+            "message": message,
+        }
+        return result
+
+    synced_portfolio, sync_summary = sync_saved_portfolio_with_toss(
         active_portfolio,
         balance,
         settings,

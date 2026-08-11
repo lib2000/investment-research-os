@@ -85,6 +85,17 @@ class Settings(BaseModel):
     kis_access_token_file: str = Field(default="")
     kis_token_cache_file: str = "../research_vault/_system/kis_access_token.json"
     kis_timeout_seconds: float = 8.0
+    # Toss Securities Open API (read-only account/holdings sync).
+    toss_enabled: bool = False
+    toss_client_id: str = Field(default="")
+    toss_client_secret: str = Field(default="")
+    toss_base_url: str = "https://openapi.tossinvest.com"
+    toss_account_seq: str = ""
+    toss_token_cache_file: str = "../research_vault/_system/toss_access_token.json"
+    toss_token_expiry_buffer_seconds: int = 300
+    toss_timeout_seconds: float = 10.0
+    toss_max_retries: int = 2
+    toss_retry_backoff_seconds: float = 1.0
     dart_api_key: str = Field(default="")
     dart_base_url: str = "https://opendart.fss.or.kr/api"
     dart_corp_code_cache_file: str = "../research_vault/_system/dart_corp_codes.json"
@@ -290,6 +301,18 @@ class Settings(BaseModel):
                 "KIS_TOKEN_CACHE_FILE", "../research_vault/_system/kis_access_token.json"
             ),
             kis_timeout_seconds=float(os.getenv("KIS_TIMEOUT_SECONDS", "8")),
+            toss_enabled=_read_bool("TOSS_ENABLED", False),
+            toss_client_id=os.getenv("TOSS_CLIENT_ID", ""),
+            toss_client_secret=os.getenv("TOSS_CLIENT_SECRET", ""),
+            toss_base_url=os.getenv("TOSS_BASE_URL", "https://openapi.tossinvest.com"),
+            toss_account_seq=os.getenv("TOSS_ACCOUNT_SEQ", ""),
+            toss_token_cache_file=os.getenv(
+                "TOSS_TOKEN_CACHE_FILE", "../research_vault/_system/toss_access_token.json"
+            ),
+            toss_token_expiry_buffer_seconds=_read_int("TOSS_TOKEN_EXPIRY_BUFFER_SECONDS", 300),
+            toss_timeout_seconds=_read_float("TOSS_TIMEOUT_SECONDS", 10.0),
+            toss_max_retries=_read_int("TOSS_MAX_RETRIES", 2),
+            toss_retry_backoff_seconds=_read_float("TOSS_RETRY_BACKOFF_SECONDS", 1.0),
             dart_api_key=os.getenv("DART_API_KEY", os.getenv("OPENDART_API_KEY", "")),
             dart_base_url=os.getenv("DART_BASE_URL", "https://opendart.fss.or.kr/api"),
             dart_corp_code_cache_file=os.getenv(

@@ -7,6 +7,7 @@
 - 백엔드 API 키: `backend\.env`
 - 모바일/프론트 개발 설정: `mobile_app\.env`, `apps\mobile\.env`
 - KIS 접근 토큰 캐시 기본값: `research_vault\_system\kis_access_token.json`
+- 토스증권 접근 토큰 캐시 기본값: `research_vault\_system\toss_access_token.json`
 - 리서치 저장소와 토큰 캐시는 `research_vault\` 아래에 두는 것을 기본으로 합니다.
 
 `.gitignore`는 `.env`, `research_vault\`, 로컬 DB, 키 파일, 토큰 JSON을 제외합니다. 예시 파일인 `.env.example`만 Git에 보관합니다.
@@ -17,6 +18,7 @@
 
 - `KIWOOM_API_KEY`, `KIWOOM_API_SECRET`
 - `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCESS_TOKEN_FILE`
+- `TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET`
 - `DART_API_KEY`, `FINNHUB_API_KEY`, `TIINGO_API_KEY`, `ALPHA_VANTAGE_API_KEY`
 - `TAVILY_API_KEY`, `BRAVE_API_KEY`, `NPS_ODCLOUD_API_KEY`, `CUSTOMS_TRADE_API_KEY`
 - `KCIF_USERNAME`, `KCIF_PASSWORD`
@@ -45,6 +47,20 @@ KIS_ACCESS_TOKEN=
 KIS_ACCESS_TOKEN_FILE=
 KIS_TOKEN_CACHE_FILE=../research_vault/_system/kis_access_token.json
 ```
+
+## 토스증권 Open API 원칙
+
+토스증권 연동은 OAuth client credentials로 계좌·보유자산만 조회합니다. `TOSS_ENABLED=false`가 기본값이며, 포트폴리오 화면의 미리보기/적용을 사용자가 직접 실행할 때만 API를 호출하도록 설계합니다. 주문·정정·취소·조건주문 엔드포인트는 연결하지 않습니다.
+
+```dotenv
+TOSS_ENABLED=false
+TOSS_CLIENT_ID=
+TOSS_CLIENT_SECRET=
+TOSS_ACCOUNT_SEQ=
+TOSS_TOKEN_CACHE_FILE=../research_vault/_system/toss_access_token.json
+```
+
+토스증권 Open API는 계좌·자산 요청에 `X-Tossinvest-Account` 헤더가 필요하며, 계좌 식별값을 비워두면 첫 번째 `BROKERAGE` 계좌를 자동 선택합니다. 실제 키는 `backend\\.env`에만 넣고, 콘솔 상태 응답에는 설정 여부와 마스킹 값만 표시합니다.
 
 ## KCIF 계정 원칙
 

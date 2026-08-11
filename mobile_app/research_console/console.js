@@ -91,6 +91,8 @@
   savePortfolio,
   syncKiwoomDomesticPortfolio,
   previewKiwoomDomesticPortfolioSync,
+  syncTossPortfolio,
+  previewTossPortfolioSync,
   fetchPortfolioSyncHistory,
   deletePortfolio,
   fetchInterests,
@@ -113,7 +115,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=e2f4f92f8fbe";
+} from "./api.js?v=f15a6a2fc242";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -187,6 +189,9 @@ const elements = {
   portfolioKiwoomSyncButton: document.querySelector("#portfolioKiwoomSyncButton"),
   portfolioKiwoomApplyButton: document.querySelector("#portfolioKiwoomApplyButton"),
   portfolioKiwoomCancelButton: document.querySelector("#portfolioKiwoomCancelButton"),
+  portfolioTossSyncButton: document.querySelector("#portfolioTossSyncButton"),
+  portfolioTossApplyButton: document.querySelector("#portfolioTossApplyButton"),
+  portfolioTossCancelButton: document.querySelector("#portfolioTossCancelButton"),
   portfolioSyncHistoryButton: document.querySelector("#portfolioSyncHistoryButton"),
   portfolioConnectivityButton: document.querySelector("#portfolioConnectivityButton"),
   portfolioNpsFlowButton: document.querySelector("#portfolioNpsFlowButton"),
@@ -513,6 +518,7 @@ let lastTickerProfile = null;
 let savedPortfolios = [];
 let activePortfolioSnapshot = null;
 let pendingKiwoomDomesticSync = null;
+let pendingTossHoldingsSync = null;
 let portfolioSmartRows = [];
 let portfolioSmartSort = { key: "market_value", direction: "desc" };
 let consensusScanRows = [];
@@ -1703,14 +1709,18 @@ function createPortfolioRefreshBadge(holding = {}) {
   return badge;
 }
 
-function portfolioSyncStatusMeta(status) {
+function portfolioSyncStatusMeta(status, source = "") {
   const normalized = String(status || "").trim().toLowerCase();
+  const sourceLabel = String(source || "").toLowerCase().includes("toss") ? "토스" : "키움";
   const map = {
-    account_synced: ["키움 동기화", "success"],
+    account_synced: [`${sourceLabel} 동기화`, "success"],
     kiwoom_domestic_missing: ["키움 미확인", "warning"],
+    toss_missing: ["토스 미확인", "warning"],
     manual_or_overseas_protected: ["수동 보호", "info"],
     kiwoom_not_configured: ["설정 필요", "warning"],
     kiwoom_unavailable: ["연결 실패", "warning"],
+    toss_not_configured: ["토스 설정 필요", "warning"],
+    toss_unavailable: ["토스 연결 실패", "warning"],
   };
   const [label, tone] = map[normalized] || ["수동/미확인", "muted"];
   return { label, tone, normalized };
@@ -1718,7 +1728,7 @@ function portfolioSyncStatusMeta(status) {
 
 function createPortfolioSyncBadge(holding = {}) {
   const badge = document.createElement("div");
-  const meta = portfolioSyncStatusMeta(holding.sync_status);
+  const meta = portfolioSyncStatusMeta(holding.sync_status, holding.sync_source);
   badge.className = `portfolio-sync-badge ${meta.tone}`;
   badge.title = [
     `계좌 동기화: ${meta.label}`,
@@ -4194,10 +4204,13 @@ function portfolioStoreFreshnessSummary(portfolio = {}) {
 
 function portfolioSyncStatusLabel(status) {
   const labels = {
-    account_synced: "키움 동기화",
+    account_synced: "계좌 동기화",
     manual_or_overseas_protected: "수동 보호",
     kiwoom_domestic_missing: "키움 미확인",
     kiwoom_not_configured: "설정 필요",
+    toss_missing: "토스 미확인",
+    toss_not_configured: "토스 설정 필요",
+    toss_unavailable: "토스 연결 실패",
     unknown: "미확인",
   };
   return labels[status] || "미확인";
@@ -4217,6 +4230,9 @@ function summarizePortfolioSyncFromPortfolio(portfolio) {
       kiwoom_domestic_missing: 0,
       kiwoom_not_configured: 0,
       kiwoom_unavailable: 0,
+      toss_missing: 0,
+      toss_not_configured: 0,
+      toss_unavailable: 0,
       unknown: 0,
     }
   );
@@ -4243,16 +4259,16 @@ function renderPortfolioSyncOverview(payload = {}) {
   const counts = summary.counts || {};
   const synced = counts.account_synced || 0;
   const protectedCount = counts.manual_or_overseas_protected || 0;
-  const missing = (counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0);
+  const missing = (counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0) + (counts.toss_missing || 0) + (counts.toss_not_configured || 0) + (counts.toss_unavailable || 0);
   const unknown = counts.unknown || 0;
   const checkedAt = summary.last_history_checked_at || summary.latest_checked_at || summary.last_history_created_at;
   const holdingCount = summary.holding_count || synced + protectedCount + missing + unknown;
   const statusClass = missing > 0 ? "warning" : synced + protectedCount > 0 ? "ok" : "needs_action";
   elements.portfolioSyncOverview.innerHTML = [
-    `<div class="${statusClass}"><span>계좌 동기화</span><strong>${escapeHtml(checkedAt ? formatDateTime(checkedAt) : "확인 전")}</strong><p>${escapeHtml(checkedAt ? "최근 키움 국내 수량 확인 기준" : "최근 동기화 이력이 없습니다.")}</p></div>`,
-    `<div class="${synced ? "ok" : "needs_action"}"><span>키움 동기화</span><strong>${formatNumber(synced)}개</strong><p>국내 잔고와 수량/평단 확인</p></div>`,
+    `<div class="${statusClass}"><span>계좌 동기화</span><strong>${escapeHtml(checkedAt ? formatDateTime(checkedAt) : "확인 전")}</strong><p>${escapeHtml(checkedAt ? "최근 키움 또는 토스 보유자산 확인 기준" : "최근 동기화 이력이 없습니다.")}</p></div>`,
+    `<div class="${synced ? "ok" : "needs_action"}"><span>계좌 동기화</span><strong>${formatNumber(synced)}개</strong><p>수량·평단·평가금액 확인</p></div>`,
     `<div class="${protectedCount ? "info" : "ok"}"><span>수동 보호</span><strong>${formatNumber(protectedCount)}개</strong><p>해외주식·수동 관리 수량 보존</p></div>`,
-    `<div class="${missing ? "warning" : "ok"}"><span>확인 필요</span><strong>${formatNumber(missing + unknown)}개</strong><p>${escapeHtml(missing ? "국내 잔고 미확인 또는 설정 필요" : "미확인 항목 없음")}</p></div>`,
+    `<div class="${missing ? "warning" : "ok"}"><span>확인 필요</span><strong>${formatNumber(missing + unknown)}개</strong><p>${escapeHtml(missing ? "증권사 잔고 미확인 또는 설정 필요" : "미확인 항목 없음")}</p></div>`,
     `<div><span>전체 종목</span><strong>${formatNumber(holdingCount)}개</strong><p>${escapeHtml(summary.last_history_message || "이력 조회 시 최근 기록을 함께 표시")}</p></div>`,
   ].join("");
 }
@@ -4282,9 +4298,9 @@ function portfolioSyncHistoryOutputLines(result = {}) {
     "# 최근 계좌 동기화 이력",
     "",
     `- 포트폴리오: ${result.portfolio_name || elements.portfolioSelect?.value || "미선택"}`,
-    `- 키움 동기화: ${formatNumber(counts.account_synced || 0)}개`,
+    `- 계좌 동기화: ${formatNumber(counts.account_synced || 0)}개`,
     `- 수동 보호: ${formatNumber(counts.manual_or_overseas_protected || 0)}개`,
-    `- 확인 필요: ${formatNumber((counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0) + (counts.unknown || 0))}개`,
+    `- 확인 필요: ${formatNumber((counts.kiwoom_domestic_missing || 0) + (counts.kiwoom_not_configured || 0) + (counts.kiwoom_unavailable || 0) + (counts.toss_missing || 0) + (counts.toss_not_configured || 0) + (counts.toss_unavailable || 0) + (counts.unknown || 0))}개`,
     summary.last_history_checked_at || summary.latest_checked_at
       ? `- 최근 확인 시각: ${formatDateTime(summary.last_history_checked_at || summary.latest_checked_at)}`
       : "- 최근 확인 시각: 아직 없음",
@@ -4367,6 +4383,9 @@ function syncSkipReasonLabel(reason) {
     kiwoom_domestic_missing: "키움 국내 잔고에서 미확인",
     kiwoom_not_configured: "키움 API 키/토큰 설정 필요",
     kiwoom_unavailable: "키움 국내 잔고 API 연결 실패",
+    toss_missing: "토스 보유자산에서 미확인",
+    toss_not_configured: "토스 client_id/client_secret 설정 필요",
+    toss_unavailable: "토스 보유자산 API 연결 실패",
   };
   return labels[reason] || "동기화 제외";
 }
@@ -4403,6 +4422,53 @@ function setPendingKiwoomDomesticSync(portfolioName, result) {
   if (elements.portfolioKiwoomSyncButton) {
     elements.portfolioKiwoomSyncButton.textContent = "다시 확인";
   }
+}
+
+function clearPendingTossHoldingsSync() {
+  pendingTossHoldingsSync = null;
+  if (elements.portfolioTossApplyButton) {
+    elements.portfolioTossApplyButton.hidden = true;
+    elements.portfolioTossApplyButton.disabled = true;
+  }
+  if (elements.portfolioTossCancelButton) {
+    elements.portfolioTossCancelButton.hidden = true;
+    elements.portfolioTossCancelButton.disabled = true;
+  }
+  if (elements.portfolioTossSyncButton) {
+    elements.portfolioTossSyncButton.textContent = "토스 보유자산 확인";
+  }
+}
+
+function setPendingTossHoldingsSync(portfolioName, result) {
+  pendingTossHoldingsSync = {
+    portfolioName,
+    checkedAt: result?.sync_summary?.checked_at || "",
+    summary: result?.sync_summary || {},
+  };
+  if (elements.portfolioTossApplyButton) {
+    elements.portfolioTossApplyButton.hidden = false;
+    elements.portfolioTossApplyButton.disabled = false;
+  }
+  if (elements.portfolioTossCancelButton) {
+    elements.portfolioTossCancelButton.hidden = false;
+    elements.portfolioTossCancelButton.disabled = false;
+  }
+  if (elements.portfolioTossSyncButton) {
+    elements.portfolioTossSyncButton.textContent = "다시 확인";
+  }
+}
+
+function tossSyncSummaryLines(summary = {}) {
+  const lines = kiwoomSyncSummaryLines(summary);
+  const untracked = Array.isArray(summary.untracked_remote) ? summary.untracked_remote : [];
+  if (untracked.length) {
+    lines.push(
+      "",
+      "토스에만 있는 종목(자동 추가하지 않음)",
+      ...untracked.slice(0, 8).map((item) => `- ${item.name || item.ticker}: ${formatNumber(item.quantity ?? 0)}주 · ${formatMoney(item.market_value, item.currency || "KRW", "평가금액 n/a")}`)
+    );
+  }
+  return lines;
 }
 
 function portfolioRefreshStatusLines(portfolio) {
@@ -11677,6 +11743,9 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioKiwoomSyncButton: "키움 국내 수량 변경 예정 목록을 확인합니다.",
   portfolioKiwoomApplyButton: "확인한 키움 국내 수량 변경을 적용합니다.",
   portfolioKiwoomCancelButton: "키움 국내 수량 적용 대기를 취소합니다.",
+  portfolioTossSyncButton: "토스 국내·미국 보유자산 변경 예정 목록을 확인합니다.",
+  portfolioTossApplyButton: "확인한 토스 보유자산 변경을 적용합니다.",
+  portfolioTossCancelButton: "토스 보유자산 적용 대기를 취소합니다.",
   portfolioSyncHistoryButton: "최근 계좌 동기화 이력을 조회합니다.",
   portfolioPerformanceButton: "기간 수익 비교를 시작했습니다.",
   portfolioSaveButton: "포트폴리오 저장을 시작했습니다.",
@@ -13544,6 +13613,150 @@ elements.portfolioKiwoomCancelButton?.addEventListener("click", async () => {
     }
   }
   setOutput("키움 국내 수량 변경 적용을 취소했습니다. 저장 데이터는 변경하지 않았습니다.");
+});
+
+elements.portfolioTossSyncButton?.addEventListener("click", async () => {
+  const portfolioName = elements.portfolioSelect.value;
+  if (!portfolioName) {
+    setOutput("동기화할 내 포트폴리오가 없습니다.");
+    return;
+  }
+  syncApiBaseUrl();
+  elements.portfolioTossSyncButton.disabled = true;
+  startOutputLoading("토스 보유자산 변경 예정 확인 중", [
+    "저장 포트폴리오 조회",
+    "토스 계좌·보유자산 조회",
+    "국내·미국 종목 변경 예정 목록 구성",
+    "미매칭 신규 종목 자동 추가 방지",
+  ]);
+  try {
+    const result = await previewTossPortfolioSync(token(), portfolioName);
+    const activePortfolio = result?.active_portfolio;
+    if (activePortfolio) {
+      if (elements.portfolioSelect) {
+        elements.portfolioSelect.value = activePortfolio.portfolio_name || portfolioName;
+      }
+      fillPortfolioForm(activePortfolio);
+      updatePortfolioLoadedAt(activePortfolio, "토스 미리보기 후 불러온");
+    }
+    const summary = result?.sync_summary || {};
+    if (["not_configured", "toss_unavailable"].includes(summary.status)) {
+      clearPendingTossHoldingsSync();
+    } else {
+      setPendingTossHoldingsSync(portfolioName, result);
+    }
+    renderPortfolioSyncOverview({
+      portfolio: activePortfolio,
+      summary: {
+        ...summarizePortfolioSyncFromPortfolio(activePortfolio),
+        latest_checked_at: summary.checked_at || summarizePortfolioSyncFromPortfolio(activePortfolio).latest_checked_at,
+      },
+    });
+    setOutput(
+      [
+        summary.status === "not_configured"
+          ? "# 토스 보유자산 동기화 설정 필요"
+          : summary.status === "toss_unavailable"
+            ? "# 토스 보유자산 확인 연결 실패"
+            : "# 토스 보유자산 변경 예정",
+        "",
+        `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
+        "- 범위: 토스 국내·미국 보유자산만 갱신",
+        "- 아직 저장하지 않았습니다. 내용을 확인한 뒤 `토스 변경 적용`을 누르면 저장됩니다.",
+        "- 토스에만 있는 신규 종목은 자동 추가하지 않고 별도 목록으로 표시합니다.",
+        summary.message ? `- 상태: ${summary.message}` : "",
+        ...tossSyncSummaryLines(summary),
+      ].filter(Boolean).join("\n")
+    );
+    await refreshPortfolioSmartTable({ silent: true });
+  } catch (error) {
+    setError(error);
+  } finally {
+    elements.portfolioTossSyncButton.disabled = false;
+  }
+});
+
+elements.portfolioTossApplyButton?.addEventListener("click", async () => {
+  const portfolioName = pendingTossHoldingsSync?.portfolioName || elements.portfolioSelect.value;
+  if (!portfolioName) {
+    setOutput("적용할 토스 보유자산 확인 결과가 없습니다.");
+    return;
+  }
+  syncApiBaseUrl();
+  elements.portfolioTossApplyButton.disabled = true;
+  elements.portfolioTossCancelButton.disabled = true;
+  startOutputLoading("토스 보유자산 변경 적용 중", [
+    "최신 토스 보유자산 재조회",
+    "매칭된 종목 변경 저장",
+    "미매칭 신규 종목 자동 추가 방지",
+    "동기화 이력 기록",
+  ]);
+  try {
+    const result = await syncTossPortfolio(token(), portfolioName);
+    await refreshPortfolioStore(true);
+    const activePortfolio = result?.active_portfolio;
+    if (activePortfolio) {
+      if (elements.portfolioSelect) {
+        elements.portfolioSelect.value = activePortfolio.portfolio_name || portfolioName;
+      }
+      fillPortfolioForm(activePortfolio);
+      updatePortfolioLoadedAt(activePortfolio, "토스 적용 후 불러온");
+    }
+    const summary = result?.sync_summary || {};
+    clearPendingTossHoldingsSync();
+    renderPortfolioSyncOverview({
+      portfolio: activePortfolio,
+      summary: {
+        ...summarizePortfolioSyncFromPortfolio(activePortfolio),
+        latest_checked_at: summary.checked_at || summarizePortfolioSyncFromPortfolio(activePortfolio).latest_checked_at,
+        last_history_checked_at: summary.checked_at || "",
+        last_history_message: summary.message || "",
+      },
+    });
+    setOutput(
+      [
+        summary.status === "not_configured"
+          ? "# 토스 보유자산 동기화 설정 필요"
+          : summary.status === "toss_unavailable"
+            ? "# 토스 보유자산 확인 연결 실패"
+            : "# 토스 보유자산 변경 적용 완료",
+        "",
+        `- 포트폴리오: ${activePortfolio?.portfolio_name || portfolioName}`,
+        "- 적용 이력은 `research_vault/_system/portfolio_sync_history.jsonl`에 기록했습니다.",
+        "- 토스에만 있는 신규 종목은 자동 추가하지 않았습니다.",
+        summary.message ? `- 상태: ${summary.message}` : "",
+        ...tossSyncSummaryLines(summary),
+      ].filter(Boolean).join("\n")
+    );
+    await refreshPortfolioSmartTable({ silent: true });
+  } catch (error) {
+    setError(error);
+    if (elements.portfolioTossApplyButton) {
+      elements.portfolioTossApplyButton.disabled = false;
+    }
+    if (elements.portfolioTossCancelButton) {
+      elements.portfolioTossCancelButton.disabled = false;
+    }
+  }
+});
+
+elements.portfolioTossCancelButton?.addEventListener("click", async () => {
+  const portfolioName = pendingTossHoldingsSync?.portfolioName || elements.portfolioSelect.value;
+  clearPendingTossHoldingsSync();
+  if (portfolioName) {
+    try {
+      const result = await fetchPortfolio(token(), portfolioName, {
+        refreshPrices: false,
+        persistRefresh: false,
+      });
+      fillPortfolioForm(result?.active_portfolio);
+      updatePortfolioLoadedAt(result?.active_portfolio, "토스 미리보기 취소 후 불러온");
+    } catch (error) {
+      setError(error);
+      return;
+    }
+  }
+  setOutput("토스 보유자산 변경 적용을 취소했습니다. 저장 데이터는 변경하지 않았습니다.");
 });
 
 elements.portfolioSyncHistoryButton?.addEventListener("click", async () => {

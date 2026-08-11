@@ -2082,6 +2082,40 @@ export async function previewKiwoomDomesticPortfolioSync(accessToken, portfolioN
   );
 }
 
+export async function syncTossPortfolio(accessToken, portfolioName) {
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/sync/toss`,
+    {
+      method: "POST",
+      accessToken,
+    }
+  );
+}
+
+export async function previewTossPortfolioSync(accessToken, portfolioName) {
+  return request(
+    `/api/v1/portfolios/${encodeURIComponent(portfolioName)}/sync/toss/preview`,
+    {
+      method: "POST",
+      accessToken,
+    }
+  );
+}
+
+export async function fetchTossAccounts(accessToken) {
+  return request("/api/v1/brokerage/toss/accounts", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function fetchTossHoldings(accessToken) {
+  return request("/api/v1/brokerage/toss/holdings", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchPortfolioSyncHistory(accessToken, portfolioName, { limit = 10 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
   return request(

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=36b679307e16" />
+    <link rel="stylesheet" href="./styles.css?v=a66412669267" />
   </head>
   <body>
     <main class="app-shell">
@@ -789,6 +789,9 @@
             <button id="portfolioKiwoomSyncButton" class="secondary" type="button">키움 국내 수량 확인</button>
             <button id="portfolioKiwoomApplyButton" type="button" hidden disabled>변경 적용</button>
             <button id="portfolioKiwoomCancelButton" class="secondary" type="button" hidden disabled>취소</button>
+            <button id="portfolioTossSyncButton" class="secondary" type="button">토스 보유자산 확인</button>
+            <button id="portfolioTossApplyButton" type="button" hidden disabled>토스 변경 적용</button>
+            <button id="portfolioTossCancelButton" class="secondary" type="button" hidden disabled>취소</button>
             <button id="portfolioSyncHistoryButton" class="secondary" type="button">최근 동기화 이력</button>
             <button id="portfolioConnectivityButton" class="secondary" type="button">전체 연결 점검</button>
             <button id="portfolioNpsFlowButton" class="secondary" type="button">국민연금 수급</button>
@@ -813,7 +816,7 @@
           <div>
             <span>계좌 동기화</span>
             <strong>확인 전</strong>
-            <p>키움 국내 수량 확인 또는 이력 조회를 실행하면 상태가 표시됩니다.</p>
+            <p>키움 국내 수량 또는 토스 보유자산 확인을 실행하면 상태가 표시됩니다.</p>
           </div>
         </div>
         <div id="portfolioAnalysisOverview" class="portfolio-analysis-overview" aria-live="polite">
@@ -1209,6 +1212,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=2a6329155e51"></script>
+  <script type="module" src="./console.js?v=f2e00718e863"></script>
 </body>
 </html>

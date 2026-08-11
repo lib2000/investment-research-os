@@ -9,6 +9,7 @@ from research_os.research_memory import ResearchStorageInfo
 class Broker(str, Enum):
     KIWOOM = "KIWOOM"
     KIS = "KIS"
+    TOSS = "TOSS"
 
 
 class TradeSide(str, Enum):

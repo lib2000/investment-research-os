@@ -300,7 +300,7 @@ python -m unittest tests.test_backend_regressions.InvestmentJournalManualImportT
 최신 투자일지 API 백엔드는 8010 포트를 사용한다. 아래 스크립트는 오래된 8000 포트 잔류 프로세스를 먼저 정리한 뒤 최신 백엔드를 실행한다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_backend.ps1
 ```
 
@@ -318,13 +318,15 @@ cd C:\Users\lib20\InvestmentJournalApp
 
 ## 현재 결정 사항
 
-- 첫 연동 증권사: 키움증권
-- 후속 연동 증권사: 한국투자증권
+- 계좌 연동: 키움증권 + 토스증권 읽기 전용 보유자산
+- 시장 데이터: 한국투자증권(KIS) 경로 유지
 - 인증 권장안: Supabase Auth 또는 동등한 JWT 기반 인증, 백엔드 검증 필수
 - 데이터베이스 권장안: 로컬 개발은 SQLite WAL 모드, 클라우드/운영 배포는 PostgreSQL
 - ORB 기본값: 5분 Opening Range, 사용자 설정으로 변경 가능
 
 키움 연동 세부 설계는 [docs/kiwoom-integration.md](docs/kiwoom-integration.md)를 기준으로 진행합니다.
+
+토스증권 보유자산 연동 세부 설계는 [docs/toss-invest-integration.md](docs/toss-invest-integration.md)를 기준으로 진행합니다. 토스 연동은 미리보기/사용자 적용 방식이며 주문 API를 호출하지 않습니다.
 
 키움 APP KEY 관리 화면에서는 먼저 현재 개발 PC의 공인 IP를 등록해야 합니다. 운영 배포 시에는 로컬 PC IP가 아니라 서버의 고정 outbound IP를 등록해야 합니다.
 

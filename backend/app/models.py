@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class Broker(str, Enum):
     KIWOOM = "KIWOOM"
     KIS = "KIS"
+    TOSS = "TOSS"
 
 
 class TradeSide(str, Enum):
