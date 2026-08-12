@@ -12866,13 +12866,14 @@ function renderTossWorkflowSummary(result) {
   const proposals = result.news_analysis?.proposals || [];
   const newsCount = result.news_analysis?.news_count || 0;
   const matchedNewsCount = result.news_analysis?.matched_news_count || 0;
+  const paperStage = result.stages?.paper_simulation || {};
   elements.tossWorkflowSummary.textContent = [
     `실행일: ${result.query_date || result.run_at || "-"}`,
     `뉴스 분석: ${newsCount}개 · 보유/관심 매칭: ${matchedNewsCount}개 · 조건 일치 주문안: ${proposals.length}개`,
     `가격 스냅샷: ${result.news_analysis?.price_snapshot_count || 0}개 · 기준일: ${result.news_analysis?.price_snapshot ? Object.values(result.news_analysis.price_snapshot).find((item) => item?.as_of_date)?.as_of_date || "-" : "-"}`,
     `오늘 거래 기록: ${result.orders?.length || 0}건 · 체결수량: ${formatNumber(review.filled_quantity || 0)}`,
     `복기: ${review.review_status || "-"} · 체결금액: ${formatNumber(review.filled_amount || 0)}`,
-    `모의체결: ${result.paper_simulation?.status || result.stages?.paper_simulation?.status || "awaiting_user_confirmation"} · ${result.paper_fills?.length || 0}건`,
+    `모의체결: ${result.paper_simulation?.status || paperStage.status || "awaiting_user_confirmation"} · ${result.paper_fills?.length || 0}건 · 가격 갱신 ${paperStage.mark_refresh_count || result.paper_mark_refresh_count || 0}건 · 중복 억제 ${paperStage.history_duplicate_count || result.paper_history_duplicate_count || 0}건`,
     "실제 토스 주문 API는 차단되어 주문안만 생성됩니다.",
   ].join("\n");
 }

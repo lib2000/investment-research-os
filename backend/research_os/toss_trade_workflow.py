@@ -88,6 +88,85 @@ def read_workflow_history(settings: Settings, *, limit: int = 200) -> list[dict[
     return records
 
 
+def write_workflow_history(settings: Settings, records: list[dict[str, Any]]) -> None:
+    """Rewrite the bounded history after mark-to-market updates."""
+    path = workflow_history_path(settings)
+    path.write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in records if isinstance(item, dict)),
+        encoding="utf-8",
+    )
+
+
+def refresh_paper_fill_marks(
+    records: list[dict[str, Any]],
+    price_snapshot: dict[str, dict[str, Any]],
+    *,
+    as_of_date: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Refresh existing simulated fills using the latest read-only prices."""
+    refreshed: list[dict[str, Any]] = []
+    updated_count = 0
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        updated_record = dict(record)
+        fills = []
+        for raw_fill in record.get("paper_fills") or []:
+            fill = dict(raw_fill) if isinstance(raw_fill, dict) else raw_fill
+            if isinstance(fill, dict):
+                ticker = str(fill.get("symbol") or "").strip().upper()
+                snapshot = price_snapshot.get(ticker)
+                if (
+                    str(fill.get("status") or "") in {"simulated_filled", "awaiting_price"}
+                    and isinstance(snapshot, dict)
+                    and snapshot.get("price") is not None
+                ):
+                    try:
+                        mark_price = float(snapshot["price"])
+                    except (TypeError, ValueError):
+                        mark_price = 0.0
+                    if mark_price > 0:
+                        if str(fill.get("status") or "") == "awaiting_price":
+                            fill["status"] = "simulated_filled"
+                            fill["quantity"] = 1
+                            fill["reference_price"] = round(mark_price, 4)
+                            fill["amount"] = round(mark_price, 2)
+                            fill["reference_price_source"] = "backfilled_eod_price_snapshot"
+                        fill["mark_price"] = round(mark_price, 4)
+                        fill["mark_as_of"] = as_of_date
+                        fill["mark_source"] = snapshot.get("source") or "eod_price_snapshot"
+                        updated_count += 1
+            fills.append(fill)
+        updated_record["paper_fills"] = fills
+        refreshed.append(updated_record)
+    return refreshed, updated_count
+
+
+def dedupe_paper_fill_history(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """Keep the newest occurrence of deterministic paper fills."""
+    seen: set[str] = set()
+    deduped_reversed: list[dict[str, Any]] = []
+    removed = 0
+    for record in reversed(records):
+        if not isinstance(record, dict):
+            continue
+        kept_reversed: list[dict[str, Any]] = []
+        for raw_fill in reversed(record.get("paper_fills") or []):
+            if not isinstance(raw_fill, dict):
+                continue
+            paper_id = str(raw_fill.get("paper_order_id") or "")
+            if paper_id and paper_id in seen:
+                removed += 1
+                continue
+            if paper_id:
+                seen.add(paper_id)
+            kept_reversed.append(raw_fill)
+        updated = dict(record)
+        updated["paper_fills"] = list(reversed(kept_reversed))
+        deduped_reversed.append(updated)
+    return list(reversed(deduped_reversed)), removed
+
+
 def _text(item: dict[str, Any]) -> str:
     values = [
         item.get(key)

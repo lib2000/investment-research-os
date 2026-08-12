@@ -14,6 +14,8 @@ from research_os.toss_trade_workflow import (
     build_trade_review,
     build_paper_evaluation,
     build_workflow_result,
+    dedupe_paper_fill_history,
+    refresh_paper_fill_marks,
     simulate_paper_fills,
 )
 
@@ -29,6 +31,42 @@ def test_price_snapshot_populates_review_reference_prices() -> None:
     )
     assert result["proposals"][0]["reference_prices"] == {"000660": 1504000}
     assert result["analyzed"][0]["matched_context"][0]["price_as_of"] == "2026-08-12"
+
+
+def test_refresh_paper_fill_marks_updates_existing_records() -> None:
+    records, updated = refresh_paper_fill_marks(
+        [
+            {
+                "run_at": "2026-08-11T16:10:00+09:00",
+                "paper_fills": [
+                    {
+                        "paper_order_id": "p1",
+                        "symbol": "000660",
+                        "status": "awaiting_price",
+                    }
+                ],
+            }
+        ],
+        {"000660": {"price": 110, "source": "eod_price_snapshot"}},
+        as_of_date="2026-08-12",
+    )
+    assert updated == 1
+    assert records[0]["paper_fills"][0]["status"] == "simulated_filled"
+    assert records[0]["paper_fills"][0]["reference_price"] == 110
+    assert records[0]["paper_fills"][0]["mark_price"] == 110
+    assert records[0]["paper_fills"][0]["mark_as_of"] == "2026-08-12"
+
+
+def test_dedupe_paper_fill_history_keeps_newest_mark() -> None:
+    records, removed = dedupe_paper_fill_history(
+        [
+            {"run_at": "2026-08-11", "paper_fills": [{"paper_order_id": "p1", "mark_price": 100}]},
+            {"run_at": "2026-08-12", "paper_fills": [{"paper_order_id": "p1", "mark_price": 110}]},
+        ]
+    )
+    assert removed == 1
+    assert len(records[0]["paper_fills"]) == 0
+    assert records[1]["paper_fills"][0]["mark_price"] == 110
 
 
 def test_news_analysis_creates_review_only_proposal_for_existing_holding() -> None:

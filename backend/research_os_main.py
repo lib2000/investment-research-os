@@ -159,10 +159,13 @@ from research_os.toss_trade_workflow import (
     append_workflow_history as append_toss_workflow_history,
     build_paper_evaluation as build_toss_paper_evaluation,
     build_workflow_result as build_toss_workflow_result,
+    dedupe_paper_fill_history as dedupe_toss_paper_fill_history,
     read_workflow_history as read_toss_workflow_history,
+    refresh_paper_fill_marks as refresh_toss_paper_fill_marks,
     read_workflow_state as read_toss_workflow_state,
     simulate_paper_fills as simulate_toss_paper_fills,
     write_workflow_state as write_toss_workflow_state,
+    write_workflow_history as write_toss_workflow_history,
 )
 from research_os.investment_calendar import (
     build_investment_calendar_earnings_events as build_calendar_earnings_events,
@@ -13672,15 +13675,45 @@ def complete_toss_paper_simulation(settings: Settings, result: dict) -> dict:
         for item in _toss_workflow_holdings(settings)
         if item.get("current_price") is not None
     })
+    history = read_toss_workflow_history(settings, limit=1000)
+    existing_paper_ids = {
+        str(fill.get("paper_order_id") or "")
+        for record in history
+        for fill in (record.get("paper_fills") or [])
+        if isinstance(fill, dict) and fill.get("paper_order_id")
+    }
+    duplicate_count = sum(
+        1 for fill in paper_fills if str(fill.get("paper_order_id") or "") in existing_paper_ids
+    )
+    paper_fills = [
+        fill for fill in paper_fills if str(fill.get("paper_order_id") or "") not in existing_paper_ids
+    ]
+    refreshed_history, mark_refresh_count = refresh_toss_paper_fill_marks(
+        list(reversed(history)),
+        {
+            ticker: {"price": price, "source": "eod_price_snapshot"}
+            for ticker, price in mark_prices.items()
+            if price is not None
+        },
+        as_of_date=current_storage_date().isoformat(),
+    )
+    refreshed_history, history_duplicate_count = dedupe_toss_paper_fill_history(refreshed_history)
+    write_toss_workflow_history(settings, refreshed_history)
     for fill in paper_fills:
         fill["mark_price"] = mark_prices.get(str(fill.get("symbol") or "").strip().upper())
         fill["mark_as_of"] = current_storage_date().isoformat()
         fill["mark_source"] = "eod_price_snapshot"
     result["paper_fills"] = paper_fills
+    result["paper_mark_refresh_count"] = mark_refresh_count
+    result["paper_duplicate_count"] = duplicate_count
+    result["paper_history_duplicate_count"] = history_duplicate_count
     result["stages"]["paper_simulation"] = {
         "status": "completed",
         "fill_count": len(paper_fills),
-        "message": "모의체결만 기록했으며 토스 주문 API는 호출하지 않았습니다.",
+        "mark_refresh_count": mark_refresh_count,
+        "duplicate_count": duplicate_count,
+        "history_duplicate_count": history_duplicate_count,
+        "message": "기존 모의체결 가격을 갱신하고 신규 모의체결만 기록했습니다. 토스 주문 API는 호출하지 않았습니다.",
     }
     state = read_toss_workflow_state(settings)
     state["last_result"] = result
