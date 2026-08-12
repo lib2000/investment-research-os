@@ -89,8 +89,88 @@ def read_workflow_history(settings: Settings, *, limit: int = 200) -> list[dict[
 
 
 def _text(item: dict[str, Any]) -> str:
-    values = [item.get(key) for key in ("title", "summary", "raw_content", "scope_reason", "tags")]
+    values = [
+        item.get(key)
+        for key in (
+            "title",
+            "summary",
+            "raw_content",
+            "scope_reason",
+            "tags",
+            "company_name",
+            "issuer",
+            "organization",
+            "entities",
+            "related_companies",
+        )
+    ]
     return " ".join(str(value or "") for value in values).lower()
+
+
+_LEGAL_SUFFIXES = {
+    "inc", "incorporated", "corp", "corporation", "company", "co", "ltd", "limited",
+    "holdings", "holding", "group", "plc", "pbc", "common", "stock", "class", "ordinary",
+}
+_IGNORED_ALIASES = {
+    "etf", "market", "sector", "macro", "policy", "news", "common", "stock", "company",
+    "tiger", "kodex", "kiwoom", "sol", "kindex", "arirang", "ace", "plus", "hanaro",
+}
+
+
+def _normalize_entity_text(value: Any) -> str:
+    """Normalize Korean/English company text for deterministic substring matching."""
+    return re.sub(r"[^0-9a-z가-힣]+", "", str(value or "").lower())
+
+
+def _entity_aliases(value: Any) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    aliases: list[str] = []
+
+    def add(candidate: str) -> None:
+        normalized = _normalize_entity_text(candidate)
+        if not normalized or normalized in _IGNORED_ALIASES:
+            return
+        # Two Korean characters are useful, but short English/common tokens are too noisy.
+        has_korean = bool(re.search(r"[가-힣]", normalized))
+        if len(normalized) < (2 if has_korean else 4):
+            return
+        if normalized not in aliases:
+            aliases.append(normalized)
+
+    add(raw)
+    words = re.findall(r"[A-Za-z0-9가-힣]+", raw)
+    if words and any(re.search(r"[A-Za-z]", word) for word in words):
+        trimmed = [word for word in words if word.lower() not in _LEGAL_SUFFIXES]
+        add(" ".join(trimmed))
+    return aliases
+
+
+def _holding_entity_aliases(holding: dict[str, Any]) -> list[dict[str, str]]:
+    """Return aliases with their origin so matching evidence is explainable."""
+    values: list[tuple[Any, str]] = []
+    for key in ("name", "company_name", "display_name", "issuer"):
+        if holding.get(key):
+            values.append((holding.get(key), "company_name"))
+    verification = holding.get("verification")
+    if isinstance(verification, dict) and verification.get("company_name"):
+        values.append((verification.get("company_name"), "verified_company_name"))
+    for key in ("alias", "aliases"):
+        raw = holding.get(key)
+        if isinstance(raw, (list, tuple, set)):
+            values.extend((item, "alias") for item in raw)
+        elif raw:
+            values.append((raw, "alias"))
+    aliases: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for value, matched_by in values:
+        for alias in _entity_aliases(value):
+            if alias in seen:
+                continue
+            seen.add(alias)
+            aliases.append({"alias": alias, "matched_by": matched_by, "display": str(value).strip()})
+    return aliases
 
 
 def _ticker_candidates(item: dict[str, Any]) -> set[str]:
@@ -122,33 +202,79 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
         for item in holdings
         if isinstance(item, dict) and item.get("ticker")
     }
+    alias_index: dict[str, list[dict[str, str]]] = {}
+    for holding in holdings:
+        if not isinstance(holding, dict):
+            continue
+        ticker = str(holding.get("ticker") or "").strip().upper()
+        if not ticker:
+            continue
+        for alias in _holding_entity_aliases(holding):
+            alias_index.setdefault(alias["alias"], []).append(
+                {
+                    "ticker": ticker,
+                    "matched_by": alias["matched_by"],
+                    "display": alias["display"],
+                }
+            )
     analyzed: list[dict[str, Any]] = []
     proposals: list[dict[str, Any]] = []
     for item in news_items[:100]:
         if not isinstance(item, dict):
             continue
         text = _text(item)
+        normalized_text = _normalize_entity_text(text)
         signal, positive_hits, negative_hits = _signal(text)
         tickers = sorted(_ticker_candidates(item))
-        matched = sorted(set(tickers) & holding_tickers)
+        matched_by_ticker: dict[str, list[dict[str, str]]] = {}
+        for ticker in sorted(set(tickers) & holding_tickers):
+            matched_by_ticker[ticker] = [{"matched_by": "explicit_ticker", "display": ticker}]
+        for alias, alias_matches in alias_index.items():
+            if alias not in normalized_text:
+                continue
+            for alias_match in alias_matches:
+                matched_by_ticker.setdefault(alias_match["ticker"], []).append(
+                    {"matched_by": alias_match["matched_by"], "display": alias_match["display"]}
+                )
+        matched = sorted(matched_by_ticker)
         matched_context = [
             {
                 "ticker": str(holding.get("ticker") or "").strip().upper(),
                 "name": holding.get("name"),
                 "quantity": holding.get("quantity"),
                 "current_price": holding.get("current_price"),
+                "source": holding.get("source", "holding"),
+                "source_types": holding.get("source_types") or [holding.get("source", "holding")],
             }
             for holding in holdings
             if isinstance(holding, dict)
             and str(holding.get("ticker") or "").strip().upper() in matched
         ]
+        match_evidence = [
+            {
+                "ticker": ticker,
+                "matches": sorted(
+                    {
+                        (entry.get("matched_by"), entry.get("display"))
+                        for entry in entries
+                    }
+                ),
+            }
+            for ticker, entries in sorted(matched_by_ticker.items())
+        ]
+        held_tickers = {
+            str(context.get("ticker") or "").strip().upper()
+            for context in matched_context
+            if "holding" in (context.get("source_types") or [context.get("source", "holding")])
+            and (context.get("quantity") is not None or context.get("source") == "holding")
+        }
         confidence = float(item.get("confidence") or 0)
         quality = str(item.get("quality_status") or item.get("review_status") or "unknown")
         evidence_strength = "strong" if item.get("source_url") and confidence >= 0.7 else "medium" if item.get("source_url") or confidence >= 0.55 else "low"
         action = "WATCH"
         if matched and signal == "positive":
             action = "BUY_REVIEW"
-        elif matched and signal == "negative":
+        elif matched and signal == "negative" and held_tickers:
             action = "SELL_REVIEW"
         analyzed_item = {
             "id": item.get("id"),
@@ -156,6 +282,7 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
             "source_url": item.get("source_url"),
             "tickers": tickers,
             "matched_holdings": matched,
+            "matched_entities": match_evidence,
             "matched_context": matched_context,
             "signal": signal,
             "positive_hits": positive_hits,
@@ -183,7 +310,8 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
                     "evidence_strength": evidence_strength,
                     "confidence": confidence,
                     "source_news_id": item.get("id"),
-                    "reason": "뉴스 신호와 기존 보유종목이 조건에 맞았습니다.",
+                    "match_evidence": match_evidence,
+                    "reason": "뉴스 신호와 종목명·티커 매칭 근거가 조건에 맞았습니다.",
                     "quantity": None,
                     "price": None,
                     "order_type": None,

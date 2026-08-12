@@ -13475,6 +13475,53 @@ def read_toss_orders(
 def _toss_workflow_holdings(settings: Settings) -> list[dict]:
     store = read_portfolio_store(settings)
     holdings_by_ticker: dict[str, dict] = {}
+
+    def add_entity(
+        *,
+        ticker: str,
+        name: str | None,
+        source: str,
+        quantity: float | int | None = None,
+        current_price: float | int | None = None,
+        verification: dict | None = None,
+        priority: str | None = None,
+        tags: list | None = None,
+    ) -> None:
+        if not ticker:
+            return
+        existing = holdings_by_ticker.get(ticker)
+        if existing is None:
+            holdings_by_ticker[ticker] = {
+                "ticker": ticker,
+                "name": name,
+                "quantity": quantity,
+                "current_price": current_price,
+                "source": source,
+                "source_types": [source],
+                "verification": verification,
+                "priority": priority,
+                "tags": tags or [],
+            }
+            return
+        source_types = list(existing.get("source_types") or [])
+        if source not in source_types:
+            source_types.append(source)
+        existing["source_types"] = source_types
+        if source == "holding":
+            existing["source"] = "holding"
+        if not existing.get("name") and name:
+            existing["name"] = name
+        if existing.get("quantity") is None and quantity is not None:
+            existing["quantity"] = quantity
+        if existing.get("current_price") is None and current_price is not None:
+            existing["current_price"] = current_price
+        if verification and not existing.get("verification"):
+            existing["verification"] = verification
+        if priority and not existing.get("priority"):
+            existing["priority"] = priority
+        if tags:
+            existing["tags"] = sorted(set((existing.get("tags") or []) + tags))
+
     for portfolio in (store.get("portfolios") or {}).values():
         if not isinstance(portfolio, dict):
             continue
@@ -13482,13 +13529,26 @@ def _toss_workflow_holdings(settings: Settings) -> list[dict]:
             if not isinstance(holding, dict):
                 continue
             ticker = normalize_ticker(holding.get("ticker"))
-            if ticker and ticker not in holdings_by_ticker:
-                holdings_by_ticker[ticker] = {
-                    "ticker": ticker,
-                    "name": holding.get("name"),
-                    "quantity": holding.get("quantity"),
-                    "current_price": holding.get("current_price"),
-                }
+            add_entity(
+                ticker=ticker,
+                name=holding.get("name"),
+                source="holding",
+                quantity=holding.get("quantity"),
+                current_price=holding.get("current_price"),
+            )
+    for interest in read_interest_list(settings).get("tickers", []):
+        if not isinstance(interest, dict):
+            continue
+        ticker = normalize_ticker(interest.get("ticker"))
+        verification = interest.get("verification") if isinstance(interest.get("verification"), dict) else None
+        add_entity(
+            ticker=ticker,
+            name=interest.get("name") or (verification or {}).get("company_name"),
+            source="interest",
+            verification=verification,
+            priority=interest.get("priority"),
+            tags=interest.get("tags") if isinstance(interest.get("tags"), list) else [],
+        )
     return list(holdings_by_ticker.values())
 
 

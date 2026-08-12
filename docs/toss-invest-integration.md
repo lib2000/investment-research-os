@@ -44,7 +44,7 @@ TOSS_TOKEN_CACHE_FILE=../research_vault/_system/toss_access_token.json
 
 ## 뉴스→조건→거래 기록→복기 워크플로
 
-`TOSS_WORKFLOW_ENABLED=true`이면 매일 설정된 시각(기본 16:10 KST)에 뉴스 인박스와 기존 보유 종목을 대조해 조건 일치 주문안을 만들고, 같은 날짜의 토스 주문 이력을 기록·복기한다. 주문안에는 수량과 가격을 자동 확정하지 않으며 `manual_review_required`와 `blocked_live_order` 상태로 저장한다.
+`TOSS_WORKFLOW_ENABLED=true`이면 매일 설정된 시각(기본 16:10 KST)에 뉴스 인박스와 보유·관심 종목을 대조해 조건 일치 주문안을 만들고, 같은 날짜의 토스 주문 이력을 기록·복기한다. 종목 코드가 뉴스에 없어도 검증된 회사명, 영문 법인명(예: `Planet Labs PBC` → `Planet Labs`)과 저장 별칭을 정규화해 매칭하며, 각 결과에 `matched_entities` 근거를 남긴다. 관심종목의 부정 신호는 보유 수량이 없으므로 매도 주문안으로 만들지 않고 `WATCH`로 남긴다. 주문안에는 수량과 가격을 자동 확정하지 않으며 `manual_review_required`와 `blocked_live_order` 상태로 저장한다.
 
 현재 단계에서는 주문 생성·정정·취소 API를 호출하지 않는다. 자동화가 실행되어도 실계좌에 주문이 제출되지 않으며, 실제 매매를 연결하려면 별도의 위험 한도·승인·모의검증 설계가 선행되어야 한다.
 

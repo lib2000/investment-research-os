@@ -38,6 +38,43 @@ def test_news_analysis_creates_review_only_proposal_for_existing_holding() -> No
     assert result["proposals"][0]["quantity"] is None
 
 
+def test_news_analysis_matches_korean_company_name_without_ticker() -> None:
+    result = analyze_news_items(
+        [
+            {
+                "id": "name-match",
+                "title": "삼양식품 해외 매출 증가와 라면 수출 호조",
+                "summary": "호실적 성장",
+                "source_url": "https://example.com/name-match",
+                "confidence": 0.8,
+            }
+        ],
+        [{"ticker": "003230", "name": "삼양식품", "quantity": 18}],
+    )
+    assert result["matched_news_count"] == 1
+    assert result["proposals"][0]["symbols"] == ["003230"]
+    assert result["analyzed"][0]["matched_entities"][0]["matches"][0][0] == "company_name"
+
+
+def test_news_analysis_matches_english_legal_name_alias() -> None:
+    result = analyze_news_items(
+        [{"id": "english-name", "title": "Planet Labs reports growth", "summary": "positive growth"}],
+        [{"ticker": "PL", "name": "Planet Labs PBC", "quantity": 100}],
+    )
+    assert result["matched_news_count"] == 1
+    assert result["proposals"][0]["action"] == "BUY_REVIEW"
+
+
+def test_negative_interest_match_does_not_create_sell_proposal() -> None:
+    result = analyze_news_items(
+        [{"id": "interest-risk", "title": "SK하이닉스 규제 우려", "summary": "하향 악재"}],
+        [{"ticker": "000660", "name": "SK하이닉스", "source": "interest", "source_types": ["interest"]}],
+    )
+    assert result["matched_news_count"] == 1
+    assert result["proposals"] == []
+    assert result["analyzed"][0]["action"] == "WATCH"
+
+
 def test_trade_review_counts_partial_and_canceled_orders() -> None:
     review = build_trade_review(
         [
