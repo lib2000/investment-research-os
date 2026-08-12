@@ -8,7 +8,12 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from research_os.toss_trade_workflow import analyze_news_items, build_trade_review, build_workflow_result
+from research_os.toss_trade_workflow import (
+    analyze_news_items,
+    build_trade_review,
+    build_workflow_result,
+    simulate_paper_fills,
+)
 
 
 def test_news_analysis_creates_review_only_proposal_for_existing_holding() -> None:
@@ -55,3 +60,17 @@ def test_workflow_result_blocks_live_trade_stage() -> None:
     assert result["stages"]["trade"]["status"] == "blocked_live_order"
     assert result["stages"]["trade"]["created_order_count"] == 0
     assert result["human_gate"]["required"] is True
+
+
+def test_paper_simulation_is_deterministic_and_has_no_live_execution_marker() -> None:
+    news = analyze_news_items(
+        [{"id": "news-1", "title": "플리토 성장 호재", "scope": "300080"}],
+        [{"ticker": "300080", "current_price": 8640}],
+    )
+    first = simulate_paper_fills(news, run_at="2026-08-12T16:10:00+09:00")
+    second = simulate_paper_fills(news, run_at="2026-08-12T16:10:00+09:00")
+    assert first == second
+    assert first[0]["status"] == "simulated_filled"
+    assert first[0]["quantity"] == 1
+    assert first[0]["execution"] == "paper_only"
+    assert "order_id" not in first[0]

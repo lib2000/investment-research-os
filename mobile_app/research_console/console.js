@@ -96,6 +96,7 @@
   fetchTossOrders,
   fetchTossWorkflowStatus,
   runTossWorkflow,
+  simulateTossPaperWorkflow,
   fetchPortfolioSyncHistory,
   deletePortfolio,
   fetchInterests,
@@ -118,7 +119,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=571db0539e6e";
+} from "./api.js?v=def1f2972b7b";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -176,6 +177,7 @@ const elements = {
   newsInboxList: document.querySelector("#newsInboxList"),
   tossOrdersButton: document.querySelector("#tossOrdersButton"),
   tossWorkflowButton: document.querySelector("#tossWorkflowButton"),
+  tossPaperButton: document.querySelector("#tossPaperButton"),
   tossWorkflowStatusButton: document.querySelector("#tossWorkflowStatusButton"),
   tossWorkflowSummary: document.querySelector("#tossWorkflowSummary"),
   llmPromptForm: document.querySelector("#llmPromptForm"),
@@ -12865,6 +12867,7 @@ function renderTossWorkflowSummary(result) {
     `뉴스 분석: ${result.news_analysis?.news_count || 0}개 · 조건 일치 주문안: ${proposals.length}개`,
     `오늘 거래 기록: ${result.orders?.length || 0}건 · 체결수량: ${formatNumber(review.filled_quantity || 0)}`,
     `복기: ${review.review_status || "-"} · 체결금액: ${formatNumber(review.filled_amount || 0)}`,
+    `모의체결: ${result.paper_simulation?.status || result.stages?.paper_simulation?.status || "awaiting_user_confirmation"} · ${result.paper_fills?.length || 0}건`,
     "실제 토스 주문 API는 차단되어 주문안만 생성됩니다.",
   ].join("\n");
 }
@@ -12896,6 +12899,18 @@ elements.tossWorkflowButton?.addEventListener("click", async () => {
   startOutputLoading("토스 거래 워크플로 실행 중", ["뉴스 분석", "조건 검색", "오늘 거래 기록", "복기 결과 저장"]);
   try {
     const result = await runTossWorkflow(token());
+    renderTossWorkflowSummary(result);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.tossPaperButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("토스 모의체결 기록 중", ["주문안 재검증", "1주 기준 모의체결", "복기 기록 저장"]);
+  try {
+    const result = await simulateTossPaperWorkflow(token());
     renderTossWorkflowSummary(result);
     setOutput(result);
   } catch (error) {

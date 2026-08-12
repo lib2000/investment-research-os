@@ -106,6 +106,17 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
         signal, positive_hits, negative_hits = _signal(text)
         tickers = sorted(_ticker_candidates(item))
         matched = sorted(set(tickers) & holding_tickers)
+        matched_context = [
+            {
+                "ticker": str(holding.get("ticker") or "").strip().upper(),
+                "name": holding.get("name"),
+                "quantity": holding.get("quantity"),
+                "current_price": holding.get("current_price"),
+            }
+            for holding in holdings
+            if isinstance(holding, dict)
+            and str(holding.get("ticker") or "").strip().upper() in matched
+        ]
         confidence = float(item.get("confidence") or 0)
         quality = str(item.get("quality_status") or item.get("review_status") or "unknown")
         evidence_strength = "strong" if item.get("source_url") and confidence >= 0.7 else "medium" if item.get("source_url") or confidence >= 0.55 else "low"
@@ -120,6 +131,7 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
             "source_url": item.get("source_url"),
             "tickers": tickers,
             "matched_holdings": matched,
+            "matched_context": matched_context,
             "signal": signal,
             "positive_hits": positive_hits,
             "negative_hits": negative_hits,
@@ -138,6 +150,11 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
                     "proposal_id": proposal_id,
                     "action": action,
                     "symbols": matched,
+                    "reference_prices": {
+                        str(item.get("ticker")): item.get("current_price")
+                        for item in matched_context
+                        if item.get("current_price") is not None
+                    },
                     "source_news_id": item.get("id"),
                     "reason": "뉴스 신호와 기존 보유종목이 조건에 맞았습니다.",
                     "quantity": None,
@@ -194,8 +211,10 @@ def build_workflow_result(
     run_at: str,
     news_result: dict[str, Any],
     orders: list[dict[str, Any]],
+    paper_fills: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     review = build_trade_review(orders)
+    simulated_fills = [item for item in (paper_fills or []) if isinstance(item, dict)]
     return {
         "status": "success",
         "workflow": "news_analysis_condition_search_trade_record_review",
@@ -209,17 +228,58 @@ def build_workflow_result(
                 "created_order_count": 0,
                 "message": "자동 매매는 안전상 비활성화되어 주문 API를 호출하지 않았습니다.",
             },
+            "paper_simulation": {
+                "status": "completed" if simulated_fills else "awaiting_user_confirmation",
+                "fill_count": len(simulated_fills),
+                "message": "모의체결만 기록했으며 토스 주문 API는 호출하지 않았습니다."
+                if simulated_fills
+                else "사용자 확인 후 모의체결을 생성합니다.",
+            },
             "record": {"status": "completed", "order_count": len(orders)},
             "review": review,
         },
         "news_analysis": news_result,
         "orders": orders,
+        "paper_fills": simulated_fills,
         "review": review,
         "human_gate": {
             "required": True,
             "reason": "생성된 신호는 검증되지 않은 투자 판단이며 실계좌 주문으로 직접 연결하지 않습니다.",
         },
     }
+
+
+def simulate_paper_fills(news_result: dict[str, Any], *, run_at: str) -> list[dict[str, Any]]:
+    """Create deterministic one-share paper fills for review-only proposals."""
+    fills: list[dict[str, Any]] = []
+    for proposal in news_result.get("proposals") or []:
+        if not isinstance(proposal, dict):
+            continue
+        action = str(proposal.get("action") or "").upper()
+        side = "BUY" if action == "BUY_REVIEW" else "SELL" if action == "SELL_REVIEW" else ""
+        if not side:
+            continue
+        prices = proposal.get("reference_prices") if isinstance(proposal.get("reference_prices"), dict) else {}
+        for symbol in proposal.get("symbols") or []:
+            ticker = str(symbol or "").strip().upper()
+            try:
+                reference_price = float(prices.get(ticker) or 0)
+            except (TypeError, ValueError):
+                reference_price = 0.0
+            paper_id = hashlib.sha256(f"paper|{proposal.get('proposal_id')}|{ticker}".encode("utf-8")).hexdigest()[:16]
+            fills.append({
+                "paper_order_id": paper_id,
+                "proposal_id": proposal.get("proposal_id"),
+                "symbol": ticker,
+                "side": side,
+                "status": "simulated_filled" if reference_price > 0 else "awaiting_price",
+                "quantity": 1 if reference_price > 0 else 0,
+                "reference_price": round(reference_price, 4) if reference_price > 0 else None,
+                "amount": round(reference_price, 2) if reference_price > 0 else 0,
+                "simulated_at": run_at,
+                "execution": "paper_only",
+            })
+    return fills
 
 
 def append_workflow_history(settings: Settings, result: dict[str, Any]) -> None:

@@ -158,6 +158,7 @@ from research_os.toss_trade_workflow import (
     append_workflow_history as append_toss_workflow_history,
     build_workflow_result as build_toss_workflow_result,
     read_workflow_state as read_toss_workflow_state,
+    simulate_paper_fills as simulate_toss_paper_fills,
     write_workflow_state as write_toss_workflow_state,
 )
 from research_os.investment_calendar import (
@@ -13544,6 +13545,7 @@ def read_toss_workflow_status(settings: Settings = Depends(get_settings)) -> dic
     return {
         "status": state.get("status", "not_run"),
         "enabled": settings.toss_workflow_enabled and settings.toss_enabled,
+        "paper_trading_enabled": settings.toss_paper_trading_enabled,
         "live_trading_enabled": False,
         "scheduled_time_kst": f"{settings.toss_workflow_run_hour:02d}:{settings.toss_workflow_run_minute:02d}",
         "last_run_at": state.get("last_run_at"),
@@ -13563,6 +13565,46 @@ def run_toss_workflow_endpoint(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return run_toss_workflow_for_date(settings, query_date=query_date)
+
+
+@app.post(
+    "/api/v1/brokerage/toss/workflow/paper-simulate",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_toss_paper_simulation_endpoint(
+    query_date: str | None = None,
+    confirm: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Simulate review proposals only after an explicit confirmation flag."""
+    result = run_toss_workflow_for_date(settings, query_date=query_date)
+    if not confirm:
+        result["paper_simulation"] = {
+            "status": "confirmation_required",
+            "fill_count": 0,
+            "message": "모의체결을 만들려면 confirm=true를 명시해야 합니다.",
+        }
+        return result
+    if not settings.toss_paper_trading_enabled:
+        result["paper_simulation"] = {
+            "status": "disabled",
+            "fill_count": 0,
+            "message": "TOSS_PAPER_TRADING_ENABLED가 false라 모의체결을 만들지 않았습니다.",
+        }
+        return result
+    paper_fills = simulate_toss_paper_fills(result.get("news_analysis") or {}, run_at=current_storage_timestamp())
+    result["paper_fills"] = paper_fills
+    result["stages"]["paper_simulation"] = {
+        "status": "completed",
+        "fill_count": len(paper_fills),
+        "message": "모의체결만 기록했으며 토스 주문 API는 호출하지 않았습니다.",
+    }
+    state = read_toss_workflow_state(settings)
+    state["last_result"] = result
+    state["last_paper_simulation_at"] = current_storage_timestamp()
+    write_toss_workflow_state(settings, state)
+    append_toss_workflow_history(settings, result)
+    return result
 
 
 @app.get(

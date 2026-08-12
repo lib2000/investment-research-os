@@ -100,6 +100,7 @@ class Settings(BaseModel):
     toss_workflow_enabled: bool = False
     toss_workflow_run_hour: int = 16
     toss_workflow_run_minute: int = 10
+    toss_paper_trading_enabled: bool = False
     toss_live_trading_enabled: bool = False
     dart_api_key: str = Field(default="")
     dart_base_url: str = "https://opendart.fss.or.kr/api"
@@ -321,6 +322,7 @@ class Settings(BaseModel):
             toss_workflow_enabled=_read_bool("TOSS_WORKFLOW_ENABLED", False),
             toss_workflow_run_hour=_read_int("TOSS_WORKFLOW_RUN_HOUR", 16),
             toss_workflow_run_minute=_read_int("TOSS_WORKFLOW_RUN_MINUTE", 10),
+            toss_paper_trading_enabled=_read_bool("TOSS_PAPER_TRADING_ENABLED", False),
             toss_live_trading_enabled=_read_bool("TOSS_LIVE_TRADING_ENABLED", False),
             dart_api_key=os.getenv("DART_API_KEY", os.getenv("OPENDART_API_KEY", "")),
             dart_base_url=os.getenv("DART_BASE_URL", "https://opendart.fss.or.kr/api"),
