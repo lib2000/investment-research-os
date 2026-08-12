@@ -173,6 +173,47 @@ def _holding_entity_aliases(holding: dict[str, Any]) -> list[dict[str, str]]:
     return aliases
 
 
+def apply_price_snapshot(
+    news_result: dict[str, Any],
+    price_snapshot: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach read-only end-of-day prices to proposals and match evidence."""
+    if not isinstance(price_snapshot, dict):
+        return news_result
+    for proposal in news_result.get("proposals") or []:
+        if not isinstance(proposal, dict):
+            continue
+        reference_prices = proposal.setdefault("reference_prices", {})
+        for symbol in proposal.get("symbols") or []:
+            ticker = str(symbol or "").strip().upper()
+            snapshot = price_snapshot.get(ticker)
+            if not isinstance(snapshot, dict) or snapshot.get("price") is None:
+                continue
+            reference_prices[ticker] = snapshot.get("price")
+        proposal["price_snapshot"] = [
+            {"ticker": str(symbol or "").strip().upper(), **price_snapshot[str(symbol or "").strip().upper()]}
+            for symbol in proposal.get("symbols") or []
+            if isinstance(price_snapshot.get(str(symbol or "").strip().upper()), dict)
+        ]
+    for analyzed in news_result.get("analyzed") or []:
+        if not isinstance(analyzed, dict):
+            continue
+        for context in analyzed.get("matched_context") or []:
+            if not isinstance(context, dict):
+                continue
+            ticker = str(context.get("ticker") or "").strip().upper()
+            snapshot = price_snapshot.get(ticker)
+            if isinstance(snapshot, dict) and snapshot.get("price") is not None:
+                context["current_price"] = snapshot.get("price")
+                context["price_source"] = snapshot.get("source")
+                context["price_as_of"] = snapshot.get("as_of_date")
+    news_result["price_snapshot"] = price_snapshot
+    news_result["price_snapshot_count"] = sum(
+        1 for item in price_snapshot.values() if isinstance(item, dict) and item.get("price") is not None
+    )
+    return news_result
+
+
 def _ticker_candidates(item: dict[str, Any]) -> set[str]:
     candidates: set[str] = set()
     for key in ("ticker", "scope", "symbol"):
@@ -448,6 +489,7 @@ def append_workflow_history(settings: Settings, result: dict[str, Any]) -> None:
         "proposal_count": len((result.get("news_analysis") or {}).get("proposals") or []),
         "order_count": len(result.get("orders") or []),
         "paper_fills": [item for item in result.get("paper_fills") or [] if isinstance(item, dict)],
+        "price_snapshot": result.get("news_analysis", {}).get("price_snapshot", {}),
         "review": result.get("review") or {},
     }
     with workflow_history_path(settings).open("a", encoding="utf-8") as file:

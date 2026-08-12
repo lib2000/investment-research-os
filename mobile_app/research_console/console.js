@@ -12869,6 +12869,7 @@ function renderTossWorkflowSummary(result) {
   elements.tossWorkflowSummary.textContent = [
     `실행일: ${result.query_date || result.run_at || "-"}`,
     `뉴스 분석: ${newsCount}개 · 보유/관심 매칭: ${matchedNewsCount}개 · 조건 일치 주문안: ${proposals.length}개`,
+    `가격 스냅샷: ${result.news_analysis?.price_snapshot_count || 0}개 · 기준일: ${result.news_analysis?.price_snapshot ? Object.values(result.news_analysis.price_snapshot).find((item) => item?.as_of_date)?.as_of_date || "-" : "-"}`,
     `오늘 거래 기록: ${result.orders?.length || 0}건 · 체결수량: ${formatNumber(review.filled_quantity || 0)}`,
     `복기: ${review.review_status || "-"} · 체결금액: ${formatNumber(review.filled_amount || 0)}`,
     `모의체결: ${result.paper_simulation?.status || result.stages?.paper_simulation?.status || "awaiting_user_confirmation"} · ${result.paper_fills?.length || 0}건`,

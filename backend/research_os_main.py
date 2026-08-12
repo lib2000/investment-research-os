@@ -154,6 +154,7 @@ from research_os.kiwoom_interest import (
 import research_os.dart_filing_watch as dart_filing_watch
 from research_os.toss_invest import TossApiError, TossClient, TossMaskedTokenStatus
 from research_os.toss_trade_workflow import (
+    apply_price_snapshot as apply_toss_price_snapshot,
     analyze_news_items as analyze_toss_news_items,
     append_workflow_history as append_toss_workflow_history,
     build_paper_evaluation as build_toss_paper_evaluation,
@@ -13552,14 +13553,75 @@ def _toss_workflow_holdings(settings: Settings) -> list[dict]:
     return list(holdings_by_ticker.values())
 
 
+def _toss_workflow_price_snapshot(
+    settings: Settings,
+    holdings: list[dict],
+    tickers: set[str],
+    *,
+    as_of_date: str,
+) -> dict[str, dict]:
+    """Read prices for matched names without calling any order/write endpoint."""
+    snapshot: dict[str, dict] = {}
+    for holding in holdings:
+        if not isinstance(holding, dict):
+            continue
+        ticker = normalize_ticker(holding.get("ticker"))
+        if not ticker or ticker not in tickers or ticker == "CASH":
+            continue
+        saved_price = holding.get("current_price")
+        try:
+            saved_price = float(saved_price) if saved_price is not None else None
+        except (TypeError, ValueError):
+            saved_price = None
+        if saved_price is not None and saved_price > 0:
+            snapshot[ticker] = {
+                "price": round(saved_price, 4),
+                "source": holding.get("price_source") or "saved_portfolio_snapshot",
+                "as_of_date": as_of_date,
+                "status": "saved_snapshot",
+            }
+            continue
+        provider_price, provider_source = latest_provider_price(ticker, settings, force_refresh=True)
+        if provider_price is not None and provider_price > 0:
+            snapshot[ticker] = {
+                "price": round(provider_price, 4),
+                "source": provider_source or "read_only_market_provider",
+                "as_of_date": as_of_date,
+                "status": "provider_snapshot",
+            }
+        else:
+            snapshot[ticker] = {
+                "price": None,
+                "source": None,
+                "as_of_date": as_of_date,
+                "status": "unavailable",
+            }
+    return snapshot
+
+
 def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = None) -> dict:
     run_at = current_storage_timestamp()
     date_value = str(query_date or current_storage_date().isoformat()).strip()
     news_payload = read_news_inbox(settings)
+    workflow_holdings = _toss_workflow_holdings(settings)
     news_result = analyze_toss_news_items(
         [item for item in news_payload.get("items", []) if isinstance(item, dict)],
-        _toss_workflow_holdings(settings),
+        workflow_holdings,
     )
+    proposal_tickers = {
+        normalize_ticker(symbol)
+        for proposal in news_result.get("proposals") or []
+        if isinstance(proposal, dict)
+        for symbol in proposal.get("symbols") or []
+        if normalize_ticker(symbol)
+    }
+    price_snapshot = _toss_workflow_price_snapshot(
+        settings,
+        workflow_holdings,
+        proposal_tickers,
+        as_of_date=date_value,
+    )
+    apply_toss_price_snapshot(news_result, price_snapshot)
     order_status = "success"
     orders: list[dict] = []
     order_message = ""
@@ -13597,17 +13659,23 @@ def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = N
     append_toss_workflow_history(settings, result)
     return result
 
+
 def complete_toss_paper_simulation(settings: Settings, result: dict) -> dict:
     paper_fills = simulate_toss_paper_fills(result.get("news_analysis") or {}, run_at=current_storage_timestamp())
     mark_prices = {
+        ticker: snapshot.get("price")
+        for ticker, snapshot in (result.get("news_analysis", {}).get("price_snapshot") or {}).items()
+        if isinstance(snapshot, dict) and snapshot.get("price") is not None
+    }
+    mark_prices.update({
         str(item.get("ticker") or "").strip().upper(): item.get("current_price")
         for item in _toss_workflow_holdings(settings)
         if item.get("current_price") is not None
-    }
+    })
     for fill in paper_fills:
         fill["mark_price"] = mark_prices.get(str(fill.get("symbol") or "").strip().upper())
         fill["mark_as_of"] = current_storage_date().isoformat()
-        fill["mark_source"] = "portfolio_snapshot"
+        fill["mark_source"] = "eod_price_snapshot"
     result["paper_fills"] = paper_fills
     result["stages"]["paper_simulation"] = {
         "status": "completed",
@@ -13621,7 +13689,6 @@ def complete_toss_paper_simulation(settings: Settings, result: dict) -> dict:
     state["paper_evaluation"] = build_toss_paper_evaluation(read_toss_workflow_history(settings))
     write_toss_workflow_state(settings, state)
     return result
-
 
 
 @app.get(

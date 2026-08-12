@@ -9,12 +9,26 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.toss_trade_workflow import (
+    apply_price_snapshot,
     analyze_news_items,
     build_trade_review,
     build_paper_evaluation,
     build_workflow_result,
     simulate_paper_fills,
 )
+
+
+def test_price_snapshot_populates_review_reference_prices() -> None:
+    result = analyze_news_items(
+        [{"id": "snapshot", "title": "SK하이닉스 성장 호재", "summary": "호실적"}],
+        [{"ticker": "000660", "name": "SK하이닉스", "source": "interest"}],
+    )
+    apply_price_snapshot(
+        result,
+        {"000660": {"price": 1504000, "source": "read_only_market_provider", "as_of_date": "2026-08-12"}},
+    )
+    assert result["proposals"][0]["reference_prices"] == {"000660": 1504000}
+    assert result["analyzed"][0]["matched_context"][0]["price_as_of"] == "2026-08-12"
 
 
 def test_news_analysis_creates_review_only_proposal_for_existing_holding() -> None:
