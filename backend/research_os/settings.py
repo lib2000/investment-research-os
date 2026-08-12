@@ -96,6 +96,11 @@ class Settings(BaseModel):
     toss_timeout_seconds: float = 10.0
     toss_max_retries: int = 2
     toss_retry_backoff_seconds: float = 1.0
+    # Daily Toss research workflow; live order submission remains disabled.
+    toss_workflow_enabled: bool = False
+    toss_workflow_run_hour: int = 16
+    toss_workflow_run_minute: int = 10
+    toss_live_trading_enabled: bool = False
     dart_api_key: str = Field(default="")
     dart_base_url: str = "https://opendart.fss.or.kr/api"
     dart_corp_code_cache_file: str = "../research_vault/_system/dart_corp_codes.json"
@@ -313,6 +318,10 @@ class Settings(BaseModel):
             toss_timeout_seconds=_read_float("TOSS_TIMEOUT_SECONDS", 10.0),
             toss_max_retries=_read_int("TOSS_MAX_RETRIES", 2),
             toss_retry_backoff_seconds=_read_float("TOSS_RETRY_BACKOFF_SECONDS", 1.0),
+            toss_workflow_enabled=_read_bool("TOSS_WORKFLOW_ENABLED", False),
+            toss_workflow_run_hour=_read_int("TOSS_WORKFLOW_RUN_HOUR", 16),
+            toss_workflow_run_minute=_read_int("TOSS_WORKFLOW_RUN_MINUTE", 10),
+            toss_live_trading_enabled=_read_bool("TOSS_LIVE_TRADING_ENABLED", False),
             dart_api_key=os.getenv("DART_API_KEY", os.getenv("OPENDART_API_KEY", "")),
             dart_base_url=os.getenv("DART_BASE_URL", "https://opendart.fss.or.kr/api"),
             dart_corp_code_cache_file=os.getenv(

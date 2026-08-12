@@ -93,6 +93,43 @@ def normalize_toss_holding(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _mask_order_id(order_id: object) -> str | None:
+    value = str(order_id or "").strip()
+    if not value:
+        return None
+    if len(value) <= 10:
+        return "****"
+    return f"{value[:4]}****{value[-4:]}"
+
+
+def normalize_toss_order(item: dict[str, Any]) -> dict[str, Any]:
+    """Return a secret-free, stable order-history record."""
+    execution = item.get("execution") if isinstance(item.get("execution"), dict) else {}
+    return {
+        "order_id_masked": _mask_order_id(item.get("orderId")),
+        "symbol": str(item.get("symbol") or "").strip().upper(),
+        "side": str(item.get("side") or "").strip().upper() or None,
+        "order_type": str(item.get("orderType") or "").strip().upper() or None,
+        "time_in_force": str(item.get("timeInForce") or "").strip().upper() or None,
+        "status": str(item.get("status") or "").strip().upper() or None,
+        "currency": str(item.get("currency") or "").strip().upper() or None,
+        "quantity": _parse_decimal(item.get("quantity")),
+        "price": _parse_decimal(item.get("price")),
+        "order_amount": _parse_decimal(item.get("orderAmount")),
+        "ordered_at": item.get("orderedAt"),
+        "canceled_at": item.get("canceledAt"),
+        "execution": {
+            "filled_quantity": _parse_decimal(execution.get("filledQuantity")),
+            "average_filled_price": _parse_decimal(execution.get("averageFilledPrice")),
+            "filled_amount": _parse_decimal(execution.get("filledAmount")),
+            "commission": _parse_decimal(execution.get("commission")),
+            "tax": _parse_decimal(execution.get("tax")),
+            "filled_at": execution.get("filledAt"),
+            "settlement_date": execution.get("settlementDate"),
+        },
+    }
+
+
 class TossClient:
     """Small, read-only wrapper around the Toss Securities Open API."""
 
@@ -299,4 +336,43 @@ class TossClient:
             "api_path": "/api/v1/holdings",
             "holdings": [item for item in holdings if item.get("ticker")],
             "summary": result,
+        }
+
+    def fetch_orders(
+        self,
+        *,
+        status: str,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        symbol: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        """Read order history only; this method never creates or mutates orders."""
+        normalized_status = str(status or "").strip().upper()
+        if normalized_status not in {"OPEN", "CLOSED"}:
+            raise ValueError("토스 주문 이력 status는 OPEN 또는 CLOSED여야 합니다.")
+        params: dict[str, str] = {"status": normalized_status}
+        if date_from:
+            params["from"] = str(date_from)
+        if date_to:
+            params["to"] = str(date_to)
+        if symbol:
+            params["symbol"] = str(symbol).strip().upper()
+        if normalized_status == "CLOSED":
+            params["limit"] = str(max(1, min(int(limit or 100), 100)))
+            if cursor:
+                params["cursor"] = str(cursor)
+        resolved_account = self.resolve_account_seq()
+        payload = self._request_json("GET", "/api/v1/orders", account_seq=resolved_account, params=params)
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        raw_orders = result.get("orders") if isinstance(result.get("orders"), list) else []
+        return {
+            "status": "success",
+            "broker": "TOSS",
+            "account_seq": resolved_account,
+            "query": {"status": normalized_status, **{key: value for key, value in params.items() if key != "status"}},
+            "orders": [normalize_toss_order(item) for item in raw_orders if isinstance(item, dict)],
+            "next_cursor": result.get("nextCursor"),
+            "has_next": bool(result.get("hasNext")),
         }

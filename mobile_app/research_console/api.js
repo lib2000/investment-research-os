@@ -2116,6 +2116,31 @@ export async function fetchTossHoldings(accessToken) {
   });
 }
 
+export async function fetchTossOrders(accessToken, { queryDate = "", status = "ALL", symbol = "" } = {}) {
+  const params = new URLSearchParams({ status });
+  if (queryDate) params.set("query_date", queryDate);
+  if (symbol) params.set("symbol", symbol);
+  return request(`/api/v1/brokerage/toss/orders?${params.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function fetchTossWorkflowStatus(accessToken) {
+  return request("/api/v1/brokerage/toss/workflow/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function runTossWorkflow(accessToken, queryDate = "") {
+  const params = queryDate ? `?query_date=${encodeURIComponent(queryDate)}` : "";
+  return request(`/api/v1/brokerage/toss/workflow/run${params}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
 export async function fetchPortfolioSyncHistory(accessToken, portfolioName, { limit = 10 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
   return request(

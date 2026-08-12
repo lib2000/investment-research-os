@@ -2841,6 +2841,31 @@ label {
   font-size: 16px;
 }
 
+.toss-workflow-block {
+  margin-top: 18px;
+}
+
+.toss-workflow-block .editor-header {
+  align-items: flex-start;
+}
+
+.toss-workflow-block .editor-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 .editor-actions {
   display: flex;
   flex-wrap: wrap;

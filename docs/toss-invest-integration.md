@@ -32,10 +32,19 @@ TOSS_TOKEN_CACHE_FILE=../research_vault/_system/toss_access_token.json
 - `POST /api/v1/brokerage/toss/token-test`
 - `GET /api/v1/brokerage/toss/accounts`
 - `GET /api/v1/brokerage/toss/holdings`
+- `GET /api/v1/brokerage/toss/orders?query_date=YYYY-MM-DD&status=ALL`
 - `POST /api/v1/portfolios/{portfolio_name}/sync/toss/preview`
 - `POST /api/v1/portfolios/{portfolio_name}/sync/toss`
+- `GET /api/v1/brokerage/toss/workflow/status`
+- `POST /api/v1/brokerage/toss/workflow/run`
 
 모든 포트폴리오 동기화는 기존 저장 종목과 티커가 일치하는 항목만 갱신한다. 미리보기는 저장하지 않으며, 적용 버튼을 눌렀을 때만 `portfolio_sync_history.jsonl`에 이력을 남긴다.
+
+## 뉴스→조건→거래 기록→복기 워크플로
+
+`TOSS_WORKFLOW_ENABLED=true`이면 매일 설정된 시각(기본 16:10 KST)에 뉴스 인박스와 기존 보유 종목을 대조해 조건 일치 주문안을 만들고, 같은 날짜의 토스 주문 이력을 기록·복기한다. 주문안에는 수량과 가격을 자동 확정하지 않으며 `manual_review_required`와 `blocked_live_order` 상태로 저장한다.
+
+현재 단계에서는 주문 생성·정정·취소 API를 호출하지 않는다. 자동화가 실행되어도 실계좌에 주문이 제출되지 않으며, 실제 매매를 연결하려면 별도의 위험 한도·승인·모의검증 설계가 선행되어야 한다.
 
 ## 검증
 

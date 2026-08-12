@@ -14,7 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.portfolio_sync import apply_toss_holdings_to_portfolio
 from research_os.models import PortfolioHolding, SavedPortfolio
 from research_os.settings import Settings
-from research_os.toss_invest import TossClient, normalize_toss_holding
+from research_os.toss_invest import TossClient, normalize_toss_holding, normalize_toss_order
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -131,3 +131,48 @@ def test_apply_toss_holdings_preserves_missing_and_reports_remote_new() -> None:
     assert summary["updated_count"] == 1
     assert summary["skipped_count"] == 1
     assert summary["untracked_remote"][0]["ticker"] == "MSFT"
+
+
+def test_normalize_toss_order_masks_id_and_keeps_execution_summary() -> None:
+    result = normalize_toss_order(
+        {
+            "orderId": "abcdefghijklmnop",
+            "symbol": "300080",
+            "side": "BUY",
+            "orderType": "LIMIT",
+            "status": "CANCELED",
+            "quantity": "279",
+            "price": "8590",
+            "orderedAt": "2026-08-12T12:38:11+09:00",
+            "execution": {
+                "filledQuantity": "236",
+                "averageFilledPrice": "8590",
+                "filledAmount": "2027240",
+            },
+        }
+    )
+    assert result["order_id_masked"] == "abcd****mnop"
+    assert result["symbol"] == "300080"
+    assert result["execution"]["filled_quantity"] == 236
+    assert result["execution"]["filled_amount"] == 2027240
+
+
+def test_toss_client_fetches_order_history_without_mutating_api(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    token_response = httpx.Response(
+        200,
+        json={"access_token": "order-token", "token_type": "Bearer", "expires_in": 3600},
+    )
+    orders_response = httpx.Response(
+        200,
+        json={"result": {"orders": [], "nextCursor": None, "hasNext": False}},
+    )
+    with patch("research_os.toss_invest.httpx.post", return_value=token_response):
+        with patch("research_os.toss_invest.httpx.request", return_value=orders_response) as api_call:
+            result = TossClient(settings).fetch_orders(
+                status="CLOSED", date_from="2026-08-12", date_to="2026-08-12"
+            )
+    assert result["status"] == "success"
+    assert result["query"]["from"] == "2026-08-12"
+    assert api_call.call_args.args[0] == "GET"
+    assert api_call.call_args.args[1].endswith("/api/v1/orders")

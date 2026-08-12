@@ -93,6 +93,9 @@
   previewKiwoomDomesticPortfolioSync,
   syncTossPortfolio,
   previewTossPortfolioSync,
+  fetchTossOrders,
+  fetchTossWorkflowStatus,
+  runTossWorkflow,
   fetchPortfolioSyncHistory,
   deletePortfolio,
   fetchInterests,
@@ -115,7 +118,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=f15a6a2fc242";
+} from "./api.js?v=571db0539e6e";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -171,6 +174,10 @@ const elements = {
   newsPromoteLatestButton: document.querySelector("#newsPromoteLatestButton"),
   newsInboxFilter: document.querySelector("#newsInboxFilter"),
   newsInboxList: document.querySelector("#newsInboxList"),
+  tossOrdersButton: document.querySelector("#tossOrdersButton"),
+  tossWorkflowButton: document.querySelector("#tossWorkflowButton"),
+  tossWorkflowStatusButton: document.querySelector("#tossWorkflowStatusButton"),
+  tossWorkflowSummary: document.querySelector("#tossWorkflowSummary"),
   llmPromptForm: document.querySelector("#llmPromptForm"),
   llmPromptOutput: document.querySelector("#llmPromptOutput"),
   copyLlmPromptButton: document.querySelector("#copyLlmPromptButton"),
@@ -12839,6 +12846,70 @@ elements.newsInboxList?.addEventListener("click", async (event) => {
     const inbox = await fetchNewsInbox(token(), 30, currentNewsInboxFilter());
     renderNewsInboxCards(inbox);
     await runSecondaryRefresh("상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
+function renderTossWorkflowSummary(result) {
+  if (!elements.tossWorkflowSummary) return;
+  if (!result || result.status !== "success") {
+    elements.tossWorkflowSummary.textContent = result?.message || "토스 워크플로 결과를 불러오지 못했습니다.";
+    return;
+  }
+  const stages = result.stages || {};
+  const review = result.review || stages.review || {};
+  const proposals = result.news_analysis?.proposals || [];
+  elements.tossWorkflowSummary.textContent = [
+    `실행일: ${result.query_date || result.run_at || "-"}`,
+    `뉴스 분석: ${result.news_analysis?.news_count || 0}개 · 조건 일치 주문안: ${proposals.length}개`,
+    `오늘 거래 기록: ${result.orders?.length || 0}건 · 체결수량: ${formatNumber(review.filled_quantity || 0)}`,
+    `복기: ${review.review_status || "-"} · 체결금액: ${formatNumber(review.filled_amount || 0)}`,
+    "실제 토스 주문 API는 차단되어 주문안만 생성됩니다.",
+  ].join("\n");
+}
+
+elements.tossOrdersButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("오늘 토스 거래 조회 중", ["토스 종료·진행 주문 조회", "체결·취소 분리", "복기 요약 생성"]);
+  try {
+    const result = await fetchTossOrders(token());
+    renderTossWorkflowSummary({
+      status: result.status,
+      query_date: result.query_date,
+      orders: result.orders,
+      review: {
+        review_status: result.order_count ? "needs_human_review" : "no_orders_today",
+        filled_quantity: (result.orders || []).reduce((sum, item) => sum + Number(item.execution?.filled_quantity || 0), 0),
+        filled_amount: (result.orders || []).reduce((sum, item) => sum + Number(item.execution?.filled_amount || 0), 0),
+      },
+      news_analysis: { news_count: 0, proposals: [] },
+    });
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.tossWorkflowButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("토스 거래 워크플로 실행 중", ["뉴스 분석", "조건 검색", "오늘 거래 기록", "복기 결과 저장"]);
+  try {
+    const result = await runTossWorkflow(token());
+    renderTossWorkflowSummary(result);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.tossWorkflowStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("토스 자동화 상태 조회 중", ["예약 시각 확인", "최근 실행 확인", "실제 주문 차단 상태 확인"]);
+  try {
+    const result = await fetchTossWorkflowStatus(token());
+    renderTossWorkflowSummary(result.last_result || result);
+    setOutput(result);
   } catch (error) {
     setError(error);
   }

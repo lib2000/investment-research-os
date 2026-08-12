@@ -153,6 +153,13 @@ from research_os.kiwoom_interest import (
 )
 import research_os.dart_filing_watch as dart_filing_watch
 from research_os.toss_invest import TossApiError, TossClient, TossMaskedTokenStatus
+from research_os.toss_trade_workflow import (
+    analyze_news_items as analyze_toss_news_items,
+    append_workflow_history as append_toss_workflow_history,
+    build_workflow_result as build_toss_workflow_result,
+    read_workflow_state as read_toss_workflow_state,
+    write_workflow_state as write_toss_workflow_state,
+)
 from research_os.investment_calendar import (
     build_investment_calendar_earnings_events as build_calendar_earnings_events,
     load_latest_calendar_file_payload,
@@ -444,6 +451,7 @@ async def lifespan(app: FastAPI):
     start_regional_macro_sources_scheduler()
     start_company_ir_sources_scheduler()
     start_daily_recommendations_scheduler()
+    start_toss_workflow_scheduler()
     yield
 
 
@@ -13397,6 +13405,166 @@ def read_toss_holdings(
         return {"status": "unavailable", "broker": "TOSS", "message": str(exc), "holdings": []}
 
 
+def read_toss_orders_for_date(
+    *,
+    settings: Settings,
+    query_date: str | None = None,
+    status: str = "ALL",
+    symbol: str | None = None,
+) -> dict:
+    """Read today's Toss order/fulfillment history without mutation."""
+    date_value = str(query_date or current_storage_date().isoformat()).strip()
+    normalized_status = str(status or "ALL").strip().upper()
+    statuses = ["CLOSED", "OPEN"] if normalized_status == "ALL" else [normalized_status]
+    if normalized_status not in {"ALL", "CLOSED", "OPEN"}:
+        raise ValueError("토스 주문 이력 status는 ALL, OPEN 또는 CLOSED여야 합니다.")
+    client = TossClient(settings)
+    orders: list[dict] = []
+    source_statuses: dict[str, str] = {}
+    for item_status in statuses:
+        payload = client.fetch_orders(
+            status=item_status,
+            date_from=date_value,
+            date_to=date_value,
+            symbol=symbol,
+        )
+        source_statuses[item_status] = payload.get("status", "success")
+        orders.extend(payload.get("orders") or [])
+    orders.sort(key=lambda item: str(item.get("ordered_at") or ""), reverse=True)
+    return {
+        "status": "success",
+        "broker": "TOSS",
+        "query_date": date_value,
+        "query_status": normalized_status,
+        "symbol": str(symbol or "").strip().upper() or None,
+        "orders": orders,
+        "order_count": len(orders),
+        "closed_count": sum(1 for item in orders if item.get("status") not in {"PENDING", "PARTIAL_FILLED", "PENDING_CANCEL", "PENDING_REPLACE"}),
+        "open_count": sum(1 for item in orders if item.get("status") in {"PENDING", "PARTIAL_FILLED", "PENDING_CANCEL", "PENDING_REPLACE"}),
+        "source_statuses": source_statuses,
+        "message": "토스 주문 이력을 조회했습니다. 주문 생성·정정·취소는 호출하지 않았습니다.",
+    }
+
+
+@app.get(
+    "/api/v1/brokerage/toss/orders",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_toss_orders(
+    query_date: str | None = None,
+    status: str = "ALL",
+    symbol: str | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    try:
+        return read_toss_orders_for_date(
+            settings=settings,
+            query_date=query_date,
+            status=status,
+            symbol=symbol,
+        )
+    except ValueError as exc:
+        return {"status": "not_configured", "broker": "TOSS", "message": str(exc), "orders": []}
+    except (TossApiError, httpx.HTTPError) as exc:
+        return {"status": "unavailable", "broker": "TOSS", "message": str(exc), "orders": []}
+
+
+def _toss_workflow_holdings(settings: Settings) -> list[dict]:
+    store = read_portfolio_store(settings)
+    holdings_by_ticker: dict[str, dict] = {}
+    for portfolio in (store.get("portfolios") or {}).values():
+        if not isinstance(portfolio, dict):
+            continue
+        for holding in portfolio.get("holdings") or []:
+            if not isinstance(holding, dict):
+                continue
+            ticker = normalize_ticker(holding.get("ticker"))
+            if ticker and ticker not in holdings_by_ticker:
+                holdings_by_ticker[ticker] = {
+                    "ticker": ticker,
+                    "name": holding.get("name"),
+                    "quantity": holding.get("quantity"),
+                    "current_price": holding.get("current_price"),
+                }
+    return list(holdings_by_ticker.values())
+
+
+def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = None) -> dict:
+    run_at = current_storage_timestamp()
+    date_value = str(query_date or current_storage_date().isoformat()).strip()
+    news_payload = read_news_inbox(settings)
+    news_result = analyze_toss_news_items(
+        [item for item in news_payload.get("items", []) if isinstance(item, dict)],
+        _toss_workflow_holdings(settings),
+    )
+    order_status = "success"
+    orders: list[dict] = []
+    order_message = ""
+    try:
+        order_result = read_toss_orders_for_date(settings=settings, query_date=date_value, status="ALL")
+        orders = order_result.get("orders") or []
+    except ValueError as exc:
+        order_status = "not_configured"
+        order_message = str(exc)
+    except (TossApiError, httpx.HTTPError) as exc:
+        order_status = "unavailable"
+        order_message = str(exc)
+    result = build_toss_workflow_result(run_at=run_at, news_result=news_result, orders=orders)
+    result["query_date"] = date_value
+    result["orders_status"] = order_status
+    if order_message:
+        result["orders_message"] = order_message
+    state = read_toss_workflow_state(settings)
+    history = [item for item in state.get("runs", []) if isinstance(item, dict)]
+    history.insert(0, {
+        "run_at": run_at,
+        "query_date": date_value,
+        "status": result.get("status"),
+        "proposal_count": len((news_result.get("proposals") or [])),
+        "order_count": len(orders),
+        "orders_status": order_status,
+    })
+    write_toss_workflow_state(settings, {
+        "status": result.get("status"),
+        "last_run_at": run_at,
+        "last_run_date": date_value,
+        "last_result": result,
+        "runs": history[:30],
+    })
+    append_toss_workflow_history(settings, result)
+    return result
+
+
+@app.get(
+    "/api/v1/brokerage/toss/workflow/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_toss_workflow_status(settings: Settings = Depends(get_settings)) -> dict:
+    state = read_toss_workflow_state(settings)
+    return {
+        "status": state.get("status", "not_run"),
+        "enabled": settings.toss_workflow_enabled and settings.toss_enabled,
+        "live_trading_enabled": False,
+        "scheduled_time_kst": f"{settings.toss_workflow_run_hour:02d}:{settings.toss_workflow_run_minute:02d}",
+        "last_run_at": state.get("last_run_at"),
+        "last_run_date": state.get("last_run_date"),
+        "last_result": state.get("last_result"),
+        "runs": state.get("runs", [])[:10],
+        "message": "뉴스 분석→조건 검색→주문안→기록→복기 자동화가 준비되었습니다. 실제 주문은 항상 차단됩니다.",
+    }
+
+
+@app.post(
+    "/api/v1/brokerage/toss/workflow/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_toss_workflow_endpoint(
+    query_date: str | None = None,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return run_toss_workflow_for_date(settings, query_date=query_date)
+
+
 @app.get(
     "/api/v1/brokerage/kiwoom/interest-groups",
     dependencies=[Depends(verify_user_token)],
@@ -16624,6 +16792,45 @@ def run_daily_stock_recommendations(
             },
         )
     return result
+
+
+_TOSS_WORKFLOW_SCHEDULER_STARTED = False
+
+
+def toss_workflow_scheduler_loop() -> None:
+    settings = get_settings()
+    while True:
+        try:
+            if settings.toss_enabled and settings.toss_workflow_enabled:
+                now = current_storage_datetime()
+                scheduled = now.replace(
+                    hour=max(0, min(settings.toss_workflow_run_hour, 23)),
+                    minute=max(0, min(settings.toss_workflow_run_minute, 59)),
+                    second=0,
+                    microsecond=0,
+                )
+                state = read_toss_workflow_state(settings)
+                if now >= scheduled and state.get("last_run_date") != now.date().isoformat():
+                    run_toss_workflow_for_date(settings, query_date=now.date().isoformat())
+        except Exception:
+            # Scheduled research must never interrupt the API process. The
+            # next manual/status run exposes the last successful state.
+            pass
+        threading.Event().wait(300)
+
+
+def start_toss_workflow_scheduler() -> None:
+    global _TOSS_WORKFLOW_SCHEDULER_STARTED
+    settings = get_settings()
+    if _TOSS_WORKFLOW_SCHEDULER_STARTED or not settings.toss_enabled or not settings.toss_workflow_enabled:
+        return
+    _TOSS_WORKFLOW_SCHEDULER_STARTED = True
+    thread = threading.Thread(
+        target=toss_workflow_scheduler_loop,
+        name="toss-research-trade-workflow",
+        daemon=True,
+    )
+    thread.start()
 
 
 _DAILY_RECOMMENDATIONS_SCHEDULER_STARTED = False

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=a66412669267" />
+    <link rel="stylesheet" href="./styles.css?v=636acbb87eee" />
   </head>
   <body>
     <main class="app-shell">
@@ -583,6 +583,23 @@
         </form>
         <div id="newsInboxList" class="news-inbox-list" aria-live="polite">
           <div class="news-inbox-empty">뉴스 인박스를 조회하면 미승격 뉴스와 품질 확인 항목이 여기에 표시됩니다.</div>
+        </div>
+        <div class="editor-block toss-workflow-block">
+          <div class="editor-header">
+            <div>
+              <strong>토스 거래 워크플로</strong>
+              <p>뉴스 분석 → 조건 검색 → 주문안 → 거래 기록 → 복기를 한 번에 실행합니다.</p>
+            </div>
+            <span class="status-pill">실제 주문 차단</span>
+          </div>
+          <div class="button-row">
+            <button id="tossOrdersButton" class="secondary" type="button">오늘 토스 거래 조회</button>
+            <button id="tossWorkflowButton" type="button">워크플로 실행</button>
+            <button id="tossWorkflowStatusButton" class="secondary" type="button">자동화 상태</button>
+          </div>
+          <div id="tossWorkflowSummary" class="editor-summary" aria-live="polite">
+            토스 API 연결 후 오늘 거래와 자동화 결과가 표시됩니다.
+          </div>
         </div>
       </section>
 
@@ -1212,6 +1229,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=f2e00718e863"></script>
+  <script type="module" src="./console.js?v=b434070e402f"></script>
 </body>
 </html>

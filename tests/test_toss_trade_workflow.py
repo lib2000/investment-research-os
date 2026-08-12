@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from research_os.toss_trade_workflow import analyze_news_items, build_trade_review, build_workflow_result
+
+
+def test_news_analysis_creates_review_only_proposal_for_existing_holding() -> None:
+    result = analyze_news_items(
+        [
+            {
+                "id": "news-1",
+                "title": "플리토 신규 계약으로 성장 전망 상향",
+                "summary": "호실적과 수주 증가",
+                "source_url": "https://example.com/news-1",
+                "scope": "300080",
+                "confidence": 0.9,
+            }
+        ],
+        [{"ticker": "300080", "quantity": 279}],
+    )
+    assert result["matched_news_count"] == 1
+    assert result["proposals"][0]["action"] == "BUY_REVIEW"
+    assert result["proposals"][0]["status"] == "manual_review_required"
+    assert result["proposals"][0]["execution"] == "blocked_live_order"
+    assert result["proposals"][0]["quantity"] is None
+
+
+def test_trade_review_counts_partial_and_canceled_orders() -> None:
+    review = build_trade_review(
+        [
+            {"side": "BUY", "status": "FILLED", "quantity": 43, "execution": {"filled_quantity": 43, "filled_amount": 371520}},
+            {"side": "BUY", "status": "CANCELED", "quantity": 279, "execution": {"filled_quantity": 236, "filled_amount": 2027240}},
+        ]
+    )
+    assert review["order_count"] == 2
+    assert review["canceled_count"] == 1
+    assert review["partial_fill_count"] == 1
+    assert review["filled_quantity"] == 279
+    assert review["filled_amount"] == 2398760
+
+
+def test_workflow_result_blocks_live_trade_stage() -> None:
+    result = build_workflow_result(
+        run_at="2026-08-12T16:10:00+09:00",
+        news_result={"news_count": 1, "proposals": [{"proposal_id": "p1"}]},
+        orders=[],
+    )
+    assert result["stages"]["trade"]["status"] == "blocked_live_order"
+    assert result["stages"]["trade"]["created_order_count"] == 0
+    assert result["human_gate"]["required"] is True
