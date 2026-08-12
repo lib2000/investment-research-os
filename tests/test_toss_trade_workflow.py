@@ -11,6 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.toss_trade_workflow import (
     analyze_news_items,
     build_trade_review,
+    build_paper_evaluation,
     build_workflow_result,
     simulate_paper_fills,
 )
@@ -74,3 +75,49 @@ def test_paper_simulation_is_deterministic_and_has_no_live_execution_marker() ->
     assert first[0]["quantity"] == 1
     assert first[0]["execution"] == "paper_only"
     assert "order_id" not in first[0]
+
+
+def test_paper_evaluation_calculates_marked_pnl_and_drawdown() -> None:
+    evaluation = build_paper_evaluation(
+        [
+            {
+                "run_at": "2026-08-10T16:10:00+09:00",
+                "paper_fills": [
+                    {
+                        "paper_order_id": "p1",
+                        "symbol": "AAA",
+                        "side": "BUY",
+                        "status": "simulated_filled",
+                        "quantity": 1,
+                        "reference_price": 100,
+                        "mark_price": 110,
+                        "simulated_at": "2026-08-10T16:10:00+09:00",
+                    }
+                ],
+            },
+            {
+                "run_at": "2026-08-11T16:10:00+09:00",
+                "paper_fills": [
+                    {
+                        "paper_order_id": "p2",
+                        "symbol": "BBB",
+                        "side": "BUY",
+                        "status": "simulated_filled",
+                        "quantity": 1,
+                        "reference_price": 100,
+                        "mark_price": 90,
+                        "simulated_at": "2026-08-11T16:10:00+09:00",
+                    }
+                ],
+            },
+        ],
+        window_days=7,
+        as_of_date="2026-08-11",
+    )
+    assert evaluation["sample_size"] == 2
+    assert evaluation["pnl"] == 0
+    assert evaluation["wins"] == 1
+    assert evaluation["losses"] == 1
+    assert evaluation["win_rate"] == 0.5
+    assert evaluation["max_drawdown"] == 10
+    assert evaluation["status"] == "insufficient_sample"

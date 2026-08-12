@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -45,6 +45,12 @@ def workflow_history_path(settings: Settings) -> Path:
     return path
 
 
+def paper_evaluation_path(settings: Settings) -> Path:
+    path = resolve_vault_dir(settings.research_vault_dir) / "_system" / "toss_paper_evaluation.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def read_workflow_state(settings: Settings) -> dict[str, Any]:
     path = workflow_state_path(settings)
     if not path.exists():
@@ -61,6 +67,25 @@ def write_workflow_state(settings: Settings, payload: dict[str, Any]) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def read_workflow_history(settings: Settings, *, limit: int = 200) -> list[dict[str, Any]]:
+    path = workflow_history_path(settings)
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in reversed(lines[-max(1, min(limit, 1000)):]):
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            records.append(item)
+    return records
 
 
 def _text(item: dict[str, Any]) -> str:
@@ -155,6 +180,8 @@ def analyze_news_items(news_items: list[dict[str, Any]], holdings: list[dict[str
                         for item in matched_context
                         if item.get("current_price") is not None
                     },
+                    "evidence_strength": evidence_strength,
+                    "confidence": confidence,
                     "source_news_id": item.get("id"),
                     "reason": "뉴스 신호와 기존 보유종목이 조건에 맞았습니다.",
                     "quantity": None,
@@ -278,6 +305,8 @@ def simulate_paper_fills(news_result: dict[str, Any], *, run_at: str) -> list[di
                 "amount": round(reference_price, 2) if reference_price > 0 else 0,
                 "simulated_at": run_at,
                 "execution": "paper_only",
+                "evidence_strength": proposal.get("evidence_strength", "low"),
+                "confidence": proposal.get("confidence", 0),
             })
     return fills
 
@@ -290,8 +319,104 @@ def append_workflow_history(settings: Settings, result: dict[str, Any]) -> None:
         "stage_status": {key: value.get("status") for key, value in (result.get("stages") or {}).items() if isinstance(value, dict)},
         "proposal_count": len((result.get("news_analysis") or {}).get("proposals") or []),
         "order_count": len(result.get("orders") or []),
+        "paper_fills": [item for item in result.get("paper_fills") or [] if isinstance(item, dict)],
         "review": result.get("review") or {},
     }
     with workflow_history_path(settings).open("a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False))
         file.write("\n")
+
+
+def build_paper_evaluation(
+    records: list[dict[str, Any]],
+    *,
+    window_days: int = 7,
+    as_of_date: str | None = None,
+) -> dict[str, Any]:
+    """Evaluate marked paper fills without treating them as live performance."""
+    days = max(1, min(int(window_days or 7), 30))
+    try:
+        as_of = date.fromisoformat(str(as_of_date)) if as_of_date else _now_kst().date()
+    except ValueError:
+        as_of = _now_kst().date()
+    window_start = as_of - timedelta(days=days - 1)
+    fills: list[dict[str, Any]] = []
+    observed_dates: set[str] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        run_date = str(record.get("run_at") or "")[:10]
+        try:
+            record_date = date.fromisoformat(run_date)
+        except ValueError:
+            continue
+        if record_date < window_start or record_date > as_of:
+            continue
+        paper_fills = record.get("paper_fills") if isinstance(record.get("paper_fills"), list) else []
+        for fill in paper_fills:
+            if not isinstance(fill, dict):
+                continue
+            observed_dates.add(run_date)
+            fills.append({**fill, "run_date": run_date})
+    marked = []
+    unmarked_count = 0
+    for fill in fills:
+        if str(fill.get("status") or "") != "simulated_filled":
+            unmarked_count += 1
+            continue
+        try:
+            quantity = float(fill.get("quantity") or 0)
+            entry = float(fill.get("reference_price") or 0)
+            mark = float(fill.get("mark_price") or 0)
+        except (TypeError, ValueError):
+            quantity = entry = mark = 0.0
+        if quantity <= 0 or entry <= 0 or mark <= 0:
+            unmarked_count += 1
+            continue
+        side = str(fill.get("side") or "BUY").upper()
+        pnl = (mark - entry) * quantity if side == "BUY" else (entry - mark) * quantity
+        marked.append({**fill, "entry_amount": round(entry * quantity, 2), "mark_amount": round(mark * quantity, 2), "pnl": round(pnl, 2)})
+    pnl = round(sum(float(item["pnl"]) for item in marked), 2)
+    invested = round(sum(float(item["entry_amount"]) for item in marked), 2)
+    wins = sum(1 for item in marked if item["pnl"] > 0)
+    losses = sum(1 for item in marked if item["pnl"] < 0)
+    curve = []
+    cumulative = 0.0
+    peak = 0.0
+    max_drawdown = 0.0
+    for item in sorted(marked, key=lambda value: (value.get("simulated_at") or "", value.get("paper_order_id") or "")):
+        cumulative += float(item["pnl"])
+        peak = max(peak, cumulative)
+        max_drawdown = max(max_drawdown, peak - cumulative)
+        curve.append(round(cumulative, 2))
+    by_symbol: dict[str, dict[str, Any]] = {}
+    for item in marked:
+        symbol = str(item.get("symbol") or "UNKNOWN")
+        bucket = by_symbol.setdefault(symbol, {"symbol": symbol, "fill_count": 0, "pnl": 0.0, "wins": 0, "losses": 0})
+        bucket["fill_count"] += 1
+        bucket["pnl"] = round(bucket["pnl"] + float(item["pnl"]), 2)
+        bucket["wins"] += int(item["pnl"] > 0)
+        bucket["losses"] += int(item["pnl"] < 0)
+    sample_size = len(marked)
+    return {
+        "status": "completed" if len(observed_dates) >= days and sample_size else "insufficient_sample",
+        "window_days": days,
+        "window_start": window_start.isoformat(),
+        "as_of_date": as_of.isoformat(),
+        "observed_dates": sorted(observed_dates),
+        "days_observed": len(observed_dates),
+        "sample_size": sample_size,
+        "unmarked_count": unmarked_count,
+        "filled_count": len(fills),
+        "invested_amount": invested,
+        "pnl": pnl,
+        "return_rate": round((pnl / invested) if invested else 0.0, 6),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round((wins / sample_size) if sample_size else 0.0, 6),
+        "max_drawdown": round(max_drawdown, 2),
+        "evidence_strength": "low" if sample_size < 10 or unmarked_count else "medium",
+        "by_symbol": sorted(by_symbol.values(), key=lambda item: (-abs(item["pnl"]), item["symbol"])),
+        "equity_curve": curve,
+        "message": "모의체결 평가이며 실계좌 수익률이나 투자 권고가 아닙니다.",
+    }

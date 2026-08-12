@@ -2150,6 +2150,14 @@ export async function simulateTossPaperWorkflow(accessToken, queryDate = "") {
   });
 }
 
+export async function fetchTossPaperEvaluation(accessToken, days = 7) {
+  const params = new URLSearchParams({ days: String(days) });
+  return request(`/api/v1/brokerage/toss/workflow/paper-evaluation?${params.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchPortfolioSyncHistory(accessToken, portfolioName, { limit = 10 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
   return request(

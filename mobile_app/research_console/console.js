@@ -95,6 +95,7 @@
   previewTossPortfolioSync,
   fetchTossOrders,
   fetchTossWorkflowStatus,
+  fetchTossPaperEvaluation,
   runTossWorkflow,
   simulateTossPaperWorkflow,
   fetchPortfolioSyncHistory,
@@ -119,7 +120,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=def1f2972b7b";
+} from "./api.js?v=3af343e4a8c8";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -178,6 +179,7 @@ const elements = {
   tossOrdersButton: document.querySelector("#tossOrdersButton"),
   tossWorkflowButton: document.querySelector("#tossWorkflowButton"),
   tossPaperButton: document.querySelector("#tossPaperButton"),
+  tossEvaluationButton: document.querySelector("#tossEvaluationButton"),
   tossWorkflowStatusButton: document.querySelector("#tossWorkflowStatusButton"),
   tossWorkflowSummary: document.querySelector("#tossWorkflowSummary"),
   llmPromptForm: document.querySelector("#llmPromptForm"),
@@ -12912,6 +12914,28 @@ elements.tossPaperButton?.addEventListener("click", async () => {
   try {
     const result = await simulateTossPaperWorkflow(token());
     renderTossWorkflowSummary(result);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.tossEvaluationButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("7일 모의평가 조회 중", ["모의체결 집계", "종목별 손익 계산", "승률·최대낙폭 산출"]);
+  try {
+    const result = await fetchTossPaperEvaluation(token(), 7);
+    const evaluation = result.evaluation || {};
+    if (elements.tossWorkflowSummary) {
+      elements.tossWorkflowSummary.textContent = [
+        `평가 기간: ${evaluation.window_start || "-"} ~ ${evaluation.as_of_date || "-"}`,
+        `관측일: ${evaluation.days_observed || 0}/${evaluation.window_days || 7}일 · 표본: ${evaluation.sample_size || 0}건`,
+        `손익: ${formatNumber(evaluation.pnl || 0)} · 수익률: ${formatNumber((evaluation.return_rate || 0) * 100)}%`,
+        `승률: ${formatNumber((evaluation.win_rate || 0) * 100)}% · 최대낙폭: ${formatNumber(evaluation.max_drawdown || 0)}`,
+        `상태: ${evaluation.status || "insufficient_sample"} · 근거 강도: ${evaluation.evidence_strength || "low"}`,
+        evaluation.message || "모의체결 평가 결과입니다.",
+      ].join("\n");
+    }
     setOutput(result);
   } catch (error) {
     setError(error);

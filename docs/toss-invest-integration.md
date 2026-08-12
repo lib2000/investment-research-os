@@ -38,6 +38,7 @@ TOSS_TOKEN_CACHE_FILE=../research_vault/_system/toss_access_token.json
 - `GET /api/v1/brokerage/toss/workflow/status`
 - `POST /api/v1/brokerage/toss/workflow/run`
 - `POST /api/v1/brokerage/toss/workflow/paper-simulate?confirm=true`
+- `GET /api/v1/brokerage/toss/workflow/paper-evaluation?days=7`
 
 모든 포트폴리오 동기화는 기존 저장 종목과 티커가 일치하는 항목만 갱신한다. 미리보기는 저장하지 않으며, 적용 버튼을 눌렀을 때만 `portfolio_sync_history.jsonl`에 이력을 남긴다.
 
@@ -48,6 +49,10 @@ TOSS_TOKEN_CACHE_FILE=../research_vault/_system/toss_access_token.json
 현재 단계에서는 주문 생성·정정·취소 API를 호출하지 않는다. 자동화가 실행되어도 실계좌에 주문이 제출되지 않으며, 실제 매매를 연결하려면 별도의 위험 한도·승인·모의검증 설계가 선행되어야 한다.
 
 `TOSS_PAPER_TRADING_ENABLED=true`일 때만 콘솔의 `모의체결 기록`이 활성화된다. 명시적 확인 요청 후 기존 주문안에 대해 1주·참고가격 기준의 결정적 모의체결을 저장하며, 토스 API에는 쓰기 요청을 보내지 않는다.
+
+이 설정이 켜져 있으면 예약 워크플로도 하루 한 번 같은 모의체결·가격 스냅샷을 저장한다. 실거래 설정과 별개이며 `TOSS_LIVE_TRADING_ENABLED=false` 상태에서는 토스 주문 쓰기 API가 호출되지 않는다.
+
+콘솔의 `7일 모의평가`는 누적된 모의체결을 기준으로 종목별 손익, 수익률, 승률, 최대낙폭, 표본 수와 근거 강도를 계산한다. 관측일 또는 표본이 부족하면 `insufficient_sample`로 표시하며, 결과는 실계좌 성과나 투자 권고로 해석하지 않는다.
 
 ## 검증
 
