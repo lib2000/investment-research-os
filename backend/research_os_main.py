@@ -157,6 +157,7 @@ from research_os.toss_trade_workflow import (
     apply_price_snapshot as apply_toss_price_snapshot,
     analyze_news_items as analyze_toss_news_items,
     append_workflow_history as append_toss_workflow_history,
+    build_evidence_review as build_toss_evidence_review,
     build_paper_evaluation as build_toss_paper_evaluation,
     build_workflow_result as build_toss_workflow_result,
     dedupe_paper_fill_history as dedupe_toss_paper_fill_history,
@@ -5283,15 +5284,65 @@ def sync_saved_portfolio_with_toss(
     portfolio: SavedPortfolio,
     balance: dict,
     settings: Settings,
+    *,
+    import_untracked: bool = False,
+    preserve_non_toss_holdings: bool = False,
 ) -> tuple[SavedPortfolio, dict]:
     checked_at = current_storage_timestamp()
     synced_portfolio, sync_summary = apply_toss_holdings_to_portfolio(
         portfolio,
         balance,
         checked_at=checked_at,
+        import_untracked=import_untracked,
+        preserve_non_toss_holdings=preserve_non_toss_holdings,
     )
     synced_portfolio = sort_and_weight_portfolio(synced_portfolio, settings, refresh_prices=False)
     return synced_portfolio, sync_summary
+
+
+def sync_toss_owner_portfolio(settings: Settings) -> tuple[SavedPortfolio | None, dict]:
+    """Sync Toss holdings into the configured family owner portfolio."""
+    portfolio_name = settings.toss_portfolio_name.strip()
+    if not portfolio_name:
+        return None, {
+            "status": "not_configured",
+            "owner_portfolio_name": None,
+            "message": "TOSS_PORTFOLIO_NAME이 비어 있어 자동 소유자 동기화를 건너뛰었습니다.",
+        }
+
+    store = read_portfolio_store(settings)
+    key = portfolio_store_key(portfolio_name)
+    payload = (store.get("portfolios") or {}).get(key)
+    if not payload:
+        raise ValueError(f"토스 지정 소유자 포트폴리오 '{portfolio_name}'을 찾을 수 없습니다.")
+
+    active_portfolio = SavedPortfolio.model_validate(payload)
+    balance = fetch_toss_holdings(settings)
+    synced_portfolio, sync_summary = sync_saved_portfolio_with_toss(
+        active_portfolio,
+        balance,
+        settings,
+        import_untracked=True,
+        preserve_non_toss_holdings=True,
+    )
+    sync_summary["mode"] = "automatic_owner_sync"
+    sync_summary["owner_portfolio_name"] = synced_portfolio.portfolio_name
+    store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
+    write_json_store(portfolio_store_path(settings), store)
+    append_portfolio_sync_history(
+        settings,
+        portfolio_name=synced_portfolio.portfolio_name,
+        summary=sync_summary,
+    )
+    enriched_portfolio = sort_and_weight_portfolio(
+        synced_portfolio,
+        settings,
+        refresh_prices=False,
+        include_research_context=True,
+    )
+    public_summary = dict(sync_summary)
+    public_summary.pop("account_seq", None)
+    return enriched_portfolio, public_summary
 
 
 
@@ -13476,9 +13527,10 @@ def read_toss_orders(
         return {"status": "unavailable", "broker": "TOSS", "message": str(exc), "orders": []}
 
 
-def _toss_workflow_holdings(settings: Settings) -> list[dict]:
+def _toss_workflow_holdings(settings: Settings, portfolio_name: str | None = None) -> list[dict]:
     store = read_portfolio_store(settings)
     holdings_by_ticker: dict[str, dict] = {}
+    owner_name = str(portfolio_name or settings.toss_portfolio_name or "").strip()
 
     def add_entity(
         *,
@@ -13526,7 +13578,13 @@ def _toss_workflow_holdings(settings: Settings) -> list[dict]:
         if tags:
             existing["tags"] = sorted(set((existing.get("tags") or []) + tags))
 
-    for portfolio in (store.get("portfolios") or {}).values():
+    portfolio_payloads = store.get("portfolios") or {}
+    if owner_name:
+        selected = portfolio_payloads.get(portfolio_store_key(owner_name))
+        portfolio_values = [selected] if isinstance(selected, dict) else []
+    else:
+        portfolio_values = portfolio_payloads.values()
+    for portfolio in portfolio_values:
         if not isinstance(portfolio, dict):
             continue
         for holding in portfolio.get("holdings") or []:
@@ -13605,8 +13663,9 @@ def _toss_workflow_price_snapshot(
 def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = None) -> dict:
     run_at = current_storage_timestamp()
     date_value = str(query_date or current_storage_date().isoformat()).strip()
+    owner_portfolio, portfolio_sync = sync_toss_owner_portfolio(settings)
     news_payload = read_news_inbox(settings)
-    workflow_holdings = _toss_workflow_holdings(settings)
+    workflow_holdings = _toss_workflow_holdings(settings, settings.toss_portfolio_name)
     news_result = analyze_toss_news_items(
         [item for item in news_payload.get("items", []) if isinstance(item, dict)],
         workflow_holdings,
@@ -13637,8 +13696,29 @@ def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = N
     except (TossApiError, httpx.HTTPError) as exc:
         order_status = "unavailable"
         order_message = str(exc)
-    result = build_toss_workflow_result(run_at=run_at, news_result=news_result, orders=orders)
+    workflow_history = read_toss_workflow_history(settings, limit=1000)
+    strategy_evaluation = build_toss_paper_evaluation(
+        workflow_history,
+        window_days=7,
+        as_of_date=date_value,
+    )
+    evidence_review = build_toss_evidence_review(
+        owner_portfolio=owner_portfolio.model_dump(mode="json") if owner_portfolio else None,
+        news_result=news_result,
+        orders=orders,
+        market_journal_entries=read_market_close_journal(settings).get("entries", []),
+        history=workflow_history,
+        strategy_evaluation=strategy_evaluation,
+    )
+    result = build_toss_workflow_result(
+        run_at=run_at,
+        news_result=news_result,
+        orders=orders,
+        evidence_review=evidence_review,
+    )
     result["query_date"] = date_value
+    result["owner_portfolio_name"] = settings.toss_portfolio_name or None
+    result["portfolio_sync"] = portfolio_sync
     result["orders_status"] = order_status
     if order_message:
         result["orders_message"] = order_message
@@ -13657,6 +13737,7 @@ def run_toss_workflow_for_date(settings: Settings, *, query_date: str | None = N
         "last_run_at": run_at,
         "last_run_date": date_value,
         "last_result": result,
+        "paper_evaluation": strategy_evaluation,
         "runs": history[:30],
     })
     append_toss_workflow_history(settings, result)
@@ -13735,6 +13816,7 @@ def read_toss_workflow_status(settings: Settings = Depends(get_settings)) -> dic
         "enabled": settings.toss_workflow_enabled and settings.toss_enabled,
         "paper_trading_enabled": settings.toss_paper_trading_enabled,
         "live_trading_enabled": False,
+        "owner_portfolio_name": settings.toss_portfolio_name or None,
         "scheduled_time_kst": f"{settings.toss_workflow_run_hour:02d}:{settings.toss_workflow_run_minute:02d}",
         "last_run_at": state.get("last_run_at"),
         "last_run_date": state.get("last_run_date"),

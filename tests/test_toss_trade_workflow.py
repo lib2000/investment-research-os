@@ -11,6 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.toss_trade_workflow import (
     apply_price_snapshot,
     analyze_news_items,
+    build_evidence_review,
     build_trade_review,
     build_paper_evaluation,
     build_workflow_result,
@@ -149,6 +150,131 @@ def test_workflow_result_blocks_live_trade_stage() -> None:
     )
     assert result["stages"]["trade"]["status"] == "blocked_live_order"
     assert result["stages"]["trade"]["created_order_count"] == 0
+    assert result["human_gate"]["required"] is True
+
+
+def test_evidence_review_combines_purchase_macro_pattern_and_strategy_metrics() -> None:
+    strategy = {
+        "status": "completed",
+        "window_days": 7,
+        "window_start": "2026-08-07",
+        "as_of_date": "2026-08-13",
+        "days_observed": 7,
+        "sample_size": 14,
+        "wins": 9,
+        "losses": 5,
+        "win_rate": 0.642857,
+        "return_rate": 0.031,
+        "max_drawdown": 1200,
+        "evidence_strength": "medium",
+        "message": "모의체결 평가",
+    }
+    evidence = build_evidence_review(
+        owner_portfolio={
+            "portfolio_name": "이형주",
+            "holdings": [
+                {
+                    "ticker": "300080",
+                    "name": "플리토",
+                    "sync_source": "toss_holdings",
+                    "latest_reports": [
+                        {
+                            "type": "earnings",
+                            "file_name": "300080.md",
+                            "relative_path": "300080/earnings.md",
+                            "date": "2026-08-12",
+                            "summary": "매출 성장 확인",
+                            "impact_label": "긍정",
+                            "impact_reason": "수익성 개선",
+                        }
+                    ],
+                }
+            ],
+        },
+        news_result={
+            "proposals": [{"action": "BUY_REVIEW", "symbols": ["300080"]}],
+            "analyzed": [],
+        },
+        orders=[],
+        market_journal_entries=[
+            {
+                "entry_id": "kr-20260813",
+                "market": "KR",
+                "session_date": "2026-08-13",
+                "regime": "risk_on",
+                "sentiment": "positive",
+                "risk_level": "medium",
+                "portfolio_actions": ["추격 매수 금지"],
+            }
+        ],
+        history=[
+            {
+                "run_at": "2026-08-12T16:10:00+09:00",
+                "proposals": [{"action": "BUY_REVIEW", "symbols": ["300080"]}],
+                "paper_fills": [
+                    {
+                        "symbol": "300080",
+                        "side": "BUY",
+                        "quantity": 1,
+                        "reference_price": 8000,
+                        "mark_price": 8500,
+                        "simulated_at": "2026-08-12T16:10:00+09:00",
+                    }
+                ],
+            }
+        ],
+        strategy_evaluation=strategy,
+    )
+
+    assert evidence["owner_portfolio_name"] == "이형주"
+    assert evidence["purchase_rationale"]["status"] == "available"
+    assert evidence["macro_evidence"]["by_market"][0]["regime"] == "risk_on"
+    assert evidence["recurring_pattern"]["by_symbol"][0]["same_side_count"] == 2
+    assert evidence["strategy_success"]["win_rate"] == 0.642857
+    assert evidence["review_status"] == "evidence_complete"
+    assert evidence["evidence_strength"] == "medium"
+
+
+def test_evidence_review_exposes_missing_evidence_and_insufficient_strategy_sample() -> None:
+    evidence = build_evidence_review(
+        owner_portfolio={
+            "portfolio_name": "이형주",
+            "holdings": [{"ticker": "JOBY", "name": "Joby", "sync_source": "toss_holdings"}],
+        },
+        news_result={"proposals": [], "analyzed": []},
+        orders=[],
+        market_journal_entries=[],
+        history=[],
+        strategy_evaluation={
+            "status": "insufficient_sample",
+            "days_observed": 1,
+            "sample_size": 14,
+            "win_rate": 0.785714,
+            "evidence_strength": "medium",
+        },
+    )
+
+    assert evidence["purchase_rationale"]["status"] == "missing"
+    assert evidence["macro_evidence"]["status"] == "missing"
+    assert evidence["recurring_pattern"]["status"] == "first_observation"
+    assert evidence["strategy_success"]["win_rate"] == 0.785714
+    assert evidence["strategy_success"]["status"] == "insufficient_sample"
+    assert evidence["review_status"] == "needs_evidence"
+    assert evidence["evidence_strength"] == "low"
+
+
+def test_workflow_result_carries_structured_evidence_without_enabling_live_orders() -> None:
+    evidence = {"review_status": "needs_evidence", "evidence_strength": "low"}
+    result = build_workflow_result(
+        run_at="2026-08-13T16:10:00+09:00",
+        news_result={"news_count": 0, "proposals": []},
+        orders=[],
+        evidence_review=evidence,
+    )
+
+    assert result["evidence_review"] == evidence
+    assert result["review"]["evidence_review_status"] == "needs_evidence"
+    assert result["stages"]["trade"]["status"] == "blocked_live_order"
     assert result["human_gate"]["required"] is True
 
 

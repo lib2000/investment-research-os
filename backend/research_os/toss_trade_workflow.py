@@ -481,14 +481,281 @@ def build_trade_review(orders: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_evidence_review(
+    *,
+    owner_portfolio: dict[str, Any] | None,
+    news_result: dict[str, Any],
+    orders: list[dict[str, Any]],
+    market_journal_entries: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    strategy_evaluation: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a non-generative review from traceable portfolio evidence.
+
+    The function deliberately reports missing evidence instead of inventing a
+    purchase thesis. Strategy metrics remain labelled as paper results.
+    """
+
+    portfolio = owner_portfolio if isinstance(owner_portfolio, dict) else {}
+    raw_holdings = portfolio.get("holdings") if isinstance(portfolio.get("holdings"), list) else []
+    holdings_by_ticker: dict[str, dict[str, Any]] = {}
+    for item in raw_holdings:
+        if not isinstance(item, dict) or str(item.get("sync_source") or "") != "toss_holdings":
+            continue
+        ticker = str(item.get("ticker") or "").strip().upper()
+        if ticker:
+            holdings_by_ticker[ticker] = item
+
+    proposals = [item for item in news_result.get("proposals") or [] if isinstance(item, dict)]
+    current_sides: dict[str, set[str]] = {}
+    target_tickers = set(holdings_by_ticker)
+    for proposal in proposals:
+        action = str(proposal.get("action") or "").upper()
+        side = "BUY" if action == "BUY_REVIEW" else "SELL" if action == "SELL_REVIEW" else action
+        for symbol in proposal.get("symbols") or []:
+            ticker = str(symbol or "").strip().upper()
+            if not ticker:
+                continue
+            target_tickers.add(ticker)
+            if side:
+                current_sides.setdefault(ticker, set()).add(side)
+    for order in orders:
+        if not isinstance(order, dict):
+            continue
+        ticker = str(order.get("symbol") or order.get("ticker") or "").strip().upper()
+        side = str(order.get("side") or "").strip().upper()
+        if ticker:
+            target_tickers.add(ticker)
+            if side:
+                current_sides.setdefault(ticker, set()).add(side)
+
+    news_by_ticker: dict[str, list[dict[str, Any]]] = {ticker: [] for ticker in target_tickers}
+    for item in news_result.get("analyzed") or []:
+        if not isinstance(item, dict):
+            continue
+        matched = {
+            str(value or "").strip().upper()
+            for value in item.get("matched_holdings") or []
+            if str(value or "").strip()
+        }
+        matched.update(
+            str(value.get("ticker") or "").strip().upper()
+            for value in item.get("matched_context") or []
+            if isinstance(value, dict) and value.get("ticker")
+        )
+        compact = {
+            "id": item.get("id"),
+            "title": item.get("title"),
+            "source_url": item.get("source_url"),
+            "signal": item.get("signal"),
+            "evidence_strength": item.get("evidence_strength") or "low",
+        }
+        for ticker in matched & target_tickers:
+            news_by_ticker.setdefault(ticker, []).append(compact)
+
+    purchase_rows: list[dict[str, Any]] = []
+    for ticker in sorted(target_tickers):
+        holding = holdings_by_ticker.get(ticker, {})
+        reports = []
+        for report in holding.get("latest_reports") or []:
+            if not isinstance(report, dict):
+                continue
+            reports.append(
+                {
+                    key: report.get(key)
+                    for key in (
+                        "type",
+                        "file_name",
+                        "relative_path",
+                        "date",
+                        "summary",
+                        "impact_label",
+                        "impact_reason",
+                    )
+                }
+            )
+            if len(reports) >= 3:
+                break
+        matched_news = news_by_ticker.get(ticker, [])[:3]
+        purchase_rows.append(
+            {
+                "ticker": ticker,
+                "name": holding.get("name") or ticker,
+                "status": "available" if reports or matched_news else "missing",
+                "reports": reports,
+                "matched_news": matched_news,
+                "message": (
+                    "저장된 리서치와 당일 매칭 뉴스만 구매 근거로 사용했습니다."
+                    if reports or matched_news
+                    else "저장된 구매 근거를 확인할 수 없습니다. 사람 검토가 필요합니다."
+                ),
+            }
+        )
+    available_purchase_count = sum(row["status"] == "available" for row in purchase_rows)
+    purchase_status = (
+        "available"
+        if purchase_rows and available_purchase_count == len(purchase_rows)
+        else "partial"
+        if available_purchase_count
+        else "missing"
+    )
+    purchase_rationale = {
+        "status": purchase_status,
+        "target_count": len(purchase_rows),
+        "available_count": available_purchase_count,
+        "missing_count": len(purchase_rows) - available_purchase_count,
+        "by_symbol": purchase_rows,
+    }
+
+    target_markets = {"KR" if re.fullmatch(r"\d{6}", ticker) else "US" for ticker in target_tickers}
+    macro_rows: list[dict[str, Any]] = []
+    valid_journal = [item for item in market_journal_entries if isinstance(item, dict)]
+    for market in sorted(target_markets):
+        candidates = [
+            item for item in valid_journal if str(item.get("market") or "").strip().upper() == market
+        ]
+        latest = max(candidates, key=lambda item: str(item.get("session_date") or ""), default=None)
+        macro_rows.append(
+            {
+                "market": market,
+                "status": "available" if latest else "missing",
+                "entry_id": latest.get("entry_id") if latest else None,
+                "session_date": latest.get("session_date") if latest else None,
+                "regime": latest.get("regime") if latest else None,
+                "sentiment": latest.get("sentiment") if latest else None,
+                "risk_level": latest.get("risk_level") if latest else None,
+                "portfolio_actions": list(latest.get("portfolio_actions") or [])[:2] if latest else [],
+            }
+        )
+    available_macro_count = sum(row["status"] == "available" for row in macro_rows)
+    macro_status = (
+        "available"
+        if macro_rows and available_macro_count == len(macro_rows)
+        else "partial"
+        if available_macro_count
+        else "missing"
+    )
+    macro_evidence = {
+        "status": macro_status,
+        "market_count": len(macro_rows),
+        "available_count": available_macro_count,
+        "by_market": macro_rows,
+    }
+
+    pattern_rows: list[dict[str, Any]] = []
+    for ticker in sorted(target_tickers):
+        occurrences = 0
+        same_side_count = 0
+        wins = 0
+        losses = 0
+        last_seen = ""
+        requested_sides = current_sides.get(ticker, set())
+        for record in history:
+            if not isinstance(record, dict):
+                continue
+            run_at = str(record.get("run_at") or "")
+            for proposal in record.get("proposals") or []:
+                if not isinstance(proposal, dict):
+                    continue
+                symbols = {str(value or "").strip().upper() for value in proposal.get("symbols") or []}
+                if ticker not in symbols:
+                    continue
+                occurrences += 1
+                action = str(proposal.get("action") or "").upper()
+                side = "BUY" if action == "BUY_REVIEW" else "SELL" if action == "SELL_REVIEW" else action
+                same_side_count += bool(side and side in requested_sides)
+                last_seen = max(last_seen, run_at)
+            for fill in record.get("paper_fills") or []:
+                if not isinstance(fill, dict) or str(fill.get("symbol") or "").strip().upper() != ticker:
+                    continue
+                occurrences += 1
+                side = str(fill.get("side") or "").upper()
+                same_side_count += bool(side and side in requested_sides)
+                try:
+                    entry = float(fill.get("reference_price") or 0)
+                    mark = float(fill.get("mark_price") or 0)
+                    quantity = float(fill.get("quantity") or 0)
+                except (TypeError, ValueError):
+                    entry = mark = quantity = 0
+                pnl = (mark - entry) * quantity if side != "SELL" else (entry - mark) * quantity
+                wins += pnl > 0
+                losses += pnl < 0
+                last_seen = max(last_seen, str(fill.get("simulated_at") or run_at))
+        marked_count = wins + losses
+        pattern_rows.append(
+            {
+                "ticker": ticker,
+                "status": "observed" if occurrences else "first_observation",
+                "occurrence_count": occurrences,
+                "same_side_count": same_side_count,
+                "marked_count": marked_count,
+                "wins": wins,
+                "losses": losses,
+                "historical_win_rate": round(wins / marked_count, 6) if marked_count else None,
+                "last_seen_at": last_seen or None,
+            }
+        )
+    recurring_pattern = {
+        "status": "observed" if any(row["occurrence_count"] for row in pattern_rows) else "first_observation",
+        "target_count": len(pattern_rows),
+        "by_symbol": pattern_rows,
+    }
+
+    strategy_success = {
+        key: strategy_evaluation.get(key)
+        for key in (
+            "status",
+            "window_days",
+            "window_start",
+            "as_of_date",
+            "days_observed",
+            "sample_size",
+            "wins",
+            "losses",
+            "win_rate",
+            "return_rate",
+            "max_drawdown",
+            "evidence_strength",
+            "message",
+        )
+    }
+    sample_size = int(strategy_success.get("sample_size") or 0)
+    review_status = (
+        "evidence_complete"
+        if purchase_status == "available" and macro_status == "available" and sample_size > 0
+        else "needs_evidence"
+    )
+    evidence_strength = (
+        "low"
+        if review_status != "evidence_complete"
+        or strategy_success.get("status") != "completed"
+        or strategy_success.get("evidence_strength") == "low"
+        else "medium"
+    )
+    return {
+        "review_status": review_status,
+        "evidence_strength": evidence_strength,
+        "owner_portfolio_name": portfolio.get("portfolio_name"),
+        "purchase_rationale": purchase_rationale,
+        "macro_evidence": macro_evidence,
+        "recurring_pattern": recurring_pattern,
+        "strategy_success": strategy_success,
+        "disclaimer": "저장된 근거와 모의체결 통계에 기반한 자동 복기이며 투자 권고나 실계좌 성과가 아닙니다.",
+    }
+
+
 def build_workflow_result(
     *,
     run_at: str,
     news_result: dict[str, Any],
     orders: list[dict[str, Any]],
     paper_fills: list[dict[str, Any]] | None = None,
+    evidence_review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     review = build_trade_review(orders)
+    structured_review = evidence_review if isinstance(evidence_review, dict) else {}
+    review["evidence_review_status"] = structured_review.get("review_status", "needs_evidence")
+    review["evidence_strength"] = structured_review.get("evidence_strength", "low")
     simulated_fills = [item for item in (paper_fills or []) if isinstance(item, dict)]
     return {
         "status": "success",
@@ -511,12 +778,17 @@ def build_workflow_result(
                 else "사용자 확인 후 모의체결을 생성합니다.",
             },
             "record": {"status": "completed", "order_count": len(orders)},
+            "review_evidence": {
+                "status": structured_review.get("review_status", "needs_evidence"),
+                "evidence_strength": structured_review.get("evidence_strength", "low"),
+            },
             "review": review,
         },
         "news_analysis": news_result,
         "orders": orders,
         "paper_fills": simulated_fills,
         "review": review,
+        "evidence_review": structured_review,
         "human_gate": {
             "required": True,
             "reason": "생성된 신호는 검증되지 않은 투자 판단이며 실계좌 주문으로 직접 연결하지 않습니다.",
@@ -560,16 +832,31 @@ def simulate_paper_fills(news_result: dict[str, Any], *, run_at: str) -> list[di
 
 
 def append_workflow_history(settings: Settings, result: dict[str, Any]) -> None:
+    proposals = []
+    for proposal in (result.get("news_analysis") or {}).get("proposals") or []:
+        if not isinstance(proposal, dict):
+            continue
+        proposals.append(
+            {
+                "proposal_id": proposal.get("proposal_id"),
+                "action": proposal.get("action"),
+                "symbols": list(proposal.get("symbols") or []),
+                "evidence_strength": proposal.get("evidence_strength"),
+                "source_news_id": proposal.get("source_news_id"),
+            }
+        )
     record = {
         "run_at": result.get("run_at"),
         "status": result.get("status"),
         "workflow": result.get("workflow"),
         "stage_status": {key: value.get("status") for key, value in (result.get("stages") or {}).items() if isinstance(value, dict)},
         "proposal_count": len((result.get("news_analysis") or {}).get("proposals") or []),
+        "proposals": proposals,
         "order_count": len(result.get("orders") or []),
         "paper_fills": [item for item in result.get("paper_fills") or [] if isinstance(item, dict)],
         "price_snapshot": result.get("news_analysis", {}).get("price_snapshot", {}),
         "review": result.get("review") or {},
+        "evidence_review": result.get("evidence_review") or {},
     }
     with workflow_history_path(settings).open("a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False))

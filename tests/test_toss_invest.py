@@ -133,6 +133,47 @@ def test_apply_toss_holdings_preserves_missing_and_reports_remote_new() -> None:
     assert summary["untracked_remote"][0]["ticker"] == "MSFT"
 
 
+def test_apply_toss_holdings_imports_owner_positions_and_preserves_other_sources() -> None:
+    portfolio = SavedPortfolio(
+        portfolio_name="이형주",
+        holdings=[
+            PortfolioHolding(ticker="JOBY", name="Joby Aviation", quantity=10, sync_source="toss_holdings"),
+            PortfolioHolding(ticker="005930", name="삼성전자", quantity=3, sync_source="kis_holdings"),
+        ],
+    )
+    synced, summary = apply_toss_holdings_to_portfolio(
+        portfolio,
+        {
+            "holdings": [
+                {"ticker": "JOBY", "name": "Joby Aviation", "quantity": 12, "currency": "USD"},
+                {
+                    "ticker": "300080",
+                    "name": "플리토",
+                    "quantity": 279,
+                    "average_cost": 8590,
+                    "current_price": 8640,
+                    "market_value": 2410560,
+                    "currency": "KRW",
+                },
+            ]
+        },
+        checked_at="2026-08-13T16:10:00+09:00",
+        import_untracked=True,
+        preserve_non_toss_holdings=True,
+    )
+
+    holdings = {item.ticker: item for item in synced.holdings}
+    assert holdings["JOBY"].quantity == 12
+    assert holdings["300080"].sync_source == "toss_holdings"
+    assert holdings["300080"].sync_status == "account_synced"
+    assert holdings["005930"].quantity == 3
+    assert holdings["005930"].sync_source == "kis_holdings"
+    assert summary["imported_count"] == 1
+    assert summary["imported_remote"][0]["ticker"] == "300080"
+    assert summary["untracked_remote"] == []
+    assert any(item["reason"] == "non_toss_holding_preserved" for item in summary["skipped"])
+
+
 def test_normalize_toss_order_masks_id_and_keeps_execution_summary() -> None:
     result = normalize_toss_order(
         {

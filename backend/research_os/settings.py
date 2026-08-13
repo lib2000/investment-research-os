@@ -91,6 +91,7 @@ class Settings(BaseModel):
     toss_client_secret: str = Field(default="")
     toss_base_url: str = "https://openapi.tossinvest.com"
     toss_account_seq: str = ""
+    toss_portfolio_name: str = ""
     toss_token_cache_file: str = "../research_vault/_system/toss_access_token.json"
     toss_token_expiry_buffer_seconds: int = 300
     toss_timeout_seconds: float = 10.0
@@ -312,6 +313,7 @@ class Settings(BaseModel):
             toss_client_secret=os.getenv("TOSS_CLIENT_SECRET", ""),
             toss_base_url=os.getenv("TOSS_BASE_URL", "https://openapi.tossinvest.com"),
             toss_account_seq=os.getenv("TOSS_ACCOUNT_SEQ", ""),
+            toss_portfolio_name=os.getenv("TOSS_PORTFOLIO_NAME", "").strip(),
             toss_token_cache_file=os.getenv(
                 "TOSS_TOKEN_CACHE_FILE", "../research_vault/_system/toss_access_token.json"
             ),

@@ -12867,12 +12867,29 @@ function renderTossWorkflowSummary(result) {
   const newsCount = result.news_analysis?.news_count || 0;
   const matchedNewsCount = result.news_analysis?.matched_news_count || 0;
   const paperStage = result.stages?.paper_simulation || {};
+  const evidence = result.evidence_review || {};
+  const purchase = evidence.purchase_rationale || {};
+  const macro = evidence.macro_evidence || {};
+  const macroRows = macro.by_market || [];
+  const patterns = evidence.recurring_pattern || {};
+  const patternCount = (patterns.by_symbol || []).reduce(
+    (sum, item) => sum + Number(item?.occurrence_count || 0),
+    0,
+  );
+  const strategy = evidence.strategy_success || {};
+  const portfolioSync = result.portfolio_sync || {};
   elements.tossWorkflowSummary.textContent = [
     `실행일: ${result.query_date || result.run_at || "-"}`,
+    `토스 소유자: ${result.owner_portfolio_name || evidence.owner_portfolio_name || "미지정"} · 동기화 ${portfolioSync.status || "-"} · 신규 편입 ${portfolioSync.imported_count || 0}개`,
     `뉴스 분석: ${newsCount}개 · 보유/관심 매칭: ${matchedNewsCount}개 · 조건 일치 주문안: ${proposals.length}개`,
     `가격 스냅샷: ${result.news_analysis?.price_snapshot_count || 0}개 · 기준일: ${result.news_analysis?.price_snapshot ? Object.values(result.news_analysis.price_snapshot).find((item) => item?.as_of_date)?.as_of_date || "-" : "-"}`,
     `오늘 거래 기록: ${result.orders?.length || 0}건 · 체결수량: ${formatNumber(review.filled_quantity || 0)}`,
     `복기: ${review.review_status || "-"} · 체결금액: ${formatNumber(review.filled_amount || 0)}`,
+    `구매 근거: ${purchase.status || "missing"} · 확인 ${purchase.available_count || 0}/${purchase.target_count || 0}종목`,
+    `매크로 근거: ${macro.status || "missing"} · ${macroRows.map((item) => `${item.market} ${item.session_date || "날짜 없음"} ${item.regime || "국면 미확인"}`).join(" / ") || "시장일지 없음"}`,
+    `반복 패턴: ${patterns.status || "first_observation"} · 과거 동일 종목 관측 ${patternCount}회`,
+    `현재 전략 성공률: ${formatNumber(Number(strategy.win_rate || 0) * 100)}% · 표본 ${strategy.sample_size || 0}건/관측 ${strategy.days_observed || 0}일 · ${strategy.status || "insufficient_sample"} · 근거 ${strategy.evidence_strength || "low"}`,
+    `증거 복기 상태: ${evidence.review_status || "needs_evidence"} · 근거 강도 ${evidence.evidence_strength || "low"}`,
     `모의체결: ${result.paper_simulation?.status || paperStage.status || "awaiting_user_confirmation"} · ${result.paper_fills?.length || 0}건 · 가격 갱신 ${paperStage.mark_refresh_count || result.paper_mark_refresh_count || 0}건 · 중복 억제 ${paperStage.history_duplicate_count || result.paper_history_duplicate_count || 0}건`,
     "실제 토스 주문 API는 차단되어 주문안만 생성됩니다.",
   ].join("\n");

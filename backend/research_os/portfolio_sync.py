@@ -48,6 +48,7 @@ def append_portfolio_sync_history(
         "checked_at": summary.get("checked_at"),
         "updated_count": summary.get("updated_count", 0),
         "confirmed_count": summary.get("confirmed_count", 0),
+        "imported_count": summary.get("imported_count", 0),
         "skipped_count": summary.get("skipped_count", 0),
         "changes": summary.get("changes", []),
         "skipped": summary.get("skipped", []),
@@ -226,14 +227,18 @@ def apply_toss_holdings_to_portfolio(
     balance: dict,
     *,
     checked_at: str,
+    import_untracked: bool = False,
+    preserve_non_toss_holdings: bool = False,
 ) -> tuple[SavedPortfolio, dict]:
-    """Apply read-only Toss KR/US holdings without creating new positions.
+    """Apply read-only Toss KR/US holdings to a saved portfolio.
 
     Existing holdings are updated only when their ticker is present in the
     Toss response. Holdings absent from the response stay untouched and are
     marked as ``toss_missing`` for review. Remote holdings that are not yet in
     the selected saved portfolio are reported as ``untracked_remote`` rather
-    than silently added.
+    than silently added by default. The automatic owner workflow opts into
+    importing remote positions while preserving holdings owned by other
+    brokers or entered manually.
     """
     balance_by_ticker = {
         normalize_import_ticker(item.get("ticker", "")): item
@@ -288,6 +293,18 @@ def apply_toss_holdings_to_portfolio(
             )
             continue
 
+        if preserve_non_toss_holdings and holding.sync_source != "toss_holdings":
+            synced_holdings.append(holding)
+            skipped.append(
+                {
+                    "ticker": ticker,
+                    "name": holding.name or ticker,
+                    "quantity": holding.quantity,
+                    "reason": "non_toss_holding_preserved",
+                }
+            )
+            continue
+
         synced_holdings.append(
             holding.model_copy(
                 update={
@@ -307,7 +324,7 @@ def apply_toss_holdings_to_portfolio(
             }
         )
 
-    untracked_remote = [
+    remote_candidates = [
         {
             "ticker": ticker,
             "name": item.get("name") or ticker,
@@ -319,6 +336,47 @@ def apply_toss_holdings_to_portfolio(
         for ticker, item in balance_by_ticker.items()
         if ticker not in matched_tickers
     ]
+    imported_remote: list[dict] = []
+    if import_untracked:
+        for remote in remote_candidates:
+            source = balance_by_ticker[remote["ticker"]]
+            synced_holdings.append(
+                PortfolioHolding(
+                    ticker=remote["ticker"],
+                    name=source.get("name") or remote["ticker"],
+                    quantity=source.get("quantity"),
+                    average_cost=source.get("average_cost"),
+                    current_price=source.get("current_price"),
+                    market_value=source.get("market_value"),
+                    cost_basis=source.get("cost_basis"),
+                    unrealized_gain=source.get("unrealized_gain"),
+                    unrealized_return=source.get("unrealized_return"),
+                    currency=source.get("currency") or "USD",
+                    price_source="toss_holdings",
+                    price_refresh_status="account_synced",
+                    price_checked_at=checked_at,
+                    sync_status="account_synced",
+                    sync_source="toss_holdings",
+                    sync_checked_at=checked_at,
+                    sync_message="토스증권 보유자산에서 확인되어 지정 포트폴리오에 자동 편입했습니다.",
+                )
+            )
+            imported_remote.append({**remote, "reason": "imported_remote"})
+            changes.append(
+                {
+                    "ticker": remote["ticker"],
+                    "name": source.get("name") or remote["ticker"],
+                    "old_quantity": None,
+                    "new_quantity": source.get("quantity"),
+                    "old_average_cost": None,
+                    "new_average_cost": source.get("average_cost"),
+                    "old_market_value": None,
+                    "new_market_value": source.get("market_value"),
+                    "changed": True,
+                    "reason": "imported_remote",
+                }
+            )
+    untracked_remote = [] if import_untracked else remote_candidates
     synced_portfolio = portfolio.model_copy(
         update={
             "holdings": synced_holdings,
@@ -335,11 +393,17 @@ def apply_toss_holdings_to_portfolio(
         "checked_at": checked_at,
         "updated_count": sum(1 for item in changes if item.get("changed")),
         "confirmed_count": sum(1 for item in changes if not item.get("changed")),
+        "imported_count": len(imported_remote),
         "skipped_count": len(skipped),
         "changes": changes,
         "skipped": skipped,
+        "imported_remote": imported_remote,
         "untracked_remote": untracked_remote,
-        "message": "토스증권 보유자산과 매칭된 종목만 갱신했습니다. 미매칭 기존 종목은 보존하고 원격 신규 종목은 자동 추가하지 않았습니다.",
+        "message": (
+            "토스증권 보유자산을 지정 포트폴리오에 반영하고 다른 증권사·수동 보유 종목은 보존했습니다."
+            if import_untracked and preserve_non_toss_holdings
+            else "토스증권 보유자산과 매칭된 종목만 갱신했습니다. 미매칭 기존 종목은 보존하고 원격 신규 종목은 자동 추가하지 않았습니다."
+        ),
     }
 
 
