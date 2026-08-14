@@ -98,6 +98,9 @@ function Set-OpenClawDailyInvestmentMemory {
     "- 실제 답변 캡처 상태: python tools\check_openclaw_actual_answer_capture_status.py --json",
     "- 실제 답변 사후감사: python tools\check_openclaw_actual_answer_audit.py --json",
     "- 답변 직전 fresh bootstrap 검증: python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json",
+    "- 실적 일정/DART/IR/Dossier 통합 상태: python tools\check_research_evidence_pipeline.py --json --strict",
+    "- 실적 일정/DART/IR/Dossier 안전 갱신: python tools\check_research_evidence_pipeline.py --refresh --write-state --json --strict",
+    "- 보호 API는 토큰 없이 직접 호출하거나 경로를 추측하지 않는다. 통합 점검기가 backend/.env의 DEV_USER_TOKEN을 읽고 정식 경로로 호출한다.",
     "",
     "## Required Read Order",
     "1. data/investment_research/bridge_status.json",
@@ -285,6 +288,8 @@ $operationalCommands = [ordered]@{
   recommendation_market_journal_quality = "python tools\check_daily_recommendation_market_journal_quality.py --json"
   operational_schedule_status = "python tools\check_operational_schedule_status.py --json --allow-warnings"
   offline_readiness = "python tools\check_offline_readiness.py --json"
+  research_evidence_status = "python tools\check_research_evidence_pipeline.py --json --strict"
+  research_evidence_refresh = "python tools\check_research_evidence_pipeline.py --refresh --write-state --json --strict"
 }
 $fileSha256 = [ordered]@{
   first_read_json = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $targetDir "openclaw_first_read.json")).Hash.ToLowerInvariant()
@@ -432,6 +437,9 @@ $readme = @(
   "- operational schedule status: ``python tools\check_operational_schedule_status.py --json --allow-warnings``",
   "- expected status summary hashes: ``hash_status=ok``, ``hash_checked_count=14``, ``hash_mismatches=[]``",
   "- offline readiness: ``python tools\check_offline_readiness.py --json``",
+  "- research evidence status: ``python tools\check_research_evidence_pipeline.py --json --strict``",
+  "- research evidence refresh: ``python tools\check_research_evidence_pipeline.py --refresh --write-state --json --strict``",
+  "- protected earnings/DART/IR/automation APIs are called only through the checker so Bearer auth and canonical routes are always applied.",
   "- secrets, broker tokens, raw DB files, and account-auth material are excluded.",
   ""
 )
@@ -478,6 +486,9 @@ $startupLines = @(
   "- Pending answer collect from ``$projectRoot``: ``python tools\collect_openclaw_pending_answers.py --json``.",
   "- Actual answer capture status from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_capture_status.py --json``.",
   "- Actual answer audit from ``$projectRoot``: ``python tools\check_openclaw_actual_answer_audit.py --json``.",
+  "- Research evidence status from ``$projectRoot``: ``python tools\check_research_evidence_pipeline.py --json --strict``.",
+  "- Research evidence refresh from ``$projectRoot``: ``python tools\check_research_evidence_pipeline.py --refresh --write-state --json --strict``.",
+  "- Do not call protected earnings/DART/IR/automation endpoints without Bearer authentication or guess endpoint paths; use the research evidence checker, which loads ``DEV_USER_TOKEN`` without printing it.",
   "- WSL sync from ``$projectRoot``: ``powershell.exe -ExecutionPolicy Bypass -File .\tools\sync_openclaw_wsl_investment_context.ps1``.",
   "- WSL PA answer context from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --json``.",
   "- WSL PA fresh bootstrap from ``$projectRoot``: ``python tools\check_openclaw_wsl_answer_context.py --require-fresh-bootstrap --json``.",

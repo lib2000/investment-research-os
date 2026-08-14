@@ -131,6 +131,29 @@ def build_knowledge_graph_answer(first_read: dict[str, Any], context: dict[str, 
     ).strip() + "\n"
 
 
+def build_research_evidence_answer(first_read: dict[str, Any]) -> str:
+    evidence = first_read.get("research_evidence_pipeline") or {}
+    checks = evidence.get("checks") or {}
+    earnings = checks.get("earnings") or {}
+    dart = checks.get("dart") or {}
+    company_ir = checks.get("company_ir") or {}
+    dossier_review = checks.get("dossier_review") or {}
+    dossier_queue = ((checks.get("automation") or {}).get("dossier_refresh_queue") or {})
+    return "\n".join(
+        [
+            "실적 일정·DART·IR·자동화 상태",
+            "- 기준: openclaw_first_read.json research_evidence_pipeline",
+            f"- 인증: {(evidence.get('authentication') or {}).get('status')} (Bearer token 미노출)",
+            f"- 실적 일정: {earnings.get('entry_count', 0)}건, fallback_unavailable {earnings.get('fallback_unavailable_count', 0)}건, not_applicable {earnings.get('not_applicable_count', 0)}건",
+            f"- DART: {dart.get('checked_count', 0)}/{dart.get('target_count', 0)}, coverage {dart.get('coverage_rate')}, failures {dart.get('failure_count', 0)}",
+            f"- IR: 관련 {company_ir.get('related_count', 0)}건, 저장 {company_ir.get('item_count', 0)}건, 원천 경고 {company_ir.get('failed_source_count', 0)}건",
+            f"- Dossier: 중복 리뷰 {dossier_review.get('checked_count', 0)}건, 재합성 후보 {dossier_queue.get('candidate_count', 0)}건, 실패 {dossier_queue.get('failed_count', 0)}건",
+            "- not_applicable은 ETF/ETN/펀드 등 개별 기업 실적 일정 비대상의 정상 분류입니다.",
+            "- fallback_unavailable만 공급자와 DART fallback을 모두 확보하지 못한 조치 대상입니다.",
+        ]
+    ).strip() + "\n"
+
+
 def validate_answer(route_id: str, answer: str, required_fragments: list[str]) -> list[str]:
     errors = []
     for banned in BANNED_STALE_FRAGMENTS:
@@ -154,6 +177,7 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "recommendations_priority",
         "bridge_status_completion",
         "knowledge_graph_context",
+        "research_evidence_pipeline",
     ]
     missing_routes = [route_id for route_id in required_route_ids if route_id not in routes]
     if missing_routes:
@@ -164,6 +188,7 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "recommendations_priority": build_priority_answer(first_read),
         "bridge_status_completion": build_completion_answer(bridge_status, manifest),
         "knowledge_graph_context": build_knowledge_graph_answer(first_read, context),
+        "research_evidence_pipeline": build_research_evidence_answer(first_read),
     }
     telegram = first_read.get("telegram") or {}
     favorite_message_count = int(
@@ -177,6 +202,7 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "recommendations_priority": ["오늘 추천 종목", "중요 메시지", "KR#1", "US#1", str(favorite_message_count)],
         "bridge_status_completion": ["OpenClaw 연동 상태", "source git", "final audit", str(bridge_status.get("source_git_commit"))],
         "knowledge_graph_context": ["투자 방향과 지식 그래프 컨텍스트", "graph schema", "seed nodes", "시장별 추천"],
+        "research_evidence_pipeline": ["실적 일정·DART·IR·자동화 상태", "fallback_unavailable", "not_applicable", "Dossier", "Bearer token 미노출"],
     }
     errors: list[str] = []
     sample_results = []

@@ -96,6 +96,16 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
     defaults = firecrawl.get("safety_defaults") or {}
     if defaults.get("enabled_default") is not False or defaults.get("dry_run_default") is not True:
         raise AssertionError("Firecrawl safety defaults must remain enabled=false and dry_run=true")
+    research_evidence = state.get("research_evidence_pipeline") or {}
+    if research_evidence.get("status") not in {"success", "warning"}:
+        raise AssertionError("research evidence pipeline status must be available")
+    if (research_evidence.get("authentication") or {}).get("token_exposed") is not False:
+        raise AssertionError("research evidence pipeline must not expose its Bearer token")
+    canonical_endpoints = ((research_evidence.get("endpoint_contract") or {}).get("canonical") or {})
+    if canonical_endpoints.get("dart_status") != "/api/v1/dart/filings/status":
+        raise AssertionError("research evidence pipeline DART endpoint contract mismatch")
+    if canonical_endpoints.get("company_ir_status") != "/api/v1/company-ir-sources/watch?refresh=false":
+        raise AssertionError("research evidence pipeline company IR endpoint contract mismatch")
     usage = payload.get("openclaw_usage") or {}
     if usage.get("status_file") != "bridge_status.json":
         raise AssertionError("OpenClaw usage must point to bridge_status.json")
@@ -154,6 +164,10 @@ def validate_context(payload: dict, *, max_age_hours: float | None = None) -> li
         raise AssertionError("OpenClaw usage must include WSL fresh bootstrap command")
     if usage.get("offline_readiness_command") != "python tools\\check_offline_readiness.py --json":
         raise AssertionError("OpenClaw usage must include offline readiness command")
+    if usage.get("research_evidence_status_command") != "python tools\\check_research_evidence_pipeline.py --json --strict":
+        raise AssertionError("OpenClaw usage must include research evidence status command")
+    if usage.get("research_evidence_refresh_command") != "python tools\\check_research_evidence_pipeline.py --refresh --write-state --json --strict":
+        raise AssertionError("OpenClaw usage must include research evidence refresh command")
     blueprint = payload.get("openclaw_knowledge_graph_blueprint")
     if not isinstance(blueprint, dict):
         raise AssertionError("OpenClaw knowledge graph blueprint missing")
@@ -324,6 +338,8 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "wsl_answer_context_command",
         "wsl_fresh_bootstrap_command",
         "offline_readiness_command",
+        "research_evidence_status_command",
+        "research_evidence_refresh_command",
     ]
     missing_commands = [field for field in command_fields if not manifest.get(field)]
     if missing_commands:
@@ -338,6 +354,7 @@ def validate_bundle(directory: Path, *, max_age_hours: float | None = None) -> l
         "민감정보",
         "오픈클로 사용 규칙",
         "show_openclaw_bridge_status.py --json",
+        "check_research_evidence_pipeline.py --json --strict",
         "KR 1위",
         "US 1위",
         "OpenClaw 개인 지식 그래프 Blueprint",

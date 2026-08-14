@@ -694,6 +694,7 @@ def build_context(project_root: Path) -> dict:
     telegram_state = load_json(system_dir / "telegram_favorite_posts_state.json", {})
     nps_snapshot = load_json(system_dir / "nps_portfolio_change_snapshot.json", {})
     firecrawl_status = load_json(system_dir / "firecrawl_monitor_webhook_status.json", {})
+    research_evidence_status = load_json(system_dir / "research_evidence_pipeline_status.json", {})
     generated_at = datetime.now(tz=KST).isoformat(timespec="seconds")
     return {
         "module": "openclaw_investment_research_context",
@@ -739,6 +740,7 @@ def build_context(project_root: Path) -> dict:
             "news_and_telegram": build_news_state(news_inbox, telegram_state),
             "nps_rebalancing": build_nps_state(nps_snapshot),
             "firecrawl_monitoring": build_firecrawl_state(firecrawl_status),
+            "research_evidence_pipeline": research_evidence_status,
         },
         "openclaw_knowledge_graph_blueprint": build_personal_knowledge_graph_blueprint(),
         "openclaw_usage": {
@@ -781,12 +783,15 @@ def build_context(project_root: Path) -> dict:
             "recommendation_market_journal_quality_command": "python tools\\check_daily_recommendation_market_journal_quality.py --json",
             "operational_schedule_status_command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
             "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
+            "research_evidence_status_command": "python tools\\check_research_evidence_pipeline.py --json --strict",
+            "research_evidence_refresh_command": "python tools\\check_research_evidence_pipeline.py --refresh --write-state --json --strict",
             "suggested_heartbeat_note": "투자리서치 상태 확인은 bridge_status.json의 source git, generated_at, completion_report_sha256을 기준으로 판단합니다.",
             "safe_actions": [
                 "최신 추천/관심종목/텔레그램 인기글 요약 조회",
                 "텔레그램 발송은 오늘 추천, 신규 보유 리포트, 포트폴리오 주의 신호를 합친 Investment Priority Brief 1건으로 축약",
                 "일일 운영 루틴에서 텔레그램 delivery ledger dry-run 상태 확인",
                 "투자리서치 백엔드 health 확인",
+                "실적 일정/DART/IR/Dossier는 보호 API를 직접 추측 호출하지 않고 통합 점검 명령으로 인증 상태와 정식 경로 확인",
                 "투자 판단 전 근거 문서와 최신성 점검 요청",
             ],
             "restricted_actions": [
@@ -901,6 +906,8 @@ def render_markdown(context: dict) -> str:
             "- 오늘 추천 시장일지 반영 품질은 `python tools\\check_daily_recommendation_market_journal_quality.py --json`으로 확인합니다.",
             "- 07:20/08:00/22:00 백엔드 운영 스케줄 상태는 `python tools\\check_operational_schedule_status.py --json --allow-warnings`로 확인합니다.",
             "- 전체 운영 준비도는 `python tools\\check_offline_readiness.py --json`으로 확인합니다.",
+            "- 실적 일정/DART/IR/Dossier 상태는 `python tools\\check_research_evidence_pipeline.py --json --strict`으로 확인하고, 갱신은 `python tools\\check_research_evidence_pipeline.py --refresh --write-state --json --strict`으로 실행합니다.",
+            "- 보호 API를 토큰 없이 직접 호출하거나 상태 경로를 추측하지 않습니다. 통합 점검기가 인증과 정식 경로를 적용합니다.",
             "- 추천 상세 판단은 원본 투자리서치 콘솔과 근거 문서 확인 후 진행합니다.",
             "- 국민연금 리밸런싱은 공개 공시/보도 기반 모니터링이며 실시간 주문 데이터가 아닙니다.",
             "- Firecrawl은 기본적으로 `enabled=false`, `dry_run=true` 안전 설정을 유지합니다.",
@@ -1318,6 +1325,17 @@ def build_openclaw_question_routes() -> list[dict]:
             "required_payload_keys": ["primary_files", "operational_commands"],
             "quality_command": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
         },
+        {
+            "id": "research_evidence_pipeline",
+            "question": "실적 일정, DART, IR, 자동화, Dossier 상태를 점검해줘",
+            "read_order": [
+                "bridge_status.json",
+                FIRST_READ_JSON_FILE,
+                "openclaw_bridge_manifest.json",
+            ],
+            "required_payload_keys": ["research_evidence_pipeline", "operational_commands"],
+            "quality_command": "python tools\\check_research_evidence_pipeline.py --json --strict",
+        },
     ]
 
 
@@ -1326,6 +1344,7 @@ def build_first_read_packet(context: dict) -> dict:
     rec = state.get("daily_recommendations") or {}
     news = state.get("news_and_telegram") or {}
     openclaw_usage = context.get("openclaw_usage") or {}
+    research_evidence = state.get("research_evidence_pipeline") or {}
     recommendations = []
     for row in rec.get("latest_rows") or []:
         if not isinstance(row, dict):
@@ -1383,6 +1402,7 @@ def build_first_read_packet(context: dict) -> dict:
                 "secret_policy": (news.get("telegram_authenticated_collector") or {}).get("secret_policy"),
             },
         },
+        "research_evidence_pipeline": research_evidence,
         "safety": {
             "secrets_excluded": True,
             "decision_support_only": True,
@@ -1430,6 +1450,8 @@ def build_first_read_packet(context: dict) -> dict:
             "recommendation_market_journal_quality": openclaw_usage.get("recommendation_market_journal_quality_command"),
             "operational_schedule_status": openclaw_usage.get("operational_schedule_status_command"),
             "offline_readiness": openclaw_usage.get("offline_readiness_command"),
+            "research_evidence_status": openclaw_usage.get("research_evidence_status_command"),
+            "research_evidence_refresh": openclaw_usage.get("research_evidence_refresh_command"),
         },
         "optimization_notes": [
             "Start with this packet for current state, then read bridge_status.json for hashes and freshness.",
@@ -1442,12 +1464,23 @@ def build_first_read_packet(context: dict) -> dict:
 def render_first_read_markdown(packet: dict) -> str:
     today_report = packet.get("today_work_report") or {}
     answer_correction = packet.get("answer_correction") or {}
+    research_evidence = packet.get("research_evidence_pipeline") or {}
+    evidence_checks = research_evidence.get("checks") or {}
+    earnings = evidence_checks.get("earnings") or {}
+    dart = evidence_checks.get("dart") or {}
+    company_ir = evidence_checks.get("company_ir") or {}
+    dossier_queue = ((evidence_checks.get("automation") or {}).get("dossier_refresh_queue") or {})
     lines = [
         "# OpenClaw Investment Research First Read",
         "",
         f"- status: `{packet.get('status')}`",
         f"- generated_at: `{packet.get('generated_at')}`",
         f"- latest recommendation date: `{packet.get('latest_recommendation_date')}`",
+        f"- research evidence status: `{research_evidence.get('status', 'not_checked')}`",
+        f"- earnings: entries `{earnings.get('entry_count', 0)}`, fallback_unavailable `{earnings.get('fallback_unavailable_count', 0)}`, not_applicable `{earnings.get('not_applicable_count', 0)}`",
+        f"- DART: coverage `{dart.get('coverage_rate')}`, failures `{dart.get('failure_count', 0)}`",
+        f"- company IR: items `{company_ir.get('item_count', 0)}`, related `{company_ir.get('related_count', 0)}`, failed sources `{company_ir.get('failed_source_count', 0)}`",
+        f"- Dossier refresh candidates: `{dossier_queue.get('candidate_count', 0)}`",
         f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
         f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",
         f"- telegram favorite candidates: `{(packet.get('telegram') or {}).get('favorite_candidate_count')}`",
@@ -1561,6 +1594,8 @@ def build_bridge_manifest(context: dict) -> dict:
         "market_journal_linkage_backlog_command": "python tools\\check_market_journal_linkage.py --strict --write-backlog --json",
         "operational_schedule_status_command": "python tools\\check_operational_schedule_status.py --json --allow-warnings",
         "offline_readiness_command": "python tools\\check_offline_readiness.py --json",
+        "research_evidence_status_command": "python tools\\check_research_evidence_pipeline.py --json --strict",
+        "research_evidence_refresh_command": "python tools\\check_research_evidence_pipeline.py --refresh --write-state --json --strict",
         "sanitization": context.get("sanitization"),
         "restricted_actions": (context.get("openclaw_usage") or {}).get("restricted_actions", []),
     }

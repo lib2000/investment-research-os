@@ -145,43 +145,31 @@ if (-not $SkipPortfolioReportAlert.IsPresent) {
 }
 
 if (-not $SkipResearchAutomationRefresh.IsPresent) {
-  Invoke-DailyResearchStep "리서치 중복/Dossier 상태 갱신" {
-    $headers = @{
-      Authorization = "Bearer $DevUserToken"
-      "Content-Type" = "application/json"
-    }
-    $base = $BaseUrl.TrimEnd("/")
+  Invoke-DailyResearchStep "실적 일정/DART/IR/중복/Dossier 상태 갱신" {
+    $previousPipelineToken = $env:INVESTMENT_RESEARCH_DEV_USER_TOKEN
     try {
-      $reviewUri = "$base/api/v1/research-automation/dedupes/review?limit=80" + [char]38 + "save_result=true"
-      $review = Invoke-RestMethod -Method Post -Uri $reviewUri -Headers $headers -TimeoutSec $ResearchAutomationTimeoutSeconds
-      $reviewGroupCount = $review.duplicate_group_count
-      if ($null -eq $reviewGroupCount) {
-        $reviewGroupCount = $review.group_count
+      $env:INVESTMENT_RESEARCH_DEV_USER_TOKEN = $DevUserToken
+      python tools\check_research_evidence_pipeline.py `
+        --base-url $BaseUrl `
+        --timeout $ResearchAutomationTimeoutSeconds `
+        --refresh `
+        --write-state `
+        --strict `
+        --json
+    } finally {
+      if ($null -eq $previousPipelineToken) {
+        Remove-Item Env:INVESTMENT_RESEARCH_DEV_USER_TOKEN -ErrorAction SilentlyContinue
+      } else {
+        $env:INVESTMENT_RESEARCH_DEV_USER_TOKEN = $previousPipelineToken
       }
-      Write-Host (
-        "중복 리뷰 상태={0}; 그룹={1}; 갱신={2}" -f
-        $review.status,
-        $reviewGroupCount,
-        $review.as_of
-      )
-      $refreshUri = "$base/api/v1/research-automation/dedupes/refresh-dossiers?limit=8" + [char]38 + "save_result=true"
-      $refresh = Invoke-RestMethod -Method Post -Uri $refreshUri -Headers $headers -TimeoutSec $ResearchAutomationTimeoutSeconds
-      Write-Host (
-        "Dossier 큐 상태={0}; 후보={1}; 갱신={2}; 실패={3}; 기준={4}" -f
-        $refresh.status,
-        $refresh.candidate_count,
-        $refresh.refreshed_count,
-        $refresh.failed_count,
-        $refresh.as_of
-      )
-    } catch {
-      Write-Warning "리서치 중복/Dossier 상태 갱신 응답 실패/타임아웃: $($_.Exception.Message)"
+    }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "실적 일정/DART/IR/중복/Dossier 통합 점검에 실패해 저장 상태 검증을 시도합니다."
       python tools\check_research_source_store.py --strict
       if ($LASTEXITCODE -eq 0) {
         Write-Warning "리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다."
         return
       }
-      throw
     }
   }
 }

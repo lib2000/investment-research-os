@@ -1042,10 +1042,12 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         )
 
         self.assertIn("[switch]$SkipResearchAutomationRefresh", script_source)
-        self.assertIn("리서치 중복/Dossier 상태 갱신", script_source)
-        self.assertIn("/api/v1/research-automation/dedupes/review?limit=80", script_source)
-        self.assertIn("/api/v1/research-automation/dedupes/refresh-dossiers?limit=8", script_source)
-        self.assertIn("duplicate_group_count", script_source)
+        self.assertIn("실적 일정/DART/IR/중복/Dossier 상태 갱신", script_source)
+        self.assertIn("tools\\check_research_evidence_pipeline.py", script_source)
+        self.assertIn("INVESTMENT_RESEARCH_DEV_USER_TOKEN", script_source)
+        self.assertIn("--refresh", script_source)
+        self.assertIn("--write-state", script_source)
+        self.assertIn("--strict", script_source)
         self.assertIn("check_research_source_store.py --strict", script_source)
         self.assertIn("리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다.", script_source)
 
@@ -1065,6 +1067,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("check_openclaw_bridge_completion.py", script_source)
         self.assertIn("show_openclaw_bridge_status.py", script_source)
         self.assertIn("check_openclaw_quick_health.py", script_source)
+        self.assertIn("check_research_evidence_pipeline.py --json --strict", script_source)
+        self.assertIn("check_research_evidence_pipeline.py --refresh --write-state --json --strict", script_source)
         self.assertIn("backend_watchdog_status", script_source)
         self.assertIn("check_research_backend_watchdog_task_status.py --json", script_source)
         self.assertIn("backend watchdog register", script_source)
@@ -20585,6 +20589,28 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
                 json.dumps({"webhook_ready": False, "last_webhook_status": "rejected"}, ensure_ascii=False),
                 encoding="utf-8",
             )
+            (system_dir / "research_evidence_pipeline_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "authentication": {"status": "attached", "token_exposed": False},
+                        "endpoint_contract": {
+                            "canonical": {
+                                "dart_status": "/api/v1/dart/filings/status",
+                                "company_ir_status": "/api/v1/company-ir-sources/watch?refresh=false",
+                            }
+                        },
+                        "checks": {
+                            "earnings": {"entry_count": 6, "fallback_unavailable_count": 0, "not_applicable_count": 0},
+                            "dart": {"coverage_rate": 1.0, "failure_count": 0},
+                            "company_ir": {"item_count": 2, "related_count": 2, "failed_source_count": 0},
+                            "automation": {"dossier_refresh_queue": {"candidate_count": 0}},
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
 
             context = export_tool.build_context(root)
             output_dir = root / "out"
@@ -22296,6 +22322,8 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "actual_answer_capture_status": "python tools\\check_openclaw_actual_answer_capture_status.py --json",
             "final_completion_audit": "python tools\\check_openclaw_bridge_completion.py --max-age-hours 24 --require-report-hashes",
             "knowledge_graph_validation": "python tools\\check_openclaw_knowledge_graph.py --max-age-hours 24",
+            "research_evidence_status": "python tools\\check_research_evidence_pipeline.py --json --strict",
+            "research_evidence_refresh": "python tools\\check_research_evidence_pipeline.py --refresh --write-state --json --strict",
         }
 
     def write_bundle(self, openclaw_dir: Path, *, missing_us: bool = False):
@@ -22325,12 +22353,24 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "latest_market_counts": {"KR": 3, "US": 0 if missing_us else 3},
             "telegram": {"favorite_saved_count": 5},
             "primary_files": {"status": "bridge_status.json"},
+            "research_evidence_pipeline": {
+                "status": "success",
+                "authentication": {"status": "attached", "token_exposed": False},
+                "checks": {
+                    "earnings": {"entry_count": 6, "fallback_unavailable_count": 0, "not_applicable_count": 1},
+                    "dart": {"checked_count": 6, "target_count": 6, "coverage_rate": 1.0, "failure_count": 0},
+                    "company_ir": {"related_count": 2, "item_count": 2, "failed_source_count": 0},
+                    "automation": {"dossier_refresh_queue": {"candidate_count": 0, "failed_count": 0}},
+                    "dossier_review": {"checked_count": 6},
+                },
+            },
             "operational_commands": commands,
             "question_routes": [
                 {"id": "today_work_report"},
                 {"id": "recommendations_priority"},
                 {"id": "bridge_status_completion"},
                 {"id": "knowledge_graph_context"},
+                {"id": "research_evidence_pipeline"},
             ],
         }
         (openclaw_dir / "openclaw_first_read.json").write_text(json.dumps(first_read, ensure_ascii=False), encoding="utf-8")
@@ -22358,6 +22398,8 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             "actual_answer_capture_status_command": commands["actual_answer_capture_status"],
             "final_completion_audit_command": commands["final_completion_audit"],
             "knowledge_graph_validation_command": commands["knowledge_graph_validation"],
+            "research_evidence_status_command": commands["research_evidence_status"],
+            "research_evidence_refresh_command": commands["research_evidence_refresh"],
         }
         (openclaw_dir / "openclaw_bridge_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
@@ -22372,8 +22414,8 @@ class OpenClawQuestionReadOrderTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(4, result["route_count"])
-        self.assertEqual(4, result["first_read_declared_route_count"])
+        self.assertEqual(5, result["route_count"])
+        self.assertEqual(5, result["first_read_declared_route_count"])
         self.assertIn("today_work_report: ok", rendered)
         self.assertIn("recommendations_priority: ok", rendered)
         self.assertIn("question_read_order", result["available_commands"])
@@ -22448,13 +22490,14 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
             rendered = tool.render_text(result)
 
         self.assertEqual("ok", result["status"])
-        self.assertEqual(4, result["sample_count"])
+        self.assertEqual(5, result["sample_count"])
         self.assertIn("today_work_report: ok", rendered)
         self.assertIn("recommendations_priority: ok", rendered)
         self.assertTrue(any("오늘 구현 작업 보고" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("오늘 추천 종목" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("텔레그램 즐겨찾기 수집: 10건" in sample["answer_preview"] for sample in result["samples"]))
         self.assertTrue(any("hash status: checked 3 files" in sample["answer_preview"] for sample in result["samples"]))
+        self.assertTrue(any("fallback_unavailable 0건" in sample["answer_preview"] for sample in result["samples"]))
 
     def test_answer_samples_rejects_stale_sample_claims(self):
         tool = load_openclaw_answer_samples_tool()

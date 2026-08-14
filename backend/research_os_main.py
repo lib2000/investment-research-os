@@ -11084,6 +11084,11 @@ def build_policy_sources_watch_payload(
     "/api/v1/company-ir-sources/watch",
     dependencies=[Depends(verify_user_token)],
 )
+@app.get(
+    "/api/v1/company-ir-sources/status",
+    dependencies=[Depends(verify_user_token)],
+    include_in_schema=False,
+)
 def get_company_ir_sources_watch(
     limit: int = 20,
     refresh: bool = False,
@@ -14524,6 +14529,11 @@ def get_rag_thesis_snapshot(
     "/api/v1/dart/filings/status",
     dependencies=[Depends(verify_user_token)],
 )
+@app.get(
+    "/api/v1/dart-filings/status",
+    dependencies=[Depends(verify_user_token)],
+    include_in_schema=False,
+)
 def get_dart_filing_watch_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
@@ -14572,6 +14582,11 @@ def get_recent_weekly_research_brief(
 @app.post(
     "/api/v1/dart/filings/refresh",
     dependencies=[Depends(verify_user_token)],
+)
+@app.post(
+    "/api/v1/dart-filings/refresh",
+    dependencies=[Depends(verify_user_token)],
+    include_in_schema=False,
 )
 def run_dart_filing_watch_refresh(
     request: dict = Body(default_factory=dict),

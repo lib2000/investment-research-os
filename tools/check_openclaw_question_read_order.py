@@ -68,6 +68,13 @@ QUESTION_ROUTES = (
         required_payload_keys=("primary_files", "operational_commands"),
         required_commands=("knowledge_graph_validation",),
     ),
+    QuestionRoute(
+        route_id="research_evidence_pipeline",
+        question="실적 일정, DART, IR, 자동화, Dossier 상태를 점검해줘",
+        required_files=(BRIDGE_STATUS_FILE, FIRST_READ_JSON_FILE, MANIFEST_FILE),
+        required_payload_keys=("research_evidence_pipeline", "operational_commands"),
+        required_commands=("research_evidence_status", "research_evidence_refresh"),
+    ),
 )
 
 
