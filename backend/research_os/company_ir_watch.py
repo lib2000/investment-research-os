@@ -33,11 +33,20 @@ def company_ir_item_matches_targets(runtime: CompanyIrWatchRuntime, item: dict, 
     return False
 
 
-def build_company_ir_sources_next_actions(related_items: list[dict], warnings: list[str]) -> list[str]:
+def build_company_ir_sources_next_actions(
+    related_items: list[dict],
+    warnings: list[str],
+    *,
+    fallback_covered_count: int = 0,
+) -> list[str]:
     actions = [
-        "Joby IR 보도자료는 보유/관심 종목과 연결되면 공개 IR 저장 데이터와 RAG에 자동 반영됩니다.",
+        "회사 IR/SEC 자료는 보유·관심 종목과 연결되면 공개 IR 저장 데이터와 RAG에 자동 반영됩니다.",
         "본문 추출이 짧은 항목은 URL-only/본문 보강 필요로 남기고 추천 점수 가산에서 제외합니다.",
     ]
+    if fallback_covered_count:
+        actions.append(
+            f"직접 IR 원천 장애 {fallback_covered_count}건은 공식 SEC EDGAR 제출자료로 대체되어 미해결 실패에서 제외됩니다."
+        )
     if warnings:
         actions.append("목록 확인 실패가 있으면 기존 캐시를 기준으로 최근 1주 자료를 유지하고 다음 주기에 재시도하세요.")
     if related_items:
@@ -98,6 +107,25 @@ def build_company_ir_sources_watch_payload(
         source_results = cache.get("source_results") or [] if isinstance(cache, dict) else []
     target_terms = runtime.recent_activity_target_terms(settings)
     related_items = [item for item in items if company_ir_item_matches_targets(runtime, item, target_terms)]
+    fallback_sources = [
+        item
+        for item in source_results
+        if isinstance(item, dict)
+        and (item.get("status") == "fallback_success" or item.get("fallback_status") == "success")
+    ]
+    unresolved_sources = [
+        item
+        for item in source_results
+        if isinstance(item, dict)
+        and item.get("status") not in {None, "success", "fallback_success"}
+        and item.get("fallback_status") != "success"
+    ]
+    direct_failure_count = sum(
+        1
+        for item in source_results
+        if isinstance(item, dict)
+        and (item.get("primary_status") == "failed" or item.get("status") == "failed")
+    )
     capture_results: list[dict] = []
     if save_result and related_items:
         for item in related_items[:normalized_limit]:
@@ -157,9 +185,17 @@ def build_company_ir_sources_watch_payload(
         "captured_count": sum(1 for item in capture_results if item.get("status") in {"success", "skipped_existing", "url_only_saved"}),
         "source_results": source_results,
         "source_count": len(source_results),
+        "source_health_status": "degraded" if unresolved_sources else "fallback_covered" if fallback_sources else "healthy",
+        "direct_source_failure_count": direct_failure_count,
+        "fallback_covered_count": len(fallback_sources),
+        "unresolved_source_failure_count": len(unresolved_sources),
         "warnings": warnings,
         "policy": runtime.company_ir_copyright_policy(),
-        "next_actions": build_company_ir_sources_next_actions(related_items, warnings),
+        "next_actions": build_company_ir_sources_next_actions(
+            related_items,
+            warnings,
+            fallback_covered_count=len(fallback_sources),
+        ),
     }
     if save_result:
         payload["storage_path"] = str(runtime.company_ir_sources_watch_path(settings))

@@ -425,7 +425,9 @@ def fetch_company_ir_sources(
                 timeout=timeout,
                 user_agent=user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             )
-            source_results.append({key: value for key, value in result.items() if key != "items"})
+            source_summary = {key: value for key, value in result.items() if key != "items"}
+            source_summary["item_count"] = len(result.get("items") or [])
+            source_results.append(source_summary)
             all_items.extend(result.get("items") or [])
         except Exception as exc:
             source_results.append(
@@ -440,8 +442,8 @@ def fetch_company_ir_sources(
                     "error": str(exc),
                 }
             )
-    successful_sec_tickers = {
-        str(result.get("ticker") or "").upper()
+    successful_sec_sources = {
+        str(result.get("ticker") or "").upper(): result
         for result in source_results
         if result.get("status") == "success"
         and result.get("source_scope") == "sec_company_submissions"
@@ -450,13 +452,16 @@ def fetch_company_ir_sources(
         if result.get("status") != "failed":
             continue
         ticker = str(result.get("ticker") or "").upper()
-        if (
-            ticker in successful_sec_tickers
-            and result.get("source_scope") != "sec_company_submissions"
-        ):
+        fallback = successful_sec_sources.get(ticker)
+        if fallback and result.get("source_scope") != "sec_company_submissions":
+            result["primary_status"] = "failed"
+            result["status"] = "fallback_success"
             result["fallback_status"] = "success"
-            result["fallback_provider"] = "SEC EDGAR"
-            result["fallback_source_scope"] = "sec_company_submissions"
+            result["fallback_source_key"] = fallback.get("source_key")
+            result["fallback_provider"] = fallback.get("provider") or "SEC EDGAR"
+            result["fallback_source_scope"] = fallback.get("source_scope") or "sec_company_submissions"
+            result["fallback_source_url"] = fallback.get("source_url")
+            result["fallback_item_count"] = int(fallback.get("item_count") or 0)
             continue
         warnings.append(
             f"{result.get('provider') or '회사 IR'} 목록 확인 실패: {result.get('error') or '알 수 없는 오류'}"

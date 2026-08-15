@@ -212,12 +212,33 @@ def _safe_ir_failure(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _safe_ir_fallback(entry: dict[str, Any]) -> dict[str, Any]:
+    failure = _safe_ir_failure(entry)
+    return {
+        "source_key": entry.get("source_key"),
+        "status": "fallback_success",
+        "primary_error_kind": failure["error_kind"],
+        "fallback_source_key": entry.get("fallback_source_key"),
+        "fallback_provider": entry.get("fallback_provider"),
+        "fallback_source_scope": entry.get("fallback_source_scope"),
+        "fallback_item_count": int(entry.get("fallback_item_count") or 0),
+    }
+
+
 def summarize_company_ir(payload: dict[str, Any]) -> dict[str, Any]:
     source_results = payload.get("source_results") if isinstance(payload.get("source_results"), list) else []
+    fallback_sources = [
+        _safe_ir_fallback(entry)
+        for entry in source_results
+        if isinstance(entry, dict)
+        and (entry.get("status") == "fallback_success" or entry.get("fallback_status") == "success")
+    ]
     failures = [
         _safe_ir_failure(entry)
         for entry in source_results
-        if isinstance(entry, dict) and entry.get("status") not in {None, "success"}
+        if isinstance(entry, dict)
+        and entry.get("status") not in {None, "success", "fallback_success"}
+        and entry.get("fallback_status") != "success"
     ]
     return {
         "status": payload.get("status"),
@@ -227,6 +248,14 @@ def summarize_company_ir(payload: dict[str, Any]) -> dict[str, Any]:
         "related_count": int(payload.get("related_count") or 0),
         "captured_count": int(payload.get("captured_count") or 0),
         "source_count": int(payload.get("source_count") or 0),
+        "source_health_status": payload.get("source_health_status") or (
+            "degraded" if failures else "fallback_covered" if fallback_sources else "healthy"
+        ),
+        "direct_source_failure_count": int(
+            payload.get("direct_source_failure_count") or len(fallback_sources) + len(failures)
+        ),
+        "fallback_source_count": len(fallback_sources),
+        "fallback_sources": fallback_sources,
         "failed_source_count": len(failures),
         "failed_sources": failures,
         "warnings": list(payload.get("warnings") or []),
@@ -374,7 +403,7 @@ def collect_pipeline_status(
         blocking_issues.append("company IR status has no usable cached items")
     elif company_ir["failed_source_count"]:
         warnings.append(
-            f"company IR is usable but {company_ir['failed_source_count']} source(s) returned 403/timeout/request errors"
+            f"company IR has {company_ir['failed_source_count']} unresolved source error(s) after official fallback"
         )
     if checks["public_ir_sec"]["status"] != "success":
         blocking_issues.append("public IR/SEC status is unavailable")
@@ -409,6 +438,7 @@ def collect_pipeline_status(
         "interpretation": {
             "not_applicable": "정상 분류: ETF/ETN/펀드 등 개별 기업 실적 일정 비대상",
             "fallback_unavailable": "조치 필요: 국내 기업 실적 일정의 DART fallback도 확보하지 못함",
+            "company_ir_fallback": "직접 IR 원천 장애는 동일 종목의 공식 SEC EDGAR 수집 성공 시 fallback_success로 분리하며 미해결 실패로 계산하지 않음",
             "dossier_candidate_count": queue["candidate_count"],
         },
     }

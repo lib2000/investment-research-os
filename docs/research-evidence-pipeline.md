@@ -29,7 +29,7 @@ python tools\check_research_evidence_pipeline.py --refresh --write-state --json 
 
 - `not_applicable`: ETF/ETN/펀드처럼 개별 기업 실적 일정이 적용되지 않는 자산의 정상 분류다.
 - `fallback_unavailable`: 국내 기업 실적 일정을 외부 공급자와 DART fallback 모두에서 확보하지 못한 차단 문제다.
-- IR 원천 일부의 `403` 또는 timeout: 저장된 관련 IR 자료가 있으면 경고로 보고하며, 전체 IR 상태를 조회 실패로 오판하지 않는다.
+- IR 직접 원천 일부의 `403` 또는 timeout: 동일 종목의 공식 SEC EDGAR 제출자료가 정상 조회되면 `fallback_success`로 기록한다. `direct_source_failure_count`에는 원래 장애, `fallback_source_count`에는 SEC 대체 건수, `failed_source_count`에는 대체 후에도 남은 미해결 건수만 표시한다.
 - Dossier `candidate_count=0`: 후보 확인 불가가 아니라 현재 재합성 대기 후보가 없다는 뜻이다.
 
 비밀정보가 제거된 최신 결과는 `research_vault/_system/research_evidence_pipeline_status.json`에 저장되고 OpenClaw 첫 읽기 패킷에 포함된다.

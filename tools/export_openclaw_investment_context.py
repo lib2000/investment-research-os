@@ -1479,7 +1479,7 @@ def render_first_read_markdown(packet: dict) -> str:
         f"- research evidence status: `{research_evidence.get('status', 'not_checked')}`",
         f"- earnings: entries `{earnings.get('entry_count', 0)}`, fallback_unavailable `{earnings.get('fallback_unavailable_count', 0)}`, not_applicable `{earnings.get('not_applicable_count', 0)}`",
         f"- DART: coverage `{dart.get('coverage_rate')}`, failures `{dart.get('failure_count', 0)}`",
-        f"- company IR: items `{company_ir.get('item_count', 0)}`, related `{company_ir.get('related_count', 0)}`, failed sources `{company_ir.get('failed_source_count', 0)}`",
+        f"- company IR: items `{company_ir.get('item_count', 0)}`, related `{company_ir.get('related_count', 0)}`, SEC fallback `{company_ir.get('fallback_source_count', 0)}`, unresolved sources `{company_ir.get('failed_source_count', 0)}`",
         f"- Dossier refresh candidates: `{dossier_queue.get('candidate_count', 0)}`",
         f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
         f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",

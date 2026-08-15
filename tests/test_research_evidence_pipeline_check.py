@@ -59,6 +59,46 @@ def test_ir_failures_are_sanitized_to_error_kinds() -> None:
     ]
 
 
+def test_ir_sec_fallback_is_covered_not_unresolved_failure() -> None:
+    tool = load_tool()
+    summary = tool.summarize_company_ir(
+        {
+            "status": "success",
+            "item_count": 20,
+            "related_count": 20,
+            "source_results": [
+                {
+                    "source_key": "planet_ir_press_releases",
+                    "ticker": "PL",
+                    "status": "failed",
+                    "error": "403 Forbidden",
+                    "fallback_status": "success",
+                    "fallback_source_key": "planet_sec_submissions",
+                    "fallback_provider": "SEC EDGAR",
+                    "fallback_source_scope": "sec_company_submissions",
+                    "fallback_item_count": 4,
+                }
+            ],
+        }
+    )
+
+    assert summary["source_health_status"] == "fallback_covered"
+    assert summary["direct_source_failure_count"] == 1
+    assert summary["fallback_source_count"] == 1
+    assert summary["failed_source_count"] == 0
+    assert summary["fallback_sources"] == [
+        {
+            "source_key": "planet_ir_press_releases",
+            "status": "fallback_success",
+            "primary_error_kind": "http_403",
+            "fallback_source_key": "planet_sec_submissions",
+            "fallback_provider": "SEC EDGAR",
+            "fallback_source_scope": "sec_company_submissions",
+            "fallback_item_count": 4,
+        }
+    ]
+
+
 def test_legacy_routes_map_to_authenticated_canonical_contract() -> None:
     tool = load_tool()
 
