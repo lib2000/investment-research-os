@@ -333,6 +333,11 @@ label {
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   align-items: end;
+  min-width: 0;
+}
+
+.form-grid > * {
+  min-width: 0;
 }
 
 .dashboard-form {

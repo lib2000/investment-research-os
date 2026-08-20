@@ -644,6 +644,12 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn('"js_contract_ok_count"', source)
         self.assertIn('"workflow_action_ok_count"', source)
 
+    def test_console_form_grid_allows_mobile_shrink(self):
+        styles = (PROJECT_ROOT / "mobile_app" / "research_console" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertRegex(styles, r"\.form-grid\s*\{[^}]*min-width:\s*0;")
+        self.assertRegex(styles, r"\.form-grid > \*\s*\{[^}]*min-width:\s*0;")
+
     def test_click_smoke_exposes_ordered_partial_stages(self):
         tool = load_clicks_smoke_tool()
 
@@ -5535,6 +5541,57 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         )
 
         self.assertTrue(all(state.values()))
+
+    def test_portfolio_analysis_review_gate_rejects_partial_checklist(self):
+        from research_os.portfolio_analysis_coverage import (
+            portfolio_analysis_checklist_status,
+            portfolio_analysis_module_state,
+            portfolio_analysis_review_state,
+        )
+
+        entries = [
+            {"file_name": "003230-collaborative-team-report-2026-06-01.json"},
+            {"file_name": "003230-smart-trade-setup-2026-06-01.json"},
+            {"file_name": "003230-earnings-reaction-2026-06-01.json"},
+            {"file_name": "003230-dossier-synthesis-2026-06-01.json"},
+            {
+                "file_name": "003230-research-checklist-2026-06-01.json",
+                "completion_rate": 0.3125,
+                "completed_count": 5,
+                "total_count": 16,
+                "readiness_level": "낮음",
+            },
+            {"file_name": "003230-dart-filing-watch-2026-06-01.json"},
+        ]
+
+        documented = portfolio_analysis_module_state(entries)
+        reviewed = portfolio_analysis_review_state(entries)
+        checklist = portfolio_analysis_checklist_status(entries)
+
+        self.assertTrue(documented["checklist"])
+        self.assertFalse(reviewed["checklist"])
+        self.assertEqual(checklist["completion_rate"], 0.3125)
+        self.assertFalse(checklist["review_ready"])
+        self.assertIn("75%", checklist["reason"])
+
+    def test_portfolio_analysis_review_gate_accepts_threshold_checklist(self):
+        from research_os.portfolio_analysis_coverage import portfolio_analysis_checklist_status
+
+        status = portfolio_analysis_checklist_status(
+            [
+                {
+                    "file_name": "003230-research-checklist-2026-06-01.json",
+                    "completion_rate": 0.75,
+                    "completed_count": 12,
+                    "total_count": 16,
+                    "readiness_level": "높음",
+                }
+            ]
+        )
+
+        self.assertTrue(status["documented"])
+        self.assertTrue(status["review_ready"])
+        self.assertEqual(status["required_completion_rate"], 0.75)
 
     def test_portfolio_analysis_coverage_accepts_path_consistent_local_vault_evidence(self):
         from research_os.portfolio_analysis_coverage import (

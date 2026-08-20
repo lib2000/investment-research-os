@@ -15,9 +15,39 @@ REQUIRED_PORTFOLIO_ANALYSIS_MODULES = [
     ("recent_capture", "최근 정보 입력", {"research-capture", "public-ir-sec", "dart-filing-watch", "chart-analysis"}),
 ]
 
+# A saved checklist is evidence that the workflow was started, not evidence that
+# the human review is complete. The dashboard already uses 75% as its practical
+# readiness boundary, so coverage uses the same gate.
+REVIEW_CHECKLIST_COMPLETION_THRESHOLD = 0.75
+
 
 def normalize_portfolio_analysis_ticker(value: Any) -> str:
     return str(value or "").strip().upper()
+
+
+def _as_optional_ratio(value: Any) -> float | None:
+    try:
+        ratio = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ratio < 0 or ratio > 1:
+        return None
+    return ratio
+
+
+def _as_optional_count(value: Any) -> int | None:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return count if count >= 0 else None
+
+
+def _entry_sort_key(entry: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(entry.get("date") or entry.get("created_at") or entry.get("saved_at") or ""),
+        str(entry.get("file_name") or entry.get("storage_path") or ""),
+    )
 
 
 def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[str, Any]]:
@@ -49,6 +79,9 @@ def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[st
             if payload_ticker and payload_ticker != ticker:
                 continue
             seen.add(key)
+            data_quality = item.get("data_quality")
+            quality_payload = data_quality if isinstance(data_quality, dict) else {}
+            injected_data = item.get("injected_data")
             entries.append(
                 {
                     "ticker": ticker,
@@ -63,6 +96,15 @@ def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[st
                     "title": item.get("title") or item.get("summary"),
                     "summary": item.get("summary"),
                     "tags": item.get("tags") or [],
+                    "completion_rate": item.get("completion_rate"),
+                    "completed_count": item.get("completed_count"),
+                    "total_count": item.get("total_count"),
+                    "readiness_level": item.get("readiness_level"),
+                    "data_quality": quality_payload.get("data_quality") or data_quality,
+                    "source_confidence": quality_payload.get("source_confidence")
+                    or item.get("source_confidence"),
+                    "source_count": len(injected_data) if isinstance(injected_data, list) else item.get("source_count"),
+                    "current_price": item.get("current_price"),
                     "local_vault_verified": True,
                 }
             )
@@ -127,16 +169,102 @@ def portfolio_analysis_entry_markers(entry: dict[str, Any]) -> set[str]:
     return markers
 
 
-def portfolio_analysis_module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
-    markers = set().union(*(portfolio_analysis_entry_markers(entry) for entry in entries)) if entries else set()
-    return {
-        key: any(
+def portfolio_analysis_module_entries(
+    entries: list[dict[str, Any]],
+    module_key: str,
+) -> list[dict[str, Any]]:
+    """Return stored entries that satisfy a document-presence module marker."""
+    expected_types = next(
+        (
+            expected
+            for key, _label, expected in REQUIRED_PORTFOLIO_ANALYSIS_MODULES
+            if key == module_key
+        ),
+        set(),
+    )
+    if not expected_types:
+        return []
+    matched: list[dict[str, Any]] = []
+    for entry in entries:
+        markers = portfolio_analysis_entry_markers(entry)
+        if any(
             expected in marker or marker in expected
             for expected in expected_types
             for marker in markers
-        )
-        for key, _label, expected_types in REQUIRED_PORTFOLIO_ANALYSIS_MODULES
+        ):
+            matched.append(entry)
+    return matched
+
+
+def portfolio_analysis_module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
+    """Document-presence state retained for compatibility with existing clients."""
+    return {
+        key: bool(portfolio_analysis_module_entries(entries, key))
+        for key, _label, _expected_types in REQUIRED_PORTFOLIO_ANALYSIS_MODULES
     }
+
+
+def portfolio_analysis_checklist_status(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe whether a saved checklist actually clears the human-review gate."""
+    checklist_entries = portfolio_analysis_module_entries(entries, "checklist")
+    if not checklist_entries:
+        return {
+            "documented": False,
+            "review_ready": False,
+            "completion_rate": None,
+            "completed_count": None,
+            "total_count": None,
+            "readiness_level": None,
+            "required_completion_rate": REVIEW_CHECKLIST_COMPLETION_THRESHOLD,
+            "reason": "체크리스트 문서가 없습니다.",
+        }
+
+    latest = max(checklist_entries, key=_entry_sort_key)
+    completion_rate = _as_optional_ratio(latest.get("completion_rate"))
+    completed_count = _as_optional_count(latest.get("completed_count"))
+    total_count = _as_optional_count(latest.get("total_count"))
+    if completion_rate is None:
+        return {
+            "documented": True,
+            "review_ready": False,
+            "completion_rate": None,
+            "completed_count": completed_count,
+            "total_count": total_count,
+            "readiness_level": latest.get("readiness_level"),
+            "required_completion_rate": REVIEW_CHECKLIST_COMPLETION_THRESHOLD,
+            "reason": "저장된 체크리스트의 완료율을 확인할 수 없습니다.",
+        }
+
+    review_ready = completion_rate >= REVIEW_CHECKLIST_COMPLETION_THRESHOLD
+    completed_text = (
+        f"{completed_count}/{total_count}"
+        if completed_count is not None and total_count not in {None, 0}
+        else f"{completion_rate:.0%}"
+    )
+    return {
+        "documented": True,
+        "review_ready": review_ready,
+        "completion_rate": completion_rate,
+        "completed_count": completed_count,
+        "total_count": total_count,
+        "readiness_level": latest.get("readiness_level"),
+        "required_completion_rate": REVIEW_CHECKLIST_COMPLETION_THRESHOLD,
+        "reason": (
+            f"체크리스트 {completed_text}로 검토 게이트를 충족했습니다."
+            if review_ready
+            else (
+                f"체크리스트 {completed_text}; "
+                f"검토 게이트 {REVIEW_CHECKLIST_COMPLETION_THRESHOLD:.0%} 미만입니다."
+            )
+        ),
+    }
+
+
+def portfolio_analysis_review_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
+    """Review-gate state: documentation plus a sufficiently completed checklist."""
+    state = portfolio_analysis_module_state(entries)
+    state["checklist"] = portfolio_analysis_checklist_status(entries)["review_ready"]
+    return state
 
 
 def missing_portfolio_analysis_labels(module_state: dict[str, bool]) -> list[str]:

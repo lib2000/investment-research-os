@@ -359,9 +359,11 @@ from research_os.portfolio_analysis_coverage import (
     REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
     merge_portfolio_analysis_entries,
     missing_portfolio_analysis_labels,
+    portfolio_analysis_checklist_status,
     portfolio_analysis_entries_for_ticker,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
+    portfolio_analysis_review_state,
     portfolio_vault_entries,
 )
 from research_os.portfolio_store import (
@@ -15738,9 +15740,13 @@ def check_portfolio_analysis_status(
             reverse=True,
         )
         module_state = portfolio_analysis_module_state(ticker_entries)
+        review_state = portfolio_analysis_review_state(ticker_entries)
+        checklist_status = portfolio_analysis_checklist_status(ticker_entries)
         completed_count = sum(1 for value in module_state.values() if value)
+        reviewed_count = sum(1 for value in review_state.values() if value)
         missing_labels = missing_portfolio_analysis_labels(module_state)
-        next_action = portfolio_analysis_next_action(missing_labels, verified=verification.verified)
+        review_missing_labels = missing_portfolio_analysis_labels(review_state)
+        next_action = portfolio_analysis_next_action(review_missing_labels, verified=verification.verified)
 
         items.append(
             {
@@ -15751,10 +15757,15 @@ def check_portfolio_analysis_status(
                 "portfolios": record["portfolios"],
                 "market_value": record.get("market_value"),
                 "module_state": module_state,
+                "review_state": review_state,
+                "checklist_status": checklist_status,
                 "completed_count": completed_count,
+                "reviewed_count": reviewed_count,
                 "required_count": len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
                 "completion_rate": completed_count / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
+                "review_completion_rate": reviewed_count / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
                 "missing_modules": missing_labels,
+                "review_missing_modules": review_missing_labels,
                 "latest_report_date": sorted_entries[0].get("date") if sorted_entries else None,
                 "latest_report_summary": sorted_entries[0].get("summary") if sorted_entries else None,
                 "latest_files": [
@@ -15775,9 +15786,18 @@ def check_portfolio_analysis_status(
         if items
         else 0
     )
+    average_review_completion = (
+        sum(item["review_completion_rate"] for item in items) / len(items)
+        if items
+        else 0
+    )
     ready_count = sum(1 for item in items if item["completion_rate"] >= 1)
+    review_ready_count = sum(1 for item in items if item["review_completion_rate"] >= 1)
     needs_team_report = sum(
         1 for item in items if not item["module_state"]["team_report"]
+    )
+    needs_checklist_review = sum(
+        1 for item in items if not item["review_state"]["checklist"]
     )
     return {
         "status": "success",
@@ -15785,11 +15805,16 @@ def check_portfolio_analysis_status(
         "portfolio_count": len(response.portfolios),
         "holding_count": len(items),
         "ready_count": ready_count,
+        "documented_ready_count": ready_count,
+        "review_ready_count": review_ready_count,
         "average_completion": average_completion,
+        "average_review_completion": average_review_completion,
         "needs_team_report_count": needs_team_report,
+        "needs_checklist_review_count": needs_checklist_review,
         "summary": (
             f"저장 포트폴리오 {len(response.portfolios)}개, 고유 보유 종목 {len(items)}개 기준 "
-            f"분석 준비 완료 {ready_count}개, 평균 완료율 {average_completion:.0%}입니다."
+            f"문서 세트 완료 {ready_count}개, 문서 커버리지 {average_completion:.0%}, "
+            f"검토 게이트 통과 {review_ready_count}개, 검토 충족률 {average_review_completion:.0%}입니다."
         ),
         "items": sorted(
             items,

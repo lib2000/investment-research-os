@@ -726,6 +726,8 @@ $contracts = @(
       'unique_holdings_from_portfolios',
       'portfolio_analysis_backlog.json',
       'portfolio_analysis_module_state',
+      'portfolio_analysis_review_state',
+      '--min-average-review-completion',
       'portfolio_analysis_next_action',
       '포트폴리오 분석 커버리지 점검 정상'
     )
@@ -738,6 +740,8 @@ $contracts = @(
       'REQUIRED_PORTFOLIO_ANALYSIS_MODULES',
       'team_report',
       'smart-trade-setup',
+      'REVIEW_CHECKLIST_COMPLETION_THRESHOLD',
+      'portfolio_analysis_checklist_status',
       'missing_portfolio_analysis_labels',
       'portfolio_analysis_next_action'
     )

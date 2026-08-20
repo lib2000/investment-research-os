@@ -19964,6 +19964,8 @@ function formatKoreanResult(value) {
     const items = value.items || [];
     const lines = items.map((item, index) => {
       const state = item.module_state || {};
+      const reviewState = item.review_state || {};
+      const checklist = item.checklist_status || {};
       const marks = [
         `팀 ${state.team_report ? "완료" : "필요"}`,
         `매매 ${state.trade_setup ? "완료" : "필요"}`,
@@ -19972,25 +19974,52 @@ function formatKoreanResult(value) {
         `체크 ${state.checklist ? "완료" : "필요"}`,
         `정보 ${state.recent_capture ? "있음" : "없음"}`,
       ].join(" · ");
+      const checklistRate =
+        checklist.completion_rate === undefined || checklist.completion_rate === null
+          ? "완료율 미확인"
+          : toPercent(checklist.completion_rate);
+      const checklistProgress =
+        checklist.completed_count !== undefined &&
+        checklist.completed_count !== null &&
+        checklist.total_count !== undefined &&
+        checklist.total_count !== null
+          ? `${checklist.completed_count}/${checklist.total_count}`
+          : checklistRate;
+      const checklistGate = reviewState.checklist
+        ? "검토 게이트 통과"
+        : checklist.reason || "체크리스트 검토 보강 필요";
       const portfolioText = (item.portfolios || []).join(", ") || "포트폴리오 미확인";
       const missingText = (item.missing_modules || []).length
-        ? `부족: ${(item.missing_modules || []).join(", ")}`
-        : "필수 분석 연결 완료";
+        ? `문서 부족: ${(item.missing_modules || []).join(", ")}`
+        : "문서 누락 없음";
+      const reviewMissingText = (item.review_missing_modules || []).length
+        ? `검토 게이트 보강: ${(item.review_missing_modules || []).join(", ")}`
+        : "검토 게이트 통과";
       return [
-        `${index + 1}. ${displayCompanyName(item)} · 완료율 ${toPercent(item.completion_rate)}`,
+        `${index + 1}. ${displayCompanyName(item)} · 문서 ${toPercent(item.completion_rate)} · 검토 ${toPercent(item.review_completion_rate ?? item.completion_rate)}`,
         `   ${marks}`,
+        `   체크리스트 ${checklistProgress} · ${checklistGate}`,
         `   포함: ${portfolioText}`,
         `   ${missingText}`,
+        `   ${reviewMissingText}`,
         `   다음 액션: ${item.next_action || "없음"}`,
       ].join("\n");
     });
+    const documentedReady = value.documented_ready_count ?? value.ready_count ?? 0;
+    const reviewReady = value.review_ready_count ?? 0;
+    const documentCompletion = value.average_completion ?? 0;
+    const reviewCompletion = value.average_review_completion ?? documentCompletion;
     return [
       `포트폴리오 전체 분석 현황`,
       ``,
       value.summary || `고유 보유 종목 ${items.length}개를 점검했습니다.`,
-      `분석 준비 완료: ${value.ready_count || 0}/${value.holding_count || items.length}`,
-      `평균 완료율: ${toPercent(value.average_completion)}`,
+      `문서 세트 완료: ${documentedReady}/${value.holding_count || items.length}`,
+      `문서 커버리지: ${toPercent(documentCompletion)}`,
+      `검토 게이트 통과: ${reviewReady}/${value.holding_count || items.length}`,
+      `검토 충족률: ${toPercent(reviewCompletion)}`,
+      `체크리스트 검토 보강: ${value.needs_checklist_review_count || 0}개`,
       `기준 리포트 필요: ${value.needs_team_report_count || 0}개`,
+      `문서 보유와 투자 판단 검토는 다릅니다. 주문 지시가 아닌 리서치 점검 상태입니다.`,
       ``,
       `종목별 현황`,
       ...(lines.length ? lines : ["- 저장된 보유 종목이 없습니다."]),

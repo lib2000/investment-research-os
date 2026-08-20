@@ -20,9 +20,11 @@ from research_os.portfolio_analysis_coverage import (  # noqa: E402
     merge_portfolio_analysis_entries,
     missing_portfolio_analysis_labels,
     normalize_portfolio_analysis_ticker,
+    portfolio_analysis_checklist_status,
     portfolio_analysis_entries_for_ticker,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
+    portfolio_analysis_review_state,
     portfolio_vault_entries,
 )
 
@@ -55,6 +57,10 @@ def module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
     return portfolio_analysis_module_state(entries)
 
 
+def review_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
+    return portfolio_analysis_review_state(entries)
+
+
 def next_action(missing: list[str]) -> str:
     return portfolio_analysis_next_action(missing)
 
@@ -74,9 +80,13 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
         if not ticker or ticker in {"CASH", "UNKNOWN"}:
             continue
         entries = manifest_entries_for_ticker(manifest, ticker)
-        state = module_state(entries)
-        completed = sum(1 for value in state.values() if value)
-        missing = missing_portfolio_analysis_labels(state)
+        documented_state = module_state(entries)
+        reviewed_state = review_state(entries)
+        checklist_status = portfolio_analysis_checklist_status(entries)
+        completed = sum(1 for value in documented_state.values() if value)
+        reviewed = sum(1 for value in reviewed_state.values() if value)
+        missing = missing_portfolio_analysis_labels(documented_state)
+        review_missing = missing_portfolio_analysis_labels(reviewed_state)
         latest_date = max((str(entry.get("date") or "") for entry in entries), default="") or None
         rows.append(
             {
@@ -84,23 +94,33 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
                 "company_name": holding.get("name") or ticker,
                 "portfolio_name": portfolio_name,
                 "market_value": holding.get("market_value"),
-                "module_state": state,
+                "module_state": documented_state,
+                "review_state": reviewed_state,
+                "checklist_status": checklist_status,
                 "completed_count": completed,
+                "reviewed_count": reviewed,
                 "required_count": len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
                 "completion_rate": round(completed / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES), 4),
+                "review_completion_rate": round(reviewed / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES), 4),
                 "missing_modules": missing,
+                "review_missing_modules": review_missing,
                 "latest_report_date": latest_date,
-                "next_action": next_action(missing),
+                "next_action": next_action(review_missing),
             }
         )
     rows.sort(key=lambda item: (item["completion_rate"], -(float(item.get("market_value") or 0))))
     average = sum(item["completion_rate"] for item in rows) / len(rows) if rows else 0.0
+    review_average = sum(item["review_completion_rate"] for item in rows) / len(rows) if rows else 0.0
     ready_count = sum(1 for item in rows if item["completion_rate"] >= 1.0)
+    review_ready_count = sum(1 for item in rows if item["review_completion_rate"] >= 1.0)
     return {
         "portfolio_name": portfolio_name,
         "holding_count": len(rows),
         "ready_count": ready_count,
+        "documented_ready_count": ready_count,
+        "review_ready_count": review_ready_count,
         "average_completion": round(average, 4),
+        "average_review_completion": round(review_average, 4),
         "items": rows,
     }
 
@@ -148,6 +168,8 @@ def main() -> int:
     parser.add_argument("--all-portfolios", action="store_true")
     parser.add_argument("--min-average-completion", type=float, default=0.0)
     parser.add_argument("--min-ready-count", type=int, default=0)
+    parser.add_argument("--min-average-review-completion", type=float, default=0.0)
+    parser.add_argument("--min-review-ready-count", type=int, default=0)
     parser.add_argument("--write-backlog", action="store_true")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--limit", type=int, default=10)
@@ -184,6 +206,8 @@ def main() -> int:
     result["thresholds"] = {
         "min_average_completion": args.min_average_completion,
         "min_ready_count": args.min_ready_count,
+        "min_average_review_completion": args.min_average_review_completion,
+        "min_review_ready_count": args.min_review_ready_count,
     }
 
     if args.write_backlog:
@@ -192,8 +216,15 @@ def main() -> int:
         result["backlog_path"] = str(out.relative_to(root))
 
     average = float(result["average_completion"])
+    review_average = float(result["average_review_completion"])
     ready = int(result["ready_count"])
-    ok = average >= args.min_average_completion and ready >= args.min_ready_count
+    review_ready = int(result["review_ready_count"])
+    ok = (
+        average >= args.min_average_completion
+        and ready >= args.min_ready_count
+        and review_average >= args.min_average_review_completion
+        and review_ready >= args.min_review_ready_count
+    )
     result["status"] = "ok" if ok else "warning"
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -202,11 +233,23 @@ def main() -> int:
     print(f"프로젝트 루트: {root}")
     print(
         f"포트폴리오: {result['portfolio_name']} | 보유 {result['holding_count']}개 "
-        f"| 준비 완료 {ready}개 | 평균 완료율 {average:.1%}"
+        f"| 문서 완료 {ready}개 | 문서 커버리지 {average:.1%} "
+        f"| 검토 게이트 통과 {review_ready}개 | 검토 충족률 {review_average:.1%}"
     )
     for item in result["items"][: max(0, args.limit)]:
-        missing = ", ".join(item["missing_modules"]) if item["missing_modules"] else "누락 없음"
-        print(f"- {item['company_name']} ({item['ticker']}): {item['completion_rate']:.0%} | 부족: {missing} | 다음: {item['next_action']}")
+        missing = ", ".join(item["missing_modules"]) if item["missing_modules"] else "문서 누락 없음"
+        review_missing = ", ".join(item["review_missing_modules"]) if item["review_missing_modules"] else "검토 게이트 통과"
+        checklist = item["checklist_status"]
+        checklist_text = (
+            f"체크 {checklist['completion_rate']:.0%}"
+            if checklist.get("completion_rate") is not None
+            else "체크 미작성"
+        )
+        print(
+            f"- {item['company_name']} ({item['ticker']}): 문서 {item['completion_rate']:.0%} "
+            f"| 검토 {item['review_completion_rate']:.0%} | {checklist_text} "
+            f"| 문서 부족: {missing} | 검토 보강: {review_missing} | 다음: {item['next_action']}"
+        )
     if args.write_backlog:
         print(f"보강 큐 저장: {result['backlog_path']}")
 

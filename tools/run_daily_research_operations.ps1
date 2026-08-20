@@ -15,6 +15,7 @@
   [switch]$SkipPortfolioReportAlert,
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
+  [switch]$SkipPortfolioAnalysisCoverage,
   [switch]$SkipOpenClawSync,
   [switch]$RequireCompletionAudit,
   [switch]$SkipVerification
@@ -181,6 +182,21 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
         return
       }
     }
+  }
+}
+
+if (-not $SkipPortfolioAnalysisCoverage.IsPresent) {
+  Invoke-DailyResearchStep "포트폴리오 분석 문서/검토 게이트 backlog 갱신" {
+    # This is local-only bookkeeping. It never creates a report, calls an LLM,
+    # sends a notification, or submits an order.
+    # Keep scheduled-task logs compact; the complete per-holding backlog is
+    # persisted locally in research_vault/_system/portfolio_analysis_backlog.json.
+    python tools\check_portfolio_analysis_coverage.py `
+      --all-portfolios `
+      --min-average-completion 0.95 `
+      --write-backlog `
+      --strict `
+      --limit 0
   }
 }
 
