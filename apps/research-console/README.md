@@ -30,7 +30,7 @@
 ## 검증
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp\apps\research-console
+cd D:\workspace\InvestmentJournalApp\apps\research-console
 npm run check
 npm run test:portfolio
 npm run test:portfolio-api
@@ -44,7 +44,7 @@ npm run verify
 의존성이 설치되어 있으면 아래 명령으로 새 React 콘솔을 확인합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp\apps\research-console
+cd D:\workspace\InvestmentJournalApp\apps\research-console
 npm run dev
 ```
 

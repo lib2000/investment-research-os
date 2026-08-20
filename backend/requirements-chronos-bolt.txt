@@ -1,0 +1,2 @@
+# Optional, research-only benchmark environment. Keep out of the production image.
+chronos-forecasting==2.3.1

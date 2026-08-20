@@ -1,7 +1,8 @@
 ﻿param(
   [string]$ProjectRoot = "",
   [string]$BaseUrl = "http://127.0.0.1:8001",
-  [string]$DevUserToken = "dev-local-token",
+  [string]$DevUserToken = "",
+  [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [int]$PortfolioRefreshTimeoutSeconds = 120,
   [int]$RecommendationRunTimeoutSeconds = 600,
   [int]$ResearchAutomationTimeoutSeconds = 300,
@@ -15,6 +16,7 @@
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
   [switch]$SkipOpenClawSync,
+  [switch]$RequireCompletionAudit,
   [switch]$SkipVerification
 )
 
@@ -25,6 +27,14 @@ $env:PYTHONIOENCODING = "utf-8"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 Set-Location -LiteralPath $ProjectRootPath
+. (Join-Path $ProjectRootPath "tools\investment_research_credential.ps1")
+
+if ([string]::IsNullOrWhiteSpace($DevUserToken)) {
+  $DevUserToken = Get-InvestmentResearchCredentialSecret -Target $CredentialTarget
+}
+if ([string]::IsNullOrWhiteSpace($DevUserToken)) {
+  throw "Windows Credential Manager에 투자 리서치 API 토큰이 없습니다: $CredentialTarget"
+}
 
 function Invoke-DailyResearchStep {
   param(
@@ -178,7 +188,11 @@ if (-not $SkipOpenClawSync.IsPresent) {
   Invoke-DailyResearchStep "OpenClaw 투자리서치 브리지 동기화" {
     # Keep the decision-support bridge fresh even while normal development changes are uncommitted.
     # The bridge itself marks completion audit as deferred in that state.
-    & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1")
+    if ($RequireCompletionAudit.IsPresent) {
+      & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1") -RequireCompletionAudit
+    } else {
+      & (Join-Path $PSScriptRoot "sync_openclaw_investment_context.ps1")
+    }
   }
 }
 

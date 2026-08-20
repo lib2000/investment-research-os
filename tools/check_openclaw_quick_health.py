@@ -267,9 +267,29 @@ def check_answer_capture_cycle(openclaw_dir: Path) -> dict[str, Any]:
 def check_answer_capture_task(project_root: Path) -> dict[str, Any]:
     module = load_tool("check_openclaw_answer_capture_task_status", CHECK_MODULES["answer_capture_task"])
     state_file = project_root / "research_vault" / "_system" / "openclaw_answer_capture_cycle_state.json"
+    task = module.read_scheduled_task(module.DEFAULT_TASK_NAME)
+    if not task.get("found"):
+        return {
+            "label": "answer_capture_task",
+            "status": "disabled",
+            "errors": [],
+            "warnings": [
+                "scheduled answer capture task is intentionally disabled; on-demand capture checks remain available"
+            ],
+            "summary": {
+                "task_name": module.DEFAULT_TASK_NAME,
+                "next_run": None,
+                "last_run": None,
+                "last_result": None,
+                "repetition_interval": None,
+                "state_file_exists": state_file.exists(),
+                "state_file_age_hours": None,
+                "warnings": ["task removed by automation cleanup"],
+            },
+        }
     try:
         result = module.evaluate_task_status(
-            module.read_scheduled_task(module.DEFAULT_TASK_NAME),
+            task,
             state_file=state_file,
             max_state_age_hours=24.0,
             require_state_fresh=False,
@@ -374,7 +394,7 @@ def build_result(
         except Exception as exc:
             result = {"label": "unknown", "status": "failure", "errors": [str(exc)], "summary": {}}
         checks.append(result)
-        if result.get("status") != "ok":
+        if result.get("status") not in ("ok", "disabled"):
             label = result.get("label") or "unknown"
             for error in result.get("errors") or [f"{label} failed without detail"]:
                 errors.append(f"{label}: {error}")

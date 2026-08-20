@@ -7,7 +7,7 @@
 ## 실행
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_backend.ps1
 .\tools\start_mobile_web.ps1
 ```
@@ -17,14 +17,14 @@ cd C:\Users\lib20\InvestmentJournalApp
 빈 화면이 보이거나 8085 포트가 이미 사용 중이면 Metro 잔류 프로세스와 캐시를 같이 정리해서 실행합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_mobile_web.ps1 -StopExistingPortProcess -ClearCache
 ```
 
 서버와 웹 미리보기가 떠 있는지 빠르게 확인합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\smoke_mobile_web.ps1
 ```
 
@@ -64,7 +64,7 @@ CSV 템플릿 API만 404인 경우에는 오래된 백엔드가 8010 포트를 �
 분석 차트용 샘플 데이터 집계도 확인할 수 있습니다. 기본 실행은 임시 CSV 샘플을 가져온 뒤 바로 삭제합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\smoke_mobile_analytics_sample.ps1
 ```
 

@@ -4,7 +4,8 @@ Thank you for considering a contribution to Investment Research OS. The project 
 
 ## Development Rules
 
-- Work from `C:\Users\lib20\InvestmentJournalApp` on the maintainer machine. Do not use OneDrive as the project root.
+- Work from `D:\workspace\InvestmentJournalApp` on the maintainer machine. Do not use OneDrive as the project root.
+- Treat an unavailable `D:` drive as a blocking environment error; do not fall back to a stale C-drive checkout.
 - Do not commit `.env`, `research_vault`, local databases, token files, downloaded private reports, or screenshots containing account data.
 - Keep user-facing status and error messages in Korean where they are part of the app UI.
 - Prefer small, validated changes over broad rewrites.

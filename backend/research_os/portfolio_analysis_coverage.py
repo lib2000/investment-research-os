@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 REQUIRED_PORTFOLIO_ANALYSIS_MODULES = [
@@ -12,6 +14,99 @@ REQUIRED_PORTFOLIO_ANALYSIS_MODULES = [
     ("checklist", "체크리스트", {"research-checklist", "checklist"}),
     ("recent_capture", "최근 정보 입력", {"research-capture", "public-ir-sec", "dart-filing-watch", "chart-analysis"}),
 ]
+
+
+def normalize_portfolio_analysis_ticker(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[str, Any]]:
+    """Read ticker-folder JSON evidence and mark only path-consistent files as local evidence."""
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for ticker_value in tickers:
+        ticker = normalize_portfolio_analysis_ticker(ticker_value)
+        if not ticker or ticker in {"CASH", "UNKNOWN"}:
+            continue
+        folder = vault_dir / ticker
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            key = (ticker, path.name)
+            if key in seen:
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            item = payload if isinstance(payload, dict) else {}
+            payload_ticker = normalize_portfolio_analysis_ticker(
+                item.get("ticker")
+                or (item.get("captured_item") or {}).get("ticker")
+                if isinstance(item.get("captured_item"), dict)
+                else item.get("ticker")
+            )
+            if payload_ticker and payload_ticker != ticker:
+                continue
+            seen.add(key)
+            entries.append(
+                {
+                    "ticker": ticker,
+                    "file_name": path.name,
+                    "date": item.get("date") or item.get("created_at") or item.get("saved_at"),
+                    "type": item.get("type"),
+                    "category": item.get("category"),
+                    "analysis_type": item.get("analysis_type"),
+                    "document_type": item.get("document_type"),
+                    "source_type": item.get("source_type"),
+                    "scope": item.get("scope"),
+                    "title": item.get("title") or item.get("summary"),
+                    "summary": item.get("summary"),
+                    "tags": item.get("tags") or [],
+                    "local_vault_verified": True,
+                }
+            )
+    return entries
+
+
+def merge_portfolio_analysis_entries(
+    manifest: list[dict[str, Any]],
+    extra: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in [*manifest, *extra]:
+        if not isinstance(entry, dict):
+            continue
+        ticker = normalize_portfolio_analysis_ticker(entry.get("ticker"))
+        file_name = str(entry.get("file_name") or entry.get("storage_path") or entry.get("path") or "")
+        key = (ticker, file_name)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
+    return merged
+
+
+def portfolio_analysis_entries_for_ticker(
+    entries: list[dict[str, Any]],
+    ticker: str,
+    *,
+    manifest_verifier=None,
+) -> list[dict[str, Any]]:
+    normalized = normalize_portfolio_analysis_ticker(ticker)
+    matches = [
+        entry
+        for entry in entries
+        if normalize_portfolio_analysis_ticker(entry.get("ticker")) == normalized
+    ]
+    if manifest_verifier is None:
+        return matches
+    return [
+        entry
+        for entry in matches
+        if entry.get("local_vault_verified") is True or manifest_verifier(entry, normalized)
+    ]
 
 
 def portfolio_analysis_entry_markers(entry: dict[str, Any]) -> set[str]:

@@ -69,27 +69,27 @@ InvestmentJournalApp/
 
 장기 구조와 이관 기준은 [docs/long-term-architecture.md](docs/long-term-architecture.md)를 기준으로 합니다.
 
-폴더 정책은 [docs/folder-policy.md](docs/folder-policy.md)를 기준으로 한다. 활성 프로젝트 루트는 `C:\Users\lib20\InvestmentJournalApp`이며, OneDrive 경로에서는 서버 실행, 코드 수정, 생성 파일 저장을 하지 않는다.
+폴더 정책은 [docs/folder-policy.md](docs/folder-policy.md)를 기준으로 한다. 활성 프로젝트 루트는 `D:\workspace\InvestmentJournalApp`이며, OneDrive 경로에서는 서버 실행, 코드 수정, 생성 파일 저장을 하지 않는다.
 
 최근 폴더 정리 결과는 [docs/folder_cleanup_2026-05-17.md](docs/folder_cleanup_2026-05-17.md)에 기록했다.
 
 작업 전 루트 확인:
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 
 `현재 작업 디렉토리가 없습니다` 또는 OneDrive 경로가 보이면 아래 명령으로 루트를 다시 맞춘다. 현재 PowerShell 창의 위치까지 바꾸려면 앞의 점(`.`)을 포함해 dot-source로 실행한다.
 
 ```powershell
-. C:\Users\lib20\InvestmentJournalApp\scripts\enter-investment-research-os.ps1
+. D:\workspace\InvestmentJournalApp\scripts\enter-investment-research-os.ps1
 ```
 
 백엔드 연결 거부가 보이면 아래처럼 8001 백엔드를 재시작 검증한 뒤 콘솔을 바로 열 수 있다.
 
 ```powershell
-. C:\Users\lib20\InvestmentJournalApp\scripts\enter-investment-research-os.ps1 -RestartBackend -OpenConsole
+. D:\workspace\InvestmentJournalApp\scripts\enter-investment-research-os.ps1 -RestartBackend -OpenConsole
 ```
 
 매일 추천종목은 콘솔 첫 화면의 **오늘 추천 1~3위** 또는 저장 데이터 탭의 **오늘 추천 1~3위 / 추천 추적 상태**에서 확인한다. 저장 원본은 `research_vault\_system\daily_recommendations.json`이며, 사용자 첨부 투자 방향 프로필은 후보 점수, 리스크 메모, 모니터링 트리거에 함께 반영된다.
@@ -113,14 +113,14 @@ cd C:\Users\lib20\InvestmentJournalApp
 ## Research OS 백엔드 실행
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\scripts\start-research-backend.ps1
 ```
 
 `scripts\start-research-backend.ps1`는 프로젝트의 `.venv-win\Scripts\python.exe`를 먼저 사용합니다. Windows에서 처음 실행하거나 콘솔이 열리지 않으면 아래처럼 Windows 전용 가상환경을 만든 뒤 다시 시작합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 C:\Users\lib20\AppData\Local\Programs\Python\Python312\python.exe -m venv .venv-win
 .\.venv-win\Scripts\pip.exe install -r backend\requirements.txt
 .\scripts\start-research-backend.ps1 -Port 8001
@@ -129,7 +129,7 @@ C:\Users\lib20\AppData\Local\Programs\Python\Python312\python.exe -m venv .venv-
 이미 8001 포트가 꼬였거나 `http://127.0.0.1:8001/console/index.html`이 열리지 않으면 재시작 검증 스크립트를 사용합니다. 기존 8001 프로세스를 정리하고 백그라운드로 다시 띄운 뒤 health와 콘솔 HTML 응답을 확인합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\scripts\restart-research-backend.ps1 -Port 8001
 ```
 
@@ -183,11 +183,11 @@ Classic Research Console 회귀 검증에 안전장치 점검까지 포함하려
 Expo/React Native 이관용 모바일 앱은 `apps\mobile`에 있다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_mobile_web.ps1
 ```
 
-위 스크립트는 프로젝트 루트가 `C:\Users\lib20\InvestmentJournalApp`인지 확인한 뒤, Expo 웹 미리보기를 `http://localhost:8085`로 실행한다. 백엔드는 먼저 `.\tools\start_backend.ps1`로 8010 포트에서 실행한다. `start_backend.ps1`은 기본적으로 reload 없이 실행해 중복 리스너를 줄이고, 코드 자동 재시작이 필요할 때만 `-Reload`를 붙인다.
+위 스크립트는 프로젝트 루트가 `D:\workspace\InvestmentJournalApp`인지 확인한 뒤, Expo 웹 미리보기를 `http://localhost:8085`로 실행한다. 백엔드는 먼저 `.\tools\start_backend.ps1`로 8010 포트에서 실행한다. `start_backend.ps1`은 기본적으로 reload 없이 실행해 중복 리스너를 줄이고, 코드 자동 재시작이 필요할 때만 `-Reload`를 붙인다.
 
 8085 포트에 오래된 Metro 프로세스가 남아 있거나 빈 화면이 보이면 아래처럼 실행한다.
 

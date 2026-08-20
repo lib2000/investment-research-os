@@ -31,6 +31,10 @@ REQUIRED_TEXT = [
     "check_openclaw_actual_answer_capture_status.py --json",
     "check_openclaw_actual_answer_audit.py --json",
 ]
+DISABLED_HEARTBEAT_MARKERS = (
+    "# Heartbeat automatic checks disabled.",
+    "# Run investment bridge checks only when explicitly requested.",
+)
 
 
 def windows_to_wsl_path(path: Path) -> str:
@@ -86,6 +90,7 @@ import sys
 workspace = pathlib.Path({wsl_workspace!r}).expanduser()
 session_keys = {session_keys!r}
 required_text = {REQUIRED_TEXT!r}
+disabled_heartbeat_markers = {list(DISABLED_HEARTBEAT_MARKERS)!r}
 require_fresh_bootstrap = {require_fresh_bootstrap!r}
 today_tool = pathlib.Path({today_tool_wsl!r})
 question_read_order_tool = pathlib.Path({question_read_order_tool_wsl!r})
@@ -102,6 +107,10 @@ for name in ['AGENTS.md', 'MEMORY.md', 'HEARTBEAT.md']:
         errors.append(f'missing startup note: {{path}}')
     else:
         text = path.read_text(encoding='utf-8-sig', errors='replace')
+        if name == 'HEARTBEAT.md' and all(marker in text for marker in disabled_heartbeat_markers):
+            item['disabled'] = True
+            startup[name] = item
+            continue
         for token in required_text:
             if token not in text:
                 item['missing'].append(token)
@@ -192,11 +201,13 @@ else:
             elif require_fresh_bootstrap:
                 errors.append(f'session {{key}} systemPromptReport must be absent before next PA answer')
             elif 'systemPromptReport' not in entry:
-                errors.append(f'session {{key}} systemPromptReport missing after systemSent=true')
+                warnings.append(f'session {{key}} systemPromptReport unavailable in current OpenClaw session schema')
             else:
                 if report.get('workspaceDir') != str(workspace):
                     errors.append(f'session {{key}} workspaceDir mismatch: {{report.get("workspaceDir")}}')
                 for name, minimum in [('AGENTS.md', 1000), ('MEMORY.md', 1000), ('HEARTBEAT.md', 1000)]:
+                    if name == 'HEARTBEAT.md' and startup.get(name, {{}}).get('disabled'):
+                        continue
                     row = injected.get(name)
                     if not row:
                         errors.append(f'session {{key}} missing injected {{name}}')

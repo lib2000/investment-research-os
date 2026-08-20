@@ -11,6 +11,7 @@ from typing import Any
 
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
 CASH_TICKERS = {"CASH", "예수금"}
+AUTHORITATIVE_ACCOUNT_SYNC_SOURCES = {"toss_holdings", "kiwoom_holdings", "kis_holdings"}
 
 
 def project_root(start: Path) -> Path:
@@ -66,6 +67,14 @@ def age_hours(value: Any) -> float | None:
 
 def holding_ticker(item: dict[str, Any]) -> str:
     return str(item.get("ticker") or "").strip().upper()
+
+
+def overseas_quantity_is_protected(item: dict[str, Any]) -> bool:
+    sync_status = str(item.get("sync_status") or item.get("sync_state") or "").strip().lower()
+    sync_source = str(item.get("sync_source") or "").strip().lower()
+    return sync_status == "manual_or_overseas_protected" or (
+        sync_status == "account_synced" and sync_source in AUTHORITATIVE_ACCOUNT_SYNC_SOURCES
+    )
 
 
 def portfolio_name(key: str, portfolio: dict[str, Any]) -> str:
@@ -139,7 +148,7 @@ def validate_portfolio(
         sync_status = str(item.get("sync_status") or item.get("sync_state") or "").strip()
         if currency and currency != "KRW":
             overseas_count += 1
-            if sync_status == "manual_or_overseas_protected":
+            if overseas_quantity_is_protected(item):
                 protected_count += 1
             elif require_overseas_protection:
                 errors.append(f"{label}: {ticker_or_name} 해외/수동 수량 보호 상태 누락: {sync_status or '없음'}")

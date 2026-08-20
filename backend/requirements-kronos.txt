@@ -1,0 +1,10 @@
+# Optional, isolated numerical environment for Kronos experiments.
+# Do not merge these heavy dependencies into the Research OS runtime.
+numpy
+pandas==2.2.2
+torch>=2.0
+einops==0.8.1
+huggingface_hub==0.33.1
+matplotlib==3.9.3
+tqdm
+safetensors

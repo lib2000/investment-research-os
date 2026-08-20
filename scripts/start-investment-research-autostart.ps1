@@ -17,6 +17,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $StatePath) | Out-
 $startedAt = (Get-Date).ToString("o")
 $token = $null
 $credentialLoaded = $false
+$wslKeepaliveReady = $false
 $openClawGatewayReady = $false
 $status = "failed"
 $exitCode = 1
@@ -29,12 +30,34 @@ try {
   }
   $credentialLoaded = $true
   $env:DEV_USER_TOKEN = $token
+  # In this Windows/WSL setup the distro is stopped after the final wsl.exe
+  # client exits, even with an enabled user service. Keep one hidden client
+  # attached so OpenClaw remains reachable after this scheduled task ends.
+  $keepaliveName = "investment-research-wsl-keepalive"
+  $existingKeepalive = @(
+    Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" -ErrorAction SilentlyContinue |
+      Where-Object { [string]$_.CommandLine -match [regex]::Escape($keepaliveName) }
+  )
+  if ($existingKeepalive.Count -eq 0) {
+    $keepaliveArguments = "-d `"$OpenClawWslDistro`" --user lib2000 --exec bash -lc `"exec -a $keepaliveName /usr/bin/sleep infinity`""
+    $keepaliveProcess = Start-Process -FilePath "wsl.exe" -ArgumentList $keepaliveArguments -WindowStyle Hidden -PassThru
+    Start-Sleep -Seconds 2
+    $wslKeepaliveReady = -not $keepaliveProcess.HasExited
+  } else {
+    $wslKeepaliveReady = $true
+  }
+  if (-not $wslKeepaliveReady) {
+    throw "WSL keepalive 프로세스를 시작하지 못했습니다."
+  }
   $userBusReady = $false
   for ($attempt = 1; $attempt -le 8; $attempt++) {
     # Use WSL's direct exec path.  A login shell can wait on a systemd user
     # session during cold boot and make the logon task time out even though
     # the user bus is already usable.
-    $userBusState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active default.target 2>&1
+    # WSL can emit a transient systemd-session warning on stderr even when the
+    # command succeeds. Do not let Windows PowerShell turn that warning into a
+    # terminating NativeCommandError; the exit code and stdout are authoritative.
+    $userBusState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active default.target 2>$null
     if ($LASTEXITCODE -eq 0 -and "$userBusState" -match "(?m)^active\s*$") {
       $userBusReady = $true
       break
@@ -44,14 +67,24 @@ try {
   if (-not $userBusReady) {
     throw "WSL systemd 사용자 세션이 준비되지 않았습니다. 로그인 직후 사용자 버스가 늦게 올라왔을 수 있습니다."
   }
-  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user start openclaw-gateway.service 2>&1
+  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user start openclaw-gateway.service 2>$null
   if ($LASTEXITCODE -ne 0) {
     throw "WSL OpenClaw 게이트웨이 사용자 서비스를 시작하지 못했습니다."
   }
-  $openClawState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active openclaw-gateway.service 2>$null
-  $openClawGatewayReady = $LASTEXITCODE -eq 0 -and "$openClawState" -match "(?m)^active\s*$"
+  $listenerProbe = "import socket; s=socket.socket(); s.settimeout(0.5); r=s.connect_ex(('127.0.0.1',18789)); s.close(); print(1 if r == 0 else 0)"
+  for ($attempt = 1; $attempt -le 18; $attempt++) {
+    $openClawState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active openclaw-gateway.service 2>$null
+    $serviceActive = $LASTEXITCODE -eq 0 -and "$openClawState" -match "(?m)^active\s*$"
+    $listenerState = & wsl.exe -d $OpenClawWslDistro --user root --exec python3 -c $listenerProbe 2>$null
+    $listenerReady = $LASTEXITCODE -eq 0 -and "$listenerState" -match "(?m)^1\s*$"
+    if ($serviceActive -and $listenerReady) {
+      $openClawGatewayReady = $true
+      break
+    }
+    Start-Sleep -Seconds 5
+  }
   if (-not $openClawGatewayReady) {
-    throw "WSL OpenClaw 게이트웨이 사용자 서비스가 active 상태가 아닙니다."
+    throw "WSL OpenClaw 게이트웨이가 90초 안에 실제 18789 리스너를 열지 못했습니다."
   }
   $output = & $Launcher start 2>&1
   $launcherSucceeded = $?
@@ -78,6 +111,7 @@ try {
     exit_code = $exitCode
     credential_target = $CredentialTarget
     credential_configured = $credentialLoaded
+    wsl_keepalive_ready = $wslKeepaliveReady
     openclaw_gateway_ready = $openClawGatewayReady
     message = $message
     project_root = $ProjectRootPath

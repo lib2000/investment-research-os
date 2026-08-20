@@ -31,7 +31,7 @@ InvestmentJournalApp/
 
 ## 운영 원칙
 
-- 활성 프로젝트 루트는 `C:\Users\lib20\InvestmentJournalApp`입니다.
+- 활성 프로젝트 루트는 `D:\workspace\InvestmentJournalApp`입니다.
 - OneDrive 경로에서는 서버 실행, 파일 저장, 코드 수정을 하지 않습니다.
 - 프론트엔드는 화면 상태와 사용자 입력만 담당합니다.
 - 백엔드는 데이터 검증, 외부 API 호출, 계산, 파일 저장, 분석 실행을 담당합니다.

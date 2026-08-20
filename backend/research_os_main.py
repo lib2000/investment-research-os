@@ -23,6 +23,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
+from research_os.chart_copilot_evaluation import (
+    ChartCopilotEvaluationRequest,
+    build_chart_copilot_evaluation,
+    build_chart_copilot_pilot_status,
+)
 from research_os.code_knowledge import build_code_knowledge_graph_payload
 
 TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
@@ -255,6 +260,8 @@ from research_os.company_ir_sources import (
 )
 from research_os.classification import classification_system_tags, merge_research_tags
 from research_os.models import (
+    BacktestResultSaveRequest,
+    BacktestResultStoreResponse,
     Broker,
     BrokerStatus,
     CapturedResearchItem,
@@ -350,9 +357,12 @@ from research_os.portfolio_performance import (
 )
 from research_os.portfolio_analysis_coverage import (
     REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
+    merge_portfolio_analysis_entries,
     missing_portfolio_analysis_labels,
+    portfolio_analysis_entries_for_ticker,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
+    portfolio_vault_entries,
 )
 from research_os.portfolio_store import (
     infer_holding_fx_rate,
@@ -430,6 +440,7 @@ from research_os.storage_quality import (
     storage_quality_entry_needs_ocr,
 )
 from research_os.system_health import (
+    build_investment_workbench_status,
     build_data_provider_status_payload,
     build_safety_config_payload,
     build_system_health_payload,
@@ -11928,6 +11939,33 @@ def read_system_health(settings: Settings = Depends(get_settings)) -> dict:
     return build_system_health_payload(settings, ocr_runtime_status())
 
 
+def workbench_health_history_path(settings: Settings) -> Path:
+    return resolve_vault_dir(settings.research_vault_dir) / "_system" / "workbench_health_history.json"
+
+
+@app.get("/api/v1/system/workbench/status")
+def read_investment_workbench_status(settings: Settings = Depends(get_settings)) -> dict:
+    current = build_investment_workbench_status()
+    failures = [
+        {"id": item.get("id"), "status": item.get("status")}
+        for item in current.get("checks", [])
+        if item.get("status") != "ready"
+    ]
+    event = {
+        "checked_at": current.get("checked_at"),
+        "status": current.get("status"),
+        "ready_count": current.get("ready_count"),
+        "check_count": current.get("check_count"),
+        "failures": failures,
+    }
+    path = workbench_health_history_path(settings)
+    payload = read_json_store(path, {"events": []})
+    events = [item for item in payload.get("events", []) if isinstance(item, dict)]
+    events.insert(0, event)
+    write_json_store(path, {"events": events[:100]})
+    return {**current, "history": events[:20]}
+
+
 TRADING_TOOL_SERVICES = (
     ("strategy_api", 8000, "전략 API"),
     ("strategy_builder", 3100, "전략 빌더"),
@@ -11935,6 +11973,7 @@ TRADING_TOOL_SERVICES = (
     ("backtester", 3200, "백테스터"),
 )
 BACKTEST_RUNS_LOCK = threading.Lock()
+CHART_COPILOT_EVALUATIONS_LOCK = threading.Lock()
 
 
 def _backtest_runs_path(settings: Settings) -> Path:
@@ -11952,14 +11991,28 @@ def _finite_number(value: Any, *, name: str) -> float:
 
 
 def _read_backtest_runs(settings: Settings) -> list[dict[str, Any]]:
-    path = _backtest_runs_path(settings)
-    if not path.exists():
-        return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    return payload if isinstance(payload, list) else []
+    primary_path = _backtest_runs_path(settings)
+    fallback_path = resolve_vault_dir(settings.research_vault_dir) / "_system" / "backtest_results.json"
+    for path in (primary_path, fallback_path):
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict) and isinstance(payload.get("results"), list):
+            # Compatibility with the confirmed-result store used by the console.
+            return [
+                {
+                    **item,
+                    "captured_at": item.get("captured_at") or item.get("saved_at") or item.get("received_at"),
+                }
+                for item in payload["results"]
+                if isinstance(item, dict)
+            ]
+    return []
 
 
 def _local_port_is_listening(port: int) -> bool:
@@ -12127,6 +12180,158 @@ def save_backtest_run(payload: dict = Body(...), settings: Settings = Depends(ge
         temp_path.write_text(json.dumps(runs[:200], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         temp_path.replace(path)
     return {"status": "success", "message": "백테스트 결과를 Research OS에 저장했습니다.", "run": record}
+
+
+def backtest_result_store_path(settings: Settings) -> Path:
+    return resolve_vault_dir(settings.research_vault_dir) / "_system" / "backtest_results.json"
+
+
+def chart_copilot_evaluation_store_path(settings: Settings) -> Path:
+    return resolve_vault_dir(settings.research_vault_dir) / "_system" / "chart_copilot_evaluations.json"
+
+
+def _read_chart_copilot_evaluations(settings: Settings) -> list[dict[str, Any]]:
+    payload = read_json_store(chart_copilot_evaluation_store_path(settings), {"evaluations": []})
+    evaluations = [item for item in payload.get("evaluations", []) if isinstance(item, dict)]
+    evaluations.sort(key=lambda item: str(item.get("captured_at") or ""), reverse=True)
+    return evaluations
+
+
+def _chart_copilot_target_universe(settings: Settings) -> list[dict[str, str]]:
+    return [
+        {"ticker": ticker, "name": name}
+        for ticker, name in list(investment_calendar_universe_tickers(settings).items())[:20]
+    ]
+
+
+def save_confirmed_backtest_result(
+    payload: BacktestResultSaveRequest,
+    *,
+    settings: Settings,
+) -> BacktestResultStoreResponse:
+    """Persist only a user-confirmed, secret-free backtest summary."""
+
+    result = payload.model_dump()
+    result["run_id"] = str(result.get("run_id") or "").strip()[:120]
+    if not result["run_id"]:
+        raise HTTPException(status_code=422, detail="백테스트 run_id가 필요합니다.")
+    result["symbols"] = list(dict.fromkeys(str(item).strip().upper() for item in result.get("symbols") or [] if str(item).strip()))[:20]
+    result["saved_at"] = current_storage_timestamp()
+    result["evidence_strength"] = "low"
+    existing = read_json_store(backtest_result_store_path(settings), {"results": []})
+    results = [
+        item
+        for item in existing.get("results", [])
+        if isinstance(item, dict) and item.get("run_id") != result["run_id"]
+    ]
+    results.insert(0, result)
+    write_json_store(backtest_result_store_path(settings), {"results": results[:200]})
+    return BacktestResultStoreResponse(saved_count=1, results=[result])
+
+
+def list_backtest_results(
+    ticker: str | None = None,
+    limit: int = 20,
+    *,
+    settings: Settings,
+) -> BacktestResultStoreResponse:
+    payload = read_json_store(backtest_result_store_path(settings), {"results": []})
+    normalized = str(ticker or "").strip().upper()
+    results = [item for item in payload.get("results", []) if isinstance(item, dict)]
+    if normalized:
+        results = [item for item in results if normalized in {str(symbol).upper() for symbol in item.get("symbols", [])}]
+    return BacktestResultStoreResponse(saved_count=len(results[:limit]), results=results[:limit])
+
+
+@app.post(
+    "/api/v1/backtest-results",
+    dependencies=[Depends(verify_user_token)],
+    response_model=BacktestResultStoreResponse,
+)
+def save_confirmed_backtest_result_route(
+    payload: BacktestResultSaveRequest,
+    settings: Settings = Depends(get_settings),
+) -> BacktestResultStoreResponse:
+    return save_confirmed_backtest_result(payload, settings=settings)
+
+
+@app.get(
+    "/api/v1/backtest-results",
+    dependencies=[Depends(verify_user_token)],
+    response_model=BacktestResultStoreResponse,
+)
+def list_backtest_results_route(
+    ticker: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    settings: Settings = Depends(get_settings),
+) -> BacktestResultStoreResponse:
+    return list_backtest_results(ticker, limit, settings=settings)
+
+
+@app.get(
+    "/api/v1/chart-copilot-pilot",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_chart_copilot_pilot(
+    limit: int = Query(default=20, ge=1, le=100),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    evaluations = _read_chart_copilot_evaluations(settings)
+    pilot = build_chart_copilot_pilot_status(
+        evaluations,
+        target_tickers=_chart_copilot_target_universe(settings),
+    )
+    return {
+        "status": "success",
+        "pilot": pilot,
+        "count": len(evaluations[:limit]),
+        "evaluations": evaluations[:limit],
+    }
+
+
+@app.post(
+    "/api/v1/chart-copilot-pilot/evaluations",
+    dependencies=[Depends(verify_user_token)],
+)
+def save_chart_copilot_evaluation(
+    payload: ChartCopilotEvaluationRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    evaluation = build_chart_copilot_evaluation(
+        payload,
+        backtest_runs=_read_backtest_runs(settings),
+    )
+    identity = (
+        evaluation.get("ticker"),
+        evaluation.get("analysis_as_of"),
+        evaluation.get("prompt_version"),
+    )
+    with CHART_COPILOT_EVALUATIONS_LOCK:
+        evaluations = [
+            item
+            for item in _read_chart_copilot_evaluations(settings)
+            if (
+                item.get("ticker"),
+                item.get("analysis_as_of"),
+                item.get("prompt_version"),
+            )
+            != identity
+        ]
+        evaluations.insert(0, evaluation)
+        write_json_store(
+            chart_copilot_evaluation_store_path(settings),
+            {"evaluations": evaluations[:1000]},
+        )
+    pilot = build_chart_copilot_pilot_status(
+        evaluations,
+        target_tickers=_chart_copilot_target_universe(settings),
+    )
+    return {
+        "status": "success",
+        "message": "Chart Copilot 결과를 주문과 분리된 비교 파일럿에 저장했습니다.",
+        "evaluation": evaluation,
+        "pilot": pilot,
+    }
 
 
 @app.get(
@@ -15509,22 +15714,26 @@ def check_portfolio_analysis_status(
             if record.get("market_value") is None and holding.market_value is not None:
                 record["market_value"] = holding.market_value
 
+    analysis_entries = merge_portfolio_analysis_entries(
+        manifest_entries,
+        portfolio_vault_entries(vault_dir, list(by_ticker)),
+    )
+
     items = []
     for ticker, record in sorted(by_ticker.items()):
         verification = verify_ticker_symbol(ticker, settings)
         official_symbol = verification.official_symbol
-        ticker_entries = [
-            entry
-            for entry in manifest_entries
-            if entry.get("ticker") == official_symbol
-            and is_verified_manifest_entry(entry, official_symbol)
-        ]
+        ticker_entries = portfolio_analysis_entries_for_ticker(
+            analysis_entries,
+            official_symbol,
+            manifest_verifier=is_verified_manifest_entry,
+        )
         sorted_entries = sorted(
             ticker_entries,
             key=lambda entry: (
-                entry.get("date", ""),
-                report_file_sequence(entry.get("file_name", "")),
-                entry.get("file_name", ""),
+                str(entry.get("date") or ""),
+                report_file_sequence(str(entry.get("file_name") or "")),
+                str(entry.get("file_name") or ""),
             ),
             reverse=True,
         )

@@ -38,6 +38,8 @@
   refreshTradingToolSymbolMaster,
   fetchBacktestRuns,
   saveBacktestRun,
+  fetchChartCopilotPilot,
+  saveChartCopilotEvaluation,
   fetchLatestDataSnapshot,
   verifyTickerSymbol,
   deleteTickerRegistryCacheEntry,
@@ -120,7 +122,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=3af343e4a8c8";
+} from "./api.js?v=1ab3619215e3";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -152,6 +154,13 @@ const elements = {
   integratedSymbolMasterRefresh: document.querySelector("#integratedSymbolMasterRefresh"),
   backtestRunHistory: document.querySelector("#backtestRunHistory"),
   backtestRunHistoryRefresh: document.querySelector("#backtestRunHistoryRefresh"),
+  chartCopilotPilotStatus: document.querySelector("#chartCopilotPilotStatus"),
+  chartCopilotPilotTargets: document.querySelector("#chartCopilotPilotTargets"),
+  chartCopilotEvaluationForm: document.querySelector("#chartCopilotEvaluationForm"),
+  chartCopilotEvaluationList: document.querySelector("#chartCopilotEvaluationList"),
+  chartCopilotPromptCopy: document.querySelector("#chartCopilotPromptCopy"),
+  chartCopilotPilotRefresh: document.querySelector("#chartCopilotPilotRefresh"),
+  chartCopilotOfficialLink: document.querySelector("#chartCopilotOfficialLink"),
   teamForm: document.querySelector("#teamForm"),
   tradeForm: document.querySelector("#tradeForm"),
   chartForm: document.querySelector("#chartForm"),
@@ -324,6 +333,7 @@ function updateIntegratedToolLinks() {
   const ticker = String(elements.dashboardForm?.elements?.ticker?.value || "").trim();
   const resolvedTicker = String(elements.backendStatus?.textContent || "").match(/(?:^|\s|·)(\d{6})(?:$|\s)/)?.[1] || "";
   const safeTicker = (resolvedTicker || ticker).slice(0, 40);
+  const pilotTicker = /^[A-Za-z0-9._-]{1,40}$/.test(safeTicker) ? safeTicker.toUpperCase() : "";
   const params = new URLSearchParams({ source: "research-os" });
   if (safeTicker) {
     params.set("ticker", safeTicker);
@@ -340,6 +350,10 @@ function updateIntegratedToolLinks() {
     elements.integratedToolsContext.textContent = safeTicker
       ? `${safeTicker} 분석 컨텍스트를 전달합니다. 계좌·수량·인증정보는 포함하지 않습니다.`
       : "대시보드에서 종목을 선택하면 두 도구에 분석 대상을 안전하게 전달합니다. 계좌·수량·인증정보는 전달하지 않습니다.";
+  }
+  const pilotTickerInput = elements.chartCopilotEvaluationForm?.elements?.ticker;
+  if (pilotTickerInput && pilotTicker && document.activeElement !== pilotTickerInput) {
+    pilotTickerInput.value = pilotTicker;
   }
 }
 
@@ -493,6 +507,202 @@ window.addEventListener("message", async (event) => {
   }
 });
 refreshBacktestRuns();
+
+let chartCopilotPilotPayload = null;
+
+function chartCopilotLabel(value, type) {
+  const labels = {
+    regime: { trending: "추세", rangebound: "횡보", unclear: "불명확" },
+    decision: { long: "상승 설정", short: "하락 설정", no_trade: "거래 없음", unclear: "불명확" },
+    verdict: { pending: "검토 대기", accepted: "연구 기록 채택", rejected: "기각" },
+  };
+  return labels[type]?.[value] || value || "-";
+}
+
+function renderChartCopilotPilot(payload) {
+  chartCopilotPilotPayload = payload;
+  const pilot = payload?.pilot || {};
+  if (elements.chartCopilotPilotStatus) {
+    const statusLabel = pilot.ready_for_review ? "검토 조건 충족" : pilot.status === "not_started" ? "수집 전" : "수집 중";
+    elements.chartCopilotPilotStatus.textContent = [
+      statusLabel,
+      `대상 ${formatNumber(pilot.available_target_count)}/${formatNumber(pilot.target_symbol_count)}개`,
+      `1D·4H ${formatNumber(pilot.captured_pair_count)}/${formatNumber(pilot.expected_pair_count)}건`,
+      `사람 검토 ${formatNumber(pilot.reviewed_pair_count)}건`,
+      `관찰 ${formatNumber(pilot.elapsed_days)}/${formatNumber(pilot.minimum_observation_days)}일`,
+      "연구 전용·주문 연결 없음",
+    ].join(" · ");
+  }
+  if (elements.chartCopilotPilotTargets) {
+    const targets = Array.isArray(pilot.targets) ? pilot.targets : [];
+    elements.chartCopilotPilotTargets.innerHTML = targets.length
+      ? targets.map((target) => `
+          <button class="chart-copilot-target ${target.complete ? "complete" : ""}" type="button" data-chart-copilot-ticker="${escapeHtml(target.ticker)}">
+            ${escapeHtml(target.name || target.ticker)} · ${(target.timeframes || []).map(escapeHtml).join("/") || "미수집"}
+          </button>`).join("")
+      : '<span class="chart-copilot-evaluation-empty">보유·관심 종목에서 파일럿 대상을 만들지 못했습니다.</span>';
+  }
+  if (elements.chartCopilotOfficialLink && pilot.official_copilot_url) {
+    elements.chartCopilotOfficialLink.href = pilot.official_copilot_url;
+  }
+  renderChartCopilotEvaluations(payload?.evaluations);
+}
+
+function renderChartCopilotEvaluations(evaluations) {
+  if (!elements.chartCopilotEvaluationList) return;
+  const rows = Array.isArray(evaluations) ? evaluations : [];
+  if (!rows.length) {
+    elements.chartCopilotEvaluationList.innerHTML = '<p class="chart-copilot-evaluation-empty">아직 저장된 비교 기록이 없습니다. 공식 Copilot 결과를 검증 프롬프트 형식에 맞춰 기록하세요.</p>';
+    return;
+  }
+  elements.chartCopilotEvaluationList.innerHTML = rows.map((item) => {
+    const issues = Array.isArray(item.issues) ? item.issues : [];
+    const baseline = item.baseline || {};
+    return `
+      <article class="chart-copilot-evaluation-card">
+        <header>
+          <strong>${escapeHtml(item.ticker || "-")} · ${(item.timeframes || []).map(escapeHtml).join("/")}</strong>
+          <span>${escapeHtml(formatDateTime(item.analysis_as_of))}</span>
+        </header>
+        <dl>
+          <div><dt>시장 국면</dt><dd>${escapeHtml(chartCopilotLabel(item.regime, "regime"))}</dd></div>
+          <div><dt>연구 판단</dt><dd>${escapeHtml(chartCopilotLabel(item.decision, "decision"))}</dd></div>
+          <div><dt>기록 품질</dt><dd>${formatNumber(item.documentation_quality_score)}/100</dd></div>
+          <div><dt>손익비</dt><dd>${item.risk_reward == null ? "-" : escapeHtml(String(item.risk_reward))}</dd></div>
+        </dl>
+        <p>백테스트: ${baseline.status === "linked" ? `${escapeHtml(baseline.strategy_name || "전략")} · ${formatNullable(baseline.total_return)}%` : "미연결"} · 사람 검토: ${escapeHtml(chartCopilotLabel(item.human_verdict, "verdict"))}</p>
+        <small>${issues.length ? `보완: ${issues.slice(0, 3).map(escapeHtml).join(" · ")}` : "필수 기록 항목이 모두 채워졌습니다."}</small>
+      </article>`;
+  }).join("");
+}
+
+async function refreshChartCopilotPilot() {
+  if (elements.chartCopilotPilotRefresh) {
+    elements.chartCopilotPilotRefresh.disabled = true;
+    elements.chartCopilotPilotRefresh.textContent = "현황 확인 중";
+  }
+  try {
+    renderChartCopilotPilot(await fetchChartCopilotPilot(token(), 20));
+  } catch (error) {
+    if (elements.chartCopilotPilotStatus) elements.chartCopilotPilotStatus.textContent = error?.message || "Chart Copilot 파일럿 조회 실패";
+    if (elements.chartCopilotEvaluationList) elements.chartCopilotEvaluationList.textContent = "비교 기록을 불러오지 못했습니다.";
+  } finally {
+    if (elements.chartCopilotPilotRefresh) {
+      elements.chartCopilotPilotRefresh.disabled = false;
+      elements.chartCopilotPilotRefresh.textContent = "현황 새로고침";
+    }
+  }
+}
+
+function chartCopilotNumberList(value) {
+  return String(value || "")
+    .split(/[\s,]+/)
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0);
+}
+
+function chartCopilotTextRows(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function chartCopilotOptionalNumber(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+function setChartCopilotSetupFieldState() {
+  const form = elements.chartCopilotEvaluationForm;
+  if (!form) return;
+  const disabled = form.elements.decision.value === "no_trade";
+  ["entryPrice", "stopPrice", "targetPrice"].forEach((name) => {
+    const field = form.elements[name];
+    field.disabled = disabled;
+    if (disabled) field.value = "";
+  });
+}
+
+elements.chartCopilotEvaluationForm?.elements?.decision?.addEventListener("change", setChartCopilotSetupFieldState);
+setChartCopilotSetupFieldState();
+
+elements.chartCopilotPilotTargets?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-chart-copilot-ticker]");
+  if (!button || !elements.chartCopilotEvaluationForm) return;
+  elements.chartCopilotEvaluationForm.elements.ticker.value = button.dataset.chartCopilotTicker || "";
+  elements.chartCopilotEvaluationForm.elements.ticker.focus();
+});
+
+elements.chartCopilotPromptCopy?.addEventListener("click", async () => {
+  const form = elements.chartCopilotEvaluationForm;
+  const pilot = chartCopilotPilotPayload?.pilot || {};
+  const ticker = String(form?.elements?.ticker?.value || "{ticker}").trim().toUpperCase() || "{ticker}";
+  const market = String(form?.elements?.market?.value || "AUTO");
+  const prompt = String(pilot.prompt_template || "").replaceAll("{ticker}", ticker).replaceAll("{market}", market);
+  if (!prompt) {
+    if (elements.chartCopilotPilotStatus) elements.chartCopilotPilotStatus.textContent = "검증 프롬프트를 먼저 불러와야 합니다.";
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(prompt);
+    elements.chartCopilotPromptCopy.textContent = "프롬프트 복사 완료";
+    setTimeout(() => { elements.chartCopilotPromptCopy.textContent = "검증 프롬프트 복사"; }, 1600);
+  } catch (error) {
+    if (elements.chartCopilotPilotStatus) elements.chartCopilotPilotStatus.textContent = "클립보드 권한이 없어 프롬프트를 복사하지 못했습니다.";
+  }
+});
+
+elements.chartCopilotPilotRefresh?.addEventListener("click", refreshChartCopilotPilot);
+
+elements.chartCopilotEvaluationForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const decision = form.elements.decision.value;
+  const confidence = chartCopilotOptionalNumber(form.elements.confidence.value);
+  const payload = {
+    ticker: String(form.elements.ticker.value || "").trim().toUpperCase(),
+    market: form.elements.market.value,
+    analysis_as_of: form.elements.analysisAsOf.value,
+    prompt_profile: form.elements.promptProfile.value,
+    prompt_version: chartCopilotPilotPayload?.pilot?.prompt_version || "x10think-chart-copilot-v1",
+    timeframes: [...form.querySelectorAll('input[name="timeframes"]:checked')].map((item) => item.value),
+    regime: form.elements.regime.value,
+    decision,
+    confidence,
+    support_levels: chartCopilotNumberList(form.elements.supportLevels.value),
+    resistance_levels: chartCopilotNumberList(form.elements.resistanceLevels.value),
+    entry_price: decision === "no_trade" ? null : chartCopilotOptionalNumber(form.elements.entryPrice.value),
+    stop_price: decision === "no_trade" ? null : chartCopilotOptionalNumber(form.elements.stopPrice.value),
+    target_price: decision === "no_trade" ? null : chartCopilotOptionalNumber(form.elements.targetPrice.value),
+    evidence: chartCopilotTextRows(form.elements.evidence.value),
+    invalidation: String(form.elements.invalidation.value || "").trim(),
+    alternate_scenario: String(form.elements.alternateScenario.value || "").trim(),
+    missing_data: chartCopilotTextRows(form.elements.missingData.value),
+    human_verdict: form.elements.humanVerdict.value,
+  };
+  submitButton.disabled = true;
+  submitButton.textContent = "비교 기록 저장 중";
+  try {
+    const result = await saveChartCopilotEvaluation(payload, token());
+    if (elements.chartCopilotPilotStatus) elements.chartCopilotPilotStatus.textContent = result.message || "비교 기록을 저장했습니다.";
+    await refreshChartCopilotPilot();
+  } catch (error) {
+    if (elements.chartCopilotPilotStatus) elements.chartCopilotPilotStatus.textContent = error?.message || "Chart Copilot 비교 기록 저장 실패";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "비교 기록 저장";
+  }
+});
+
+if (elements.chartCopilotEvaluationForm?.elements?.analysisAsOf) {
+  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  elements.chartCopilotEvaluationForm.elements.analysisAsOf.value = now.toISOString().slice(0, 16);
+}
+refreshChartCopilotPilot();
 
 const CHECKLIST_TOTAL = 16;
 const DEFAULT_TICKER = "";

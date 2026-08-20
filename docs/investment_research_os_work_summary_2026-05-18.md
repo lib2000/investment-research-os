@@ -1,7 +1,7 @@
 # 투자 리서치 OS 작업 결과 요약
 
 작성일: 2026-05-18
-작업 루트: C:\Users\lib20\InvestmentJournalApp
+작업 루트: D:\workspace\InvestmentJournalApp
 
 ## 민감정보 제외 기준
 
@@ -15,7 +15,7 @@
 
 ## 작업 원칙
 
-- 투자 리서치 OS 작업은 `C:\Users\lib20\InvestmentJournalApp`에서만 진행했습니다.
+- 투자 리서치 OS 작업은 `D:\workspace\InvestmentJournalApp`에서만 진행했습니다.
 - OneDrive 경로는 작업 루트로 사용하지 않았습니다.
 - 화면 결과와 사용자 메시지는 한국어 중심으로 유지했습니다.
 - 사용자가 버튼 클릭 후 진행 여부를 알 수 있도록 화면 피드백을 강화했습니다.

@@ -50,7 +50,7 @@ if ($ExpectedHoldings.Trim()) {
   foreach ($rawItem in $ExpectedHoldings.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
     $item = $rawItem.Trim()
     if ($item -notmatch "^(?<ticker>[^=]+)=(?<quantity>-?\d+(\.\d+)?)(:(?<currency>[A-Za-z]{3}))?$") {
-      throw "ExpectedHoldings 항목 형식이 잘못되었습니다: $item. 예: PL=100:USD,JOBY=208:USD"
+      throw "ExpectedHoldings 항목 형식이 잘못되었습니다: $item. 예: PL=100:USD,JOBY=50:USD"
     }
     $currency = if ($Matches.currency) { $Matches.currency } else { $ExpectedCurrency }
     $expectedChecks += New-ExpectedHoldingCheck -Ticker $Matches.ticker -Quantity ([double]$Matches.quantity) -Currency $currency
@@ -92,8 +92,10 @@ $items = foreach ($check in $expectedChecks) {
     "user_account_statement",
     "portfolio_state_guard"
   )
+  $accountSyncSources = @("toss_holdings", "kiwoom_holdings", "kis_holdings")
   $syncProtected =
     $syncStatus -eq "manual_or_overseas_protected" -or
+    ($syncStatus -eq "account_synced" -and $accountSyncSources -contains $syncSource) -or
     ($syncStatus -eq "manual" -and $protectedSources -contains $syncSource) -or
     $protectedSources -contains $syncSource
   $priceStatus = [string]$holding.price_refresh_status

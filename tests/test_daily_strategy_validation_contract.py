@@ -27,11 +27,22 @@ def test_runner_never_calls_strategy_execution_endpoint() -> None:
     assert "/api/order" not in source
 
 
+def test_runner_recovers_docker_and_requires_lean_image() -> None:
+    source = read_script("run_daily_strategy_validation.ps1")
+
+    assert "[switch]$StartDockerIfNeeded" in source
+    assert "Start-DockerRequirement" in source
+    assert "quantconnect/lean:latest" in source
+    assert '"--format", "{{.Id}}"' in source
+    assert "-WindowStyle Hidden" in source
+
+
 def test_scheduled_task_catches_up_and_does_not_expose_token() -> None:
     source = read_script("register_daily_strategy_validation_task.ps1")
 
     assert "-StartWhenAvailable" in source
     assert "-MultipleInstances IgnoreNew" in source
     assert "-RestartCount 2" in source
+    assert '"-StartDockerIfNeeded"' in source
     assert "Get-InvestmentResearchCredentialSecret" not in source
     assert "DEV_USER_TOKEN=" not in source

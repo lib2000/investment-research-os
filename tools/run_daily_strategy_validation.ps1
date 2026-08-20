@@ -8,7 +8,9 @@ param(
   [int]$LookbackCalendarDays = 210,
   [double]$InitialCapital = 100000000,
   [switch]$Force,
-  [switch]$StartServicesIfNeeded
+  [switch]$StartServicesIfNeeded,
+  [switch]$StartDockerIfNeeded,
+  [int]$DockerStartupTimeoutSeconds = 180
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +59,72 @@ function Test-AllServices {
     (Test-ApiEndpoint -Uri "$BuilderApiBase/api/strategies") -and
     (Test-ApiEndpoint -Uri "$BacktesterApiBase/api/strategies")
   )
+}
+
+function Invoke-BoundedDocker {
+  param([string[]]$Arguments, [int]$TimeoutSeconds = 5)
+  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if (-not $docker) { return -1 }
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $process.StartInfo.FileName = $docker.Source
+  $process.StartInfo.Arguments = ($Arguments -join " ")
+  $process.StartInfo.UseShellExecute = $false
+  $process.StartInfo.CreateNoWindow = $true
+  $process.StartInfo.RedirectStandardOutput = $true
+  $process.StartInfo.RedirectStandardError = $true
+  try {
+    if (-not $process.Start()) { return -1 }
+    if (-not $process.WaitForExit([Math]::Max($TimeoutSeconds, 1) * 1000)) {
+      try { $process.Kill() } catch { }
+      return -1
+    }
+    return $process.ExitCode
+  } finally {
+    $process.Dispose()
+  }
+}
+
+function Test-DockerEngine {
+  return (Invoke-BoundedDocker -Arguments @("info", "--format", "{{.ServerVersion}}")) -eq 0
+}
+
+function Test-LeanImage {
+  if (-not (Test-DockerEngine)) { return $false }
+  # Full inspect JSON can fill the redirected pipe while the caller waits.
+  # Ask Docker for one short field so the bounded probe cannot deadlock.
+  return (Invoke-BoundedDocker -Arguments @("image", "inspect", "quantconnect/lean:latest", "--format", "{{.Id}}")) -eq 0
+}
+
+function Start-DockerRequirement {
+  if (Test-DockerEngine) { return }
+  if (-not $StartDockerIfNeeded) {
+    throw "Docker Desktop Linux engine is unavailable. Use -StartDockerIfNeeded or start Docker Desktop first."
+  }
+
+  $candidates = @()
+  if ($env:ProgramFiles) {
+    $candidates += Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+  }
+  $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+  if ($programFilesX86) {
+    $candidates += Join-Path $programFilesX86 "Docker\Docker\Docker Desktop.exe"
+  }
+  $candidates = @($candidates | Where-Object { Test-Path -LiteralPath $_ })
+  $dockerDesktop = $candidates | Select-Object -First 1
+  if (-not $dockerDesktop) { throw "Docker Desktop executable was not found." }
+
+  Write-TaskLog "docker_start_requested"
+  Start-Process -FilePath $dockerDesktop -WindowStyle Hidden
+  $deadline = (Get-Date).AddSeconds([Math]::Max($DockerStartupTimeoutSeconds, 30))
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 5
+    if (Test-DockerEngine) {
+      Write-TaskLog "docker_start_ready"
+      return
+    }
+  }
+  throw "Docker Desktop Linux engine did not become ready within $DockerStartupTimeoutSeconds seconds."
 }
 
 function Start-RequiredServices {
@@ -118,11 +186,22 @@ $state = [ordered]@{
     live_order_endpoint_called = $false
     purpose = "research_and_simulation_only"
   }
+  prerequisites = [ordered]@{
+    docker_engine = $false
+    lean_image = $false
+  }
   error = $null
 }
 Save-TaskState -State $state
 
 try {
+  Start-DockerRequirement
+  $state.prerequisites.docker_engine = Test-DockerEngine
+  $state.prerequisites.lean_image = Test-LeanImage
+  Save-TaskState -State $state
+  if (-not $state.prerequisites.lean_image) {
+    throw "Required Docker image is missing: quantconnect/lean:latest"
+  }
   if (-not (Test-AllServices)) {
     Start-RequiredServices
   }

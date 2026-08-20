@@ -35,7 +35,7 @@
 ## 운영 확인 명령
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 $headers = @{ Authorization = 'Bearer dev-local-token' }
 Invoke-RestMethod -Headers $headers -Uri 'http://127.0.0.1:8001/api/v1/macro/customs-trade/latest?start_yymm=202605&end_yymm=202605&save_result=true'
 Invoke-RestMethod -Headers $headers -Uri 'http://127.0.0.1:8001/api/v1/macro/customs-trade/total-trend/status?start_yymm=202605&end_yymm=202605'

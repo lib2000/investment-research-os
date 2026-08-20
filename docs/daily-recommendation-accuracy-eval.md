@@ -5,7 +5,7 @@
 Goal: 추천 정확도 평가 점수 개선.
 
 Setup:
-- Project root: `C:\Users\lib20\InvestmentJournalApp`
+- Project root: `D:\workspace\InvestmentJournalApp`
 - `AGENTS.md`: not present in this checkout.
 - Primary eval: `python tools\evaluate_daily_recommendation_accuracy.py`
 - Existing validation: `python tools\check_daily_recommendations_store.py --require-milestones`, `python tools\check_daily_recommendation_citations.py`

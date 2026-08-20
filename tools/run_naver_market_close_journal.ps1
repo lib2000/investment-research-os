@@ -1,7 +1,7 @@
 param(
   [int]$Port = 8001,
   [string]$HostName = "127.0.0.1",
-  [string]$AccessToken = "dev-local-token",
+  [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [switch]$Force,
   [switch]$StartBackendIfNeeded
 )
@@ -12,6 +12,7 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ProjectRootPath = & (Join-Path $ProjectRoot "tools\assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
+. (Join-Path $ProjectRootPath "tools\investment_research_credential.ps1")
 $BackendScript = Join-Path $ProjectRootPath "scripts\start-research-backend.ps1"
 $ApiBase = "http://$HostName`:$Port"
 $SystemDir = Join-Path $ProjectRootPath "research_vault\_system"
@@ -54,6 +55,15 @@ if (-not (Test-BackendReady)) {
 
 $forceText = if ($Force) { "true" } else { "false" }
 $uri = "$ApiBase/api/v1/naver-research/market-close-journal/refresh?force=$forceText"
-$result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $AccessToken" } -TimeoutSec 120
-Write-TaskLog "market_close_journal_refresh: status=$($result.status), entry=$($result.entry.entry_id), title=$($result.source.title)"
-$result | ConvertTo-Json -Depth 12
+$accessToken = $null
+try {
+  $accessToken = Get-InvestmentResearchCredentialSecret -Target $CredentialTarget
+  if ([string]::IsNullOrWhiteSpace($accessToken)) {
+    throw "Windows Credential Manager 자격 증명이 없습니다: $CredentialTarget"
+  }
+  $result = Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $accessToken" } -TimeoutSec 120
+  Write-TaskLog "market_close_journal_refresh: status=$($result.status), entry=$($result.entry.entry_id), title=$($result.source.title)"
+  $result | ConvertTo-Json -Depth 12
+} finally {
+  $accessToken = $null
+}

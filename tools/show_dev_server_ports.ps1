@@ -6,10 +6,9 @@ $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-$aiAppFolderName = -join @([char]0xC571, [char]0x0020, [char]0xC81C, [char]0xC791)
-$aiAppRoot = Join-Path "C:\AI" $aiAppFolderName
-$monocutRoot = Join-Path $aiAppRoot "monocut"
-$monocutMobileRoot = Join-Path $aiAppRoot "monocut-mobile"
+$workspaceRoot = "D:\workspace"
+$monocutRoot = Join-Path $workspaceRoot "monocut"
+$monocutMobileRoot = Join-Path $workspaceRoot "monocut-mobile"
 $investmentResearchRoot = Split-Path -Parent $PSScriptRoot
 
 $registry = @(
@@ -18,18 +17,18 @@ $registry = @(
   [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-api-fallback"; Port = 8020; Root = $investmentResearchRoot },
   [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "react-console"; Port = 5173; Root = $investmentResearchRoot },
   [pscustomobject]@{ App = "InvestmentResearchOS"; Role = "mobile-web"; Port = 8085; Root = $investmentResearchRoot },
-  [pscustomobject]@{ App = "SportsAnalysis"; Role = "api"; Port = 8101; Root = "C:\Users\lib20\projects\sports-analysis-platform" },
-  [pscustomobject]@{ App = "SportsAnalysis"; Role = "web"; Port = 8181; Root = "C:\Users\lib20\projects\sports-analysis-platform" },
-  [pscustomobject]@{ App = "SportsAnalysisWorktree"; Role = "api"; Port = 8102; Root = "C:\Users\lib20\projects\sports-analysis-platform-worktree" },
-  [pscustomobject]@{ App = "SportsAnalysisWorktree"; Role = "web"; Port = 8182; Root = "C:\Users\lib20\projects\sports-analysis-platform-worktree" },
-  [pscustomobject]@{ App = "FamilyTranslator"; Role = "api"; Port = 8201; Root = "C:\Projects\FamilyTranslatorApp" },
-  [pscustomobject]@{ App = "FamilyTranslator"; Role = "web"; Port = 8281; Root = "C:\Projects\FamilyTranslatorApp" },
-  [pscustomobject]@{ App = "FamilyTranslator"; Role = "expo"; Port = 8282; Root = "C:\Projects\FamilyTranslatorApp" },
-  [pscustomobject]@{ App = "FamilyNews"; Role = "api"; Port = 8301; Root = "C:\Projects\FamilyNewsApp" },
-  [pscustomobject]@{ App = "FamilyNews"; Role = "web"; Port = 8381; Root = "C:\Projects\FamilyNewsApp" },
-  [pscustomobject]@{ App = "FamilyNews"; Role = "expo"; Port = 8382; Root = "C:\Projects\FamilyNewsApp" },
-  [pscustomobject]@{ App = "KoreaTravel"; Role = "web"; Port = 8481; Root = "C:\Projects\KoreaTravel_RN_review" },
-  [pscustomobject]@{ App = "KoreaTravel"; Role = "expo"; Port = 8482; Root = "C:\Projects\KoreaTravel_RN_review" },
+  [pscustomobject]@{ App = "SportsAnalysis"; Role = "api"; Port = 8101; Root = (Join-Path $workspaceRoot "sports-analysis-platform") },
+  [pscustomobject]@{ App = "SportsAnalysis"; Role = "web"; Port = 8181; Root = (Join-Path $workspaceRoot "sports-analysis-platform") },
+  [pscustomobject]@{ App = "SportsAnalysisWorktree"; Role = "api"; Port = 8102; Root = (Join-Path $workspaceRoot "sports-analysis-platform-worktree") },
+  [pscustomobject]@{ App = "SportsAnalysisWorktree"; Role = "web"; Port = 8182; Root = (Join-Path $workspaceRoot "sports-analysis-platform-worktree") },
+  [pscustomobject]@{ App = "FamilyTranslator"; Role = "api"; Port = 8201; Root = (Join-Path $workspaceRoot "FamilyTranslatorApp") },
+  [pscustomobject]@{ App = "FamilyTranslator"; Role = "web"; Port = 8281; Root = (Join-Path $workspaceRoot "FamilyTranslatorApp") },
+  [pscustomobject]@{ App = "FamilyTranslator"; Role = "expo"; Port = 8282; Root = (Join-Path $workspaceRoot "FamilyTranslatorApp") },
+  [pscustomobject]@{ App = "FamilyNews"; Role = "api"; Port = 8301; Root = (Join-Path $workspaceRoot "FamilyNewsApp") },
+  [pscustomobject]@{ App = "FamilyNews"; Role = "web"; Port = 8381; Root = (Join-Path $workspaceRoot "FamilyNewsApp") },
+  [pscustomobject]@{ App = "FamilyNews"; Role = "expo"; Port = 8382; Root = (Join-Path $workspaceRoot "FamilyNewsApp") },
+  [pscustomobject]@{ App = "KoreaTravel"; Role = "web"; Port = 8481; Root = (Join-Path $workspaceRoot "KoreaTravel_RN_review") },
+  [pscustomobject]@{ App = "KoreaTravel"; Role = "expo"; Port = 8482; Root = (Join-Path $workspaceRoot "KoreaTravel_RN_review") },
   [pscustomobject]@{ App = "Monocut Web"; Role = "web"; Port = 8501; Root = $monocutRoot },
   [pscustomobject]@{ App = "Monocut Mobile"; Role = "expo"; Port = 8582; Root = $monocutMobileRoot }
 )

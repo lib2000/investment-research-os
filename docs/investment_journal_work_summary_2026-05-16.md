@@ -1,7 +1,7 @@
 # Investment Journal App 작업 결과 요약
 
 작성일: 2026-05-16
-작업 경로: `C:\Users\lib20\InvestmentJournalApp`
+작업 경로: `D:\workspace\InvestmentJournalApp`
 주의: 본 문서는 민감정보를 제외하고 작성했다. API 키, 시크릿, 토큰, 계좌번호 원문, 개인 인증값은 포함하지 않는다.
 
 ## 1. 프로젝트 방향
@@ -572,7 +572,7 @@ KRW 순손익 = 원통화 순손익 * 적용 환율
 백엔드 실행:
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_backend.ps1
 ```
 
@@ -654,7 +654,7 @@ http://127.0.0.1:8082
 사용자 요청에 따라 작업 위치는 다음 경로를 기준으로 한다.
 
 ```text
-C:\Users\lib20\InvestmentJournalApp
+D:\workspace\InvestmentJournalApp
 ```
 
 원드라이브 경로에서는 작업하지 않는다.
@@ -746,7 +746,7 @@ C:\Users\lib20\InvestmentJournalApp
 
 ## 16. 2026-05-22 모바일 실행/검증 정리
 
-이번 추가 작업은 `C:\Users\lib20\InvestmentJournalApp`에서만 진행했다. OneDrive 경로는 사용하지 않았다.
+이번 추가 작업은 `D:\workspace\InvestmentJournalApp`에서만 진행했다. OneDrive 경로는 사용하지 않았다.
 
 적용한 내용:
 
@@ -814,7 +814,7 @@ C:\Users\lib20\InvestmentJournalApp
 확인한 명령:
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 .\tools\start_backend.ps1 -StopExistingPortProcess
 .\tools\start_mobile_web.ps1 -StopExistingPortProcess -ClearCache

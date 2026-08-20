@@ -3,12 +3,13 @@
 InvestmentJournalApp의 활성 작업 루트는 아래 하나로 고정한다.
 
 ```text
-C:\Users\lib20\InvestmentJournalApp
+D:\workspace\InvestmentJournalApp
 ```
 
 ## 원칙
 
 - OneDrive 경로에서는 서버 실행, 코드 수정, 생성 파일 저장을 하지 않는다.
+- 외장 드라이브 `D:`가 연결되지 않았거나 활성 루트가 없으면 C 드라이브 복사본으로 자동 전환하지 않고 실행을 중단한다.
 - Codex, PowerShell, Expo, FastAPI 작업은 항상 활성 프로젝트 루트 아래에서 실행한다.
 - OneDrive 경로는 사용자가 명시적으로 마이그레이션을 요청한 경우에만 읽기 대상으로 취급한다.
 - 삭제가 필요한 임시/백업 폴더는 먼저 후보를 확인하고, 명시 확인 후 정리한다.
@@ -16,7 +17,7 @@ C:\Users\lib20\InvestmentJournalApp
 ## 실행 전 검증
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 
@@ -25,7 +26,7 @@ cd C:\Users\lib20\InvestmentJournalApp
 아래 명령은 삭제하지 않고 후보만 보여준다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\list_cleanup_candidates.ps1
 ```
 

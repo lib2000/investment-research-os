@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
@@ -114,6 +115,26 @@ def test_openclaw_mobile_status_reports_paired_iphone(monkeypatch):
     assert status["next_action"] is None
 
 
+def test_wsl_gateway_listener_rejects_stale_windows_portproxy(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = "0\n"
+
+    monkeypatch.setattr(system_health.subprocess, "run", lambda *_args, **_kwargs: Result())
+
+    assert system_health._wsl_gateway_listener_ready("Ubuntu-24.04") is False
+
+
+def test_wsl_gateway_listener_accepts_real_wsl_socket(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = "1\n"
+
+    monkeypatch.setattr(system_health.subprocess, "run", lambda *_args, **_kwargs: Result())
+
+    assert system_health._wsl_gateway_listener_ready("Ubuntu-24.04") is True
+
+
 def test_windows_autostart_status_reports_only_safe_metadata(monkeypatch):
     class Result:
         returncode = 0
@@ -128,3 +149,28 @@ def test_windows_autostart_status_reports_only_safe_metadata(monkeypatch):
     assert status["last_startup_status"] == "success"
     assert "token" not in status
     assert status["next_action"] is None
+
+
+def test_windows_autostart_status_rejects_empty_json(monkeypatch):
+    monkeypatch.setattr(
+        system_health.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="{}", stderr=""),
+    )
+
+    status = system_health._windows_autostart_status()
+
+    assert status["status"] == "needs_attention"
+    assert status["next_action"]
+
+
+def test_windows_autostart_runner_keeps_wsl_alive():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "start-investment-research-autostart.ps1"
+    ).read_text(encoding="utf-8-sig")
+
+    assert "investment-research-wsl-keepalive" in source
+    assert "/usr/bin/sleep infinity" in source
+    assert "wsl_keepalive_ready" in source

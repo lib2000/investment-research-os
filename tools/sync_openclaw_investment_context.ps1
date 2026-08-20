@@ -504,7 +504,13 @@ $startupLines = @(
 Set-OpenClawDailyInvestmentMemory -Workspace $OpenClawWorkspace -DateText $todayText -GitBranch $gitBranch -GitCommit $gitCommit
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "AGENTS.md") -Lines $startupLines
 Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "MEMORY.md") -Lines $startupLines
-Set-OpenClawBridgeNoteSection -Path (Join-Path $OpenClawWorkspace "HEARTBEAT.md") -Lines $startupLines
+$heartbeatPath = Join-Path $OpenClawWorkspace "HEARTBEAT.md"
+if (Test-Path -LiteralPath $heartbeatPath) {
+  $heartbeatContent = Get-Content -LiteralPath $heartbeatPath -Raw -Encoding UTF8
+  if ($heartbeatContent -match "investment-research-os-bridge:start") {
+    Set-Content -LiteralPath $heartbeatPath -Value "# Heartbeat automatic checks disabled.`r`n# Run investment bridge checks only when explicitly requested.`r`n" -Encoding UTF8
+  }
+}
 
 if (-not $SkipValidation.IsPresent) {
   python $checkScript --source-dir $sourceDir --openclaw-dir $targetDir --max-age-hours $MaxAgeHours
@@ -578,7 +584,6 @@ if (-not $SkipValidation.IsPresent) {
     if ($LASTEXITCODE -ne 0) {
       throw "OpenClaw actual answer audit failed: $LASTEXITCODE"
     }
-  }
 }
 
 if (-not $SkipWslSync.IsPresent) {

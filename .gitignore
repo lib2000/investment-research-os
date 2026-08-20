@@ -65,6 +65,7 @@ tmp/
 *.err.log
 .test-tmp/
 .codex_migration_backup_*/
+.playwright-cli/
 
 # Local migration evidence and recovery copies (kept on this PC, never committed)
 /backups/

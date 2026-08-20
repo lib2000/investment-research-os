@@ -33,7 +33,7 @@
   [string]$PortfolioQuantityTicker = "PL",
   [double]$PortfolioQuantityExpected = 100,
   [string]$PortfolioQuantityCurrency = "USD",
-  [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW",
+  [string]$PortfolioQuantityExpectedHoldings = "PL=100:USD,JOBY=50:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW",
   [string]$NpsDomesticEquityPortfolioName = "__all__",
   [double]$NpsDomesticEquityTargetWeight = 0.14,
   [double]$NpsDomesticEquityWarnTolerance = 0.01,

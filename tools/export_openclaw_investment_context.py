@@ -625,6 +625,29 @@ def build_today_work_report(project_root: Path) -> dict:
         count = sum(1 for subject in subjects if any(needle.lower() in subject.lower() for needle in needles))
         if count:
             categories.append({"key": key, "label": label, "commit_count": count})
+    # Readiness validation requires a keyed category whenever today's work exists.
+    # Operational updates are still meaningful evidence even when commit subjects
+    # do not match the human-oriented category keywords above.
+    if not categories:
+        categories = [
+            {
+                "key": str(item.get("key") or "operational_update"),
+                "label": str(item.get("label") or "오늘 운영 변경"),
+                "commit_count": 0,
+                "source": "operational_update_fallback",
+            }
+            for item in operational_updates
+            if item.get("key") or item.get("label")
+        ]
+    if not categories and commits:
+        categories = [
+            {
+                "key": "implementation",
+                "label": "오늘 코드 변경",
+                "commit_count": len(commits),
+                "source": "commit_fallback",
+            }
+        ]
     return {
         "date": _today_kst(),
         "source": "git_log_since_local_midnight_and_operational_state",

@@ -30,6 +30,8 @@ body {
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 button,
@@ -612,6 +614,204 @@ label {
 .backtest-run-card dt { color: var(--muted); font-size: 0.74rem; }
 .backtest-run-card dd { margin: 3px 0 0; font-weight: 700; }
 
+.chart-copilot-pilot {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.chart-copilot-pilot-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.chart-copilot-pilot-heading h3 {
+  margin: 3px 0 5px;
+}
+
+.chart-copilot-pilot-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.chart-copilot-pilot-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chart-copilot-pilot-actions .tool-external-link {
+  min-height: 44px;
+  align-items: center;
+  margin: 0;
+}
+
+.chart-copilot-pilot-actions button,
+.chart-copilot-evaluation-form input:not([type="checkbox"]),
+.chart-copilot-evaluation-form select,
+.chart-copilot-evaluation-form button {
+  min-height: 44px;
+}
+
+.chart-copilot-pilot-status {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 10px;
+  background: #f0fdfa;
+  color: #115e59;
+  font-size: 0.86rem;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.chart-copilot-pilot-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.chart-copilot-target {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.chart-copilot-target.complete {
+  border-color: rgba(5, 150, 105, 0.32);
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.chart-copilot-evaluation-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.chart-copilot-evaluation-form label,
+.chart-copilot-timeframes {
+  min-width: 0;
+}
+
+.chart-copilot-evaluation-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.chart-copilot-timeframes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.chart-copilot-timeframes legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.chart-copilot-timeframes label {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 5px;
+  margin: 0;
+}
+
+.chart-copilot-wide-field {
+  grid-column: span 2;
+}
+
+.chart-copilot-submit-row {
+  grid-column: span 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-copilot-submit-row small {
+  color: var(--muted);
+  word-break: keep-all;
+}
+
+.chart-copilot-evaluation-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.chart-copilot-evaluation-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.chart-copilot-evaluation-card {
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.chart-copilot-evaluation-card header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-copilot-evaluation-card header span,
+.chart-copilot-evaluation-card p,
+.chart-copilot-evaluation-card small {
+  color: var(--muted);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.chart-copilot-evaluation-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.chart-copilot-evaluation-card dt {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.chart-copilot-evaluation-card dd {
+  margin: 3px 0 0;
+  font-weight: 700;
+}
+
 .integrated-workbench[hidden] {
   display: none;
 }
@@ -730,6 +930,41 @@ label {
 
   .backtest-run-history-heading, .backtest-run-card > div { align-items: stretch; flex-direction: column; }
   .backtest-run-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .chart-copilot-pilot-heading,
+  .chart-copilot-evaluation-card header {
+    flex-direction: column;
+  }
+
+  .chart-copilot-pilot-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .chart-copilot-pilot-actions .tool-external-link,
+  .chart-copilot-pilot-actions button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .chart-copilot-evaluation-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chart-copilot-wide-field,
+  .chart-copilot-submit-row {
+    grid-column: auto;
+  }
+
+  .chart-copilot-submit-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chart-copilot-evaluation-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
   .integrated-services-panel {
     align-items: stretch;
@@ -6318,6 +6553,26 @@ pre {
 }
 
 @media (max-width: 860px) {
+  button,
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  summary {
+    min-height: 44px;
+  }
+
+  .dashboard-ticker-toggle,
+  .dashboard-ticker-chip {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .tool-external-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding-block: 8px;
+  }
+
   .topbar,
   .connection-panel {
     display: grid;
@@ -6414,6 +6669,7 @@ pre {
 
   .daily-recommendation-top-head button {
     width: 100%;
+    min-height: 44px;
   }
 
   .dashboard-clean-signal-list li {

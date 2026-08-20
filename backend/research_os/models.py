@@ -6,6 +6,30 @@ from pydantic import BaseModel, Field
 from research_os.research_memory import ResearchStorageInfo
 
 
+class BacktestResultSaveRequest(BaseModel):
+    """Safe, user-confirmed summary of a completed backtest."""
+
+    run_id: str
+    status: str = "success"
+    symbols: List[str] = Field(default_factory=list)
+    strategy_name: str = "전략"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: Optional[float] = None
+    final_capital: Optional[float] = None
+    total_return: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    win_rate: Optional[float] = None
+    trades_count: int = 0
+    sharpe_ratio: Optional[float] = None
+
+
+class BacktestResultStoreResponse(BaseModel):
+    status: str = "success"
+    saved_count: int = 0
+    results: List[dict] = Field(default_factory=list)
+
+
 class Broker(str, Enum):
     KIWOOM = "KIWOOM"
     KIS = "KIS"

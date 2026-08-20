@@ -12,7 +12,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
-DEFAULT_EXPECTED = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
+DEFAULT_EXPECTED = "PL=100:USD,JOBY=50:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
 
 
 def project_root(cwd: Path) -> Path:

@@ -1,8 +1,8 @@
 # Integrated Strategy Workbench
 
 - Status: implemented
-- Updated: 2026-07-12
-- Authoritative root: `C:\Users\lib20\InvestmentJournalApp`
+- Updated: 2026-08-20
+- Authoritative root: `D:\workspace\InvestmentJournalApp`
 
 ## Objective
 Let a user move from holdings, family portfolios, news, earnings, and daily recommendations into strategy design and backtesting from one Research OS entry point.
@@ -30,6 +30,12 @@ flowchart LR
 - Account identifiers, holdings quantities, tokens, and brokerage credentials are never included.
 - Strategy Builder and Backtester load into a named iframe inside the Research OS dashboard, so the normal workflow stays on one console page. Explicit new-tab links remain as a recovery path.
 - The portal reads authenticated local port health for both frontends and APIs. A start-only control may invoke the fixed local launcher when a service is down; arbitrary commands, service termination, and live trading are excluded.
+
+## Daily validation contract
+- Windows Task Scheduler runs the research-only strategy validation at 08:45 and catches up after a missed boot with `StartWhenAvailable`.
+- Docker Desktop and the pinned `quantconnect/lean:latest` image are prerequisites; probes are bounded and Docker may be started hidden when it is not already available.
+- The selected daily Korean recommendation is validated through the strategy preview API, backtested through the simulation API, and stored as research evidence.
+- Generated strategy code is not persisted, brokerage credentials are not handed off, and live order endpoints remain forbidden.
 
 ## Next milestone
 Replace the URL-carried YAML with a short-lived local handoff identifier if strategies routinely exceed the current size guard, and add service health badges to the portal cards.

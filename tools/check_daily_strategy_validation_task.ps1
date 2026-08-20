@@ -18,10 +18,11 @@ $state = if (Test-Path -LiteralPath $StatePath) {
 $arguments = if ($task) { [string]$task.Actions[0].Arguments } else { "" }
 $commandSafe = -not ($arguments -match "DEV_USER_TOKEN\s*=|dev-local-token|Bearer\s+")
 $runnerConfigured = $arguments -match "run_daily_strategy_validation\.ps1"
+$dockerRecoveryConfigured = $arguments -match "-StartDockerIfNeeded"
 $startWhenAvailable = $null -ne $task -and [bool]$task.Settings.StartWhenAvailable
 $credentialConfigured = Test-InvestmentResearchCredential -Target $CredentialTarget
 $lastResultReady = $null -eq $taskInfo -or $taskInfo.LastRunTime.Year -lt 2000 -or $taskInfo.LastTaskResult -in @(0, 267009, 267011)
-$ready = $null -ne $task -and $runnerConfigured -and $commandSafe -and $startWhenAvailable -and $credentialConfigured -and $lastResultReady
+$ready = $null -ne $task -and $runnerConfigured -and $dockerRecoveryConfigured -and $commandSafe -and $startWhenAvailable -and $credentialConfigured -and $lastResultReady
 
 $result = [ordered]@{
   status = if ($ready) { "ready" } else { "needs_attention" }
@@ -29,6 +30,7 @@ $result = [ordered]@{
   task_registered = $null -ne $task
   task_state = if ($task) { [string]$task.State } else { "missing" }
   runner_configured = $runnerConfigured
+  docker_recovery_configured = $dockerRecoveryConfigured
   command_safe = $commandSafe
   start_when_available = $startWhenAvailable
   credential_configured = $credentialConfigured

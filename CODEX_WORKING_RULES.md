@@ -1,7 +1,8 @@
 # Codex Working Rules
 
 - Do not modify, run servers from, or write generated files under any OneDrive path.
-- The active project root is `C:\Users\lib20\InvestmentJournalApp`.
+- The active project root is `D:\workspace\InvestmentJournalApp`.
+- If drive `D:` or the active root is unavailable, stop instead of falling back to a C-drive checkout.
 - Before changing files or starting backend/frontend servers, verify the working directory is under the active project root.
 - OneDrive paths may be read only when the user explicitly asks for safe migration, and must never be edited.
 - Use `tools\assert_project_root.ps1` before project scripts or manual server startup.

@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectRoot = "C:\Users\lib20\projects\InvestmentJournalApp",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   [string]$TaskName = "InvestmentResearchOS-Autostart",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [switch]$Json

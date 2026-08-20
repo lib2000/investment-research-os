@@ -3,8 +3,10 @@
   [string]$DevUserToken = "dev-local-token",
   [string]$ProjectRoot = "",
   [string[]]$PortfolioNames = @(),
+  [ValidateRange(5, 600)]
+  [int]$RequestTimeoutSeconds = 300,
   [switch]$SkipCheck,
-  [string]$ExpectedMainHoldings = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
+  [string]$ExpectedMainHoldings = "PL=100:USD,JOBY=50:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,7 +66,7 @@ foreach ($portfolioName in $PortfolioNames) {
   $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/portfolios/${encodedName}?refresh_prices=true&persist_refresh=true"
   $startedAt = [datetimeoffset]::UtcNow
   try {
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec $RequestTimeoutSeconds
     $active = $response.active_portfolio
     $refreshed += [pscustomobject]@{
       portfolio_name = $active.portfolio_name

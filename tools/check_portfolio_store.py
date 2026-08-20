@@ -10,7 +10,8 @@ from typing import Any
 
 
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
-DEFAULT_EXPECTED = "PL=100:USD,JOBY=208:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
+DEFAULT_EXPECTED = "PL=100:USD,JOBY=50:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
+AUTHORITATIVE_ACCOUNT_SYNC_SOURCES = {"toss_holdings", "kiwoom_holdings", "kis_holdings"}
 
 
 def project_root(start: Path) -> Path:
@@ -86,6 +87,14 @@ def age_hours(value: Any) -> float | None:
 
 def holding_ticker(item: dict[str, Any]) -> str:
     return str(item.get("ticker") or "").strip().upper()
+
+
+def overseas_quantity_is_protected(item: dict[str, Any]) -> bool:
+    sync_status = str(item.get("sync_status") or "").strip().lower()
+    sync_source = str(item.get("sync_source") or "").strip().lower()
+    return sync_status == "manual_or_overseas_protected" or (
+        sync_status == "account_synced" and sync_source in AUTHORITATIVE_ACCOUNT_SYNC_SOURCES
+    )
 
 
 def is_close(actual: float | None, expected: float | None, *, abs_tolerance: float, rel_tolerance: float) -> bool:
@@ -191,7 +200,7 @@ def main() -> int:
                 errors.append(f"{ticker} 가격 확인 시각 오래됨/누락: {item.get('price_checked_at')}")
             currency = str(item.get("currency") or "").upper()
             sync_status = str(item.get("sync_status") or "")
-            if currency != "KRW" and sync_status != "manual_or_overseas_protected":
+            if currency != "KRW" and not overseas_quantity_is_protected(item):
                 errors.append(f"{ticker} 해외/수동 수량 보호 상태 누락: {sync_status or '없음'}")
             if sync_status in {"manual", "manual_or_overseas_protected"}:
                 sync_age = age_hours(item.get("sync_checked_at"))

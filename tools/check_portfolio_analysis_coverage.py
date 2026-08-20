@@ -17,9 +17,13 @@ if str(BACKEND_DIR) not in sys.path:
 
 from research_os.portfolio_analysis_coverage import (  # noqa: E402
     REQUIRED_PORTFOLIO_ANALYSIS_MODULES,
+    merge_portfolio_analysis_entries,
     missing_portfolio_analysis_labels,
+    normalize_portfolio_analysis_ticker,
+    portfolio_analysis_entries_for_ticker,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
+    portfolio_vault_entries,
 )
 
 
@@ -40,12 +44,11 @@ def load_json(path: Path, default: Any) -> Any:
 
 
 def normalize_ticker(value: Any) -> str:
-    return str(value or "").strip().upper()
+    return normalize_portfolio_analysis_ticker(value)
 
 
 def manifest_entries_for_ticker(entries: list[dict[str, Any]], ticker: str) -> list[dict[str, Any]]:
-    normalized = normalize_ticker(ticker)
-    return [entry for entry in entries if normalize_ticker(entry.get("ticker")) == normalized]
+    return portfolio_analysis_entries_for_ticker(entries, ticker)
 
 
 def module_state(entries: list[dict[str, Any]]) -> dict[str, bool]:
@@ -57,54 +60,11 @@ def next_action(missing: list[str]) -> str:
 
 
 def vault_entries_for_holdings(vault: Path, holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for holding in holdings:
-        ticker = normalize_ticker(holding.get("ticker"))
-        if not ticker or ticker in {"CASH", "UNKNOWN"}:
-            continue
-        folder = vault / ticker
-        if not folder.exists():
-            continue
-        for path in sorted(folder.glob("*.json")):
-            key = (ticker, path.name)
-            if key in seen:
-                continue
-            seen.add(key)
-            payload = load_json(path, {})
-            item = payload if isinstance(payload, dict) else {}
-            entries.append(
-                {
-                    "ticker": ticker,
-                    "file_name": path.name,
-                    "date": item.get("date") or item.get("created_at") or item.get("saved_at"),
-                    "type": item.get("type"),
-                    "category": item.get("category"),
-                    "analysis_type": item.get("analysis_type"),
-                    "document_type": item.get("document_type"),
-                    "source_type": item.get("source_type"),
-                    "scope": item.get("scope"),
-                    "title": item.get("title") or item.get("summary"),
-                    "tags": item.get("tags") or [],
-                }
-            )
-    return entries
+    return portfolio_vault_entries(vault, [holding.get("ticker") for holding in holdings])
 
 
 def merge_manifest_entries(manifest: list[dict[str, Any]], extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    for entry in [*manifest, *extra]:
-        if not isinstance(entry, dict):
-            continue
-        ticker = normalize_ticker(entry.get("ticker"))
-        file_name = str(entry.get("file_name") or entry.get("storage_path") or entry.get("path") or "")
-        key = (ticker, file_name)
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(entry)
-    return merged
+    return merge_portfolio_analysis_entries(manifest, extra)
 
 
 def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], manifest: list[dict[str, Any]]) -> dict[str, Any]:

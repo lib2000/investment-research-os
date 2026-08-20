@@ -984,6 +984,45 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("--output-json", script_source)
         self.assertIn("tmp\\daily_recommendation_candidate_policy_preview.json", script_source)
 
+    def test_daily_research_operations_uses_credential_manager_by_default(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn('[string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN"', script_source)
+        self.assertIn("Get-InvestmentResearchCredentialSecret -Target $CredentialTarget", script_source)
+        self.assertNotIn('[string]$DevUserToken = "dev-local-token"', script_source)
+
+    def test_boot_catchup_includes_stale_portfolio_close_prices(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_investment_research_catchup.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('id = "portfolio_close_prices"', script_source)
+        self.assertIn("Test-PortfolioRefreshDue", script_source)
+        self.assertIn("refresh_portfolio_prices.ps1", script_source)
+        self.assertIn("Get-LatestPortfolioCloseCutoff", script_source)
+        self.assertIn("[DayOfWeek]::Saturday", script_source)
+        self.assertIn("[DayOfWeek]::Sunday", script_source)
+
+    def test_portfolio_price_refresh_has_bounded_http_timeout(self):
+        script_source = (PROJECT_ROOT / "tools" / "refresh_portfolio_prices.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("[int]$RequestTimeoutSeconds = 300", script_source)
+        self.assertIn("-TimeoutSec $RequestTimeoutSeconds", script_source)
+
+    def test_daily_research_operations_task_is_safe_and_catches_up(self):
+        script_source = (PROJECT_ROOT / "tools" / "register_daily_research_operations_task.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("InvestmentResearchOS-DailyResearchOperations-1830", script_source)
+        self.assertIn("-StartWhenAvailable", script_source)
+        self.assertIn("-CredentialTarget", script_source)
+        self.assertNotIn("dev-local-token", script_source)
+        self.assertNotIn("-SubmitTelegram", script_source)
+
     def test_daily_research_operations_syncs_openclaw_bridge(self):
         script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
             encoding="utf-8-sig"
@@ -1554,6 +1593,8 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"portfolio_updated_age_hours"', source)
         self.assertIn('"oldest_price_age_hours"', source)
         self.assertIn('"errors"', source)
+        self.assertIn("AUTHORITATIVE_ACCOUNT_SYNC_SOURCES", source)
+        self.assertIn('sync_status == "account_synced"', source)
 
     def test_all_portfolio_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_all_portfolio_store.py").read_text(encoding="utf-8")
@@ -1563,6 +1604,7 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"total_holding_count"', source)
         self.assertIn('"total_overseas_protected_count"', source)
         self.assertIn('"freshness_warning_count"', source)
+        self.assertIn("AUTHORITATIVE_ACCOUNT_SYNC_SOURCES", source)
 
 
 class PortfolioAnalysisCoverageCheckToolTests(unittest.TestCase):
@@ -3151,7 +3193,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
 
         for expected in [
-            "최종 갱신: 2026-07-05",
+            "최종 갱신: 2026-07-07",
             "리서치 중복/Dossier 상태를 갱신",
             "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "bridge_status.json",
@@ -5493,6 +5535,51 @@ class BackendModuleBoundaryTests(unittest.TestCase):
         )
 
         self.assertTrue(all(state.values()))
+
+    def test_portfolio_analysis_coverage_accepts_path_consistent_local_vault_evidence(self):
+        from research_os.portfolio_analysis_coverage import (
+            merge_portfolio_analysis_entries,
+            portfolio_analysis_entries_for_ticker,
+            portfolio_vault_entries,
+        )
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault = Path(temp_dir)
+            folder = vault / "005930"
+            folder.mkdir()
+            (folder / "005930-research-checklist.json").write_text(
+                json.dumps({"type": "research-checklist", "ticker": "005930"}),
+                encoding="utf-8",
+            )
+            local_entries = portfolio_vault_entries(vault, ["005930"])
+
+        merged = merge_portfolio_analysis_entries([], local_entries)
+        matches = portfolio_analysis_entries_for_ticker(
+            merged,
+            "005930",
+            manifest_verifier=lambda _entry, _ticker: False,
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertTrue(matches[0]["local_vault_verified"])
+
+    def test_portfolio_analysis_coverage_rejects_mismatched_local_vault_ticker(self):
+        from research_os.portfolio_analysis_coverage import portfolio_vault_entries
+
+        test_tmp_dir = PROJECT_ROOT / ".test-tmp"
+        test_tmp_dir.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_dir, ignore_cleanup_errors=True) as temp_dir:
+            vault = Path(temp_dir)
+            folder = vault / "005930"
+            folder.mkdir()
+            (folder / "bad.json").write_text(
+                json.dumps({"type": "research-checklist", "ticker": "000660"}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(portfolio_vault_entries(vault, ["005930"]), [])
 
     def test_code_diff_impact_maps_legacy_api_gateway(self):
         tool = load_code_diff_impact_tool()
@@ -15246,6 +15333,8 @@ class StorageDuplicateReviewCheckToolTests(unittest.TestCase):
 class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
     def test_market_journal_linkage_summarizes_unlinked_targets(self):
         tool = load_market_journal_linkage_tool()
+        latest_session_date = date.today().isoformat()
+        prior_session_date = (date.today() - timedelta(days=1)).isoformat()
 
         with TemporaryDirectory() as tmpdir:
             targets_file = Path(tmpdir) / "interest_collection_targets.json"
@@ -15258,7 +15347,7 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
                                 {
                                     "ticker": "AAA",
                                     "company_name": "Alpha",
-                                    "market_journal_matches": [{"market": "US", "session_date": "2026-07-06"}],
+                                    "market_journal_matches": [{"market": "US", "session_date": latest_session_date}],
                                 },
                                 {
                                     "ticker": "BBB",
@@ -15273,7 +15362,7 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
                             "sector_targets": [
                                 {
                                     "name": "AI",
-                                    "market_journal_matches": [{"market": "KR", "session_date": "2026-07-05"}],
+                                    "market_journal_matches": [{"market": "KR", "session_date": prior_session_date}],
                                 }
                             ],
                         },

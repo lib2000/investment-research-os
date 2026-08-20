@@ -1,7 +1,7 @@
 # Folder Cleanup Report
 
 작성일: 2026-05-17
-기준 루트: `C:\Users\lib20\InvestmentJournalApp`
+기준 루트: `D:\workspace\InvestmentJournalApp`
 
 ## 적용한 정리
 
@@ -15,12 +15,12 @@
 
 ## 폴더 정책
 
-- 활성 프로젝트 루트는 `C:\Users\lib20\InvestmentJournalApp` 하나로 고정한다.
+- 활성 프로젝트 루트는 `D:\workspace\InvestmentJournalApp` 하나로 고정한다.
 - OneDrive 경로에서는 서버 실행, 코드 수정, 생성 파일 저장을 하지 않는다.
 - 작업 전 아래 명령으로 루트를 검증한다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 

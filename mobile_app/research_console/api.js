@@ -240,6 +240,21 @@ export async function saveBacktestRun(payload, accessToken) {
   });
 }
 
+export async function fetchChartCopilotPilot(accessToken, limit = 20) {
+  return request(`/api/v1/chart-copilot-pilot?limit=${encodeURIComponent(limit)}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function saveChartCopilotEvaluation(payload, accessToken) {
+  return request("/api/v1/chart-copilot-pilot/evaluations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    accessToken,
+  });
+}
+
 export async function fetchOpenClawStatus(accessToken) {
   try {
     return request("/api/v1/openclaw/status", {

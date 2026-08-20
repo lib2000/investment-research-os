@@ -9,7 +9,7 @@
 
 ## 실행 환경
 
-- 프로젝트 루트: `C:\Users\lib20\InvestmentJournalApp`
+- 프로젝트 루트: `D:\workspace\InvestmentJournalApp`
 - 백엔드: WSL/Windows 접근용 FastAPI `http://172.17.210.136:8020`
 - Expo 웹 미리보기: `http://172.17.210.136:8085`
 - 참고: `8085`는 모바일 웹 표준 포트로 정리했다. 기존 `8082`는 외부 WSL 로컬 LLM 브리지 프로세스가 자동 점유한다.

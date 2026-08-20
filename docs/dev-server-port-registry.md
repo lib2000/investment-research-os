@@ -16,19 +16,19 @@
 
 | 앱 | 루트 | 백엔드/API | 웹/콘솔 | 모바일/Expo | 비고 |
 |---|---|---:|---:|---:|---|
-| 투자 리서치 OS | `C:\Users\lib20\InvestmentJournalApp` | `8001`, `8010` / fallback `8020` | `5173` | `8085` | 연구 콘솔은 `8001`, 모바일 API는 `8010` 우선, 오래된 점유가 있으면 `8020` 사용 |
-| 스포츠 분석 플랫폼 | `C:\Users\lib20\projects\sports-analysis-platform` | `8101` | `8181` |  | 원본 master 직접 수정 금지 시 worktree 사용 |
-| 스포츠 분석 플랫폼 worktree | `C:\Users\lib20\projects\sports-analysis-platform-worktree` | `8102` | `8182` |  | `codex/investigation` 전용 |
-| 우리집 통역사 | `C:\Projects\FamilyTranslatorApp` | `8201` | `8281` | `8282` | Tailscale 테스트 시 API URL 별도 확인 |
-| 가족 뉴스/아카이브 | `C:\Projects\FamilyNewsApp` | `8301` | `8381` | `8382` | 모바일 검증은 전용 Expo 포트 사용 |
-| KoreaTravel | `C:\Projects\KoreaTravel_RN_review` |  | `8481` | `8482` | EAS/WSL 빌드와 로컬 미리보기 분리 |
-| Monocut Web | `C:\AI\앱 제작\monocut` |  | `8501` |  | 배포 전 로컬 웹 확인 |
-| Monocut Mobile | `C:\AI\앱 제작\monocut-mobile` |  |  | `8582` | 웹뷰 래퍼/Expo 전용 |
+| 투자 리서치 OS | `D:\workspace\InvestmentJournalApp` | `8001`, `8010` / fallback `8020` | `5173` | `8085` | 연구 콘솔은 `8001`, 모바일 API는 `8010` 우선, 오래된 점유가 있으면 `8020` 사용 |
+| 스포츠 분석 플랫폼 | `D:\workspace\sports-analysis-platform` | `8101` | `8181` |  | 원본 master 직접 수정 금지 시 worktree 사용 |
+| 스포츠 분석 플랫폼 worktree | `D:\workspace\sports-analysis-platform-worktree` | `8102` | `8182` |  | `codex/investigation` 전용 |
+| 우리집 통역사 | `D:\workspace\FamilyTranslatorApp` | `8201` | `8281` | `8282` | Tailscale 테스트 시 API URL 별도 확인 |
+| 가족 뉴스/아카이브 | `D:\workspace\FamilyNewsApp` | `8301` | `8381` | `8382` | 모바일 검증은 전용 Expo 포트 사용 |
+| KoreaTravel | `D:\workspace\KoreaTravel_RN_review` |  | `8481` | `8482` | EAS/WSL 빌드와 로컬 미리보기 분리 |
+| Monocut Web | `D:\workspace\monocut` |  | `8501` |  | 배포 전 로컬 웹 확인 |
+| Monocut Mobile | `D:\workspace\monocut-mobile` |  |  | `8582` | 웹뷰 래퍼/Expo 전용 |
 
 ## 투자 리서치 OS 실행 예
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\scripts\start-research-backend.ps1 -Port 8001
 ```
 
@@ -51,14 +51,14 @@ Invoke-RestMethod http://127.0.0.1:8001/api/v1/system/health
 콘솔 HTML과 저장소 품질까지 함께 확인하려면 전용 상태 스크립트를 사용합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\status_research_console.ps1 -Strict
 ```
 
 모바일 API/앱 스택:
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\start_backend.ps1 -Port 8010 -StopExistingPortProcess
 .\tools\start_mobile_web.ps1 -Port 8085 -ApiBaseUrl http://127.0.0.1:8010 -StopExistingPortProcess
 ```
@@ -66,7 +66,7 @@ cd C:\Users\lib20\InvestmentJournalApp
 `8010`에 오래된 게이트웨이가 남아 최신 라우트가 없으면 강제로 덮어쓰지 말고 검증된 fallback을 사용합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\restart_backend_verified.ps1 -Port 8010 -FallbackPorts @(8020,8021,8022)
 .\tools\start_mobile_web.ps1 -Port 8085 -ApiBaseUrl http://127.0.0.1:8020 -StopExistingPortProcess
 ```
@@ -74,7 +74,7 @@ cd C:\Users\lib20\InvestmentJournalApp
 기본 상태 점검은 `8010`이 오래된 서버로 남아 최신 라우트가 없을 때 `8020`, `8021`, `8022`를 순서대로 확인합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\status_dev_servers.ps1 -Strict
 ```
 
@@ -88,14 +88,14 @@ cd C:\Users\lib20\InvestmentJournalApp
 React 연구 콘솔:
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp\apps\research-console
+cd D:\workspace\InvestmentJournalApp\apps\research-console
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 ## 점검
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\show_dev_server_ports.ps1
 ```
 

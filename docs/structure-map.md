@@ -182,7 +182,7 @@ Classic Research Console의 저장 데이터 탭에는 `시스템 구조 맵` �
 로컬 실행 전에는 아래 명령을 통과해야 합니다.
 
 ```powershell
-cd C:\Users\lib20\InvestmentJournalApp
+cd D:\workspace\InvestmentJournalApp
 .\tools\assert_project_root.ps1 -PassThru
 ```
 

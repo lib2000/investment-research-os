@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=636acbb87eee" />
+    <link rel="stylesheet" href="./styles.css?v=da57b02a88f8" />
   </head>
   <body>
     <main class="app-shell">
@@ -148,6 +148,124 @@
               <button id="backtestRunHistoryRefresh" class="secondary" type="button">결과 새로고침</button>
             </div>
             <div id="backtestRunHistory" class="backtest-run-history-list" aria-live="polite">저장된 백테스트 결과를 불러오는 중입니다.</div>
+          </section>
+          <section class="chart-copilot-pilot" aria-labelledby="chartCopilotPilotTitle">
+            <div class="chart-copilot-pilot-heading">
+              <div>
+                <span class="tool-kind">HUMAN-REVIEWED PILOT</span>
+                <h3 id="chartCopilotPilotTitle">TradingView AI 비교 실험</h3>
+                <p>최대 20개 보유·관심 종목의 1D·4H 분석을 최소 14일간 백테스트와 비교합니다. 이 기록은 주문 신호가 아닙니다.</p>
+              </div>
+              <div class="chart-copilot-pilot-actions">
+                <a id="chartCopilotOfficialLink" class="tool-external-link" href="https://www.tradingview.com/blog/en/tradingview-ai-chart-copilot-beta-57730/" target="_blank" rel="noreferrer">공식 Copilot 열기</a>
+                <button id="chartCopilotPromptCopy" class="secondary" type="button">검증 프롬프트 복사</button>
+                <button id="chartCopilotPilotRefresh" class="secondary" type="button">현황 새로고침</button>
+              </div>
+            </div>
+            <div id="chartCopilotPilotStatus" class="chart-copilot-pilot-status" aria-live="polite">파일럿 현황을 불러오는 중입니다.</div>
+            <div id="chartCopilotPilotTargets" class="chart-copilot-pilot-targets" aria-live="polite"></div>
+            <form id="chartCopilotEvaluationForm" class="chart-copilot-evaluation-form">
+              <label>
+                티커
+                <input name="ticker" required maxlength="40" autocomplete="off" placeholder="005930 또는 AAPL" />
+              </label>
+              <label>
+                분석 기준 시각
+                <input name="analysisAsOf" type="datetime-local" required />
+              </label>
+              <label>
+                시장
+                <select name="market">
+                  <option value="AUTO">자동</option>
+                  <option value="KR">한국</option>
+                  <option value="US">미국</option>
+                </select>
+              </label>
+              <label>
+                프롬프트 프로필
+                <select name="promptProfile">
+                  <option value="chart_analyzer">차트 분석</option>
+                  <option value="trading_mentor_analysis">분석 근거 학습</option>
+                  <option value="trading_mentor_indicator">지표 학습</option>
+                  <option value="trade_setup_analyzer">거래 설정 검토</option>
+                </select>
+              </label>
+              <fieldset class="chart-copilot-timeframes">
+                <legend>분석 시간봉</legend>
+                <label><input name="timeframes" type="checkbox" value="1D" checked /> 1D</label>
+                <label><input name="timeframes" type="checkbox" value="4H" checked /> 4H</label>
+              </fieldset>
+              <label>
+                시장 국면
+                <select name="regime">
+                  <option value="unclear">불명확</option>
+                  <option value="trending">추세</option>
+                  <option value="rangebound">횡보</option>
+                </select>
+              </label>
+              <label>
+                연구 판단
+                <select name="decision">
+                  <option value="no_trade">거래 없음</option>
+                  <option value="long">상승 설정</option>
+                  <option value="short">하락 설정</option>
+                  <option value="unclear">불명확</option>
+                </select>
+              </label>
+              <label>
+                모델 표시 신뢰도
+                <input name="confidence" type="number" min="0" max="1" step="0.05" placeholder="0~1, 선택" />
+              </label>
+              <label>
+                지지 가격
+                <input name="supportLevels" inputmode="decimal" placeholder="쉼표 구분, 예: 72000, 70500" />
+              </label>
+              <label>
+                저항 가격
+                <input name="resistanceLevels" inputmode="decimal" placeholder="쉼표 구분" />
+              </label>
+              <label>
+                진입가
+                <input name="entryPrice" type="number" min="0" step="any" placeholder="설정이 있을 때만" />
+              </label>
+              <label>
+                손절가
+                <input name="stopPrice" type="number" min="0" step="any" placeholder="설정이 있을 때만" />
+              </label>
+              <label>
+                목표가
+                <input name="targetPrice" type="number" min="0" step="any" placeholder="설정이 있을 때만" />
+              </label>
+              <label class="chart-copilot-wide-field">
+                확인 근거
+                <textarea name="evidence" required rows="3" placeholder="한 줄에 한 항목: 가격·지표·스윙 시점 등 확인 가능한 근거"></textarea>
+              </label>
+              <label class="chart-copilot-wide-field">
+                무효화 조건
+                <textarea name="invalidation" rows="2" placeholder="어떤 조건에서 이 해석이 무효가 되는지"></textarea>
+              </label>
+              <label class="chart-copilot-wide-field">
+                반대 시나리오
+                <textarea name="alternateScenario" rows="2" placeholder="기본 해석과 반대되는 경로"></textarea>
+              </label>
+              <label class="chart-copilot-wide-field">
+                누락 데이터
+                <textarea name="missingData" rows="2" placeholder="한 줄에 한 항목. 없으면 '없음'으로 명시"></textarea>
+              </label>
+              <label>
+                사람 검토
+                <select name="humanVerdict">
+                  <option value="pending">검토 대기</option>
+                  <option value="accepted">연구 기록 채택</option>
+                  <option value="rejected">기각</option>
+                </select>
+              </label>
+              <div class="chart-copilot-submit-row">
+                <button type="submit">비교 기록 저장</button>
+                <small>계좌·수량·토큰은 입력하지 마세요. 실제 주문과 자동 알림은 실행되지 않습니다.</small>
+              </div>
+            </form>
+            <div id="chartCopilotEvaluationList" class="chart-copilot-evaluation-list" aria-live="polite">저장된 비교 기록을 불러오는 중입니다.</div>
           </section>
           <div id="integratedWorkbench" class="integrated-workbench" hidden>
             <div class="integrated-workbench-bar">
@@ -1231,6 +1349,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=2b85a5627d93"></script>
+  <script type="module" src="./console.js?v=5cf417b57757"></script>
 </body>
 </html>

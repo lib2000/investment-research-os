@@ -40,6 +40,35 @@ class WorkspacePathsTest(unittest.TestCase):
             self.assertEqual(workspace_paths.trading_api_root(), (PROJECT_ROOT.parent / "alternate-trading").resolve())
             self.assertEqual(workspace_paths.openclaw_workspace_root(), (PROJECT_ROOT.parent / "alternate-openclaw").resolve())
 
+    def test_operational_scripts_do_not_reference_retired_project_roots(self) -> None:
+        paths = (
+            PROJECT_ROOT / "tools" / "check_investment_research_autostart.ps1",
+            PROJECT_ROOT / "tools" / "register_investment_research_autostart.ps1",
+            PROJECT_ROOT / "tools" / "show_dev_server_ports.ps1",
+        )
+        retired_roots = (
+            r"C:\Users\lib20\projects",
+            r"C:\Users\lib20\InvestmentJournalApp",
+            r"C:\Projects",
+            r"C:\AI\앱 제작",
+        )
+
+        for path in paths:
+            content = path.read_text(encoding="utf-8-sig")
+            for retired_root in retired_roots:
+                self.assertNotIn(retired_root, content, f"{path.name} still references {retired_root}")
+
+    def test_naver_scheduled_runner_uses_credential_store(self) -> None:
+        paths = (
+            PROJECT_ROOT / "tools" / "register_naver_market_close_journal_task.ps1",
+            PROJECT_ROOT / "tools" / "run_naver_market_close_journal.ps1",
+        )
+
+        for path in paths:
+            content = path.read_text(encoding="utf-8-sig")
+            self.assertNotIn("dev-local-token", content)
+            self.assertIn("CredentialTarget", content)
+
 
 if __name__ == "__main__":
     unittest.main()
