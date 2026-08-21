@@ -3315,6 +3315,11 @@ function renderPortfolioAnalysisOverview(status = lastPortfolioAnalysisStatus) {
   const readyCount = status.ready_count || 0;
   const completion = Number(status.average_completion);
   const completionText = Number.isFinite(completion) ? toPercent(completion) : "n/a";
+  const humanReviewQueue = Array.isArray(status.human_review_queue) ? status.human_review_queue : [];
+  const quantityConfirmationCount = Number(
+    status.human_review_quantity_confirmation_count ??
+      humanReviewQueue.filter((item) => item.quantity_confirmation_required).length
+  );
   const missingCounts = portfolioModuleMissingCounts(status);
   const totalMissing = Object.values(missingCounts).reduce((sum, value) => sum + value, 0);
   const latestDate = items
@@ -3339,6 +3344,7 @@ function renderPortfolioAnalysisOverview(status = lastPortfolioAnalysisStatus) {
     `<div class="${statusClass}"><span>전체 연결 상태</span><strong>${readyCount}/${holdingCount}</strong><p>${readyCount === holdingCount && holdingCount > 0 ? "모든 보유 종목이 연결됐습니다." : "추가 연결이 필요한 종목이 있습니다."}</p></div>`,
     `<div><span>평균 완성도</span><strong>${escapeHtml(completionText)}</strong><p>6개 모듈 기준 자동 계산</p></div>`,
     `<div class="${totalMissing === 0 ? "ok" : "warning"}"><span>누락 모듈</span><strong>${totalMissing}개</strong><p>${escapeHtml(missingText)}</p></div>`,
+    `<div class="${humanReviewQueue.length ? "warning" : "ok"}"><span>사람 검토</span><strong>${humanReviewQueue.length}건</strong><p>${escapeHtml(humanReviewQueue.length ? `수량 확인 ${quantityConfirmationCount}건 · 검토 게이트 미반영` : "검토 준비 패킷 없음")}</p></div>`,
     `<div><span>최근 업데이트</span><strong>${escapeHtml(latestDate)}</strong><p>저장 리포트 기준</p></div>`,
     `<div class="${staleItems.length ? "warning" : "ok"}"><span>다음 액션</span><strong>${staleItems.length ? "점검" : "유지"}</strong><p>${escapeHtml(staleItems.length ? `${staleItems.join(", ")} 먼저 보강` : "새 자료 입력 시 자동 비교")}</p></div>`,
   ].join("");
@@ -20014,6 +20020,16 @@ function formatKoreanResult(value) {
     const reviewReady = value.review_ready_count ?? 0;
     const documentCompletion = value.average_completion ?? 0;
     const reviewCompletion = value.average_review_completion ?? documentCompletion;
+    const humanReviewQueue = Array.isArray(value.human_review_queue) ? value.human_review_queue : [];
+    const humanReviewQueueLines = humanReviewQueue.map((item, index) => {
+      const portfolioText = (item.portfolios || []).join(", ") || "포트폴리오 미확인";
+      return [
+        `${index + 1}. ${displayCompanyName(item)} · ${item.reason || "사람 검토 필요"}`,
+        `   포함: ${portfolioText} · 패킷 ${item.packet_date || "날짜 미확인"}`,
+        `   다음 액션: ${item.next_action || "저장 증빙을 확인하세요."}`,
+        `   검토 게이트: 미반영`,
+      ].join("\n");
+    });
     return [
       `포트폴리오 전체 분석 현황`,
       ``,
@@ -20026,6 +20042,9 @@ function formatKoreanResult(value) {
       `기준 리포트 필요: ${value.needs_team_report_count || 0}개`,
       `사람 검토 준비 패킷: ${value.human_review_packet_count || 0}개 (문서 커버리지·검토 게이트에 미반영)`,
       `문서 보유와 투자 판단 검토는 다릅니다. 주문 지시가 아닌 리서치 점검 상태입니다.`,
+      ``,
+      `사람 검토 우선 큐`,
+      ...(humanReviewQueueLines.length ? humanReviewQueueLines : ["- 생성된 사람 검토 준비 패킷이 없습니다."]),
       ``,
       `종목별 현황`,
       ...(lines.length ? lines : ["- 저장된 보유 종목이 없습니다."]),

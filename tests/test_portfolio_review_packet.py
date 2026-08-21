@@ -15,6 +15,7 @@ if str(BACKEND_DIR) not in sys.path:
 from research_os.portfolio_analysis_coverage import (  # noqa: E402
     portfolio_analysis_module_state,
     portfolio_human_review_packet,
+    portfolio_human_review_queue,
     portfolio_vault_entries,
 )
 from research_os.portfolio_review_packet import (  # noqa: E402
@@ -105,3 +106,30 @@ class PortfolioReviewPacketTests(unittest.TestCase):
             review_packet = portfolio_human_review_packet(entries)
             self.assertIsNotNone(review_packet)
             self.assertEqual(review_packet["review_gate_effect"], "none")
+            self.assertTrue(review_packet["quantity_confirmation_required"])
+
+            queue = portfolio_human_review_queue(
+                [
+                    {
+                        "ticker": "OTHER",
+                        "company_name": "다른 종목",
+                        "portfolios": ["이형주"],
+                        "market_value": 900_000,
+                        "human_review_packet": {
+                            "date": "2026-08-21",
+                            "summary": "저장 증빙 검토 필요",
+                            "quantity_confirmation_required": False,
+                        },
+                    },
+                    {
+                        "ticker": "300080",
+                        "company_name": "플리토",
+                        "portfolios": ["이형주"],
+                        "market_value": 100_000,
+                        "human_review_packet": review_packet,
+                    },
+                ]
+            )
+            self.assertEqual([item["ticker"] for item in queue], ["300080", "OTHER"])
+            self.assertEqual(queue[0]["reason"], "계좌 동기화 미검출로 보유 수량 확인 필요")
+            self.assertEqual(queue[0]["review_gate_effect"], "none")

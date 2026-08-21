@@ -362,6 +362,7 @@ from research_os.portfolio_analysis_coverage import (
     portfolio_analysis_checklist_status,
     portfolio_analysis_entries_for_ticker,
     portfolio_human_review_packet,
+    portfolio_human_review_queue,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
     portfolio_analysis_review_state,
@@ -15810,6 +15811,10 @@ def check_portfolio_analysis_status(
     human_review_packet_count = sum(
         1 for item in items if item.get("human_review_packet")
     )
+    human_review_queue = portfolio_human_review_queue(items)
+    human_review_quantity_confirmation_count = sum(
+        1 for item in human_review_queue if item.get("quantity_confirmation_required")
+    )
     return {
         "status": "success",
         "module": "portfolio_analysis_status",
@@ -15823,11 +15828,14 @@ def check_portfolio_analysis_status(
         "needs_team_report_count": needs_team_report,
         "needs_checklist_review_count": needs_checklist_review,
         "human_review_packet_count": human_review_packet_count,
+        "human_review_quantity_confirmation_count": human_review_quantity_confirmation_count,
+        "human_review_queue": human_review_queue,
         "summary": (
             f"저장 포트폴리오 {len(response.portfolios)}개, 고유 보유 종목 {len(items)}개 기준 "
             f"문서 세트 완료 {ready_count}개, 문서 커버리지 {average_completion:.0%}, "
             f"검토 게이트 통과 {review_ready_count}개, 검토 충족률 {average_review_completion:.0%}, "
-            f"사람 검토 준비 패킷 {human_review_packet_count}개입니다."
+            f"사람 검토 준비 패킷 {human_review_packet_count}개"
+            f"(수량 확인 {human_review_quantity_confirmation_count}개)입니다."
         ),
         "items": sorted(
             items,

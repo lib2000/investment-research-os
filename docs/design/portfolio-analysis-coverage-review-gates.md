@@ -57,6 +57,7 @@ The 18:30 daily research operation writes the latest portfolio-analysis backlog 
 - It is produced only by explicit local-tool execution; the daily operation does not create packets automatically.
 - The packet is not a team report, trade setup, earnings assessment, or checklist. It never increases document coverage or clears the human-review gate.
 - If a brokerage sync says a holding is missing, the packet records that uncertainty and preserves the stored quantity until a person confirms it.
+- The analysis-status response exposes a read-only human-review queue for stored packets. Quantity-confirmation conflicts sort ahead of ordinary source review, but the queue cannot edit holdings or mark review work complete.
 
 ## Verification
 

@@ -87,6 +87,9 @@ def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[st
             data_quality = item.get("data_quality")
             quality_payload = data_quality if isinstance(data_quality, dict) else {}
             injected_data = item.get("injected_data")
+            holding_snapshot = item.get("holding_snapshot")
+            holding_payload = holding_snapshot if isinstance(holding_snapshot, dict) else {}
+            review_requirements = item.get("review_requirements")
             entries.append(
                 {
                     "ticker": ticker,
@@ -110,6 +113,14 @@ def portfolio_vault_entries(vault_dir: Path, tickers: list[str]) -> list[dict[st
                     or item.get("source_confidence"),
                     "source_count": len(injected_data) if isinstance(injected_data, list) else item.get("source_count"),
                     "current_price": item.get("current_price"),
+                    "quantity_confirmation_required": bool(
+                        holding_payload.get("quantity_confirmation_required")
+                    ),
+                    "review_requirements": (
+                        [str(requirement) for requirement in review_requirements if str(requirement).strip()]
+                        if isinstance(review_requirements, list)
+                        else []
+                    ),
                     "local_vault_verified": True,
                 }
             )
@@ -288,8 +299,60 @@ def portfolio_human_review_packet(entries: list[dict[str, Any]]) -> dict[str, An
         "summary": latest.get("summary"),
         "data_quality": latest.get("data_quality"),
         "source_count": latest.get("source_count"),
+        "quantity_confirmation_required": bool(latest.get("quantity_confirmation_required")),
+        "review_requirements": latest.get("review_requirements") or [],
         "review_gate_effect": "none",
     }
+
+
+def portfolio_human_review_queue(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Prioritize explicit evidence packets without treating them as approval."""
+    queue: list[dict[str, Any]] = []
+    for item in items:
+        packet = item.get("human_review_packet")
+        if not isinstance(packet, dict):
+            continue
+        quantity_confirmation_required = bool(packet.get("quantity_confirmation_required"))
+        try:
+            market_value = float(item.get("market_value") or 0)
+        except (TypeError, ValueError):
+            market_value = 0
+        queue.append(
+            {
+                "ticker": item.get("ticker"),
+                "official_symbol": item.get("official_symbol"),
+                "company_name": item.get("company_name"),
+                "portfolios": item.get("portfolios") or [],
+                "packet_date": packet.get("date"),
+                "packet_summary": packet.get("summary"),
+                "quantity_confirmation_required": quantity_confirmation_required,
+                "reason": (
+                    "계좌 동기화 미검출로 보유 수량 확인 필요"
+                    if quantity_confirmation_required
+                    else "저장 증빙의 사람 검토 필요"
+                ),
+                "next_action": (
+                    "실제 계좌 수량을 확인한 뒤, 불일치 여부만 별도로 기록하세요."
+                    if quantity_confirmation_required
+                    else "공식 원문과 저장 증빙을 읽고 논거 변화만 검토하세요."
+                ),
+                "review_requirements": packet.get("review_requirements") or [],
+                "review_gate_effect": "none",
+                "_priority": 0 if quantity_confirmation_required else 1,
+                "_market_value": market_value,
+            }
+        )
+    queue.sort(
+        key=lambda item: (
+            item["_priority"],
+            -item["_market_value"],
+            str(item.get("ticker") or ""),
+        )
+    )
+    for item in queue:
+        item.pop("_priority", None)
+        item.pop("_market_value", None)
+    return queue
 
 
 def missing_portfolio_analysis_labels(module_state: dict[str, bool]) -> list[str]:

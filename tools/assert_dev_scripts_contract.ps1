@@ -756,6 +756,7 @@ $contracts = @(
       'HUMAN_REVIEW_PACKET_TYPE',
       'portfolio_analysis_checklist_status',
       'portfolio_human_review_packet',
+      'portfolio_human_review_queue',
       'missing_portfolio_analysis_labels',
       'portfolio_analysis_next_action'
     )
