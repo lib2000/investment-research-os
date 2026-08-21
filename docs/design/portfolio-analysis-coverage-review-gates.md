@@ -51,6 +51,13 @@ For each ticker, the service publishes:
 
 The 18:30 daily research operation writes the latest portfolio-analysis backlog after its normal research-source refresh. This is local-only bookkeeping. It does not generate reports, call an LLM, send Telegram messages, or place orders.
 
+## Human-review evidence packets
+
+- A packet may inventory already stored official filings, price-refresh metadata, and portfolio-sync status for one holding.
+- It is produced only by explicit local-tool execution; the daily operation does not create packets automatically.
+- The packet is not a team report, trade setup, earnings assessment, or checklist. It never increases document coverage or clears the human-review gate.
+- If a brokerage sync says a holding is missing, the packet records that uncertainty and preserves the stored quantity until a person confirms it.
+
 ## Verification
 
 - Unit tests cover document-only checklist presence, partial checklist rejection, and threshold acceptance.

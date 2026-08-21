@@ -361,6 +361,7 @@ from research_os.portfolio_analysis_coverage import (
     missing_portfolio_analysis_labels,
     portfolio_analysis_checklist_status,
     portfolio_analysis_entries_for_ticker,
+    portfolio_human_review_packet,
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
     portfolio_analysis_review_state,
@@ -15739,6 +15740,12 @@ def check_portfolio_analysis_status(
             ),
             reverse=True,
         )
+        review_packet = portfolio_human_review_packet(ticker_entries)
+        report_entries = [
+            entry
+            for entry in sorted_entries
+            if str(entry.get("type") or "").strip().lower() != "human-review-packet"
+        ]
         module_state = portfolio_analysis_module_state(ticker_entries)
         review_state = portfolio_analysis_review_state(ticker_entries)
         checklist_status = portfolio_analysis_checklist_status(ticker_entries)
@@ -15766,8 +15773,8 @@ def check_portfolio_analysis_status(
                 "review_completion_rate": reviewed_count / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
                 "missing_modules": missing_labels,
                 "review_missing_modules": review_missing_labels,
-                "latest_report_date": sorted_entries[0].get("date") if sorted_entries else None,
-                "latest_report_summary": sorted_entries[0].get("summary") if sorted_entries else None,
+                "latest_report_date": report_entries[0].get("date") if report_entries else None,
+                "latest_report_summary": report_entries[0].get("summary") if report_entries else None,
                 "latest_files": [
                     {
                         "type": entry.get("type"),
@@ -15775,8 +15782,9 @@ def check_portfolio_analysis_status(
                         "date": entry.get("date"),
                         "summary": entry.get("summary"),
                     }
-                    for entry in sorted_entries[:3]
+                    for entry in report_entries[:3]
                 ],
+                "human_review_packet": review_packet,
                 "next_action": next_action,
             }
         )
@@ -15799,6 +15807,9 @@ def check_portfolio_analysis_status(
     needs_checklist_review = sum(
         1 for item in items if not item["review_state"]["checklist"]
     )
+    human_review_packet_count = sum(
+        1 for item in items if item.get("human_review_packet")
+    )
     return {
         "status": "success",
         "module": "portfolio_analysis_status",
@@ -15811,10 +15822,12 @@ def check_portfolio_analysis_status(
         "average_review_completion": average_review_completion,
         "needs_team_report_count": needs_team_report,
         "needs_checklist_review_count": needs_checklist_review,
+        "human_review_packet_count": human_review_packet_count,
         "summary": (
             f"저장 포트폴리오 {len(response.portfolios)}개, 고유 보유 종목 {len(items)}개 기준 "
             f"문서 세트 완료 {ready_count}개, 문서 커버리지 {average_completion:.0%}, "
-            f"검토 게이트 통과 {review_ready_count}개, 검토 충족률 {average_review_completion:.0%}입니다."
+            f"검토 게이트 통과 {review_ready_count}개, 검토 충족률 {average_review_completion:.0%}, "
+            f"사람 검토 준비 패킷 {human_review_packet_count}개입니다."
         ),
         "items": sorted(
             items,

@@ -6620,6 +6620,25 @@ pre {
     grid-column: 1;
   }
 
+  /*
+   * A bare `1fr` track keeps its automatic minimum size. Portfolio labels
+   * contain full-width controls, so that minimum can escape a 390px viewport
+   * even though the panel itself is correctly constrained. Use an explicit
+   * zero minimum for the form stack and its single mobile column.
+   */
+  .form-stack,
+  .form-stack > *,
+  .form-grid,
+  .form-grid > *,
+  .editor-block,
+  .editor-block > * {
+    min-width: 0;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .portfolio-toolbar,
   .portfolio-family-grid,
   .portfolio-analysis-overview,
@@ -6631,6 +6650,26 @@ pre {
 
   .portfolio-performance-header {
     display: grid;
+  }
+
+  .portfolio-execution-box {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .editor-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .editor-actions > button,
+  .portfolio-execution-box > button {
+    min-width: 0;
+    width: 100%;
   }
 
   .dashboard-card.automation-digest-card,

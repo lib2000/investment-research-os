@@ -19995,6 +19995,10 @@ function formatKoreanResult(value) {
       const reviewMissingText = (item.review_missing_modules || []).length
         ? `검토 게이트 보강: ${(item.review_missing_modules || []).join(", ")}`
         : "검토 게이트 통과";
+      const reviewPacket = item.human_review_packet || null;
+      const reviewPacketText = reviewPacket
+        ? `사람 검토 준비 패킷: ${reviewPacket.date || "날짜 미확인"} · ${reviewPacket.summary || "저장 증빙 확인"} · 검토 게이트 미반영`
+        : "사람 검토 준비 패킷 없음";
       return [
         `${index + 1}. ${displayCompanyName(item)} · 문서 ${toPercent(item.completion_rate)} · 검토 ${toPercent(item.review_completion_rate ?? item.completion_rate)}`,
         `   ${marks}`,
@@ -20002,6 +20006,7 @@ function formatKoreanResult(value) {
         `   포함: ${portfolioText}`,
         `   ${missingText}`,
         `   ${reviewMissingText}`,
+        `   ${reviewPacketText}`,
         `   다음 액션: ${item.next_action || "없음"}`,
       ].join("\n");
     });
@@ -20019,6 +20024,7 @@ function formatKoreanResult(value) {
       `검토 충족률: ${toPercent(reviewCompletion)}`,
       `체크리스트 검토 보강: ${value.needs_checklist_review_count || 0}개`,
       `기준 리포트 필요: ${value.needs_team_report_count || 0}개`,
+      `사람 검토 준비 패킷: ${value.human_review_packet_count || 0}개 (문서 커버리지·검토 게이트에 미반영)`,
       `문서 보유와 투자 판단 검토는 다릅니다. 주문 지시가 아닌 리서치 점검 상태입니다.`,
       ``,
       `종목별 현황`,

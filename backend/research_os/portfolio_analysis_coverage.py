@@ -20,6 +20,11 @@ REQUIRED_PORTFOLIO_ANALYSIS_MODULES = [
 # readiness boundary, so coverage uses the same gate.
 REVIEW_CHECKLIST_COMPLETION_THRESHOLD = 0.75
 
+# A human-review packet is an evidence inventory only.  It must never make a
+# position look documented or approved simply because the source links were
+# gathered automatically.
+HUMAN_REVIEW_PACKET_TYPE = "human-review-packet"
+
 
 def normalize_portfolio_analysis_ticker(value: Any) -> str:
     return str(value or "").strip().upper()
@@ -265,6 +270,26 @@ def portfolio_analysis_review_state(entries: list[dict[str, Any]]) -> dict[str, 
     state = portfolio_analysis_module_state(entries)
     state["checklist"] = portfolio_analysis_checklist_status(entries)["review_ready"]
     return state
+
+
+def portfolio_human_review_packet(entries: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the newest non-decision evidence packet without changing module state."""
+    packets = [
+        entry
+        for entry in entries
+        if str(entry.get("type") or "").strip().lower() == HUMAN_REVIEW_PACKET_TYPE
+    ]
+    if not packets:
+        return None
+    latest = max(packets, key=_entry_sort_key)
+    return {
+        "date": latest.get("date") or latest.get("created_at") or latest.get("saved_at"),
+        "file_name": latest.get("file_name"),
+        "summary": latest.get("summary"),
+        "data_quality": latest.get("data_quality"),
+        "source_count": latest.get("source_count"),
+        "review_gate_effect": "none",
+    }
 
 
 def missing_portfolio_analysis_labels(module_state: dict[str, bool]) -> list[str]:

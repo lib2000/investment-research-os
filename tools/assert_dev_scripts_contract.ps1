@@ -735,15 +735,41 @@ $contracts = @(
 
 
   @{
+    Path = "tools\build_portfolio_human_review_packet.py"
+    Snippets = @(
+      '사람 검토 준비 패킷',
+      '--ticker',
+      '--write',
+      'local_only',
+      'build_portfolio_human_review_packet'
+    )
+  },
+
+
+  @{
     Path = "backend\research_os\portfolio_analysis_coverage.py"
     Snippets = @(
       'REQUIRED_PORTFOLIO_ANALYSIS_MODULES',
       'team_report',
       'smart-trade-setup',
       'REVIEW_CHECKLIST_COMPLETION_THRESHOLD',
+      'HUMAN_REVIEW_PACKET_TYPE',
       'portfolio_analysis_checklist_status',
+      'portfolio_human_review_packet',
       'missing_portfolio_analysis_labels',
       'portfolio_analysis_next_action'
+    )
+  },
+
+
+  @{
+    Path = "backend\research_os\portfolio_review_packet.py"
+    Snippets = @(
+      'human-review-packet',
+      'stored_dart_filings',
+      'build_portfolio_human_review_packet',
+      'affects_review_gate',
+      'write_portfolio_human_review_packet'
     )
   },
 
