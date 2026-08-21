@@ -8519,37 +8519,106 @@ function renderTodayPriorityBriefCard(brief) {
   `;
 }
 
-function renderDossierPreviewCard(dossier) {
-  if (!dossier?.summary) {
+function renderDossierPreviewCard(dossier, readiness = {}, dashboard = {}) {
+  const ticker = dossier?.ticker || dashboard?.ticker || activeTicker || "";
+  const candidateCount = Number(readiness?.candidate_source_count || 0);
+  const candidateSourceCount = Number.isFinite(candidateCount) ? Math.max(0, candidateCount) : 0;
+  const storedCount = Number(dossier?.source_count ?? readiness?.stored_source_count ?? 0);
+  const storedSourceCount = Number.isFinite(storedCount) ? Math.max(0, storedCount) : 0;
+  const hasStoredEvidence = Boolean(dossier?.summary) && storedSourceCount > 0;
+  const readinessStatus =
+    readiness?.status ||
+    (hasStoredEvidence ? "ready" : candidateSourceCount ? "review_required" : "insufficient_evidence");
+  const statusLabel = {
+    ready: "저장된 근거 있음",
+    review_required: "원문 검토 필요",
+    insufficient_evidence: "근거 보강 필요",
+  }[readinessStatus] || "확인 필요";
+  const filingHeadline =
+    readiness?.filing_headline || dashboard?.dart_filing_signal?.headline || "공시 신호 없음";
+  const filingSummary =
+    dashboard?.dart_filing_signal?.summary ||
+    (readiness?.filing_available
+      ? "공시 원문을 검토한 뒤에만 합성 근거로 사용합니다."
+      : "새 공시 신호가 들어오면 원문 확인부터 진행합니다.");
+  const scenarioBlock = (label, items, className) => `
+    <div class="${className}">
+      <b>${escapeHtml(label)}</b>
+      ${(items.length ? items : ["보강 필요"])
+        .map((item) => `<span>${escapeHtml(compactOutputText(item, 72))}</span>`)
+        .join("")}
+    </div>
+  `;
+  const evidenceSpine = `
+    <div class="dossier-evidence-spine" aria-label="Dossier 근거 상태">
+      <div>
+        <span>합성 후보</span>
+        <strong>${escapeHtml(formatNumber(candidateSourceCount))}건</strong>
+        <small>적격 보고서 유형만 선별</small>
+      </div>
+      <div class="${readiness?.filing_available ? "reference" : "neutral"}">
+        <span>DART 공시 신호</span>
+        <strong>${escapeHtml(compactOutputText(filingHeadline, 42))}</strong>
+        <small>${escapeHtml(compactOutputText(filingSummary, 82))}</small>
+      </div>
+      <div class="${escapeHtml(readinessStatus)}">
+        <span>합성 상태</span>
+        <strong>${escapeHtml(statusLabel)}</strong>
+        <small>${escapeHtml(compactOutputText(readiness?.next_action || "원문과 티커를 먼저 확인하세요.", 82))}</small>
+      </div>
+    </div>
+  `;
+
+  if (!hasStoredEvidence) {
+    const legacyNotice = dossier?.summary
+      ? `<p class="dossier-workspace-legacy">기존 저장 Dossier가 근거 0건이어서 현재 투자 논거로 표시하지 않습니다.</p>`
+      : "";
+    const hasCandidates = candidateSourceCount > 0;
     return `
-      <article class="dashboard-card warning dossier-preview-card">
-        <span>Dossier 합성</span>
-        <strong>생성 필요</strong>
-        <p>저장 자료를 중복 제거한 뒤 공통 사실, 강세·약세 논거, 핵심 쟁점과 관찰 지표를 하나로 합성하세요.</p>
-        <div class="dashboard-card-actions">
-          <button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(activeTicker)}" type="button">Dossier 생성</button>
+      <section class="dashboard-dossier-workspace warning" aria-label="리서치 Dossier 근거 상태">
+        <div class="dossier-workspace-head">
+          <div>
+            <span>RESEARCH DOSSIER</span>
+            <h3>${hasCandidates ? "원문 검토 후 합성" : "근거 보강 후 합성"}</h3>
+            <p>Dossier는 저장 개수만으로 만들지 않습니다. 적격 원문과 티커를 확인한 뒤에만 투자 논거를 합성합니다.</p>
+          </div>
+          <b class="dossier-workspace-badge">읽기 전용 · ${escapeHtml(statusLabel)}</b>
         </div>
-      </article>
+        ${evidenceSpine}
+        <div class="dossier-workspace-empty">
+          <strong>${hasCandidates ? "후보 자료는 있지만, 합성 전 사람이 확인해야 합니다." : "검증된 리서치 본문이 없어 Dossier 합성을 보류했습니다."}</strong>
+          <p>${hasCandidates
+            ? "저장 데이터에서 출처·티커·본문 품질을 확인한 뒤에만 강세·약세 논거를 묶으세요."
+            : "공시 신호는 원문 확인 전까지 자동 합성 근거가 아닙니다. 공식 공시·IR·실적 자료 또는 검증된 리서치 본문을 먼저 저장하세요."}</p>
+          ${legacyNotice}
+        </div>
+        <p class="dossier-workspace-disclosure">${escapeHtml(readiness?.disclosure || "공시 신호는 원문 검토 전까지 Dossier 합성 근거로 자동 포함하지 않습니다.")}</p>
+        <div class="dashboard-card-actions">
+          ${hasCandidates ? `<button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(ticker)}" type="button">검토 후 Dossier 합성</button>` : `<button data-workflow-action="capture" type="button">근거 자료 입력</button>`}
+          <button data-dashboard-ticker-action="memory" data-dashboard-ticker="${escapeHtml(ticker)}" class="secondary" type="button">저장 데이터 확인</button>
+        </div>
+      </section>
     `;
   }
+
   const confidence = Number(dossier.confidence);
-  const confidenceText = Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "n/a";
+  const confidenceText = Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "미평가";
   const consensus = (dossier.consensus_facts || []).slice(0, 2);
   const bull = (dossier.bull_thesis || []).slice(0, 2);
   const bear = (dossier.bear_thesis || []).slice(0, 2);
   const cruxes = (dossier.cruxes || []).slice(0, 2);
   const observables = (dossier.observables || []).slice(0, 3);
-  const scenarioBlock = (label, items, className) => `
-    <div class="${className}">
-      <b>${escapeHtml(label)}</b>
-      ${(items.length ? items : ["보강 필요"]).map((item) => `<span>${escapeHtml(compactOutputText(item, 72))}</span>`).join("")}
-    </div>
-  `;
   return `
-    <article class="dashboard-card ok dossier-preview-card">
-      <span>Dossier 합성</span>
-      <strong>${escapeHtml(compactOutputText(dossier.summary, 94))}</strong>
-      <p>고유 자료 ${escapeHtml(formatNumber(dossier.source_count || 0))}개 · 중복 ${escapeHtml(formatNumber(dossier.duplicate_count || 0))}개 · 신뢰도 ${escapeHtml(confidenceText)}</p>
+    <section class="dashboard-dossier-workspace ok" aria-label="리서치 Dossier">
+      <div class="dossier-workspace-head">
+        <div>
+          <span>RESEARCH DOSSIER</span>
+          <h3>${escapeHtml(compactOutputText(dossier.summary, 112))}</h3>
+          <p>고유 자료 ${escapeHtml(formatNumber(storedSourceCount))}개 · 중복 ${escapeHtml(formatNumber(dossier.duplicate_count || 0))}개 · 합성 신뢰도 ${escapeHtml(confidenceText)}</p>
+        </div>
+        <b class="dossier-workspace-badge">읽기 전용 · ${escapeHtml(statusLabel)}</b>
+      </div>
+      ${evidenceSpine}
       <div class="dossier-scenario-grid">
         ${scenarioBlock("공통 사실", consensus, "neutral")}
         ${scenarioBlock("강세 논거", bull, "bull")}
@@ -8557,11 +8626,12 @@ function renderDossierPreviewCard(dossier) {
         ${scenarioBlock("핵심 쟁점", cruxes, "crux")}
         ${scenarioBlock("관찰 지표", observables, "observable")}
       </div>
+      <p class="dossier-workspace-disclosure">${escapeHtml(readiness?.disclosure || "공시 신호는 원문 검토 전까지 Dossier 합성 근거로 자동 포함하지 않습니다.")}</p>
       <div class="dashboard-card-actions">
-        <button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(dossier.ticker || activeTicker)}" type="button">Dossier 갱신</button>
-        <button data-dashboard-ticker-action="memory" data-dashboard-ticker="${escapeHtml(dossier.ticker || activeTicker)}" class="secondary" type="button">근거 열기</button>
+        <button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(ticker)}" type="button">Dossier 갱신</button>
+        <button data-dashboard-ticker-action="memory" data-dashboard-ticker="${escapeHtml(ticker)}" class="secondary" type="button">근거 열기</button>
       </div>
-    </article>
+    </section>
   `;
 }
 
@@ -8815,6 +8885,10 @@ function renderDashboardCards(dashboard) {
   const latestReportCount = dashboard.latest_reports?.length || 0;
   const automationDigest = dashboard.automation_digest || {};
   const automationText = automationDigest.headline || (automationDigest.target_count ? "자동화 연결됨" : "자동화 준비 필요");
+  const dossierReadiness = dashboard.dossier_readiness || {};
+  const dossierAction = dossierReadiness.status === "insufficient_evidence"
+    ? `<button data-workflow-action="capture" type="button">근거 보강</button>`
+    : `<button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(dashboard.ticker)}" type="button">합성 갱신</button>`;
 
   setDashboardCards(`
     <section class="dashboard-clean-layout" aria-label="대시보드 요약">
@@ -8869,7 +8943,7 @@ function renderDashboardCards(dashboard) {
         <article class="dashboard-clean-panel">
           <div class="dashboard-clean-panel-head">
             <span>판단 신호</span>
-            <button data-dashboard-ticker-action="dossier" data-dashboard-ticker="${escapeHtml(dashboard.ticker)}" type="button">합성 갱신</button>
+            ${dossierAction}
           </div>
           <ul class="dashboard-clean-signal-list">
             ${renderDashboardCleanSignals(dashboard)}
@@ -8878,6 +8952,12 @@ function renderDashboardCards(dashboard) {
       </section>
 
       ${renderRecentDartFilingStrip(dashboard.dart_filing_signal)}
+
+      ${renderDossierPreviewCard(
+        dashboard.latest_dossier_preview,
+        dossierReadiness,
+        dashboard
+      )}
 
       <details class="dashboard-clean-details">
         <summary>세부 운영 신호 펼치기</summary>

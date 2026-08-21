@@ -146,6 +146,52 @@ def build_dossier_payload(runtime: DossierSynthesisRuntime, ticker: str, vault_d
     }
 
 
+def build_insufficient_evidence_result(payload: dict) -> dict:
+    """Return a displayable, non-persisted Dossier result when no sources qualify.
+
+    ``build_dossier_payload`` intentionally has useful fallback language so a
+    populated Dossier can still name its review questions.  That language must
+    never become a saved thesis when the verified-source set is empty.
+    """
+    source_count = int(payload.get("source_count") or 0)
+    if source_count > 0:
+        raise ValueError("근거가 있는 Dossier에는 근거 부족 결과를 만들 수 없습니다.")
+
+    return {
+        "status": "insufficient_evidence",
+        "module": "dossier_synthesis",
+        "ticker": payload.get("ticker"),
+        "company_name": payload.get("company_name"),
+        "date": payload.get("date"),
+        "source_count": source_count,
+        "duplicate_count": int(payload.get("duplicate_count") or 0),
+        "confidence": None,
+        "source_status": "insufficient",
+        "saved": False,
+        "review_gate_effect": "none",
+        "summary": "Dossier 합성에 사용할 검증된 리서치 자료가 없습니다.",
+        "thesis_summary": None,
+        "consensus_facts": [],
+        "bull_thesis": [],
+        "bear_thesis": [],
+        "cruxes": [],
+        "observables": [],
+        "invalidation_conditions": [],
+        "latest_changes": [],
+        "duplicates": payload.get("duplicates") or [],
+        "missing_requirements": [
+            "공식 공시·IR·실적 자료 또는 검증된 리서치 본문을 정보 입력에 저장",
+            "티커와 원문 본문 추출 상태를 사람이 확인",
+            "최소 1건의 적격 자료가 준비된 뒤 Dossier 합성 재실행",
+        ],
+        "next_actions": [
+            "저장 데이터에서 원문과 티커 인증 상태를 확인하세요.",
+            "공식 공시·IR·실적 자료를 정보 입력에 저장하고 본문 품질을 검토하세요.",
+            "자료가 준비된 뒤에만 Dossier 합성을 다시 실행하세요.",
+        ],
+    }
+
+
 def render_dossier_markdown(payload: dict) -> str:
     def bullet(items: list[str] | list[dict], empty: str = "표시할 항목이 없습니다.") -> str:
         if not items:

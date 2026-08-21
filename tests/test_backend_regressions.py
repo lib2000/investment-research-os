@@ -12695,6 +12695,30 @@ class DashboardHelpersModuleTests(unittest.TestCase):
         self.assertEqual(journal["key_drivers"], ["AI", "금리", "달러", "유가"])
         self.assertEqual(thesis["thesis_summary"], "수출 성장")
 
+    def test_dashboard_helpers_describe_dossier_evidence_gate(self):
+        from research_os import dashboard_helpers
+
+        ready = dashboard_helpers.build_dossier_readiness(
+            [
+                {"type": "research-capture", "summary": "실적 원문이 충분히 저장되었습니다."},
+                {"type": "dossier-synthesis", "summary": "이전 합성"},
+            ],
+            {"file_name": "003230-dossier.md", "source_count": 2},
+            {"headline": "반기보고서", "recent_count": 1},
+        )
+        insufficient = dashboard_helpers.build_dossier_readiness(
+            [{"type": "dart-filing-watch", "summary": "반기보고서"}],
+            {},
+            {"headline": "반기보고서", "recent_count": 1},
+        )
+
+        self.assertEqual(ready["status"], "ready")
+        self.assertEqual(ready["candidate_source_count"], 1)
+        self.assertTrue(ready["filing_available"])
+        self.assertEqual(insufficient["status"], "insufficient_evidence")
+        self.assertEqual(insufficient["candidate_source_count"], 0)
+        self.assertIn("자동 포함하지 않습니다", insufficient["disclosure"])
+
 class ResearchMemoryFilesModuleTests(unittest.TestCase):
     def test_research_memory_files_module_resolves_payload_paths_and_updates_tail_sections(self):
         from research_os import research_memory_files
@@ -16268,6 +16292,72 @@ class DossierSynthesisModuleTests(unittest.TestCase):
         self.assertIn("- 중복 제외: 1개", markdown)
         self.assertIn("- 합성 신뢰도: 82%", markdown)
         self.assertIn("2026-06-18 · broker-report · 계약 확대 업데이트", markdown)
+
+    def test_dossier_synthesis_empty_evidence_result_has_no_generated_thesis(self):
+        from research_os import dossier_synthesis
+
+        result = dossier_synthesis.build_insufficient_evidence_result(
+            {
+                "ticker": "005930",
+                "company_name": "삼성전자",
+                "date": "2026-08-21",
+                "source_count": 0,
+                "duplicate_count": 2,
+                "duplicates": [{"file_name": "legacy.md"}],
+            }
+        )
+
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertFalse(result["saved"])
+        self.assertIsNone(result["thesis_summary"])
+        self.assertEqual(result["bull_thesis"], [])
+        self.assertEqual(result["duplicate_count"], 2)
+
+    def test_dossier_queue_does_not_persist_when_no_sources_qualify(self):
+        from research_os import dossier_queue
+
+        save_calls: list[dict] = []
+        runtime = SimpleNamespace(
+            ensure_verified_ticker=lambda ticker, _settings: ticker,
+            resolve_vault_dir=lambda _value: Path("research_vault"),
+            save_research_markdown=lambda **kwargs: save_calls.append(kwargs),
+        )
+        settings = SimpleNamespace(research_vault_dir="research_vault")
+        payload = {
+            "ticker": "005930",
+            "company_name": "삼성전자",
+            "date": "2026-08-21",
+            "source_count": 0,
+            "duplicate_count": 0,
+        }
+
+        with patch.object(dossier_queue, "build_dossier_payload", return_value=payload):
+            result = dossier_queue.synthesize_and_save_dossier(
+                runtime,
+                "005930",
+                settings,
+                save_result=True,
+            )
+
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertFalse(result["saved"])
+        self.assertEqual(save_calls, [])
+
+    def test_console_renders_dossier_evidence_gate_in_dashboard_and_mobile_css(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        styles = (PROJECT_ROOT / "mobile_app" / "research_console" / "styles.css").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("function renderDossierPreviewCard(dossier, readiness = {}, dashboard = {})", console_js)
+        self.assertIn("dashboard.dossier_readiness", console_js)
+        self.assertIn("근거 자료 입력", console_js)
+        self.assertIn("DART 공시 신호", console_js)
+        self.assertIn("dossier-evidence-spine", styles)
+        self.assertIn(".dashboard-dossier-workspace", styles)
+        self.assertIn(".dossier-workspace-head", styles)
 
 
 class ResearchMemoryPolicyTests(unittest.TestCase):

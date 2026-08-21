@@ -631,6 +631,7 @@ class TickerDashboardResponse(BaseModel):
     dart_filing_signal: dict = Field(default_factory=dict)
     latest_customs_trade_reference: dict = Field(default_factory=dict)
     latest_dossier_preview: dict = Field(default_factory=dict)
+    dossier_readiness: dict = Field(default_factory=dict)
     latest_market_journal_reference: dict = Field(default_factory=dict)
     document_quality_digest: dict = Field(default_factory=dict)
     today_priority_brief: dict = Field(default_factory=dict)

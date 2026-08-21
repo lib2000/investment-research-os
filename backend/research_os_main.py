@@ -7449,6 +7449,11 @@ def build_ticker_dashboard(ticker: str, vault_dir: Path, settings: Settings) -> 
         recommended_actions.append("새 뉴스나 수치가 들어오면 빠른 정보 저장으로 기존 논거 영향도를 점검하세요.")
 
     latest_dossier_preview = build_latest_dossier_preview(ticker, entries, vault_dir)
+    dossier_readiness = dashboard_helpers.build_dossier_readiness(
+        entries,
+        latest_dossier_preview,
+        dart_filing_signal,
+    )
     document_quality_digest = build_document_quality_digest(ticker, entries, vault_dir)
     latest_market_journal_reference = build_latest_market_journal_reference(settings)
     automation_digest = build_research_automation_dashboard_digest(settings)
@@ -7643,6 +7648,7 @@ def build_ticker_dashboard(ticker: str, vault_dir: Path, settings: Settings) -> 
         dart_filing_signal=dart_filing_signal,
         latest_customs_trade_reference=latest_customs_trade_reference,
         latest_dossier_preview=latest_dossier_preview,
+        dossier_readiness=dossier_readiness,
         latest_market_journal_reference=latest_market_journal_reference,
         document_quality_digest=document_quality_digest,
         today_priority_brief=today_priority_brief,
@@ -14827,7 +14833,8 @@ def run_dossier_synthesis(
 ) -> dict:
     """
     저장된 리포트, 정보입력, 논거 영향도 분석을 중복 제거한 뒤 종목별 Dossier를 합성합니다.
-    결과는 RAG 투자 논거 스냅샷 DB에도 반영되어 후속 분석이 최신 논거를 바로 사용합니다.
+    검증된 고유 자료가 있을 때만 결과를 저장하고 RAG 투자 논거 스냅샷을 갱신합니다.
+    자료가 없으면 저장 없이 근거 보강 상태만 반환합니다.
     """
     return synthesize_and_save_dossier(ticker, settings, save_result=save_result)
 

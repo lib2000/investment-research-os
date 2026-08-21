@@ -5,6 +5,7 @@ from __future__ import annotations
 from re import search, sub
 from types import SimpleNamespace
 
+from .dossier_text import is_allowed_dossier_source_entry
 from .models import DashboardReportSummary, ResearchMemoryFile
 
 
@@ -57,6 +58,49 @@ def build_latest_dossier_preview(
         "bear_thesis": (source.get("bear_thesis") or [])[:3],
         "cruxes": (source.get("cruxes") or [])[:3],
         "observables": (source.get("observables") or [])[:4],
+    }
+
+
+def build_dossier_readiness(
+    entries: list[dict],
+    latest_dossier_preview: dict,
+    dart_filing_signal: dict,
+) -> dict:
+    """Describe the evidence gate without generating or saving a Dossier."""
+    candidate_source_count = sum(
+        1 for entry in entries if is_allowed_dossier_source_entry(entry)
+    )
+    stored_source_count = int((latest_dossier_preview or {}).get("source_count") or 0)
+    has_saved_dossier = bool((latest_dossier_preview or {}).get("file_name"))
+    filing_headline = str((dart_filing_signal or {}).get("headline") or "").strip()
+    filing_available = bool(
+        filing_headline or int((dart_filing_signal or {}).get("recent_count") or 0)
+    )
+
+    if has_saved_dossier and stored_source_count > 0:
+        status = "ready"
+        headline = "검증된 Dossier 저장됨"
+        next_action = "최신 공시·실적 변화를 원문과 대조한 뒤 필요한 경우 갱신하세요."
+    elif candidate_source_count > 0:
+        status = "review_required"
+        headline = "원문 검토 후 합성 가능"
+        next_action = "후보 자료의 원문·티커·본문 품질을 확인한 뒤 Dossier를 합성하세요."
+    else:
+        status = "insufficient_evidence"
+        headline = "근거 보강 필요"
+        next_action = "공식 공시·IR·실적 자료 또는 검증된 리서치 본문을 저장한 뒤 다시 확인하세요."
+
+    return {
+        "status": status,
+        "headline": headline,
+        "candidate_source_count": candidate_source_count,
+        "stored_source_count": stored_source_count,
+        "has_saved_dossier": has_saved_dossier,
+        "filing_available": filing_available,
+        "filing_headline": filing_headline or None,
+        "review_required": True,
+        "next_action": next_action,
+        "disclosure": "DART 공시 신호는 원문·티커·본문을 검토하기 전에는 Dossier 합성 근거로 자동 포함하지 않습니다.",
     }
 
 

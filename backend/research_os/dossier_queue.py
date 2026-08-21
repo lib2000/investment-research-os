@@ -224,6 +224,11 @@ def synthesize_and_save_dossier(
     normalized_ticker = runtime.ensure_verified_ticker(ticker, settings)
     vault_dir = runtime.resolve_vault_dir(settings.research_vault_dir)
     payload = build_dossier_payload(runtime, normalized_ticker, vault_dir)
+    if int(payload.get("source_count") or 0) <= 0:
+        # Do not turn fallback wording into a persisted investment thesis.
+        # The preview endpoint intentionally returns this structured state too,
+        # so every client sees the same evidence gate before an action is saved.
+        return dossier_synthesis.build_insufficient_evidence_result(payload)
     storage = None
     if save_result:
         markdown = render_dossier_markdown(payload)
