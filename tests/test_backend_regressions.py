@@ -16358,6 +16358,10 @@ class DossierSynthesisModuleTests(unittest.TestCase):
         self.assertIn("dossier-evidence-spine", styles)
         self.assertIn(".dashboard-dossier-workspace", styles)
         self.assertIn(".dossier-workspace-head", styles)
+        self.assertIn(
+            ".dashboard-dossier-workspace .dashboard-card-actions button {\n    min-height: 44px;",
+            styles,
+        )
 
 
 class ResearchMemoryPolicyTests(unittest.TestCase):

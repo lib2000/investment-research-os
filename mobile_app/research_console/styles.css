@@ -6786,6 +6786,11 @@ pre {
     max-width: 100%;
   }
 
+  /* Component-specific desktop sizing otherwise overrides the mobile control baseline. */
+  .dashboard-dossier-workspace .dashboard-card-actions button {
+    min-height: 44px;
+  }
+
   .editor-wide {
     grid-column: 1;
   }
