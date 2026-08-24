@@ -12066,8 +12066,8 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioNpsAllocationButton: "국내주식 14% 비중 점검을 시작했습니다.",
   portfolioNpsRebalanceButton: "국내주식 14% 리밸런싱 후보 생성을 시작했습니다.",
   portfolioAnalysisStatusButton: "전체 분석 현황 점검을 시작했습니다.",
-  portfolioTeamQueueButton: "기준 리포트 큐 정리를 시작했습니다.",
-  portfolioRunTopTeamButton: "상위 1개 리포트 실행을 시작했습니다.",
+  portfolioTeamQueueButton: "기준 근거 큐 정리를 시작했습니다.",
+  portfolioRunTopTeamButton: "상위 1개 근거 점검을 시작했습니다.",
   portfolioOptimizeButton: "포트폴리오 정책 최적화를 시작했습니다.",
   portfolioDeleteButton: "포트폴리오 삭제를 시작했습니다.",
   portfolioImportPickButton: "포트폴리오 파일 선택을 시작했습니다.",
@@ -13755,11 +13755,11 @@ elements.portfolioAnalysisStatusButton?.addEventListener("click", async () => {
 
 elements.portfolioTeamQueueButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
-  startOutputLoading("기준 리포트 생성 큐 정리 중", [
+  startOutputLoading("기준 근거 보강 큐 정리 중", [
     "저장 포트폴리오의 고유 보유 종목 추출",
-    "공식 인증 기준 팀 리포트 존재 여부 확인",
+    "공식 인증 기준 Dossier·팀 리포트 존재 여부 확인",
     "평가금액 기준 우선순위 정렬",
-    "다음 실행 대상과 중점 분석 정리",
+    "원문 검토가 필요한 다음 경로 정리",
   ]);
   try {
     const result = await fetchPortfolioTeamReportQueue(token());
@@ -13775,58 +13775,35 @@ elements.portfolioTeamQueueButton?.addEventListener("click", async () => {
 
 elements.portfolioRunTopTeamButton?.addEventListener("click", async () => {
   syncApiBaseUrl();
-  startOutputLoading("상위 1개 기준 리포트 자동 실행 중", [
-    "기준 리포트 큐 조회",
+  startOutputLoading("상위 1개 기준 근거 점검 중", [
+    "기준 근거 큐 조회",
     "평가금액 최상위 미작성 종목 선택",
-    "공식 티커 인증과 입력값 동기화",
-    "7개 스킬 팀 리포트 생성 및 저장",
+    "공식 원문·티커·본문 검토 필요 상태 확인",
+    "자동 리포트 저장 없이 다음 검토 경로 제시",
   ]);
   try {
     const queueResult = await fetchPortfolioTeamReportQueue(token());
     const target = queueResult?.queue?.[0];
     if (!target) {
-      setOutput({
-        status: "success",
-        module: "portfolio_team_report_queue",
-        summary: "기준 리포트가 필요한 보유 종목이 없습니다.",
-        queue: [],
-        already_ready: queueResult?.already_ready || [],
-        blocked: queueResult?.blocked || [],
-      });
+      setOutput("기준 근거 보강이 필요한 보유 종목이 없습니다.");
       return;
     }
-    const verification = await certifyTickerForWorkflow(target.official_symbol || target.ticker);
-    const workflowTicker = verification.official_symbol;
-    syncTickerInputs(workflowTicker);
-    if (elements.teamForm) {
-      elements.teamForm.elements.ticker.value = workflowTicker;
-      elements.teamForm.elements.investmentPeriod.value = target.investment_period || "3년";
-      elements.teamForm.elements.region.value = target.region || "US";
-      elements.teamForm.elements.style.value = normalizeTeamStyleValue(target.style);
-      elements.teamForm.elements.focusArea.value =
-        target.analysis_focus || "사업 모델, 매출 성장, 마진, 밸류에이션, 주요 리스크";
-    }
-    const result = await runCollaborativeTeamReport(token(), {
-      ticker: workflowTicker,
-      investmentPeriod: target.investment_period || "3년",
-      region: target.region || "US",
-      style: normalizeTeamStyleValue(target.style),
-      focusArea:
-        target.analysis_focus || "사업 모델, 매출 성장, 마진, 밸류에이션, 주요 리스크",
-      autoInjectData: true,
-      saveResult: true,
-    });
-    result.auto_queue_source = {
-      queue_rank: 1,
-      portfolio_names: target.portfolios || [],
-      market_value: target.market_value,
-      recommended_action: target.recommended_action,
-    };
-    setOutput(result);
-    await runSecondaryRefresh("포트폴리오 상태 새로고침", () => refreshPortfolioStore(true));
-    await runSecondaryRefresh("대시보드 카드 새로고침", () =>
-      refreshDashboardCardsOnly(workflowTicker)
-    );
+    const displayName = target.company_name || target.official_symbol || target.ticker || "종목 미확인";
+    const symbol = target.official_symbol || target.ticker || "티커 미확인";
+    const portfolioNames = Array.isArray(target.portfolios) && target.portfolios.length
+      ? target.portfolios.join(", ")
+      : "포트폴리오 미확인";
+    setOutput([
+      "상위 1개 기준 근거 점검",
+      "",
+      `- 대상: ${displayName} (${symbol})`,
+      `- 포함 포트폴리오: ${portfolioNames}`,
+      `- 상태: ${target.reason || "기준 근거 보강 필요"}`,
+      "",
+      "자동 팀 리포트 생성·저장은 실행하지 않았습니다.",
+      `다음 액션: ${target.recommended_action || "공식 원문·실적 자료를 저장한 뒤 사람이 원문·티커·본문을 검토하세요."}`,
+      "주문·계좌 변경·체크리스트 완료 처리는 하지 않습니다.",
+    ].join("\n"));
   } catch (error) {
     setError(error);
   }

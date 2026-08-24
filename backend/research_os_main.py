@@ -15912,6 +15912,7 @@ def get_portfolio_team_report_queue(
             ticker_entries,
             "collaborative-team-report",
             "institutional-stock-breakdown",
+            "dossier-synthesis",
         )
         item = {
             "ticker": ticker,
@@ -15942,9 +15943,11 @@ def get_portfolio_team_report_queue(
             queue.append(
                 {
                     **item,
-                    "reason": "공식 인증 기준 리포트가 아직 없습니다.",
+                    "reason": "공식 인증 기준 투자 논거가 아직 없습니다.",
                     "recommended_action": (
-                        f"{official_symbol} 팀 리포트를 먼저 실행해 기준 투자 논거를 생성하세요."
+                        f"{official_symbol}의 공식 공시·IR·실적 원문을 정보 입력에 저장하고, "
+                        "사람이 원문·티커·본문을 검토한 뒤 Dossier 또는 팀 리포트를 명시적으로 실행하세요. "
+                        "자동 팀 리포트 생성은 하지 않습니다."
                     ),
                 }
             )
@@ -15959,7 +15962,7 @@ def get_portfolio_team_report_queue(
         "ready_count": len(already_ready),
         "blocked_count": len(blocked),
         "summary": (
-            f"고유 보유 종목 {len(by_ticker)}개 중 기준 리포트 생성 필요 {len(queue)}개, "
+            f"고유 보유 종목 {len(by_ticker)}개 중 기준 근거 보강 필요 {len(queue)}개, "
             f"이미 준비 {len(already_ready)}개, 인증 보류 {len(blocked)}개입니다."
         ),
         "queue": queue,

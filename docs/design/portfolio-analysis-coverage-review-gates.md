@@ -1,7 +1,7 @@
 # Portfolio Analysis Coverage Review Gates
 
 - Status: implemented
-- Updated: 2026-08-20
+- Updated: 2026-08-24
 - Authoritative root: `D:\workspace\InvestmentJournalApp`
 
 ## Objective
@@ -24,6 +24,12 @@ The former coverage score treated any saved checklist file as complete. A partia
 - Creating missing team reports, trade setups, or checklist answers automatically.
 - Treating generated templates, mock data, or a saved file as human approval.
 - Changing portfolio quantities, brokerage settings, or external notifications.
+
+## Baseline evidence queue
+
+- The compatibility endpoint remains `/api/v1/portfolios/team-report-queue`, but the console labels it as a **기준 근거 큐**. A verified Dossier is accepted as an existing baseline alongside an explicit team report.
+- The top-priority action is **상위 1개 근거 점검**. It selects and explains the next source-review target only; it never calls the collaborative-team-report endpoint, saves a report, or changes a checklist.
+- When the source gate is incomplete, the next action must direct the reviewer to an official filing, IR, earnings release, or verified research body. A DART filing alert alone is not a substitute for original-text review.
 
 ## Contract
 

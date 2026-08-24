@@ -17037,6 +17037,29 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn("사람 검토 대기(체크리스트)", console_js)
         self.assertIn("검토 게이트 기준: 체크리스트 75% 이상 완료 · 자동 승인 없음", console_js)
 
+    def test_portfolio_evidence_queue_never_auto_saves_a_team_report(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+        index_html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(
+            encoding="utf-8"
+        )
+        backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+        handler = console_js.split(
+            'elements.portfolioRunTopTeamButton?.addEventListener("click", async () => {', 1
+        )[1].split('elements.portfolioOptimizeButton?.addEventListener("click", async () => {', 1)[0]
+        queue_endpoint = backend_source.split("def get_portfolio_team_report_queue", 1)[1].split(
+            "def _target_price_memory_runtime", 1
+        )[0]
+
+        self.assertIn("상위 1개 기준 근거 점검 중", handler)
+        self.assertIn("자동 팀 리포트 생성·저장은 실행하지 않았습니다.", handler)
+        self.assertNotIn("runCollaborativeTeamReport(", handler)
+        self.assertIn('id="portfolioRunTopTeamButton" class="secondary"', index_html)
+        self.assertIn("상위 1개 근거 점검", index_html)
+        self.assertIn('"dossier-synthesis"', queue_endpoint)
+        self.assertIn("자동 팀 리포트 생성은 하지 않습니다.", queue_endpoint)
+
     def test_console_system_check_uses_latest_daily_briefing_status(self):
         api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
