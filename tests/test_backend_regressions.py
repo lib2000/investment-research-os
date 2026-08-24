@@ -17026,6 +17026,17 @@ class ConsoleAssetHashTests(unittest.TestCase):
         for template in blocked_templates:
             self.assertNotIn(template, console_js)
 
+    def test_console_separates_portfolio_document_gaps_from_human_review_gate(self):
+        console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("const reviewReadyCount", console_js)
+        self.assertIn("const checklistReviewPendingCount", console_js)
+        self.assertIn("수량 검토 패킷", console_js)
+        self.assertIn("사람 검토 대기(체크리스트)", console_js)
+        self.assertIn("검토 게이트 기준: 체크리스트 75% 이상 완료 · 자동 승인 없음", console_js)
+
     def test_console_system_check_uses_latest_daily_briefing_status(self):
         api_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
