@@ -999,6 +999,16 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Get-InvestmentResearchCredentialSecret -Target $CredentialTarget", script_source)
         self.assertNotIn('[string]$DevUserToken = "dev-local-token"', script_source)
 
+    def test_daily_research_operations_logs_failures_without_exposing_token(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("daily_research_operations_task.log", script_source)
+        self.assertIn("Write-DailyResearchOperationsLog", script_source)
+        self.assertIn("[REDACTED]", script_source)
+        self.assertIn("$stepOutput = @(& $Block 2>&1)", script_source)
+
     def test_boot_catchup_includes_stale_portfolio_close_prices(self):
         script_source = (PROJECT_ROOT / "tools" / "run_investment_research_catchup.ps1").read_text(
             encoding="utf-8"

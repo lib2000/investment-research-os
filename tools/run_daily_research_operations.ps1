@@ -3,6 +3,7 @@
   [string]$BaseUrl = "http://127.0.0.1:8001",
   [string]$DevUserToken = "",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
+  [string]$LogPath = "",
   [int]$PortfolioRefreshTimeoutSeconds = 120,
   [int]$RecommendationRunTimeoutSeconds = 600,
   [int]$ResearchAutomationTimeoutSeconds = 300,
@@ -28,6 +29,47 @@ $env:PYTHONIOENCODING = "utf-8"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 Set-Location -LiteralPath $ProjectRootPath
+
+if ([string]::IsNullOrWhiteSpace($LogPath)) {
+  $LogPath = Join-Path $ProjectRootPath "research_vault\_system\daily_research_operations_task.log"
+}
+$LogDirectory = Split-Path -Parent $LogPath
+if ($LogDirectory) {
+  New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+}
+
+$script:DailyResearchOperationsLogPath = $LogPath
+$script:DailyResearchOperationsSecret = ""
+$script:DailyResearchOperationsCurrentStep = "initialization"
+
+function Write-DailyResearchOperationsLog {
+  param(
+    [Parameter(Mandatory = $true)][string]$Level,
+    [Parameter(Mandatory = $true)][string]$Message
+  )
+
+  $safeMessage = $Message
+  if (-not [string]::IsNullOrWhiteSpace($script:DailyResearchOperationsSecret)) {
+    $safeMessage = $safeMessage.Replace($script:DailyResearchOperationsSecret, "[REDACTED]")
+  }
+  $safeMessage = $safeMessage -replace "[\r\n]+", " | "
+  $line = "[{0}] [{1}] [{2}] {3}" -f (Get-Date).ToString("o"), $Level, $script:DailyResearchOperationsCurrentStep, $safeMessage
+  try {
+    [System.IO.File]::AppendAllText(
+      $script:DailyResearchOperationsLogPath,
+      "$line`r`n",
+      [System.Text.UTF8Encoding]::new($false)
+    )
+  } catch {
+    # A logging failure must never hide the actual scheduled-task failure.
+  }
+}
+
+trap {
+  Write-DailyResearchOperationsLog -Level "ERROR" -Message $_.Exception.Message
+  exit 1
+}
+
 . (Join-Path $ProjectRootPath "tools\investment_research_credential.ps1")
 
 if ([string]::IsNullOrWhiteSpace($DevUserToken)) {
@@ -36,6 +78,8 @@ if ([string]::IsNullOrWhiteSpace($DevUserToken)) {
 if ([string]::IsNullOrWhiteSpace($DevUserToken)) {
   throw "Windows Credential Manager에 투자 리서치 API 토큰이 없습니다: $CredentialTarget"
 }
+$script:DailyResearchOperationsSecret = $DevUserToken
+Write-DailyResearchOperationsLog -Level "START" -Message "daily research operations started"
 
 function Invoke-DailyResearchStep {
   param(
@@ -45,12 +89,28 @@ function Invoke-DailyResearchStep {
 
   Write-Host ""
   Write-Host "==> $Name"
+  $script:DailyResearchOperationsCurrentStep = $Name
+  Write-DailyResearchOperationsLog -Level "START" -Message "$Name started"
   $global:LASTEXITCODE = 0
-  & $Block
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Name 실패: 종료 코드 $LASTEXITCODE"
+  $stepOutput = @(& $Block 2>&1)
+  $stepExitCode = $LASTEXITCODE
+  foreach ($entry in $stepOutput) {
+    Write-Output $entry
+  }
+  if ($stepExitCode -ne 0) {
+    $outputTail = @(
+      $stepOutput |
+        ForEach-Object { ($_ | Out-String -Width 240).TrimEnd() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Last 20
+    )
+    foreach ($line in $outputTail) {
+      Write-DailyResearchOperationsLog -Level "DETAIL" -Message $line
+    }
+    throw "$Name 실패: 종료 코드 $stepExitCode"
   }
   Write-Host "정상 $Name"
+  Write-DailyResearchOperationsLog -Level "OK" -Message "$Name completed"
 }
 
 if (-not $SkipPortfolioRefresh.IsPresent) {
@@ -227,3 +287,5 @@ if (-not $SkipVerification.IsPresent) {
 
 Write-Host ""
 Write-Host "일일 리서치 운영 루틴 완료"
+$script:DailyResearchOperationsCurrentStep = "complete"
+Write-DailyResearchOperationsLog -Level "OK" -Message "daily research operations completed"
