@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from research_os.research_memory import resolve_vault_dir
@@ -108,10 +110,18 @@ def read_json_store(path: Path, default: dict) -> dict:
 
 def write_json_store(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as file:
+            file.write(json.dumps(payload, ensure_ascii=False, indent=2))
+            file.flush()
+            os.fsync(file.fileno())
+        # Same-directory replacement keeps readers from seeing a partial JSON
+        # document when two local automation requests finish near each other.
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink(missing_ok=True)
 
 
 def append_jsonl(path: Path, payload: dict) -> None:

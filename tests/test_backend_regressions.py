@@ -1106,6 +1106,24 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("check_research_source_store.py --strict", script_source)
         self.assertIn("리서치 소스 저장 상태 검증이 통과해 운영 루틴을 계속합니다.", script_source)
 
+    def test_daily_research_operations_runs_dart_duplicate_soft_archive_cleanup(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipDartFilingDuplicateCleanup", script_source)
+        self.assertIn("DART 공시 중복 소프트 보관 정리", script_source)
+        self.assertIn("tools\\cleanup_duplicate_dart_filings.py --apply --write-state --recent-tickers-hours 36 --max-recent-tickers 12", script_source)
+
+    def test_daily_research_operations_checks_research_source_store_integrity(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("[switch]$SkipResearchSourceStoreCheck", script_source)
+        self.assertIn("리서치 상태 저장 무결성 점검", script_source)
+        self.assertIn("tools\\check_research_source_store.py --strict", script_source)
+
     def test_openclaw_sync_script_validates_after_copy(self):
         script_source = (PROJECT_ROOT / "tools" / "sync_openclaw_investment_context.ps1").read_text(
             encoding="utf-8"
@@ -17433,6 +17451,7 @@ class DartFilingStorageTests(unittest.TestCase):
         self.assertEqual(saved["report_type"], "dart-filing-watch")
         self.assertEqual(saved["report_date"], date(2026, 6, 13))
         self.assertEqual(saved["file_suffix"], "202606130001")
+        self.assertTrue(saved["overwrite_existing"])
         self.assertEqual(saved["structured_payload"]["importance"], "높음")
         self.assertEqual(saved["structured_payload"]["filing"], filing)
         self.assertEqual(saved["manifest_entry"]["module"], "dart_filing_watch")

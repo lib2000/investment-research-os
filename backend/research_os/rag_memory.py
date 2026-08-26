@@ -484,6 +484,30 @@ def upsert_research_memory_document(
     return row
 
 
+def delete_research_memory_documents_by_relative_paths(
+    *,
+    vault_dir: Path,
+    relative_paths: list[str],
+) -> dict[str, Any]:
+    """Remove only obsolete search-index rows after their source was soft archived."""
+    paths = list(dict.fromkeys(_safe_text(path) for path in relative_paths if _safe_text(path)))
+    if not paths:
+        return {"deleted_count": 0, "relative_paths": []}
+    initialize_rag_db(vault_dir)
+    deleted_count = 0
+    # SQLite permits at least 999 bind parameters. Chunk defensively for future bulk cleanup.
+    with connect_rag_db(vault_dir) as connection:
+        for start in range(0, len(paths), 900):
+            chunk = paths[start : start + 900]
+            placeholders = ", ".join("?" for _ in chunk)
+            cursor = connection.execute(
+                f"DELETE FROM research_memory_documents WHERE source_relative_path IN ({placeholders})",
+                chunk,
+            )
+            deleted_count += max(int(cursor.rowcount or 0), 0)
+    return {"deleted_count": deleted_count, "relative_paths": paths}
+
+
 def backfill_research_memory_documents_from_manifest(vault_dir: Path) -> dict[str, Any]:
     initialize_rag_db(vault_dir)
     updated: list[str] = []

@@ -44,6 +44,9 @@ def save_dart_filing_watch_item(runtime, *, ticker: str, filing: dict, settings)
         ),
         report_date=report_date,
         file_suffix=str(filing.get("rcept_no") or ""),
+        # A DART receipt number is immutable. Force-refreshing the same filing
+        # must update its canonical local record rather than add a sequence copy.
+        overwrite_existing=True,
     )
     runtime.upsert_research_memory_document(
         vault_dir=vault_dir,

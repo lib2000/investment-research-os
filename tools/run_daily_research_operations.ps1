@@ -16,6 +16,8 @@
   [switch]$SkipPortfolioReportAlert,
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
+  [switch]$SkipDartFilingDuplicateCleanup,
+  [switch]$SkipResearchSourceStoreCheck,
   [switch]$SkipPortfolioAnalysisCoverage,
   [switch]$SkipOpenClawSync,
   [switch]$RequireCompletionAudit,
@@ -242,6 +244,22 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
         return
       }
     }
+  }
+}
+
+if (-not $SkipDartFilingDuplicateCleanup.IsPresent) {
+  Invoke-DailyResearchStep "DART 공시 중복 소프트 보관 정리" {
+    # Local-only cleanup: only byte-identical captures with the same DART
+    # receipt number are archived. No source file is hard-deleted.
+    python tools\cleanup_duplicate_dart_filings.py --apply --write-state --recent-tickers-hours 36 --max-recent-tickers 12
+  }
+}
+
+if (-not $SkipResearchSourceStoreCheck.IsPresent) {
+  Invoke-DailyResearchStep "리서치 상태 저장 무결성 점검" {
+    # Local-only integrity check. It catches malformed state JSON before the
+    # next source refresh or dashboard read can silently fall back to defaults.
+    python tools\check_research_source_store.py --strict
   }
 }
 
