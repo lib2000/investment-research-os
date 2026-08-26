@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from research_os.rag_memory import (
     delete_research_memory_documents_by_relative_paths,
@@ -49,7 +51,25 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_bytes_atomically(path, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+
+
+def _write_bytes_atomically(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("wb") as file:
+            file.write(payload)
+            file.flush()
+            os.fsync(file.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink(missing_ok=True)
+
+
+def _copy_json_atomically(source: Path, destination: Path) -> None:
+    _write_bytes_atomically(destination, source.read_bytes())
 
 
 def _hash_pair(markdown_path: Path, json_path: Path) -> str:
@@ -58,6 +78,73 @@ def _hash_pair(markdown_path: Path, json_path: Path) -> str:
     digest.update(b"\x00")
     digest.update(json_path.read_bytes())
     return digest.hexdigest()
+
+
+def _payload_without_filing_remark(item: DartFilingStoredItem) -> tuple[dict[str, Any], str] | None:
+    """Return comparable filing metadata and the raw DART remark value."""
+    payload = _read_json(item.json_path)
+    filing = payload.get("filing")
+    if not isinstance(filing, dict) or not isinstance(filing.get("remark"), str):
+        return None
+    comparable = json.loads(json.dumps(payload, ensure_ascii=False))
+    comparable_filing = comparable.get("filing")
+    if not isinstance(comparable_filing, dict):
+        return None
+    remark = str(comparable_filing.pop("remark"))
+    return comparable, remark
+
+
+def _build_remark_prefix_refinement(
+    canonical: DartFilingStoredItem,
+    conflicting: list[DartFilingStoredItem],
+) -> dict[str, Any] | None:
+    """Recognize one narrowly safe DART metadata refinement.
+
+    Some historic captures split the DART market/filing marker across runs
+    (for example ``코`` then ``코정``), while the official filing body and every
+    other field stay unchanged. This is not an alternate filing. It is safe to
+    reuse the more complete duplicate JSON only when all duplicate JSON bytes
+    are identical and their sole semantic difference is a strict remark prefix
+    extension. Any other difference remains a human-review case.
+    """
+    if not conflicting:
+        return None
+    try:
+        canonical_markdown = canonical.md_path.read_bytes()
+        if any(item.md_path.read_bytes() != canonical_markdown for item in conflicting):
+            return None
+        duplicate_json = conflicting[0].json_path.read_bytes()
+        if any(item.json_path.read_bytes() != duplicate_json for item in conflicting):
+            return None
+    except OSError:
+        return None
+
+    canonical_value = _payload_without_filing_remark(canonical)
+    if canonical_value is None:
+        return None
+    canonical_payload, canonical_remark = canonical_value
+    duplicate_values = [_payload_without_filing_remark(item) for item in conflicting]
+    if any(value is None for value in duplicate_values):
+        return None
+    comparable_payloads = [value[0] for value in duplicate_values if value is not None]
+    duplicate_remarks = {value[1] for value in duplicate_values if value is not None}
+    if any(payload != canonical_payload for payload in comparable_payloads) or len(duplicate_remarks) != 1:
+        return None
+
+    source_value = canonical_remark.strip()
+    target_value = next(iter(duplicate_remarks)).strip()
+    if not source_value or len(target_value) <= len(source_value) or not target_value.startswith(source_value):
+        return None
+    source = conflicting[0]
+    return {
+        "kind": "filing_remark_strict_prefix_refinement",
+        "field": "filing.remark",
+        "from_value": canonical_remark,
+        "to_value": next(iter(duplicate_remarks)),
+        "source_json_relative_path": source.json_relative_path,
+        "source_relative_path": source.relative_path,
+        "verification": "same_markdown_and_all_metadata_except_filing_remark",
+    }
 
 
 def _receipt_date_iso(receipt_date: str) -> str | None:
@@ -249,6 +336,23 @@ def build_dart_filing_duplicate_cleanup_plan(
         identical = [item for item in group_items if item != canonical and item.content_hash == canonical.content_hash]
         conflicting = [item for item in group_items if item != canonical and item.content_hash != canonical.content_hash]
         if conflicting:
+            # A raw-pair mismatch normally remains review-only. The one
+            # exception is a fully verified DART ``filing.remark`` prefix
+            # refinement; keep this deliberately narrower than a generic
+            # metadata merge.
+            refinement = _build_remark_prefix_refinement(canonical, conflicting) if not identical else None
+            if refinement is not None:
+                candidate_count += len(conflicting)
+                actionable_groups.append(
+                    {
+                        "ticker": ticker,
+                        "rcept_no": receipt_no,
+                        "canonical": _serialize_item(canonical),
+                        "duplicates": [_serialize_item(item) for item in conflicting],
+                        "metadata_refinement": refinement,
+                    }
+                )
+                continue
             skipped_groups.append(
                 {
                     "ticker": ticker,
@@ -351,6 +455,7 @@ def apply_dart_filing_duplicate_cleanup(vault_dir: Path, plan: dict[str, Any]) -
     errors: list[dict[str, Any]] = []
     rag_deleted_count = 0
     canonical_count = 0
+    metadata_refinement_count = 0
 
     for group in plan.get("groups", []):
         canonical = _find_item_by_relative_path(current_items, str((group.get("canonical") or {}).get("relative_path") or ""))
@@ -369,7 +474,31 @@ def apply_dart_filing_duplicate_cleanup(vault_dir: Path, plan: dict[str, Any]) -
                 }
             )
             continue
-        if any(item.content_hash != canonical.content_hash for item in duplicates):
+        refinement = group.get("metadata_refinement")
+        if isinstance(refinement, dict):
+            source_json_relative_path = _normalize_relative_path(refinement.get("source_json_relative_path"))
+            source = next((item for item in duplicates if item.json_relative_path == source_json_relative_path), None)
+            rechecked = _build_remark_prefix_refinement(canonical, duplicates)
+            if (
+                source is None
+                or rechecked is None
+                or rechecked.get("from_value") != refinement.get("from_value")
+                or rechecked.get("to_value") != refinement.get("to_value")
+                or rechecked.get("source_json_relative_path") != source_json_relative_path
+            ):
+                errors.append(
+                    {
+                        "ticker": canonical.ticker,
+                        "rcept_no": canonical.receipt_no,
+                        "error": "metadata_refinement_no_longer_safe",
+                    }
+                )
+                continue
+            _copy_json_atomically(source.json_path, canonical.json_path)
+            metadata_refinement_count += 1
+
+        canonical_hash = _hash_pair(canonical.md_path, canonical.json_path)
+        if any(_hash_pair(item.md_path, item.json_path) != canonical_hash for item in duplicates):
             errors.append(
                 {
                     "ticker": canonical.ticker,
@@ -440,6 +569,7 @@ def apply_dart_filing_duplicate_cleanup(vault_dir: Path, plan: dict[str, Any]) -
         **plan,
         "applied": True,
         "canonical_upsert_count": canonical_count,
+        "metadata_refinement_count": metadata_refinement_count,
         "archived_count": len(archived),
         "archived_files": archived,
         "rag_deleted_count": rag_deleted_count,
@@ -450,8 +580,5 @@ def apply_dart_filing_duplicate_cleanup(vault_dir: Path, plan: dict[str, Any]) -
 
 def write_dart_filing_duplicate_cleanup_state(vault_dir: Path, result: dict[str, Any]) -> Path:
     path = vault_dir / "_system" / "dart_filing_duplicate_cleanup.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    _write_json(path, result)
     return path

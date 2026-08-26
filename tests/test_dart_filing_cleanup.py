@@ -130,6 +130,56 @@ class DartFilingDuplicateCleanupTests(unittest.TestCase):
             self.assertEqual(plan["skipped_group_count"], 1)
             self.assertEqual(plan["skipped_groups"][0]["reason"], "content_hash_mismatch")
 
+    def test_remark_prefix_refinement_reuses_complete_metadata_then_archives_duplicates(self):
+        with TemporaryDirectory() as temporary:
+            vault = Path(temporary) / "research_vault"
+            ticker_dir = vault / "300080"
+            ticker_dir.mkdir(parents=True)
+            canonical_name = "300080-dart-filing-watch-2026-06-26-20260626901314"
+            duplicate_name = f"{canonical_name}-002"
+            markdown = "# DART 신규 공시 감시\n\n플리토 공시 본문\n"
+            canonical_payload = {
+                "module": "dart_filing_watch",
+                "ticker": "300080",
+                "filing": {
+                    "rcept_no": "20260626901314",
+                    "receipt_date": "20260626",
+                    "report_name": "[기재정정]단일판매ㆍ공급계약체결",
+                    "remark": "코",
+                },
+            }
+            refined_payload = {
+                **canonical_payload,
+                "filing": {**canonical_payload["filing"], "remark": "코정"},
+            }
+            (ticker_dir / f"{canonical_name}.md").write_text(markdown, encoding="utf-8")
+            (ticker_dir / f"{duplicate_name}.md").write_text(markdown, encoding="utf-8")
+            (ticker_dir / f"{canonical_name}.json").write_text(
+                json.dumps(canonical_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            (ticker_dir / f"{duplicate_name}.json").write_text(
+                json.dumps(refined_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
+            plan = build_dart_filing_duplicate_cleanup_plan(vault)
+            self.assertEqual(plan["duplicate_candidate_count"], 1)
+            self.assertEqual(plan["skipped_group_count"], 0)
+            refinement = plan["groups"][0]["metadata_refinement"]
+            self.assertEqual(refinement["field"], "filing.remark")
+            self.assertEqual(refinement["from_value"], "코")
+            self.assertEqual(refinement["to_value"], "코정")
+
+            result = apply_dart_filing_duplicate_cleanup(vault, plan)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["metadata_refinement_count"], 1)
+            active_payload = json.loads((ticker_dir / f"{canonical_name}.json").read_text(encoding="utf-8"))
+            archived_payload = json.loads((ticker_dir / f"{duplicate_name}.json").read_text(encoding="utf-8"))
+            self.assertEqual(active_payload["filing"]["remark"], "코정")
+            self.assertTrue(archived_payload["is_deleted"])
+            post_plan = build_dart_filing_duplicate_cleanup_plan(vault)
+            self.assertEqual(post_plan["duplicate_candidate_count"], 0)
+            self.assertEqual(post_plan["skipped_group_count"], 0)
+
     def test_recent_manifest_scope_does_not_scan_unrelated_historic_tickers(self):
         with TemporaryDirectory() as temporary:
             vault = Path(temporary) / "research_vault"
