@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import check_openclaw_today_answer_quality as today_quality
 from workspace_paths import openclaw_investment_dir
 
 DEFAULT_OPENCLAW_DIR = openclaw_investment_dir()
@@ -51,11 +52,29 @@ def recommendation_line(row: dict[str, Any]) -> str:
 def build_today_work_answer(first_read: dict[str, Any], bridge_status: dict[str, Any]) -> str:
     report = first_read.get("today_work_report") or {}
     schedule = first_read.get("next_schedule") or []
+    commit_count = int(report.get("commit_count") or 0)
+    has_implementation = report.get("has_implementation_today") is True and commit_count > 0
+    operational = today_quality.operational_update_signal(first_read)
+    if has_implementation:
+        heading = "오늘 구현 작업 보고"
+        state_lines = [f"- 오늘 반영 커밋: {commit_count}건"]
+    elif operational["pre_schedule_pending"]:
+        heading = "오늘 정기 운영 시작 전 상태"
+        state_lines = [
+            f"- 첫 예정 작업: {operational['first_scheduled_time']}",
+            f"- 최신 추천 기준일: {operational['latest_recommendation_date']}",
+        ]
+    else:
+        heading = "오늘 운영 작업 보고"
+        state_lines = [
+            f"- 최신 추천 기준일: {operational['latest_recommendation_date']}",
+            f"- 오늘 추천 저장: {operational['recommendation_count']}개",
+        ]
     lines = [
-        "오늘 구현 작업 보고",
+        heading,
         "- 기준: bridge_status.json, openclaw_first_read.json, today_work_report",
         f"- source git: {bridge_status.get('source_git_branch')} {bridge_status.get('source_git_commit')}",
-        f"- 오늘 반영 커밋: {report.get('commit_count')}건",
+        *state_lines,
     ]
     for item in report.get("summary") or []:
         lines.append(f"- {item}")
@@ -139,13 +158,23 @@ def build_research_evidence_answer(first_read: dict[str, Any]) -> str:
     company_ir = checks.get("company_ir") or {}
     dossier_review = checks.get("dossier_review") or {}
     dossier_queue = ((checks.get("automation") or {}).get("dossier_refresh_queue") or {})
+    if evidence.get("dart_scheduled_refresh_pending") is True:
+        dart_line = (
+            f"- DART: 오늘 18:30 정기 갱신 대기, 전일 {dart.get('last_checked_date')} 완료 확인, "
+            f"대상 {dart.get('target_count', 0)}개, failures {dart.get('failure_count', 0)}건"
+        )
+    else:
+        dart_line = (
+            f"- DART: {dart.get('checked_count', 0)}/{dart.get('target_count', 0)}, "
+            f"coverage {dart.get('coverage_rate')}, failures {dart.get('failure_count', 0)}"
+        )
     return "\n".join(
         [
             "실적 일정·DART·IR·자동화 상태",
             "- 기준: openclaw_first_read.json research_evidence_pipeline",
             f"- 인증: {(evidence.get('authentication') or {}).get('status')} (Bearer token 미노출)",
             f"- 실적 일정: {earnings.get('entry_count', 0)}건, fallback_unavailable {earnings.get('fallback_unavailable_count', 0)}건, not_applicable {earnings.get('not_applicable_count', 0)}건",
-            f"- DART: {dart.get('checked_count', 0)}/{dart.get('target_count', 0)}, coverage {dart.get('coverage_rate')}, failures {dart.get('failure_count', 0)}",
+            dart_line,
             f"- IR: 관련 {company_ir.get('related_count', 0)}건, 저장 {company_ir.get('item_count', 0)}건, SEC 대체 {company_ir.get('fallback_source_count', 0)}건, 미해결 {company_ir.get('failed_source_count', 0)}건",
             f"- Dossier: 중복 리뷰 {dossier_review.get('checked_count', 0)}건, 재합성 후보 {dossier_queue.get('candidate_count', 0)}건, 실패 {dossier_queue.get('failed_count', 0)}건",
             "- not_applicable은 ETF/ETN/펀드 등 개별 기업 실적 일정 비대상의 정상 분류입니다.",
@@ -197,8 +226,23 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         or telegram.get("favorite_top_post_count")
         or 0
     )
+    today_report = first_read.get("today_work_report") or {}
+    commit_count = int(today_report.get("commit_count") or 0)
+    has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
+    today_operational = today_quality.operational_update_signal(first_read)
+    if has_implementation:
+        today_required_fragments = ["오늘 구현 작업 보고", "다음 스케줄", "today_work_report", str(commit_count)]
+    elif today_operational["pre_schedule_pending"]:
+        today_required_fragments = [
+            "오늘 정기 운영 시작 전 상태",
+            "다음 스케줄",
+            "today_work_report",
+            str(today_operational["first_scheduled_time"]),
+        ]
+    else:
+        today_required_fragments = ["오늘 운영 작업 보고", "다음 스케줄", "today_work_report"]
     required_fragments = {
-        "today_work_report": ["오늘 구현 작업 보고", "다음 스케줄", "today_work_report", str((first_read.get("today_work_report") or {}).get("commit_count"))],
+        "today_work_report": today_required_fragments,
         "recommendations_priority": ["오늘 추천 종목", "중요 메시지", "KR#1", "US#1", str(favorite_message_count)],
         "bridge_status_completion": ["OpenClaw 연동 상태", "source git", "final audit", str(bridge_status.get("source_git_commit"))],
         "knowledge_graph_context": ["투자 방향과 지식 그래프 컨텍스트", "graph schema", "seed nodes", "시장별 추천"],
@@ -209,6 +253,11 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
     for route_id, answer in samples.items():
         route_errors = validate_answer(route_id, answer, required_fragments[route_id])
         errors.extend(route_errors)
+        if route_id == "today_work_report":
+            try:
+                today_quality.validate_answer_quality(first_read, answer)
+            except AssertionError as exc:
+                errors.append(f"today_work_report: {exc}")
         sample_results.append(
             {
                 "id": route_id,

@@ -7,6 +7,7 @@ param(
   [string]$StrategyId = "sma_crossover",
   [int]$LookbackCalendarDays = 210,
   [double]$InitialCapital = 100000000,
+  [string]$RunDate = "",
   [switch]$Force,
   [switch]$StartServicesIfNeeded,
   [switch]$StartDockerIfNeeded,
@@ -26,7 +27,17 @@ $RecommendationPath = Join-Path $SystemDir "daily_recommendations.json"
 $StatePath = Join-Path $RuntimeDir "daily_strategy_validation_state.json"
 $LogPath = Join-Path $RuntimeDir "daily_strategy_validation.log"
 $Launcher = Join-Path $ProjectRootPath "scripts\start-integrated-investment-workbench.ps1"
-$RunDate = Get-Date -Format "yyyy-MM-dd"
+if ([string]::IsNullOrWhiteSpace($RunDate)) {
+  $RunDate = Get-Date -Format "yyyy-MM-dd"
+} elseif ($RunDate -notmatch "^\d{4}-\d{2}-\d{2}$") {
+  throw "RunDate must use YYYY-MM-DD format."
+} else {
+  try {
+    $RunDate = [datetime]::ParseExact($RunDate, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture).ToString("yyyy-MM-dd")
+  } catch {
+    throw "RunDate must be a valid calendar date."
+  }
+}
 
 New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
 
@@ -217,7 +228,11 @@ try {
   $recommendationJson = [IO.File]::ReadAllText($RecommendationPath, [Text.UTF8Encoding]::new($false))
   $recommendationStore = $recommendationJson | ConvertFrom-Json
   $target = $recommendationStore.records |
-    Where-Object { $_.market -eq "KR" -and $_.ticker -match "^\d{6}$" } |
+    Where-Object {
+      $_.market -eq "KR" -and
+      $_.ticker -match "^\d{6}$" -and
+      [string]$_.recommendation_date -le $RunDate
+    } |
     Sort-Object -Property @{ Expression = "recommendation_date"; Descending = $true }, @{ Expression = "rank"; Descending = $false } |
     Select-Object -First 1
   if (-not $target) {

@@ -15,6 +15,9 @@ def test_runner_uses_design_backtest_and_research_store_contracts() -> None:
     assert "/api/backtest/run" in source
     assert "/api/v1/backtest-runs" in source
     assert "already_succeeded_today" in source
+    assert '[string]$RunDate = ""' in source
+    assert "RunDate must use YYYY-MM-DD format." in source
+    assert "recommendation_date -le $RunDate" in source
     assert 'live_order_endpoint_called = $false' in source
     assert "[IO.File]::ReadAllText($RecommendationPath" in source
     assert 'strategy_name = "SMA 5/20 Golden/Death Cross"' in source

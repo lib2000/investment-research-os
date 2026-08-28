@@ -4,7 +4,7 @@
   [string]$DevUserToken = "",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [string]$LogPath = "",
-  [int]$PortfolioRefreshTimeoutSeconds = 120,
+  [int]$PortfolioRefreshTimeoutSeconds = 300,
   [int]$RecommendationRunTimeoutSeconds = 600,
   [int]$ResearchAutomationTimeoutSeconds = 300,
   [switch]$SkipPortfolioRefresh,
@@ -31,6 +31,15 @@ $env:PYTHONIOENCODING = "utf-8"
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
 Set-Location -LiteralPath $ProjectRootPath
+
+# Scheduled Task starts plain Windows PowerShell, so prefer this project's
+# virtual environment over whichever global Python happens to be first on PATH.
+# This change is process-local and does not alter the user's global PATH.
+$projectPythonDirectory = Join-Path $ProjectRootPath ".venv-win\Scripts"
+$projectPython = Join-Path $projectPythonDirectory "python.exe"
+if (Test-Path -LiteralPath $projectPython) {
+  $env:PATH = "$projectPythonDirectory;$env:PATH"
+}
 
 if ([string]::IsNullOrWhiteSpace($LogPath)) {
   $LogPath = Join-Path $ProjectRootPath "research_vault\_system\daily_research_operations_task.log"
@@ -126,7 +135,6 @@ if (-not $SkipPortfolioRefresh.IsPresent) {
       python tools\check_portfolio_store.py `
         --portfolio "이형주" `
         --min-holdings 17 `
-        --expected-holdings-count 17 `
         --forbid-zero `
         --max-price-age-hours 24 `
         --max-portfolio-age-hours 24

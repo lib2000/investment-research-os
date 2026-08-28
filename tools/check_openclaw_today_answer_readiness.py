@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,38 @@ def load_markdown(path: Path) -> str:
     if not path.exists():
         raise AssertionError(f"required file not found: {path}")
     return path.read_text(encoding="utf-8-sig")
+
+
+def first_scheduled_clock(schedule: object) -> time | None:
+    if not isinstance(schedule, list):
+        return None
+    clocks: list[time] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        raw_value = item.get("time") or item.get("scheduled_time")
+        if not isinstance(raw_value, str):
+            continue
+        try:
+            clocks.append(datetime.strptime(raw_value.strip(), "%H:%M").time())
+        except ValueError:
+            continue
+    return min(clocks) if clocks else None
+
+
+def pre_schedule_pending(payload: dict[str, Any], schedule: object) -> bool:
+    generated_at = str(payload.get("generated_at") or "").strip()
+    today_report = payload.get("today_work_report")
+    if not generated_at or not isinstance(today_report, dict):
+        return False
+    try:
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if str(today_report.get("date") or "")[:10] != generated.date().isoformat():
+        return False
+    first_clock = first_scheduled_clock(schedule)
+    return first_clock is not None and generated.time() < first_clock
 
 
 def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
@@ -76,6 +109,7 @@ def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
     )
     return {
         "has_operational_update_today": has_today_recommendations or has_reported_operational_update,
+        "pre_schedule_pending": pre_schedule_pending(payload, payload.get("next_schedule")),
         "latest_recommendation_date": latest_date,
         "recommendation_count": recommendation_count,
         "latest_market_counts": {"KR": kr_count, "US": us_count},
@@ -93,7 +127,11 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
     commit_count = int(today_report.get("commit_count") or 0)
     has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
     operational = operational_update_signal(payload)
-    if not has_implementation and not operational["has_operational_update_today"]:
+    if (
+        not has_implementation
+        and not operational["has_operational_update_today"]
+        and not operational["pre_schedule_pending"]
+    ):
         raise AssertionError("today_work_report or latest operational data must indicate today's work")
 
     categories = today_report.get("implemented_categories") or today_report.get("categories")
@@ -137,8 +175,14 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
         raise AssertionError("answer_correction must include the stale no-work claim")
     if "today_work_report" not in correction_text:
         raise AssertionError("answer_correction must route answers through today_work_report")
-    if "오늘 구현 작업" not in correction_text and "다음 스케줄" not in correction_text:
-        raise AssertionError("answer_correction must describe today's work or next schedule")
+    valid_answer_states = (
+        "오늘 구현 작업",
+        "오늘 운영 작업",
+        "오늘 정기 운영 시작 전 상태",
+        "다음 스케줄",
+    )
+    if not any(state in correction_text for state in valid_answer_states):
+        raise AssertionError("answer_correction must describe today's work, scheduled pre-start state, or next schedule")
 
     for required_text in (
         "Today Implementation Report",
@@ -153,7 +197,7 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
 
     return [
         f"commit_count={commit_count}",
-        f"work_signal={'implementation' if has_implementation else 'operational_data'}",
+        f"work_signal={'implementation' if has_implementation else ('pre_schedule_pending' if operational['pre_schedule_pending'] else 'operational_data')}",
         f"latest_recommendation_date={operational['latest_recommendation_date']}",
         f"recommendation_count={operational['recommendation_count']}",
         f"operational_update_count={operational['operational_update_count']}",
@@ -172,6 +216,13 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
     schedule = payload.get("next_schedule") or []
     commit_count = int(today_report.get("commit_count") or 0)
     has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
+    operational = operational_update_signal(payload)
+    if has_implementation:
+        answer_heading = "오늘 구현 작업 보고"
+    elif operational["pre_schedule_pending"]:
+        answer_heading = "오늘 정기 운영 시작 전 상태"
+    else:
+        answer_heading = "오늘 운영 작업 보고"
     return {
         "status": "ok",
         "openclaw_dir": str(openclaw_dir),
@@ -187,7 +238,7 @@ def build_result(openclaw_dir: Path = DEFAULT_OPENCLAW_DIR) -> dict[str, Any]:
         "expected_answer_summary": {
             "must_not_answer": "오늘 구현 작업 없음",
             "must_include": [
-                "오늘 구현 작업 보고" if has_implementation else "오늘 운영 작업 보고",
+                answer_heading,
                 "다음 스케줄",
             ],
         },

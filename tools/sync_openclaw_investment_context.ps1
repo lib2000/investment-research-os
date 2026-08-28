@@ -240,7 +240,17 @@ Copy-Item -Force -LiteralPath $firstReadJsonPath -Destination (Join-Path $target
 Copy-Item -Force -LiteralPath $firstReadMarkdownPath -Destination (Join-Path $targetDir "openclaw_first_read.md")
 Copy-Item -Force -LiteralPath $manifestPath -Destination (Join-Path $targetDir "openclaw_bridge_manifest.json")
 
-$context = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$contextRaw = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8
+$context = $contextRaw | ConvertFrom-Json
+# ConvertFrom-Json materializes ISO timestamps as DateTime on newer PowerShell
+# versions.  The bridge validator compares the exact source JSON value, so keep
+# the top-level serialized timestamp rather than formatting the converted value.
+$contextGeneratedAtMatch = [regex]::Match($contextRaw, '(?m)^\s*"generated_at"\s*:\s*"(?<value>[^"]+)"')
+$contextGeneratedAt = if ($contextGeneratedAtMatch.Success) {
+  $contextGeneratedAtMatch.Groups["value"].Value
+} else {
+  [string]$context.generated_at
+}
 $gitCommit = $null
 $gitBranch = $null
 $gitDirty = $null
@@ -369,7 +379,7 @@ $status = [ordered]@{
   startup_notes_updated = $true
   operational_commands = $operationalCommands
   file_sha256 = $fileSha256
-  context_generated_at = $context.generated_at
+  context_generated_at = $contextGeneratedAt
   latest_recommendation_date = $context.current_state.daily_recommendations.latest_recommendation_date
   latest_market_counts = $context.current_state.daily_recommendations.latest_market_counts
   latest_recommendations = $latestRecommendations
@@ -396,7 +406,7 @@ $readme = @(
   "- source generator: ``$exportScript``",
   "- ``bridge_status.json``: first-read runtime status, read_order, source git state, completion report paths, operational commands, core file SHA256 hashes, and ``completion_report_sha256``",
   "- source git: ``$gitBranch $gitCommit``",
-  "- context generated at: ``$($context.generated_at)``",
+  "- context generated at: ``$contextGeneratedAt``",
   "- latest recommendation date: ``$($context.current_state.daily_recommendations.latest_recommendation_date)``",
   "- latest market counts: ``$($context.current_state.daily_recommendations.latest_market_counts | ConvertTo-Json -Compress)``",
   ""

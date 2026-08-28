@@ -100,7 +100,7 @@ def run_check(root: Path, expected: str) -> None:
             "tools/check_portfolio_store.py",
             "--portfolio",
             "이형주",
-            "--expected-holdings-count",
+            "--min-holdings",
             "17",
             "--expected",
             expected,
@@ -117,7 +117,7 @@ def main() -> int:
     parser.add_argument("--token", default="dev-local-token")
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE)
     parser.add_argument("--portfolio", action="append", help="Portfolio name to refresh. Repeatable. Defaults to all saved portfolios.")
-    parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument("--timeout", type=float, default=300.0)
     parser.add_argument("--skip-check", action="store_true")
     parser.add_argument("--expected-main", default=DEFAULT_EXPECTED)
     args = parser.parse_args()

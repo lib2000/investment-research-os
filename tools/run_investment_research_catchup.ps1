@@ -2,6 +2,9 @@ param(
   [string]$ProjectRoot = "",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [int]$Port = 8001,
+  [string]$StrategyValidationTime = "08:45",
+  [string]$ResearchOperationsTime = "18:30",
+  [int]$DockerStartupTimeoutSeconds = 180,
   [switch]$DryRun
 )
 
@@ -14,6 +17,10 @@ $CredentialHelper = Join-Path $ProjectRootPath "tools\investment_research_creden
 $Watchdog = Join-Path $ProjectRootPath "scripts\ensure-research-backend.ps1"
 $Sync = Join-Path $ProjectRootPath "tools\sync_openclaw_investment_context.ps1"
 $StatePath = Join-Path $ProjectRootPath "tmp\investment_research_catchup_state.json"
+$DailyOperationsRunner = Join-Path $ProjectRootPath "tools\run_daily_research_operations.ps1"
+$StrategyValidationRunner = Join-Path $ProjectRootPath "tools\run_daily_strategy_validation.ps1"
+$StrategyValidationStatePath = Join-Path $ProjectRootPath "tmp\daily_strategy_validation_state.json"
+$ResearchAutomationStatusPath = Join-Path $ProjectRootPath "research_vault\_system\research_automation_status.json"
 . $CredentialHelper
 
 function Invoke-ResearchApi {
@@ -49,6 +56,69 @@ function Test-PortfolioRefreshDue {
   }
 }
 
+function Get-LatestScheduledCutoff {
+  param(
+    [string]$At,
+    [datetimeoffset]$Now = [datetimeoffset]::Now
+  )
+
+  if ($At -notmatch "^(?<hour>\d{1,2}):(?<minute>\d{2})$") {
+    throw "Scheduled time must use HH:mm format: $At"
+  }
+  $hour = [int]$matches.hour
+  $minute = [int]$matches.minute
+  if ($hour -gt 23 -or $minute -gt 59) {
+    throw "Scheduled time is outside the local day: $At"
+  }
+  $cutoff = [datetimeoffset]::new($Now.Year, $Now.Month, $Now.Day, $hour, $minute, 0, $Now.Offset)
+  if ($Now -lt $cutoff) {
+    $cutoff = $cutoff.AddDays(-1)
+  }
+  return $cutoff
+}
+
+function Test-StrategyValidationDue {
+  param(
+    [string]$StateFile,
+    [string]$TargetRunDate
+  )
+
+  if (-not (Test-Path -LiteralPath $StateFile)) { return $true }
+  try {
+    $state = [IO.File]::ReadAllText($StateFile, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
+    return -not ($state.status -eq "success" -and [string]$state.run_date -eq $TargetRunDate)
+  } catch {
+    return $true
+  }
+}
+
+function Test-ResearchAutomationDue {
+  param(
+    [string]$StatusFile,
+    [datetimeoffset]$Cutoff
+  )
+
+  if (-not (Test-Path -LiteralPath $StatusFile)) { return $true }
+  try {
+    $status = [IO.File]::ReadAllText($StatusFile, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$status.updated_at)) { return $true }
+    return [datetimeoffset]::Parse([string]$status.updated_at) -lt $Cutoff
+  } catch {
+    return $true
+  }
+}
+
+function Get-SafeCatchupError {
+  param([object]$ErrorRecord, [string]$Secret)
+  $message = [string]$ErrorRecord
+  if (-not [string]::IsNullOrWhiteSpace($Secret)) {
+    $message = $message.Replace($Secret, "[REDACTED]")
+  }
+  $message = $message -replace "[\r\n]+", " | "
+  if ($message.Length -gt 500) { return $message.Substring(0, 500) }
+  return $message
+}
+
 $startedAt = (Get-Date).ToString("o")
 $operations = @()
 $token = $null
@@ -62,6 +132,7 @@ try {
     throw "Windows Credential Manager에 투자 리서치 API 토큰이 없습니다."
   }
   $headers = @{ Authorization = "Bearer $token" }
+  $catchupFailures = @()
   $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_portfolios.json"
   $portfolioDue = Test-PortfolioRefreshDue -StorePath $portfolioStorePath
   $portfolioOperation = [ordered]@{
@@ -110,6 +181,85 @@ try {
     $operations += [pscustomobject]$operation
   }
 
+  $researchCutoff = Get-LatestScheduledCutoff -At $ResearchOperationsTime
+  $researchAutomationDue = Test-ResearchAutomationDue -StatusFile $ResearchAutomationStatusPath -Cutoff $researchCutoff
+  $researchOperation = [ordered]@{
+    id = "research_evidence_and_quality"
+    enabled = $true
+    due_before = $researchAutomationDue
+    action = "skipped"
+    result_status = if ($researchAutomationDue) { "stale" } else { "fresh" }
+  }
+  if ($researchAutomationDue) {
+    if ($DryRun) {
+      $researchOperation.action = "would_run"
+    } else {
+      try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $DailyOperationsRunner `
+          -ProjectRoot $ProjectRootPath `
+          -CredentialTarget $CredentialTarget `
+          -BaseUrl "http://127.0.0.1:$Port" `
+          -SkipPortfolioRefresh `
+          -SkipRecommendationRun `
+          -SkipRecommendationPreview `
+          -SkipTelegramBriefDelivery `
+          -SkipPortfolioReportAlert `
+          -SkipOpenClawSync `
+          -SkipVerification
+        if ($LASTEXITCODE -ne 0) {
+          throw "research evidence and local quality runner exited with code $LASTEXITCODE"
+        }
+        $researchOperation.action = "ran"
+        $researchOperation.result_status = "success"
+      } catch {
+        $researchOperation.action = "failed"
+        $researchOperation.result_status = "failed"
+        $researchOperation.error = Get-SafeCatchupError -ErrorRecord $_ -Secret $token
+        $catchupFailures += "research_evidence_and_quality"
+      }
+    }
+  }
+  $operations += [pscustomobject]$researchOperation
+
+  $strategyCutoff = Get-LatestScheduledCutoff -At $StrategyValidationTime
+  $strategyRunDate = $strategyCutoff.ToString("yyyy-MM-dd")
+  $strategyDue = Test-StrategyValidationDue -StateFile $StrategyValidationStatePath -TargetRunDate $strategyRunDate
+  $strategyOperation = [ordered]@{
+    id = "daily_strategy_validation"
+    enabled = $true
+    target_run_date = $strategyRunDate
+    due_before = $strategyDue
+    action = "skipped"
+    result_status = if ($strategyDue) { "stale" } else { "fresh" }
+    live_order_endpoint_called = $false
+  }
+  if ($strategyDue) {
+    if ($DryRun) {
+      $strategyOperation.action = "would_run"
+    } else {
+      try {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StrategyValidationRunner `
+          -ProjectRoot $ProjectRootPath `
+          -CredentialTarget $CredentialTarget `
+          -RunDate $strategyRunDate `
+          -StartServicesIfNeeded `
+          -StartDockerIfNeeded `
+          -DockerStartupTimeoutSeconds $DockerStartupTimeoutSeconds
+        if ($LASTEXITCODE -ne 0) {
+          throw "daily strategy validation runner exited with code $LASTEXITCODE"
+        }
+        $strategyOperation.action = "ran"
+        $strategyOperation.result_status = "success"
+      } catch {
+        $strategyOperation.action = "failed"
+        $strategyOperation.result_status = "failed"
+        $strategyOperation.error = Get-SafeCatchupError -ErrorRecord $_ -Secret $token
+        $catchupFailures += "daily_strategy_validation"
+      }
+    }
+  }
+  $operations += [pscustomobject]$strategyOperation
+
   $ranAny = @($operations | Where-Object { $_.action -eq "ran" }).Count -gt 0
   $syncAction = "skipped"
   if ($ranAny -and -not $DryRun) {
@@ -117,6 +267,10 @@ try {
     $syncAction = "ran"
   } elseif ($DryRun -and @($operations | Where-Object { $_.action -eq "would_run" }).Count -gt 0) {
     $syncAction = "would_run"
+  }
+
+  if ($catchupFailures.Count -gt 0) {
+    throw ("Catch-up steps need attention: " + ($catchupFailures -join ", "))
   }
 
   $payload = [ordered]@{

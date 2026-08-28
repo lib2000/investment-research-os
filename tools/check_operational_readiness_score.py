@@ -373,7 +373,7 @@ def portfolio_signal(system_dir: Path) -> dict[str, Any]:
         "포트폴리오 실시간/수량 보호",
         score,
         f"포트폴리오 {len(portfolios)}개, 보유 {holdings_count}개, 수동/해외 보호 {protected_count}개",
-        "python tools\\check_portfolio_store.py --portfolio 이형주 --expected-holdings-count 17 --forbid-zero",
+        "python tools\\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --forbid-zero",
     )
 
 

@@ -33,13 +33,31 @@ try {
   # In this Windows/WSL setup the distro is stopped after the final wsl.exe
   # client exits, even with an enabled user service. Keep one hidden client
   # attached so OpenClaw remains reachable after this scheduled task ends.
+  #
+  # Do not use `bash -lc` here. Start-Process flattens argument arrays and can
+  # split the shell command after `-c`, which made the old keepalive exit
+  # immediately at logon. A direct sleep exec has no shell quoting boundary.
   $keepaliveName = "investment-research-wsl-keepalive"
+  $keepaliveSeconds = "2147483647"
+  $escapedDistro = [regex]::Escape($OpenClawWslDistro)
+  $directKeepalivePattern = [regex]::Escape("/usr/bin/sleep $keepaliveSeconds")
+  # Keep existing long-lived clients from earlier registrations compatible.
+  # They still keep this distro alive until the next clean boot creates the
+  # direct, identifiable form above.
+  $legacyKeepalivePattern = [regex]::Escape("/usr/bin/sleep infinity")
   $existingKeepalive = @(
     Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" -ErrorAction SilentlyContinue |
-      Where-Object { [string]$_.CommandLine -match [regex]::Escape($keepaliveName) }
+      Where-Object {
+        $commandLine = [string]$_.CommandLine
+        $commandLine -match $escapedDistro -and (
+          $commandLine -match [regex]::Escape($keepaliveName) -or
+          $commandLine -match $directKeepalivePattern -or
+          $commandLine -match $legacyKeepalivePattern
+        )
+      }
   )
   if ($existingKeepalive.Count -eq 0) {
-    $keepaliveArguments = "-d `"$OpenClawWslDistro`" --user lib2000 --exec bash -lc `"exec -a $keepaliveName /usr/bin/sleep infinity`""
+    $keepaliveArguments = "-d $OpenClawWslDistro --user root --exec /usr/bin/sleep $keepaliveSeconds"
     $keepaliveProcess = Start-Process -FilePath "wsl.exe" -ArgumentList $keepaliveArguments -WindowStyle Hidden -PassThru
     Start-Sleep -Seconds 2
     $wslKeepaliveReady = -not $keepaliveProcess.HasExited
@@ -112,6 +130,7 @@ try {
     credential_target = $CredentialTarget
     credential_configured = $credentialLoaded
     wsl_keepalive_ready = $wslKeepaliveReady
+    wsl_keepalive_mode = if ($existingKeepalive.Count -gt 0) { "existing" } else { "direct_root_sleep" }
     openclaw_gateway_ready = $openClawGatewayReady
     message = $message
     project_root = $ProjectRootPath

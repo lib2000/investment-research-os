@@ -6,6 +6,8 @@
 ## 범위
 
 - 백엔드를 정상 기동한 뒤 오늘의 추천, 미국 시장 일지, 텔레그램 즐겨찾기 수집, 국내 시장 마감 일지의 `due_now` 상태를 확인한다.
+- 장마감 가격뿐 아니라 실적 일정·DART·IR·Dossier 품질 상태가 마지막 18:30 기준보다 오래됐는지 확인하고, 필요한 경우 메시지 전송 없이 로컬 운영 러너를 보정 실행한다.
+- 최신 예정일의 전략 검증 결과가 없으면 Strategy Builder 미리보기와 Lean 백테스트를 같은 안전한 검증 러너로 보정 실행한다.
 - 아직 처리되지 않은 항목만 기존 API를 호출한다.
 - 데이터 반영 뒤 OpenClaw 투자 컨텍스트를 동기화한다.
 
@@ -18,7 +20,7 @@
 
 1. 로그인 후 2분 뒤 백엔드 상태를 확인하고 필요하면 기존 watchdog으로 복구한다.
 2. 각 API의 `due_now`가 참인 경우에만 한 번 실행한다. 이미 처리됐거나 아직 시각 전이면 건너뛴다.
-3. 작업 스케줄러는 `StartWhenAvailable`과 `IgnoreNew`를 사용한다. 배터리 사용 중에도 다음 로그인 후 실행할 수 있다.
+3. 작업 스케줄러는 `StartWhenAvailable`과 `IgnoreNew`를 사용한다. 배터리 사용 중에도 다음 로그인 후 실행할 수 있고, catch-up 작업의 최대 실행 시간은 60분이다.
 4. 결과는 `tmp/investment_research_catchup_state.json`에 남긴다. 토큰이나 비밀값은 기록하지 않는다.
 5. 새 작업은 Windows Credential Manager의 기존 `InvestmentResearchOS/DEV_USER_TOKEN`을 읽어 API에 인증한다.
 

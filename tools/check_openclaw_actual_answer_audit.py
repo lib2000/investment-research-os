@@ -125,6 +125,9 @@ def required_fragments_for(
         commit_count = int(today_report.get("commit_count") or 0)
         if today_report.get("has_implementation_today") is True and commit_count > 0:
             return ["오늘 구현 작업 보고", "다음 스케줄", str(commit_count)]
+        operational = today_quality.operational_update_signal(first_read)
+        if operational["pre_schedule_pending"]:
+            return ["오늘 정기 운영 시작 전 상태", "다음 스케줄", str(operational["first_scheduled_time"])]
         return ["오늘 운영 작업 보고", "다음 스케줄"]
     if route_id == "recommendations_priority":
         return [

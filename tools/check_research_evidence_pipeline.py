@@ -18,6 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV_FILE = PROJECT_ROOT / "backend" / ".env"
 DEFAULT_STATE_FILE = PROJECT_ROOT / "research_vault" / "_system" / "research_evidence_pipeline_status.json"
 KST = timezone(timedelta(hours=9))
+DART_DAILY_OPERATIONS_TIME = (18, 30)
 
 CANONICAL_ENDPOINTS = {
     "earnings_status": "/api/v1/earnings-calendar/status",
@@ -184,6 +185,9 @@ def summarize_dart(payload: dict[str, Any]) -> dict[str, Any]:
         "entry_count": int(payload.get("entry_count") or 0),
         "daily_status": daily.get("status"),
         "daily_due": bool(daily.get("due")),
+        "last_checked_date": daily.get("last_checked_date"),
+        "last_checked_at": daily.get("last_checked_at"),
+        "next_check_after": daily.get("next_check_after"),
         "coverage_rate": daily.get("coverage_rate"),
         "checked_count": int(daily.get("checked_count") or 0),
         "target_count": int(daily.get("current_target_count") or 0),
@@ -318,6 +322,57 @@ def _timed_call(call: Callable[[], dict[str, Any]]) -> tuple[dict[str, Any], flo
     return payload, round(time.monotonic() - started, 3)
 
 
+def dart_refresh_postcondition_is_complete(dart: dict[str, Any]) -> bool:
+    """Return true only when the canonical DART status proves a refresh completed.
+
+    The DART refresh endpoint can legitimately outlive the HTTP client's timeout
+    while its server-side work continues.  A timeout is not silently ignored:
+    it is downgraded only after the status endpoint confirms the entire current
+    target set completed with no failures and the next daily refresh is not due.
+    """
+    try:
+        coverage_rate = float(dart.get("coverage_rate") or 0)
+    except (TypeError, ValueError):
+        coverage_rate = 0.0
+    target_count = int(dart.get("target_count") or 0)
+    checked_count = int(dart.get("checked_count") or 0)
+    return (
+        dart.get("status") == "success"
+        and bool(dart.get("configured"))
+        and bool(dart.get("enabled"))
+        and dart.get("daily_status") == "complete"
+        and not bool(dart.get("daily_due"))
+        and target_count > 0
+        and checked_count >= target_count
+        and coverage_rate >= 1.0
+        and int(dart.get("failure_count") or 0) == 0
+        and bool(dart.get("updated_at"))
+    )
+
+
+def dart_pending_before_daily_operations_is_expected(dart: dict[str, Any], *, now: datetime) -> bool:
+    """Allow the next daily DART run to remain pending until its 18:30 KST slot.
+
+    A new calendar day begins before the after-market research task.  Treating
+    that short, scheduled gap as an outage turns every midnight bridge refresh
+    into a false error.  The exception is deliberately narrow: only a clean
+    previous-day completion with no provider failures qualifies.
+    """
+    local_now = now.astimezone(KST) if now.tzinfo else now.replace(tzinfo=KST)
+    previous_day = (local_now - timedelta(days=1)).date().isoformat()
+    deadline_hour, deadline_minute = DART_DAILY_OPERATIONS_TIME
+    return (
+        dart.get("status") == "success"
+        and dart.get("daily_status") == "due"
+        and bool(dart.get("daily_due"))
+        and dart.get("last_checked_date") == previous_day
+        and bool(dart.get("last_checked_at"))
+        and int(dart.get("failure_count") or 0) == 0
+        and int(dart.get("entry_count") or 0) > 0
+        and (local_now.hour, local_now.minute) < (deadline_hour, deadline_minute)
+    )
+
+
 def collect_pipeline_status(
     base_url: str,
     token: str,
@@ -325,6 +380,7 @@ def collect_pipeline_status(
     timeout: int = 120,
     refresh: bool = False,
     force: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     refresh_results: dict[str, Any] = {}
     errors: list[str] = []
@@ -386,6 +442,29 @@ def collect_pipeline_status(
     dart = checks["dart"]
     company_ir = checks["company_ir"]
     queue = checks["automation"]["dossier_refresh_queue"]
+    as_of = now or datetime.now(tz=KST)
+    dart_scheduled_refresh_pending = dart_pending_before_daily_operations_is_expected(dart, now=as_of)
+
+    dart_refresh = refresh_results.get("dart") if refresh else None
+    dart_refresh_message = str((dart_refresh or {}).get("message") or "")
+    dart_refresh_timed_out = (
+        isinstance(dart_refresh, dict)
+        and dart_refresh.get("status") == "error"
+        and dart_refresh.get("http_status") is None
+        and ("timed out" in dart_refresh_message.lower() or "timeout" in dart_refresh_message.lower())
+    )
+    if dart_refresh_timed_out and dart_refresh_postcondition_is_complete(dart):
+        # Preserve the transport symptom for auditability, but use the canonical
+        # postcondition rather than reporting a false platform failure.
+        blocking_issues = [issue for issue in blocking_issues if issue != dart_refresh_message]
+        refresh_results["dart"] = {
+            **dart_refresh,
+            "status": "recovered_after_timeout",
+            "postcondition_verified": True,
+        }
+        warnings.append(
+            "DART refresh response timed out, but the canonical status confirms complete current coverage."
+        )
 
     if earnings["status"] != "success":
         blocking_issues.append("earnings status is unavailable")
@@ -395,7 +474,11 @@ def collect_pipeline_status(
         )
     if not dart["configured"] or not dart["enabled"]:
         blocking_issues.append("DART is not configured or enabled")
-    if dart["daily_status"] != "complete" or dart["failure_count"]:
+    if dart_scheduled_refresh_pending:
+        warnings.append(
+            "DART daily refresh is pending for the scheduled 18:30 KST operations run; the prior day completed cleanly."
+        )
+    elif dart["daily_status"] != "complete" or dart["failure_count"]:
         blocking_issues.append(
             f"DART daily check incomplete: status={dart['daily_status']} failures={dart['failure_count']}"
         )
@@ -418,7 +501,7 @@ def collect_pipeline_status(
     return {
         "status": status,
         "module": "research_evidence_pipeline_check",
-        "as_of": datetime.now(tz=KST).isoformat(timespec="seconds"),
+        "as_of": as_of.isoformat(timespec="seconds"),
         "base_url": base_url.rstrip("/"),
         "authentication": {
             "status": "attached" if token else "missing",
@@ -433,6 +516,7 @@ def collect_pipeline_status(
         "force_refresh_requested": force,
         "refresh_results": refresh_results,
         "checks": checks,
+        "dart_scheduled_refresh_pending": dart_scheduled_refresh_pending,
         "blocking_issues": blocking_issues,
         "warnings": warnings,
         "interpretation": {

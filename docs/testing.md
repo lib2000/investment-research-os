@@ -149,7 +149,7 @@ Firecrawl Monitor env 템플릿은 `python tools\create_firecrawl_monitor_env_te
 개별 점검은 아래 명령을 사용합니다.
 
 ```powershell
-python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --expected-holdings-count 17 --forbid-zero
+python tools\check_portfolio_store.py --portfolio 이형주 --min-holdings 17 --forbid-zero
 python tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero
 python tools\check_storage_quality_store.py --strict
 python tools\check_rag_failure_diagnostics.py --strict

@@ -172,5 +172,8 @@ def test_windows_autostart_runner_keeps_wsl_alive():
     ).read_text(encoding="utf-8-sig")
 
     assert "investment-research-wsl-keepalive" in source
+    assert '$keepaliveSeconds = "2147483647"' in source
+    assert '"/usr/bin/sleep $keepaliveSeconds"' in source
     assert "/usr/bin/sleep infinity" in source
+    assert "--user root --exec /usr/bin/sleep" in source
     assert "wsl_keepalive_ready" in source

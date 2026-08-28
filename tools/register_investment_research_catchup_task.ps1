@@ -19,12 +19,12 @@ $arguments = @(
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Environment]::UserName)
 $trigger.Delay = "PT$([Math]::Max($DelayMinutes, 0))M"
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 60)
 $settings.DisallowStartIfOnBatteries = $false
 $settings.StopIfGoingOnBatteries = $false
 $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "After sign-in, safely catches up missed Investment Research OS data work without sending messages or placing trades." -Force | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "After sign-in, safely catches up missed Investment Research OS data and simulation work without sending messages or placing trades." -Force | Out-Null
 Write-Host "Registered: $TaskName"
 Write-Host "Trigger: current user logon + $DelayMinutes minute delay"
 Write-Host "Runner: $runner"

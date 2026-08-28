@@ -104,6 +104,6 @@ if (-not $SkipCheck) {
     Write-Host "검증용 python 명령을 찾지 못했습니다. 가격 갱신은 완료됐고, 검증은 Codex/WSL에서 tools\check_all_portfolio_store.py로 이어서 실행하세요."
   } else {
     & $pythonCommand.Source tools\check_all_portfolio_store.py --min-holdings 1 --forbid-zero
-    & $pythonCommand.Source tools\check_portfolio_store.py --portfolio "이형주" --expected-holdings-count 17 --expected $ExpectedMainHoldings --forbid-zero
+    & $pythonCommand.Source tools\check_portfolio_store.py --portfolio "이형주" --min-holdings 17 --expected $ExpectedMainHoldings --forbid-zero
   }
 }

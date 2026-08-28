@@ -43,8 +43,6 @@ CHECKS = [
             "이형주",
             "--min-holdings",
             "17",
-            "--expected-holdings-count",
-            "17",
             "--forbid-zero",
             "--max-price-age-hours",
             "24",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,46 @@ def compact_summary_items(today_report: dict[str, Any]) -> list[str]:
         if title:
             items.append(str(title))
     return items[:6]
+
+
+def first_scheduled_clock(schedule: object) -> time | None:
+    if not isinstance(schedule, list):
+        return None
+    clocks: list[time] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        raw_value = item.get("time") or item.get("scheduled_time")
+        if not isinstance(raw_value, str):
+            continue
+        try:
+            clocks.append(datetime.strptime(raw_value.strip(), "%H:%M").time())
+        except ValueError:
+            continue
+    return min(clocks) if clocks else None
+
+
+def pre_schedule_pending(payload: dict[str, Any], schedule: object) -> tuple[bool, str]:
+    """Allow a clean first-read generated before the day's first scheduled operation.
+
+    The condition is intentionally narrow: the report date must match the generated
+    date and the generated clock must be before an explicit clock-form schedule item.
+    Once the first operation is due, a same-day update is still required.
+    """
+    generated_at = str(payload.get("generated_at") or "").strip()
+    today_report = payload.get("today_work_report")
+    if not generated_at or not isinstance(today_report, dict):
+        return False, ""
+    try:
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False, ""
+    if str(today_report.get("date") or "")[:10] != generated.date().isoformat():
+        return False, ""
+    first_clock = first_scheduled_clock(schedule)
+    if first_clock is None or generated.time() >= first_clock:
+        return False, ""
+    return True, first_clock.strftime("%H:%M")
 
 
 def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
@@ -89,8 +130,14 @@ def operational_update_signal(payload: dict[str, Any]) -> dict[str, Any]:
         str(item.get("date") or "").strip()[:10] == generated_date
         for item in operational_updates
     )
+    pending_before_first_schedule, first_scheduled_time = pre_schedule_pending(
+        payload,
+        payload.get("next_schedule"),
+    )
     return {
         "has_operational_update_today": has_today_recommendations or has_reported_operational_update,
+        "pre_schedule_pending": pending_before_first_schedule,
+        "first_scheduled_time": first_scheduled_time,
         "generated_date": generated_date,
         "latest_recommendation_date": latest_date,
         "recommendation_count": recommendation_count,
@@ -114,6 +161,15 @@ def build_expected_answer(payload: dict[str, Any]) -> str:
         ]
         for item in compact_summary_items(today_report):
             lines.append(f"- {item}")
+    elif operational["pre_schedule_pending"]:
+        counts = operational["latest_market_counts"]
+        lines = [
+            "오늘 정기 운영 시작 전 상태",
+            f"- 기준 파일: openclaw_first_read.json / bridge_status.json",
+            f"- 첫 예정 작업: {operational['first_scheduled_time']}",
+            f"- 최신 추천 기준일: {operational['latest_recommendation_date']}",
+            f"- 최신 추천 저장: {operational['recommendation_count']}개 (KR {counts['KR']} / US {counts['US']})",
+        ]
     else:
         counts = operational["latest_market_counts"]
         lines = [
@@ -145,7 +201,11 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
     commit_count = int(today_report.get("commit_count") or 0)
     has_implementation = today_report.get("has_implementation_today") is True and commit_count > 0
     operational = operational_update_signal(payload)
-    if not has_implementation and not operational["has_operational_update_today"]:
+    if (
+        not has_implementation
+        and not operational["has_operational_update_today"]
+        and not operational["pre_schedule_pending"]
+    ):
         errors.append("today_work_report or latest operational data must indicate today's work")
 
     schedule = payload.get("next_schedule")
@@ -159,6 +219,13 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
     required_fragments = ["다음 스케줄"]
     if has_implementation:
         required_fragments.extend(["오늘 구현 작업 보고", str(commit_count)])
+    elif operational["pre_schedule_pending"]:
+        required_fragments.extend([
+            "오늘 정기 운영 시작 전 상태",
+            str(operational["first_scheduled_time"]),
+            str(operational["latest_recommendation_date"]),
+            str(operational["recommendation_count"]),
+        ])
     else:
         required_fragments.extend([
             "오늘 운영 작업 보고",
@@ -179,7 +246,7 @@ def validate_answer_quality(payload: dict[str, Any], answer: str) -> list[str]:
         raise AssertionError("; ".join(errors))
     return [
         f"commit_count={commit_count}",
-        f"work_signal={'implementation' if has_implementation else 'operational_data'}",
+        f"work_signal={'implementation' if has_implementation else ('pre_schedule_pending' if operational['pre_schedule_pending'] else 'operational_data')}",
         f"latest_recommendation_date={operational['latest_recommendation_date']}",
         f"recommendation_count={operational['recommendation_count']}",
         f"operational_update_count={operational['operational_update_count']}",

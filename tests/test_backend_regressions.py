@@ -1020,6 +1020,22 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("Get-LatestPortfolioCloseCutoff", script_source)
         self.assertIn("[DayOfWeek]::Saturday", script_source)
         self.assertIn("[DayOfWeek]::Sunday", script_source)
+        self.assertIn('id = "research_evidence_and_quality"', script_source)
+        self.assertIn('id = "daily_strategy_validation"', script_source)
+        self.assertIn("run_daily_research_operations.ps1", script_source)
+        self.assertIn("run_daily_strategy_validation.ps1", script_source)
+
+    def test_daily_research_operations_uses_bounded_project_python(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        refresh_source = (PROJECT_ROOT / "tools" / "refresh_portfolio_prices.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("[int]$PortfolioRefreshTimeoutSeconds = 300", script_source)
+        self.assertIn(".venv-win\\Scripts", script_source)
+        self.assertIn('parser.add_argument("--timeout", type=float, default=300.0)', refresh_source)
 
     def test_portfolio_price_refresh_has_bounded_http_timeout(self):
         script_source = (PROJECT_ROOT / "tools" / "refresh_portfolio_prices.ps1").read_text(
@@ -1085,6 +1101,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("포트폴리오 가격 갱신 응답은 실패했지만 저장 상태 검증을 시도합니다.", script_source)
         self.assertIn("tools\\check_portfolio_store.py", script_source)
         self.assertIn("tools\\check_all_portfolio_store.py", script_source)
+        self.assertIn("--min-holdings 17", script_source)
+        self.assertNotIn("--expected-holdings-count 17", script_source)
         self.assertIn("포트폴리오 저장 상태 검증이 통과해 운영 루틴을 계속합니다.", script_source)
         self.assertIn("오늘 추천 API 응답 실패/타임아웃", script_source)
         self.assertIn("tools\\check_daily_recommendations_store.py", script_source)
@@ -1161,6 +1179,8 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("$latestRecommendationReadmeLines", script_source)
         self.assertIn("- latest recommendations:", script_source)
         self.assertIn("baseline $($item.baseline_price) $($item.currency)", script_source)
+        self.assertIn('$contextGeneratedAtMatch = [regex]::Match($contextRaw', script_source)
+        self.assertIn('"generated_at"', script_source)
 
     def test_cleanup_only_reports_single_skip_when_backend_unreachable(self):
         import urllib.error
@@ -20792,6 +20812,28 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn("관심종목/관심섹터 콘솔 UI 정렬과 클릭 상세 표시", report["summary"])
         self.assertIn("interest_console_ui", [item["key"] for item in report["categories"]])
 
+    def test_today_answer_state_reports_pre_schedule_before_first_task(self):
+        export_tool = load_openclaw_context_export_tool()
+
+        state = export_tool.build_today_answer_state(
+            generated_at="2026-07-08T01:00:00+09:00",
+            today_work_report={
+                "date": "2026-07-08",
+                "has_implementation_today": False,
+                "commit_count": 0,
+                "operational_updates": [],
+            },
+            next_schedule=[
+                {"time": "07:00", "task": "portfolio report alert"},
+                {"time": "08:00", "task": "daily recommendations"},
+            ],
+        )
+
+        self.assertEqual("pre_schedule_pending", state["kind"])
+        self.assertEqual("07:00", state["first_scheduled_time"])
+        self.assertIn("오늘 정기 운영 시작 전 상태", state["expected_answer"])
+        self.assertIn("다음 스케줄", state["expected_answer"])
+
     def test_openclaw_context_export_and_validation_exclude_sensitive_raw_state(self):
         export_tool = load_openclaw_context_export_tool()
         check_tool = load_openclaw_context_check_tool()
@@ -21170,7 +21212,8 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
         self.assertIn('"telegram_runtime_profile"', exported_text)
         self.assertIn('"design": "telegram_runtime_profile_v1"', exported_text)
         self.assertIn('"secret_policy": "API hash, session file contents, bot tokens, chat IDs are excluded from OpenClaw exports."', exported_text)
-        self.assertIn("오늘 구현 작업 없음이라고 답하면 안 됩니다", exported_text)
+        self.assertIn("today_work_report와 next_schedule을 먼저 확인하세요", exported_text)
+        self.assertIn('"today_answer_state"', exported_text)
         self.assertIn("Today Implementation Report", first_read_text)
         self.assertIn("Next Schedule", first_read_text)
         self.assertIn("today_work_report", first_read_payload)
@@ -22325,6 +22368,55 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
         self.assertIn("work_signal=operational_data", result["messages"])
         self.assertIn("recommendation_count=6", result["messages"])
 
+    def test_today_answer_readiness_accepts_clean_pre_schedule_state(self):
+        tool = load_openclaw_today_answer_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-08T01:00:00+09:00",
+                "latest_recommendation_date": "2026-07-07",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [{"market": "KR", "rank": 1, "ticker": "001"}],
+                "today_work_report": {
+                    "date": "2026-07-08",
+                    "has_implementation_today": False,
+                    "commit_count": 0,
+                    "operational_updates": [],
+                },
+                "next_schedule": [
+                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:20", "title": "US market journal"},
+                    {"time": "08:00", "title": "daily recommendations"},
+                    {"time": "22:00", "title": "Telegram favorite posts"},
+                ],
+                "answer_correction": {
+                    "wrong_claim": "오늘 구현 작업 없음",
+                    "required_reply": "today_work_report 기준으로 당일 정기 운영 시작 전 상태와 다음 스케줄을 답합니다.",
+                    "correct_basis": "openclaw_first_read.json today_work_report를 우선 확인해야 합니다.",
+                },
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (openclaw_dir / "openclaw_first_read.md").write_text(
+                "# First Read\n\n## Answer Correction\n"
+                "- wrong claim to avoid: 오늘 구현 작업 없음\n"
+                "- correct basis: openclaw_first_read.json today_work_report\n\n"
+                "## Today Implementation Report\n"
+                "today_work_report 기준으로 당일 정기 운영 시작 전 상태와 다음 스케줄을 답합니다.\n"
+                "## Latest Today Commits\n- scheduled operations have not started\n"
+                "## Next Schedule\n- 07:00\n- 07:20\n- 08:00\n- 22:00\n",
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertIn("work_signal=pre_schedule_pending", result["messages"])
+
     def test_today_answer_readiness_accepts_market_journal_operational_update(self):
         tool = load_openclaw_today_answer_tool()
 
@@ -22465,6 +22557,64 @@ class OpenClawTodayAnswerQualityTests(unittest.TestCase):
         self.assertIn("work_signal=operational_data", result["messages"])
         self.assertIn("오늘 운영 작업 보고", result["answer_preview"])
         self.assertIn("2026-07-07", result["answer_preview"])
+
+    def test_today_answer_quality_accepts_clean_pre_schedule_state(self):
+        tool = load_openclaw_today_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-08T01:00:00+09:00",
+                "latest_recommendation_date": "2026-07-07",
+                "latest_market_counts": {"KR": 3, "US": 3},
+                "latest_recommendations": [{"market": "KR", "rank": 1, "ticker": "001"}],
+                "today_work_report": {
+                    "date": "2026-07-08",
+                    "has_implementation_today": False,
+                    "commit_count": 0,
+                    "operational_updates": [],
+                },
+                "next_schedule": [
+                    {"time": "07:00", "task": "portfolio report alert", "status": "scheduled"},
+                    {"time": "08:00", "task": "daily recommendations", "status": "scheduled"},
+                ],
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = tool.build_result(openclaw_dir)
+
+        self.assertEqual("ok", result["status"])
+        self.assertIn("work_signal=pre_schedule_pending", result["messages"])
+        self.assertIn("오늘 정기 운영 시작 전 상태", result["answer_preview"])
+        self.assertIn("07:00", result["answer_preview"])
+
+    def test_today_answer_quality_rejects_missing_update_after_first_schedule(self):
+        tool = load_openclaw_today_answer_quality_tool()
+
+        with TemporaryDirectory() as tmp:
+            openclaw_dir = Path(tmp)
+            payload = {
+                "schema": "openclaw_investment_research_first_read_v1",
+                "generated_at": "2026-07-08T07:01:00+09:00",
+                "today_work_report": {
+                    "date": "2026-07-08",
+                    "has_implementation_today": False,
+                    "commit_count": 0,
+                    "operational_updates": [],
+                },
+                "next_schedule": [{"time": "07:00", "task": "portfolio report alert", "status": "scheduled"}],
+            }
+            (openclaw_dir / "openclaw_first_read.json").write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(AssertionError, "must indicate today's work"):
+                tool.build_result(openclaw_dir)
 
     def test_today_answer_quality_accepts_market_journal_operational_update(self):
         tool = load_openclaw_today_answer_quality_tool()
@@ -22808,6 +22958,30 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
         errors = tool.validate_answer("today_work_report", "오늘 구현 작업 없음\n", ["오늘 구현 작업 보고"])
 
         self.assertTrue(any("banned fragment" in error for error in errors))
+
+    def test_research_evidence_answer_explains_expected_pre_schedule_dart_gap(self):
+        tool = load_openclaw_answer_samples_tool()
+
+        answer = tool.build_research_evidence_answer(
+            {
+                "research_evidence_pipeline": {
+                    "dart_scheduled_refresh_pending": True,
+                    "checks": {
+                        "dart": {
+                            "last_checked_date": "2026-07-07",
+                            "target_count": 93,
+                            "failure_count": 0,
+                            "checked_count": 0,
+                            "coverage_rate": 0.0,
+                        }
+                    },
+                }
+            }
+        )
+
+        self.assertIn("오늘 18:30 정기 갱신 대기", answer)
+        self.assertIn("전일 2026-07-07 완료 확인", answer)
+        self.assertNotIn("DART: 0/93", answer)
 
 
 class OpenClawActualAnswerAuditTests(unittest.TestCase):

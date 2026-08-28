@@ -18,6 +18,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
+
+import check_openclaw_today_answer_quality as today_answer_quality
+
 SYSTEM_DIR = PROJECT_ROOT / "research_vault" / "_system"
 DEFAULT_OUTPUT_DIR = SYSTEM_DIR / "openclaw_integration"
 KST = ZoneInfo("Asia/Seoul")
@@ -654,7 +657,7 @@ def build_today_work_report(project_root: Path) -> dict:
         "commit_count": len(commits),
         "has_implementation_today": len(commits) > 0,
         "has_operational_update_today": bool(operational_updates),
-        "correction_for_openclaw": "오늘 구현 작업 없음이라고 답하면 안 됩니다. 이 today_work_report와 bridge_status source_git를 먼저 확인하세요.",
+        "correction_for_openclaw": "today_work_report와 next_schedule을 먼저 확인하세요. 정기 운영 시작 전이면 그 상태와 첫 예정 작업을 명시하고, 근거 없이 오늘 작업이 없다고 단정하지 마세요.",
         "summary": [item["label"] for item in categories[:8]] or [item["label"] for item in operational_updates[:8]],
         "categories": categories,
         "operational_updates": operational_updates,
@@ -708,6 +711,47 @@ def build_next_schedule() -> list[dict]:
         },
     ]
 
+
+def build_today_answer_state(
+    *,
+    generated_at: str,
+    today_work_report: dict,
+    next_schedule: list[dict],
+) -> dict:
+    """Describe the only valid answer posture for the current local schedule state."""
+    commit_count = int(today_work_report.get("commit_count") or 0)
+    has_implementation = today_work_report.get("has_implementation_today") is True and commit_count > 0
+    signal = today_answer_quality.operational_update_signal(
+        {
+            "generated_at": generated_at,
+            "today_work_report": today_work_report,
+            "next_schedule": next_schedule,
+        }
+    )
+    if has_implementation:
+        return {
+            "kind": "implementation",
+            "heading": "오늘 구현 작업 보고",
+            "message": f"오늘 반영 커밋 {commit_count}건을 기준으로 구현 작업과 다음 스케줄을 보고합니다.",
+            "expected_answer": "오늘 구현 작업과 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
+        }
+    if signal["pre_schedule_pending"]:
+        first_time = signal["first_scheduled_time"]
+        return {
+            "kind": "pre_schedule_pending",
+            "heading": "오늘 정기 운영 시작 전 상태",
+            "first_scheduled_time": first_time,
+            "message": f"오늘 정기 운영은 아직 시작 전입니다. 첫 예정 작업은 {first_time}이며, 전일 자료를 오늘 작업으로 단정하지 않습니다.",
+            "expected_answer": f"오늘 정기 운영 시작 전 상태와 첫 예정 작업({first_time}), 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
+        }
+    return {
+        "kind": "operational_data",
+        "heading": "오늘 운영 작업 보고",
+        "message": "오늘 운영 데이터와 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
+        "expected_answer": "오늘 운영 작업과 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
+    }
+
+
 def build_context(project_root: Path) -> dict:
     system_dir = project_root / "research_vault" / "_system"
     daily_recommendations = load_json(system_dir / "daily_recommendations.json", {})
@@ -719,6 +763,13 @@ def build_context(project_root: Path) -> dict:
     firecrawl_status = load_json(system_dir / "firecrawl_monitor_webhook_status.json", {})
     research_evidence_status = load_json(system_dir / "research_evidence_pipeline_status.json", {})
     generated_at = datetime.now(tz=KST).isoformat(timespec="seconds")
+    today_work_report = build_today_work_report(project_root)
+    next_schedule = build_next_schedule()
+    today_answer_state = build_today_answer_state(
+        generated_at=generated_at,
+        today_work_report=today_work_report,
+        next_schedule=next_schedule,
+    )
     return {
         "module": "openclaw_investment_research_context",
         "generated_at": generated_at,
@@ -739,12 +790,13 @@ def build_context(project_root: Path) -> dict:
             ],
             "export_scope": "summary_only",
         },
-        "today_work_report": build_today_work_report(project_root),
-        "next_schedule": build_next_schedule(),
+        "today_work_report": today_work_report,
+        "today_answer_state": today_answer_state,
+        "next_schedule": next_schedule,
         "answer_correction": {
-            "wrong_claim": "오늘(2026-07-05) 특별히 새로 구현된 작업 기록은 없습니다.",
+            "wrong_claim": f"오늘({_today_kst()}) 특별히 새로 구현된 작업 기록은 없습니다.",
             "correct_basis": "bridge_status.json source_git와 openclaw_first_read.json today_work_report를 우선 확인해야 합니다.",
-            "expected_answer": "오늘 구현 작업과 다음 스케줄을 today_work_report/next_schedule 기준으로 보고합니다.",
+            "expected_answer": today_answer_state["expected_answer"],
         },
         "workstreams": [
             "한국/미국 오늘의 추천 1~3위 생성 및 상세 근거 화면",
@@ -1486,6 +1538,7 @@ def build_first_read_packet(context: dict) -> dict:
 
 def render_first_read_markdown(packet: dict) -> str:
     today_report = packet.get("today_work_report") or {}
+    today_answer_state = packet.get("today_answer_state") or {}
     answer_correction = packet.get("answer_correction") or {}
     research_evidence = packet.get("research_evidence_pipeline") or {}
     evidence_checks = research_evidence.get("checks") or {}
@@ -1493,6 +1546,13 @@ def render_first_read_markdown(packet: dict) -> str:
     dart = evidence_checks.get("dart") or {}
     company_ir = evidence_checks.get("company_ir") or {}
     dossier_queue = ((evidence_checks.get("automation") or {}).get("dossier_refresh_queue") or {})
+    if research_evidence.get("dart_scheduled_refresh_pending") is True:
+        dart_summary = (
+            f"today 18:30 refresh pending; prior day {dart.get('last_checked_date')} complete; "
+            f"targets {dart.get('target_count', 0)}; failures {dart.get('failure_count', 0)}"
+        )
+    else:
+        dart_summary = f"coverage `{dart.get('coverage_rate')}`, failures `{dart.get('failure_count', 0)}`"
     lines = [
         "# OpenClaw Investment Research First Read",
         "",
@@ -1501,13 +1561,14 @@ def render_first_read_markdown(packet: dict) -> str:
         f"- latest recommendation date: `{packet.get('latest_recommendation_date')}`",
         f"- research evidence status: `{research_evidence.get('status', 'not_checked')}`",
         f"- earnings: entries `{earnings.get('entry_count', 0)}`, fallback_unavailable `{earnings.get('fallback_unavailable_count', 0)}`, not_applicable `{earnings.get('not_applicable_count', 0)}`",
-        f"- DART: coverage `{dart.get('coverage_rate')}`, failures `{dart.get('failure_count', 0)}`",
+        f"- DART: {dart_summary}",
         f"- company IR: items `{company_ir.get('item_count', 0)}`, related `{company_ir.get('related_count', 0)}`, SEC fallback `{company_ir.get('fallback_source_count', 0)}`, unresolved sources `{company_ir.get('failed_source_count', 0)}`",
         f"- Dossier refresh candidates: `{dossier_queue.get('candidate_count', 0)}`",
         f"- latest market counts: `{json.dumps(packet.get('latest_market_counts') or {}, ensure_ascii=False, separators=(',', ':'))}`",
         f"- telegram favorite saved: `{(packet.get('telegram') or {}).get('favorite_saved_count')}`",
         f"- telegram favorite candidates: `{(packet.get('telegram') or {}).get('favorite_candidate_count')}`",
         f"- today implementation commits: `{today_report.get('commit_count', 0)}`",
+        f"- today answer state: `{today_answer_state.get('kind', 'unknown')}`",
         "",
         "## Answer Correction",
         "",
@@ -1517,6 +1578,8 @@ def render_first_read_markdown(packet: dict) -> str:
         "## Today Implementation Report",
         "",
     ]
+    if today_answer_state.get("message"):
+        lines.append(f"- {today_answer_state['message']}")
     for item in today_report.get("summary") or []:
         lines.append(f"- {item}")
     if not today_report.get("summary"):
