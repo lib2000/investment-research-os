@@ -229,7 +229,7 @@ from research_os.portfolio_import import (
 )
 from research_os.public_ir_sec import (
     PublicIrSecCollectRequest,
-    collect_public_ir_sec_url,
+    collect_public_ir_sec_url as _collect_public_ir_sec_url,
     public_ir_sec_status_payload,
 )
 from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
@@ -4705,6 +4705,26 @@ def ticker_verification_metadata(ticker: str, settings: Settings | None = None) 
             "message": f"{requested_symbol}는 종목이 아닌 리서치 저장 범위입니다.",
         }
     return verify_ticker_symbol(ticker, settings).model_dump(mode="json")
+
+
+def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Settings) -> dict:
+    """Persist public source evidence with local, server-verified ticker metadata.
+
+    A caller cannot supply this metadata through the HTTP payload.  The lookup
+    stays local-cached so source collection never broadens into a market-data
+    request merely to mark a document as portfolio evidence.
+    """
+    target_key = normalize_ticker(str(request.target_key or ""))
+    ticker_verification = None
+    if target_key and target_key not in SPECIAL_RESEARCH_KEYS:
+        ticker_verification = verify_ticker_symbol_local_cached(target_key, settings).model_dump(
+            mode="json"
+        )
+    return _collect_public_ir_sec_url(
+        request,
+        settings,
+        ticker_verification=ticker_verification,
+    )
 
 
 def manifest_with_ticker_verification(ticker: str, entry: dict) -> dict:

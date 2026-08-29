@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from re import findall, sub
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -21,7 +21,12 @@ from research_os.firecrawl_monitor_events import (
 )
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
 from research_os.rag_memory import upsert_research_memory_document
-from research_os.research_memory import read_manifest, resolve_vault_dir, save_research_markdown
+from research_os.research_memory import (
+    read_manifest,
+    resolve_vault_dir,
+    save_research_markdown,
+    update_manifest,
+)
 from research_os.web_capture import (
     fetch_capture_source_url,
     is_unusable_source_url,
@@ -172,12 +177,133 @@ def _find_existing_entry(vault_dir, source_url: str, target_key: str) -> dict[st
     return None
 
 
-def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any) -> dict[str, Any]:
+def _trusted_ticker_verification(ticker: str, candidate: Any) -> dict[str, Any] | None:
+    """Keep only server-verified ticker metadata for portfolio evidence."""
+    normalized = _safe_key(ticker, "")
+    if not normalized or normalized == PUBLIC_IR_SEC_KEY or not isinstance(candidate, dict):
+        return None
+    official_symbol = _safe_key(str(candidate.get("official_symbol") or ""), "")
+    if candidate.get("verified") is not True or official_symbol != normalized:
+        return None
+    return {
+        "requested_symbol": _safe_key(str(candidate.get("requested_symbol") or normalized), normalized),
+        "official_symbol": official_symbol,
+        "company_name": _safe_title(str(candidate.get("company_name") or normalized), normalized),
+        "exchange": _safe_title(str(candidate.get("exchange") or ""), "") or None,
+        "country": _safe_title(str(candidate.get("country") or ""), "") or None,
+        "verified": True,
+        "verification_source": _safe_title(
+            str(candidate.get("verification_source") or "local_cached_registry"),
+            "local_cached_registry",
+        ),
+        "message": _safe_title(
+            str(candidate.get("message") or "서버의 티커 레지스트리에서 확인했습니다."),
+            "서버의 티커 레지스트리에서 확인했습니다.",
+        ),
+    }
+
+
+def _is_official_portfolio_source_entry(entry: dict[str, Any]) -> bool:
+    """Limit automatic ticker binding to official SEC, issuer-IR, or KRX ETF URLs."""
+    source_url = str(entry.get("source_url") or entry.get("final_url") or "").strip()
+    parsed = urlparse(source_url)
+    host = (parsed.hostname or "").lower()
+    source_type = _safe_key(str(entry.get("source_type") or ""), "").lower()
+    if parsed.scheme != "https" or not host:
+        return False
+    if source_type in {"official_filing", "sec_company_submissions"}:
+        return host.endswith("sec.gov")
+    if source_type in {"company_ir_press_releases", "ir_press_release", "ir_presentation"}:
+        return host.startswith("ir.") or "investor" in host or "investors" in host
+    if source_type == "krx_etf_product":
+        return host == "kind.krx.co.kr"
+    return False
+
+
+def _apply_ticker_verification_to_existing_entry(
+    vault_dir,
+    entry: dict[str, Any],
+    ticker_verification: dict[str, Any] | None,
+) -> tuple[dict[str, Any], bool]:
+    if not ticker_verification or not _is_official_portfolio_source_entry(entry):
+        return entry, False
+    if entry.get("ticker_verification") == ticker_verification:
+        return entry, False
+    updated = {**entry, "ticker_verification": ticker_verification}
+    update_manifest(vault_dir=vault_dir, entry=updated)
+    return updated, True
+
+
+def backfill_public_ir_sec_ticker_verifications(
+    vault_dir,
+    *,
+    ticker_verification_for: Callable[[str], dict[str, Any] | None],
+    target_tickers: set[str] | None = None,
+    apply: bool = False,
+) -> dict[str, Any]:
+    """Attach verified ticker metadata to existing official public-source entries only.
+
+    This changes manifest metadata only; it does not create a report, complete a
+    review gate, alter a holding, or accept non-official URLs as evidence.
+    """
+    requested = {_safe_key(value, "") for value in (target_tickers or set())}
+    requested.discard("")
+    updated: list[str] = []
+    skipped: list[dict[str, str]] = []
+    for entry in read_manifest(vault_dir):
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("scope") or "") != "public_ir_sec" and str(entry.get("type") or "") != PUBLIC_IR_SEC_REPORT_TYPE:
+            continue
+        ticker = _safe_key(str(entry.get("ticker") or ""), "")
+        if not ticker or ticker == PUBLIC_IR_SEC_KEY:
+            continue
+        if requested and ticker not in requested:
+            continue
+        if not _is_official_portfolio_source_entry(entry):
+            skipped.append({"ticker": ticker, "file_name": str(entry.get("file_name") or ""), "reason": "non_official_source"})
+            continue
+        verification = _trusted_ticker_verification(ticker, ticker_verification_for(ticker))
+        if not verification:
+            skipped.append({"ticker": ticker, "file_name": str(entry.get("file_name") or ""), "reason": "ticker_not_verified"})
+            continue
+        if entry.get("ticker_verification") == verification:
+            skipped.append({"ticker": ticker, "file_name": str(entry.get("file_name") or ""), "reason": "already_verified"})
+            continue
+        if apply:
+            update_manifest(vault_dir=vault_dir, entry={**entry, "ticker_verification": verification})
+        updated.append(str(entry.get("file_name") or ticker))
+    return {
+        "status": "success",
+        "module": "public_ir_sec_ticker_verification_backfill",
+        "apply": apply,
+        "requested_tickers": sorted(requested),
+        "updated_count": len(updated),
+        "updated_files": updated,
+        "skipped_count": len(skipped),
+        "skipped": skipped,
+        "changes_document_coverage": False,
+        "changes_review_gate": False,
+    }
+
+
+def collect_public_ir_sec_url(
+    request: PublicIrSecCollectRequest,
+    settings: Any,
+    *,
+    ticker_verification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     source_url = str(request.url).strip()
     target_key = _safe_key(request.target_key)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    trusted_ticker_verification = _trusted_ticker_verification(target_key, ticker_verification)
     existing_entry = _find_existing_entry(vault_dir, source_url, target_key)
     if existing_entry and not request.force:
+        existing_entry, metadata_backfilled = _apply_ticker_verification_to_existing_entry(
+            vault_dir,
+            existing_entry,
+            trusted_ticker_verification,
+        )
         return {
             "status": "skipped_existing",
             "module": "public_ir_sec_collection",
@@ -189,6 +315,7 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
                 "relative_path": existing_entry.get("relative_path"),
                 "json_relative_path": existing_entry.get("json_relative_path"),
             },
+            "ticker_verification_backfilled": metadata_backfilled,
             "rag_document": None,
         }
 
@@ -297,6 +424,14 @@ def collect_public_ir_sec_url(request: PublicIrSecCollectRequest, settings: Any)
         "doc_links": doc_links,
         "collected_at": payload["collected_at"],
     }
+    if trusted_ticker_verification and _is_official_portfolio_source_entry(
+        {
+            **manifest_entry,
+            "source_url": source_url,
+            "final_url": payload["final_url"],
+        }
+    ):
+        manifest_entry["ticker_verification"] = trusted_ticker_verification
     storage = save_research_markdown(
         vault_dir=vault_dir,
         ticker=target_key,
