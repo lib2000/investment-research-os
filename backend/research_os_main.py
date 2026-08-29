@@ -5371,12 +5371,12 @@ def latest_provider_price(
     if not force_refresh and cache_key in PORTFOLIO_PRICE_CACHE:
         return PORTFOLIO_PRICE_CACHE[cache_key]
     try:
-        data_points = collect_analysis_input_data(
-            ticker=ticker,
-            provided_data=[],
-            auto_inject_data=True,
-            settings=settings,
-        )
+        # A portfolio price refresh only needs the market snapshot.  Calling
+        # collect_analysis_input_data here also triggers financial, news,
+        # filing, and research-context collectors for every holding, which
+        # can make the scheduled end-of-day refresh wait on unrelated sources.
+        provider = get_analysis_data_provider(settings)
+        data_points = provider.fetch_primary_market_snapshot(ticker)
     except Exception:
         return None, None
     for point in data_points:

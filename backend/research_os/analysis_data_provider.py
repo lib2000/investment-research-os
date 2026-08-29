@@ -83,6 +83,19 @@ class AnalysisDataProvider:
             *self.supplemental_data_provider.fetch_supplemental_snapshot(ticker),
         ]
 
+    def fetch_primary_market_snapshot(self, ticker: str) -> list[InjectedDataPoint]:
+        """Return the configured primary quote source without probing fallbacks.
+
+        Full research context intentionally collects every configured provider.
+        Portfolio close-price refreshes only need one authoritative quote, so
+        probing supplemental market sources adds latency without changing the
+        price selected by the caller.
+        """
+        providers = getattr(self.market_data_provider, "providers", None)
+        if isinstance(providers, list) and providers:
+            return providers[0].fetch_market_snapshot(ticker)
+        return self.market_data_provider.fetch_market_snapshot(ticker)
+
     def status(self) -> list[dict]:
         return [
             DataProviderStatus(
