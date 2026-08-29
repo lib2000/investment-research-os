@@ -142,7 +142,7 @@ from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
 )
 from research_os.investment_insight_hub import build_investment_insight_hub
-from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, policy_sources_watch, portfolio_intelligent_table, portfolio_policy, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
+from research_os import analysis_context, analysis_labels, analysis_module_storage, automation_status, capture_attachment, capture_auto, capture_inference, capture_storage, capture_ticker_inference, company_ir_watch, daily_brief, dashboard_helpers, dart_filing_storage, dossier_queue, dossier_text, interest_automation, kcif_watch, news_actions, news_builder, news_inbox, news_market_journal, policy_sources_watch, portfolio_intelligent_table, portfolio_policy, portfolio_research_batch, portfolio_risk_storage, rag_query_synthesis_storage, regional_business_watch, research_memory_files, research_memory_ocr, research_memory_quality_rebuild, research_memory_supplement, research_workflow_files, target_price_memory, text_repair, thesis_impact, thesis_signal_words
 from research_os.export_routes import router as export_router
 from research_os.file_extraction import (
     decode_attachment_base64,
@@ -5755,6 +5755,93 @@ def portfolio_store_response(
         portfolios=records,
         active_portfolio=active_portfolio,
         storage_path=str(portfolio_store_path(settings)),
+    )
+
+
+def build_portfolio_research_batch_payload(
+    settings: Settings,
+    *,
+    portfolio_name: str | None = None,
+) -> dict:
+    """Build one local-only two-track research view from persisted evidence."""
+    response = portfolio_store_response(settings)
+    requested_name = str(portfolio_name or "").strip()
+    selected_portfolios = [
+        portfolio
+        for portfolio in response.portfolios
+        if not requested_name or portfolio.portfolio_name.casefold() == requested_name.casefold()
+    ]
+    if requested_name and not selected_portfolios:
+        raise HTTPException(status_code=404, detail="저장된 포트폴리오 이름을 찾지 못했습니다.")
+
+    by_ticker: dict[str, dict] = {}
+    for portfolio in selected_portfolios:
+        for holding in portfolio.holdings:
+            ticker = normalize_ticker(holding.ticker)
+            if not ticker or ticker in {"CASH", "UNKNOWN"}:
+                continue
+            market_value = holding.market_value
+            record = by_ticker.setdefault(
+                ticker,
+                {
+                    "ticker": ticker,
+                    "company_name": holding.name,
+                    "portfolios": [],
+                    # The saved family aggregate can overlap its members.  Keep
+                    # the largest same-ticker value as a reference instead of
+                    # summing overlapping account views.
+                    "market_value": market_value,
+                },
+            )
+            if portfolio.portfolio_name not in record["portfolios"]:
+                record["portfolios"].append(portfolio.portfolio_name)
+            if holding.name and not record.get("company_name"):
+                record["company_name"] = holding.name
+            if (market_value or 0) > (record.get("market_value") or 0):
+                record["market_value"] = market_value
+
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    try:
+        manifest_entries = [entry for entry in read_manifest(vault_dir) if isinstance(entry, dict)]
+    except Exception:
+        manifest_entries = []
+    analysis_entries = merge_portfolio_analysis_entries(
+        manifest_entries,
+        portfolio_vault_entries(vault_dir, list(by_ticker)),
+    )
+    entries_by_ticker: dict[str, list[dict]] = {}
+    records: list[dict] = []
+    for ticker, record in sorted(by_ticker.items()):
+        verification = verify_ticker_symbol(ticker, settings)
+        official_symbol = verification.official_symbol or ticker
+        ticker_entries = portfolio_analysis_entries_for_ticker(
+            analysis_entries,
+            official_symbol,
+            manifest_verifier=is_verified_manifest_entry,
+        )
+        module_state = portfolio_analysis_module_state(ticker_entries)
+        review_state = portfolio_analysis_review_state(ticker_entries)
+        records.append(
+            {
+                **record,
+                "official_symbol": official_symbol,
+                "company_name": verification.company_name or record.get("company_name") or ticker,
+                "completion_rate": sum(1 for value in module_state.values() if value)
+                / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
+                "review_completion_rate": sum(1 for value in review_state.values() if value)
+                / len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
+                "missing_modules": missing_portfolio_analysis_labels(module_state),
+                "review_missing_modules": missing_portfolio_analysis_labels(review_state),
+                "checklist_status": portfolio_analysis_checklist_status(ticker_entries),
+            }
+        )
+        entries_by_ticker[official_symbol] = ticker_entries
+
+    return portfolio_research_batch.build_portfolio_research_batch(
+        records,
+        entries_by_ticker,
+        as_of=current_storage_date(),
+        portfolio_name=requested_name or None,
     )
 
 
@@ -15906,6 +15993,40 @@ def check_portfolio_analysis_status(
             key=lambda item: (item["completion_rate"], item.get("market_value") or 0),
         ),
     }
+
+
+@app.get(
+    "/api/v1/portfolios/research-batch",
+    dependencies=[Depends(verify_user_token)],
+)
+def preview_portfolio_research_batch(
+    portfolio_name: str | None = Query(None, min_length=1, max_length=120),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Preview an evidence-only dual-track holding research batch."""
+    return build_portfolio_research_batch_payload(settings, portfolio_name=portfolio_name)
+
+
+@app.post(
+    "/api/v1/portfolios/research-batch/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_portfolio_research_batch(
+    portfolio_name: str | None = Query(None, min_length=1, max_length=120),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Persist a local review memo; never fetch, infer, or place an order."""
+    batch = build_portfolio_research_batch_payload(settings, portfolio_name=portfolio_name)
+    output_dir = user_state_dir(settings) / portfolio_research_batch.REPORT_DIRECTORY_NAME
+    paths = portfolio_research_batch.write_portfolio_research_batch(batch, output_dir)
+    batch["storage"] = {
+        "local_only": True,
+        "paths": [str(path) for path in paths.values()],
+        "manifest_updated": False,
+        "analysis_coverage_changed": False,
+        "review_gate_changed": False,
+    }
+    return batch
 
 
 @app.get(

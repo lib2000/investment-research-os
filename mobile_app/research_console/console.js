@@ -85,6 +85,8 @@
   fetchPortfolioNpsFlow,
   fetchNpsDomesticEquityAllocation,
   fetchNpsDomesticEquityRebalancePlan,
+  fetchPortfolioResearchBatch,
+  runPortfolioResearchBatch,
   fetchPensionRebalancingStatus,
   runPensionRebalancingReview,
   fetchTickerNpsFlow,
@@ -124,7 +126,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=96e28a33da9f";
+} from "./api.js?v=59b0fbc3d729";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -220,6 +222,7 @@ const elements = {
   portfolioNpsAllocationButton: document.querySelector("#portfolioNpsAllocationButton"),
   portfolioNpsRebalanceButton: document.querySelector("#portfolioNpsRebalanceButton"),
   portfolioPensionRebalanceButton: document.querySelector("#portfolioPensionRebalanceButton"),
+  portfolioResearchBatchButton: document.querySelector("#portfolioResearchBatchButton"),
   portfolioAnalysisStatusButton: document.querySelector("#portfolioAnalysisStatusButton"),
   portfolioTeamQueueButton: document.querySelector("#portfolioTeamQueueButton"),
   portfolioRunTopTeamButton: document.querySelector("#portfolioRunTopTeamButton"),
@@ -12069,6 +12072,7 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioNpsAllocationButton: "국내주식 14% 비중 점검을 시작했습니다.",
   portfolioNpsRebalanceButton: "국내주식 14% 리밸런싱 후보 생성을 시작했습니다.",
   portfolioPensionRebalanceButton: "연금계좌 리밸런싱 수동 검토를 시작했습니다. 주문은 실행하지 않습니다.",
+  portfolioResearchBatchButton: "전체 보유 종목 이중 트랙 리서치 생성을 시작했습니다. 주문은 실행하지 않습니다.",
   portfolioAnalysisStatusButton: "전체 분석 현황 점검을 시작했습니다.",
   portfolioTeamQueueButton: "기준 근거 큐 정리를 시작했습니다.",
   portfolioRunTopTeamButton: "상위 1개 근거 점검을 시작했습니다.",
@@ -13754,6 +13758,28 @@ elements.portfolioPensionRebalanceButton?.addEventListener("click", async () => 
       ...result,
       current_status: status,
       execution_notice: "자동 매수·매도는 실행하지 않았습니다. 증권사 앱에서 사람이 확인한 뒤 수동으로만 실행하세요.",
+    });
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.portfolioResearchBatchButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("전체 보유 종목 이중 트랙 리서치 생성 중", [
+    "저장 포트폴리오와 기존 리서치 근거 확인",
+    "가족·개인 보유 종목 중복 제거",
+    "사업·산업 / 실적·밸류에이션 트랙 분리",
+    "근거 신선도·공백·사람 검토 우선순위 정리",
+    "로컬 리서치 배치 저장 · 주문·외부 원천·LLM 호출 없음",
+  ]);
+  try {
+    const preview = await fetchPortfolioResearchBatch(token());
+    const result = await runPortfolioResearchBatch(token());
+    setOutput({
+      ...result,
+      preview,
+      execution_notice: "이 배치는 저장된 자료만 정리합니다. 투자 판단과 매수·매도는 사람이 원문과 계좌를 확인한 뒤 별도 검토하세요.",
     });
   } catch (error) {
     setError(error);
@@ -17314,6 +17340,64 @@ function formatAgentOperatingFoundationStatus(value) {
   ].join("\n");
 }
 
+function formatPortfolioResearchBatch(value) {
+  const items = Array.isArray(value.items) ? value.items : [];
+  const highPriorityItems = items.filter((item) => item.review_priority === "high");
+  const mediumPriorityItems = items.filter((item) => item.review_priority === "medium");
+  const evidenceGapItems = items.filter((item) => item.research_status === "evidence_gap");
+  const storagePaths = value.storage?.paths || [];
+  const trackGuidance = [
+    "기업: 사업·산업 / 실적·밸류에이션",
+    "ETF·펀드: 기초지수·편입·산업 노출 / 추적 구조·보수·유동성",
+  ];
+
+  return [
+    "### 보유 종목 이중 트랙 리서치",
+    "",
+    `- **기준 포트폴리오:** ${value.portfolio_name || "전체 보유 종목 (가족·개인 중복 제외)"}`,
+    `- **보유 종목:** ${formatNumber(value.holding_count || items.length)}개`,
+    `- **두 트랙 근거 준비:** ${formatNumber(value.two_track_ready_count || 0)}개`,
+    `- **근거 보강 필요:** ${formatNumber(value.evidence_gap_count || evidenceGapItems.length)}개`,
+    `- **신선도 점검:** ${formatNumber(mediumPriorityItems.length)}개`,
+    "",
+    "### 검토 구조",
+    ...trackGuidance.map((item) => `- ${item}`),
+    "",
+    "### 우선 보강",
+    ...formatBulletList(
+      highPriorityItems,
+      (item) =>
+        `**${displayCompanyName(item)} (${item.ticker || "티커 확인 필요"})** · ${
+          item.review_priority_reason || "저장 문서 공백을 확인하세요."
+        }`,
+      "표준 리서치 문서 공백으로 분류된 종목이 없습니다."
+    ),
+    "",
+    "### 신선도 점검 대상",
+    ...formatBulletList(
+      mediumPriorityItems.slice(0, 8),
+      (item) =>
+        `**${displayCompanyName(item)} (${item.ticker || "티커 확인 필요"})** · ${
+          item.review_priority_reason || "최근 근거의 최신성을 확인하세요."
+        }`,
+      "최근성 기준 추가 점검 대상이 없습니다."
+    ),
+    mediumPriorityItems.length > 8
+      ? `- 외 ${formatNumber(mediumPriorityItems.length - 8)}개는 동일한 신선도 기준으로 후속 점검 대상입니다.`
+      : "",
+    "",
+    "### 안전 경계",
+    "- 저장된 로컬 근거만 정리했습니다. 외부 원천 조회·LLM 호출·텔레그램 전송·증권사 주문은 실행하지 않았습니다.",
+    "- 분석 완성도와 사람 검토 게이트는 변경하지 않았습니다.",
+    "- 매수·매도 판단은 원문과 계좌를 사람이 확인한 뒤 별도로 검토하세요.",
+    storagePaths.length
+      ? `- **저장 위치:** ${storagePaths.map((path) => `\`${path}\``).join(" · ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function formatKoreanResult(value) {
   if (typeof value === "string") {
     return value;
@@ -17338,6 +17422,10 @@ function formatKoreanResult(value) {
 
   if (value.module === "agent_operating_foundation_status") {
     return formatAgentOperatingFoundationStatus(value);
+  }
+
+  if (value.design === "portfolio_dual_track_research_v1") {
+    return formatPortfolioResearchBatch(value);
   }
 
   if (value.module === "news_inbox" || value.module === "news_promotion") {

@@ -2005,6 +2005,28 @@ export async function fetchNpsDomesticEquityRebalancePlan(accessToken, portfolio
 }
 
 /**
+ * 저장된 근거만으로 보유 종목의 사업·산업 / 실적·밸류에이션 리서치 상태를 미리 봅니다.
+ */
+export async function fetchPortfolioResearchBatch(accessToken, portfolioName = "") {
+  const query = portfolioName ? `?portfolio_name=${encodeURIComponent(portfolioName)}` : "";
+  return request(`/api/v1/portfolios/research-batch${query}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+/**
+ * 사람 검토용 로컬 보유 종목 리서치 배치를 저장합니다. 주문·외부 원천·LLM 호출은 하지 않습니다.
+ */
+export async function runPortfolioResearchBatch(accessToken, portfolioName = "") {
+  const query = portfolioName ? `?portfolio_name=${encodeURIComponent(portfolioName)}` : "";
+  return request(`/api/v1/portfolios/research-batch/run${query}`, {
+    method: "POST",
+    accessToken,
+  });
+}
+
+/**
  * 연금계좌 목표 배분과 저장 포트폴리오의 현재 비중 괴리를 확인합니다.
  * 자동 주문은 실행하지 않으며, 설정·보유자산이 부족하면 필요한 입력만 반환합니다.
  */
