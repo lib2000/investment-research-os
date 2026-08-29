@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "status": "draft_needs_confirmation",
+  "portfolio_name": "미래에셋 개인연금",
+  "base_currency": "KRW",
+  "target_allocation": {
+    "global_equity": 0.5,
+    "bond": 0.4,
+    "cash": 0.1
+  },
+  "asset_class_by_ticker": {
+    "360750": "global_equity",
+    "CASH": "cash"
+  },
+  "rebalance_threshold_pct_points": 5.0,
+  "execution_mode": "manual_review_only",
+  "monthly_schedule": {
+    "enabled": true,
+    "day": 1,
+    "time": "19:00"
+  },
+  "quarterly_schedule": {
+    "enabled": true,
+    "months": [1, 4, 7, 10],
+    "day": 1,
+    "time": "19:00"
+  },
+  "google_calendar": {
+    "enabled": false,
+    "calendar_id": "primary",
+    "reminder_minutes": [1440, 60]
+  },
+  "google_drive": {
+    "enabled": false,
+    "folder_id": "",
+    "folder_url": "",
+    "sync_directory": ""
+  }
+}

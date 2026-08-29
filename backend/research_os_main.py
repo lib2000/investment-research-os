@@ -64,6 +64,13 @@ from research_os.nps_allocation_monitor import (
     build_nps_domestic_equity_rebalance_plan,
     select_saved_portfolios_for_nps_allocation,
 )
+from research_os.pension_rebalancing import (
+    build_pension_rebalancing_calendar_plan,
+    build_pension_rebalancing_status,
+    load_pension_rebalancing_config,
+    save_pension_rebalancing_config,
+    write_pension_rebalancing_run,
+)
 from research_os.nps_portfolio_changes import (
     apply_nps_rebalancing_pressure_to_recommendation,
     build_nps_portfolio_change_snapshot,
@@ -12852,6 +12859,56 @@ def _load_saved_portfolios_for_nps_allocation(
         else:
             total_value += sum(float(item.market_value or 0) for item in portfolio.holdings)
     return resolved_name, holdings, total_value
+
+
+@app.get(
+    "/api/v1/pension-rebalancing/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_pension_rebalancing_status(
+    months_ahead: int = Query(15, ge=1, le=36),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Show personal-pension allocation drift and safe review readiness only."""
+    return build_pension_rebalancing_status(settings, months_ahead=months_ahead)
+
+
+@app.get(
+    "/api/v1/pension-rebalancing/calendar-plan",
+    dependencies=[Depends(verify_user_token)],
+)
+def read_pension_rebalancing_calendar_plan(
+    months_ahead: int = Query(15, ge=1, le=36),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Return the idempotent Google Calendar/ICS plan without writing events."""
+    config = load_pension_rebalancing_config(settings)
+    return build_pension_rebalancing_calendar_plan(config, months_ahead=months_ahead)
+
+
+@app.post(
+    "/api/v1/pension-rebalancing/config",
+    dependencies=[Depends(verify_user_token)],
+)
+def save_pension_rebalancing_settings(
+    payload: dict = Body(...),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Persist a local target-allocation draft while forcing manual-only execution."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="연금 리밸런싱 설정은 JSON 객체여야 합니다.")
+    return save_pension_rebalancing_config(settings, payload)
+
+
+@app.post(
+    "/api/v1/pension-rebalancing/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_pension_rebalancing_review(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Write an allocation-review report and ICS fallback; never submit an order."""
+    return write_pension_rebalancing_run(settings)
 
 
 @app.get(

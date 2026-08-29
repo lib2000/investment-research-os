@@ -2004,6 +2004,28 @@ export async function fetchNpsDomesticEquityRebalancePlan(accessToken, portfolio
   );
 }
 
+/**
+ * 연금계좌 목표 배분과 저장 포트폴리오의 현재 비중 괴리를 확인합니다.
+ * 자동 주문은 실행하지 않으며, 설정·보유자산이 부족하면 필요한 입력만 반환합니다.
+ */
+export async function fetchPensionRebalancingStatus(accessToken) {
+  return request("/api/v1/pension-rebalancing/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+/**
+ * 연금계좌 수동 검토 보고서와 Google Calendar ICS 대안을 생성합니다.
+ * 이 API는 주문 엔드포인트를 호출하지 않습니다.
+ */
+export async function runPensionRebalancingReview(accessToken) {
+  return request("/api/v1/pension-rebalancing/run", {
+    method: "POST",
+    accessToken,
+  });
+}
+
 export async function fetchTickerNpsFlow(accessToken, ticker) {
   return request(`/api/v1/institutional-flow/nps/${encodeURIComponent(ticker)}`, {
     method: "GET",

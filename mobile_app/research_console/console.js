@@ -85,6 +85,8 @@
   fetchPortfolioNpsFlow,
   fetchNpsDomesticEquityAllocation,
   fetchNpsDomesticEquityRebalancePlan,
+  fetchPensionRebalancingStatus,
+  runPensionRebalancingReview,
   fetchTickerNpsFlow,
   fetchPortfolioConnectivity,
   fetchPortfolioAnalysisStatus,
@@ -122,7 +124,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=1ab3619215e3";
+} from "./api.js?v=96e28a33da9f";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -217,6 +219,7 @@ const elements = {
   portfolioNpsFlowButton: document.querySelector("#portfolioNpsFlowButton"),
   portfolioNpsAllocationButton: document.querySelector("#portfolioNpsAllocationButton"),
   portfolioNpsRebalanceButton: document.querySelector("#portfolioNpsRebalanceButton"),
+  portfolioPensionRebalanceButton: document.querySelector("#portfolioPensionRebalanceButton"),
   portfolioAnalysisStatusButton: document.querySelector("#portfolioAnalysisStatusButton"),
   portfolioTeamQueueButton: document.querySelector("#portfolioTeamQueueButton"),
   portfolioRunTopTeamButton: document.querySelector("#portfolioRunTopTeamButton"),
@@ -12065,6 +12068,7 @@ attachButtonActionFeedback(document.querySelector("#portfolio"), {
   portfolioNpsFlowButton: "국민연금 수급 확인을 시작했습니다.",
   portfolioNpsAllocationButton: "국내주식 14% 비중 점검을 시작했습니다.",
   portfolioNpsRebalanceButton: "국내주식 14% 리밸런싱 후보 생성을 시작했습니다.",
+  portfolioPensionRebalanceButton: "연금계좌 리밸런싱 수동 검토를 시작했습니다. 주문은 실행하지 않습니다.",
   portfolioAnalysisStatusButton: "전체 분석 현황 점검을 시작했습니다.",
   portfolioTeamQueueButton: "기준 근거 큐 정리를 시작했습니다.",
   portfolioRunTopTeamButton: "상위 1개 근거 점검을 시작했습니다.",
@@ -13730,6 +13734,27 @@ elements.portfolioNpsRebalanceButton?.addEventListener("click", async () => {
   try {
     const result = await fetchNpsDomesticEquityRebalancePlan(token(), portfolioName);
     setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.portfolioPensionRebalanceButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("연금계좌 리밸런싱 수동 검토 준비 중", [
+    "저장된 연금 포트폴리오와 목표 자산배분 확인",
+    "현재 비중·목표 비중·허용 괴리 계산",
+    "월간·분기 Calendar 일정과 ICS 대안 생성",
+    "수동 검토 패킷 저장 · 주문 엔드포인트 호출 없음",
+  ]);
+  try {
+    const status = await fetchPensionRebalancingStatus(token());
+    const result = await runPensionRebalancingReview(token());
+    setOutput({
+      ...result,
+      current_status: status,
+      execution_notice: "자동 매수·매도는 실행하지 않았습니다. 증권사 앱에서 사람이 확인한 뒤 수동으로만 실행하세요.",
+    });
   } catch (error) {
     setError(error);
   }
