@@ -33,10 +33,11 @@ flowchart LR
 - Result: a secret-free summary is stored in the Research OS backtest history shown by the integrated screen.
 - Credential: read at runtime from Windows Credential Manager; never embedded in the task command or state file.
 - Safety: the runner has no call to Strategy Builder's execution/order endpoint and never sends a brokerage order.
+- Docker recovery: if a newly written Docker backend error identifies a blocked AF_UNIX runtime socket (`dockerInference`, `dockerEthernetVfkit`, `userAnalyticsOtlpHttp.sock`, or Secrets Engine `engine.sock`), the runner preserves the affected runtime-only parent directories by renaming them with a timestamp, then retries Docker once. It never resets Docker Desktop or deletes Docker images, volumes, containers, or WSL data.
 
 ## Failure states
 
-- Missing recommendation, unavailable local service, unavailable Docker/Lean image, market-data failure, authentication failure, and Research OS persistence failure all produce a non-zero task result.
+- Missing recommendation, unavailable local service, unavailable Docker/Lean image, market-data failure, authentication failure, and Research OS persistence failure all produce a non-zero task result. A Docker runtime-socket recovery is attempted only for a matching current startup error and only once per runner invocation.
 - State and logs are written under ignored `tmp/` paths. They contain no access token or account data.
 - If a service is unavailable, the runner may start the existing integrated workbench and waits up to four minutes for health checks.
 

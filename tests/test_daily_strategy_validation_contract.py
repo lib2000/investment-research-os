@@ -35,6 +35,10 @@ def test_runner_recovers_docker_and_requires_lean_image() -> None:
 
     assert "[switch]$StartDockerIfNeeded" in source
     assert "Start-DockerRequirement" in source
+    assert "Test-DockerRuntimeSocketFailure" in source
+    assert "Move-DockerRuntimeSocketDirectories" in source
+    assert "docker_runtime_socket_recovery_ready" in source
+    assert "run.stale" in source
     assert "quantconnect/lean:latest" in source
     assert '"--format", "{{.Id}}"' in source
     assert "-WindowStyle Hidden" in source

@@ -107,6 +107,61 @@ function Test-LeanImage {
   return (Invoke-BoundedDocker -Arguments @("image", "inspect", "quantconnect/lean:latest", "--format", "{{.Id}}")) -eq 0
 }
 
+function Wait-DockerEngineReady {
+  param([int]$TimeoutSeconds)
+  $deadline = (Get-Date).AddSeconds([Math]::Max($TimeoutSeconds, 30))
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 5
+    if (Test-DockerEngine) { return $true }
+  }
+  return $false
+}
+
+function Test-DockerRuntimeSocketFailure {
+  param([datetime]$NotBefore)
+
+  $errorPath = Join-Path $env:LOCALAPPDATA "Docker\backend.error.json"
+  if (-not (Test-Path -LiteralPath $errorPath)) { return $false }
+  $errorItem = Get-Item -LiteralPath $errorPath
+  if ($errorItem.LastWriteTime -lt $NotBefore.AddSeconds(-1)) { return $false }
+
+  try {
+    $errorDocument = [IO.File]::ReadAllText($errorPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
+    $description = [string]$errorDocument.error.error.error.originalError.description
+  } catch {
+    return $false
+  }
+  if ($description -notmatch "The file cannot be accessed by the system") { return $false }
+
+  $normalizedDescription = $description.Replace("/", "\\")
+  $socketPaths = @(
+    (Join-Path $env:LOCALAPPDATA "Docker\run\dockerInference"),
+    (Join-Path $env:LOCALAPPDATA "Docker\run\dockerEthernetVfkit"),
+    (Join-Path $env:LOCALAPPDATA "Docker\run\userAnalyticsOtlpHttp.sock"),
+    (Join-Path $env:LOCALAPPDATA "docker-secrets-engine\engine.sock")
+  )
+  return [bool]($socketPaths | Where-Object { $normalizedDescription -like "*$_*" })
+}
+
+function Move-DockerRuntimeSocketDirectories {
+  $localAppData = $env:LOCALAPPDATA
+  $targets = @(
+    [pscustomobject]@{ Path = (Join-Path $localAppData "Docker\run"); Prefix = "run.stale" },
+    [pscustomobject]@{ Path = (Join-Path $localAppData "docker-secrets-engine"); Prefix = "docker-secrets-engine.stale" }
+  )
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  foreach ($target in $targets) {
+    if (-not (Test-Path -LiteralPath $target.Path)) { continue }
+    $parent = Split-Path -Parent $target.Path
+    $destination = Join-Path $parent ("{0}-{1}" -f $target.Prefix, $stamp)
+    if (Test-Path -LiteralPath $destination) {
+      $destination = Join-Path $parent ("{0}-{1}-{2}" -f $target.Prefix, $stamp, [guid]::NewGuid().ToString("N").Substring(0, 8))
+    }
+    Move-Item -LiteralPath $target.Path -Destination $destination -ErrorAction Stop
+    Write-TaskLog "docker_runtime_dir_quarantined: $destination"
+  }
+}
+
 function Start-DockerRequirement {
   if (Test-DockerEngine) { return }
   if (-not $StartDockerIfNeeded) {
@@ -126,15 +181,26 @@ function Start-DockerRequirement {
   if (-not $dockerDesktop) { throw "Docker Desktop executable was not found." }
 
   Write-TaskLog "docker_start_requested"
+  $startupRequestedAt = Get-Date
   Start-Process -FilePath $dockerDesktop -WindowStyle Hidden
-  $deadline = (Get-Date).AddSeconds([Math]::Max($DockerStartupTimeoutSeconds, 30))
-  while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Seconds 5
-    if (Test-DockerEngine) {
-      Write-TaskLog "docker_start_ready"
+  if (Wait-DockerEngineReady -TimeoutSeconds $DockerStartupTimeoutSeconds) {
+    Write-TaskLog "docker_start_ready"
+    return
+  }
+
+  if (Test-DockerRuntimeSocketFailure -NotBefore $startupRequestedAt) {
+    Write-TaskLog "docker_runtime_socket_recovery_requested"
+    Get-Process -Name "Docker Desktop", "com.docker.backend" -ErrorAction SilentlyContinue |
+      Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Move-DockerRuntimeSocketDirectories
+    Start-Process -FilePath $dockerDesktop -WindowStyle Hidden
+    if (Wait-DockerEngineReady -TimeoutSeconds $DockerStartupTimeoutSeconds) {
+      Write-TaskLog "docker_runtime_socket_recovery_ready"
       return
     }
   }
+
   throw "Docker Desktop Linux engine did not become ready within $DockerStartupTimeoutSeconds seconds."
 }
 
