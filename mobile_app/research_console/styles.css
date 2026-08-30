@@ -614,6 +614,7 @@ label {
 .backtest-run-card { padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .backtest-run-card > div { display: flex; justify-content: space-between; gap: 12px; }
 .backtest-run-card > div span, .backtest-run-card small { color: var(--muted); }
+.backtest-run-symbols { min-width: 0; overflow-wrap: anywhere; text-align: right; }
 .backtest-run-card dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
 .backtest-run-card dl div { min-width: 0; }
 .backtest-run-card dt { color: var(--muted); font-size: 0.74rem; }
@@ -934,6 +935,7 @@ label {
   }
 
   .backtest-run-history-heading, .backtest-run-card > div { align-items: stretch; flex-direction: column; }
+  .backtest-run-symbols { text-align: left; }
   .backtest-run-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .chart-copilot-pilot-heading,

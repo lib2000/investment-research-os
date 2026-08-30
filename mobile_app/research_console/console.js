@@ -471,6 +471,27 @@ elements.integratedSymbolMasterRefresh?.addEventListener("click", async () => {
 
 refreshIntegratedServicesStatus();
 
+function formatBacktestSymbols(run) {
+  const companyNameByTicker = new Map(
+    (Array.isArray(run?.symbol_details) ? run.symbol_details : [])
+      .map((detail) => [
+        String(detail?.ticker || "").trim().toUpperCase(),
+        String(detail?.company_name || "").trim(),
+      ])
+      .filter(([ticker, companyName]) => ticker && companyName),
+  );
+  const symbols = Array.isArray(run?.symbols) ? run.symbols : [];
+  const labels = symbols.map((symbol) => {
+    const ticker = String(symbol || "").trim().toUpperCase();
+    if (!ticker) return "";
+    const companyName = companyNameByTicker.get(ticker);
+    return companyName && companyName.toUpperCase() !== ticker
+      ? `${companyName} (${ticker})`
+      : ticker;
+  }).filter(Boolean);
+  return labels.join(", ") || "종목 확인 필요";
+}
+
 function renderBacktestRuns(payload) {
   if (!elements.backtestRunHistory) return;
   const runs = Array.isArray(payload?.runs) ? payload.runs : [];
@@ -480,7 +501,7 @@ function renderBacktestRuns(payload) {
   }
   elements.backtestRunHistory.innerHTML = runs.map((run) => `
     <article class="backtest-run-card">
-      <div><strong>${escapeHtml(run.strategy_name || "전략")}</strong><span>${escapeHtml((run.symbols || []).join(", "))}</span></div>
+      <div><strong>${escapeHtml(run.strategy_name || "전략")}</strong><span class="backtest-run-symbols">${escapeHtml(formatBacktestSymbols(run))}</span></div>
       <dl>
         <div><dt>수익률</dt><dd>${formatNullable(run.total_return)}%</dd></div>
         <div><dt>최대 낙폭</dt><dd>${formatNullable(run.max_drawdown)}%</dd></div>

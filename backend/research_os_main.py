@@ -12139,6 +12139,31 @@ def _read_backtest_runs(settings: Settings) -> list[dict[str, Any]]:
     return []
 
 
+def _backtest_symbol_details(symbols: Any, settings: Settings) -> list[dict[str, str]]:
+    """Return locally known company labels for a stored backtest symbol list.
+
+    The recent-results endpoint is displayed on every console load, so this
+    intentionally reads only the official and local dynamic registries. It must
+    not trigger an external ticker lookup or mutate the registry while rendering
+    historical backtest evidence.
+    """
+    if not isinstance(symbols, list):
+        return []
+
+    dynamic_registry = read_dynamic_ticker_registry(settings)
+    details: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for value in symbols:
+        ticker = normalize_ticker(str(value or "").strip())
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        profile = OFFICIAL_TICKER_REGISTRY.get(ticker) or dynamic_registry.get(ticker) or {}
+        company_name = str(profile.get("company_name") or profile.get("name") or "").strip()
+        details.append({"ticker": ticker, "company_name": company_name})
+    return details
+
+
 def _local_port_is_listening(port: int) -> bool:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.35):
@@ -12260,7 +12285,11 @@ def refresh_trading_tool_symbol_master() -> dict:
     dependencies=[Depends(verify_user_token)],
 )
 def read_backtest_runs(limit: int = Query(default=20, ge=1, le=100), settings: Settings = Depends(get_settings)) -> dict:
-    runs = _read_backtest_runs(settings)[:limit]
+    runs = []
+    for stored_run in _read_backtest_runs(settings)[:limit]:
+        run = dict(stored_run)
+        run["symbol_details"] = _backtest_symbol_details(run.get("symbols"), settings)
+        runs.append(run)
     return {"status": "success", "count": len(runs), "runs": runs}
 
 

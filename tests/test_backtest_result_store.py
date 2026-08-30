@@ -54,3 +54,25 @@ def test_list_backtest_results_filters_ticker(monkeypatch):
 
     assert response.saved_count == 1
     assert response.results[0]["run_id"] == "a"
+
+
+def test_read_backtest_runs_adds_local_company_names_without_external_lookup(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "_read_backtest_runs",
+        lambda settings: [{"run_id": "daily", "symbols": ["005940", "UNKNOWN", "005940"]}],
+    )
+    monkeypatch.setattr(
+        main,
+        "read_dynamic_ticker_registry",
+        lambda settings: {"005940": {"company_name": "NH투자증권"}},
+    )
+
+    response = main.read_backtest_runs(limit=20, settings=SimpleNamespace())
+
+    assert response["count"] == 1
+    assert response["runs"][0]["symbols"] == ["005940", "UNKNOWN", "005940"]
+    assert response["runs"][0]["symbol_details"] == [
+        {"ticker": "005940", "company_name": "NH투자증권"},
+        {"ticker": "UNKNOWN", "company_name": ""},
+    ]
