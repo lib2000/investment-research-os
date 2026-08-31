@@ -85,7 +85,7 @@ def recommendation_signal(system_dir: Path, daily_time: str) -> dict[str, Any]:
     selected_count = selected if isinstance(selected, int) else len(state.get("selected") or [])
     now = kst_now()
     expected = {now.date().isoformat()}
-    if now.time() < parse_hhmm(daily_time, time(hour=8)):
+    if now.time() < parse_hhmm(daily_time, time(hour=7)):
         expected.add((now.date() - timedelta(days=1)).isoformat())
     last_run = str(state.get("last_run_date") or state.get("last_run_at") or "")
     date_ok = last_run[:10] in expected
@@ -671,7 +671,7 @@ def build_result(
 def main() -> int:
     parser = argparse.ArgumentParser(description="운영 완성도 95% 기준을 백엔드 없이 점검합니다.")
     parser.add_argument("--min-score", type=float, default=95.0)
-    parser.add_argument("--daily-time", default="08:00")
+    parser.add_argument("--daily-time", default="07:00")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--json", action="store_true", help="운영 완성도 결과를 JSON으로 출력합니다.")
     parser.add_argument(

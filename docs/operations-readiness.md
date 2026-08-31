@@ -6,7 +6,7 @@
 
 - 확인 위치: 콘솔 대시보드의 `오늘 한국/미국 추천 1~3위`, 또는 저장 데이터 탭의 `오늘 한국/미국 추천 1~3위` / `추천 추적 상태`
 - API 확인: `GET /api/v1/daily-recommendations/status`
-- 실행 시각: `DAILY_RECOMMENDATIONS_TIME` 기본값 `08:00`
+- 실행 시각: `DAILY_RECOMMENDATIONS_TIME` 기본값 `07:00`; 가족 오늘의 한 종목 카드는 `DAILY_FAMILY_TOP_PICK_TIME` 기본값 `07:10`에 같은 날 저장된 추천 후보만 재사용해 생성
 - 저장 위치: `research_vault/_system/daily_recommendations.json`
 - 스케줄 상태 위치: `research_vault/_system/daily_recommendations_state.json`
 - 저장 항목: 추천일, 순위, 회사명, 기준가, 통화, 점수 구성, 감점/확인 사유, 근거, 포트폴리오 연결, 사후 추적표

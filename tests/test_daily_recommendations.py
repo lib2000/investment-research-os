@@ -1238,7 +1238,7 @@ class DailyRecommendationsTests(unittest.TestCase):
 
     def test_daily_recommendation_schedule_defaults_invalid_time(self):
         settings = Settings(daily_recommendations_time="bad-value")
-        self.assertEqual(parse_daily_recommendations_time(settings), (8, 0))
+        self.assertEqual(parse_daily_recommendations_time(settings), (7, 0))
 
     def test_daily_recommendation_status_exposes_today_records(self):
         main = import_research_os_main_or_skip()

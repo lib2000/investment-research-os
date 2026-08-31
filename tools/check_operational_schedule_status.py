@@ -16,6 +16,10 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.daily_recommendations import daily_recommendation_status_payload  # noqa: E402
+from research_os.daily_family_top_pick import (  # noqa: E402
+    parse_daily_family_top_pick_time,
+    read_daily_family_top_pick_card,
+)
 from research_os.dossier_text import content_fingerprint  # noqa: E402
 from research_os.settings import Settings  # noqa: E402
 from research_os.state_store import (  # noqa: E402
@@ -142,15 +146,16 @@ def telegram_favorite_posts_runtime() -> TelegramFavoritePostsRuntime:
 
 def build_daily_recommendation_schedule(settings: Settings) -> dict[str, Any]:
     status = daily_recommendation_status_payload(settings, today=current_storage_date().isoformat())
+    daily_time = status.get("daily_time") or settings.daily_recommendations_time
     market_groups = status.get("today_market_groups") or {}
     today_count = _market_group_count(market_groups)
     has_today = bool(status.get("has_today_recommendations"))
     if not status.get("enabled"):
         schedule_status = "disabled"
-        next_action = "DAILY_RECOMMENDATIONS_ENABLED=true 설정 후 08:00 자동 추천을 켜세요."
+        next_action = f"DAILY_RECOMMENDATIONS_ENABLED=true 설정 후 {daily_time} 자동 추천을 켜세요."
     elif status.get("due_now") and not has_today:
         schedule_status = "due"
-        next_action = "오늘 추천 저장이 아직 없어 08:00 이후 재분석이 필요합니다."
+        next_action = f"오늘 추천 저장이 아직 없어 {daily_time} 이후 재분석이 필요합니다."
     elif has_today and today_count >= 6:
         schedule_status = "ok"
         next_action = "오늘 한국/미국 추천 1~3위가 저장되어 있습니다."
@@ -159,10 +164,10 @@ def build_daily_recommendation_schedule(settings: Settings) -> dict[str, Any]:
         next_action = "오늘 추천은 있으나 한국/미국 3개씩 구성이 맞는지 확인하세요."
     else:
         schedule_status = "waiting"
-        next_action = "08:00 전 대기 상태입니다."
+        next_action = f"{daily_time} 전 대기 상태입니다."
     return {
         "id": "daily_recommendations",
-        "time": status.get("daily_time") or settings.daily_recommendations_time,
+        "time": daily_time,
         "task": "한국/미국 오늘 추천 1~3위 생성/저장",
         "status": schedule_status,
         "enabled": bool(status.get("enabled")),
@@ -172,6 +177,44 @@ def build_daily_recommendation_schedule(settings: Settings) -> dict[str, Any]:
         "today_count": today_count,
         "latest_recommendation_date": status.get("latest_recommendation_date"),
         "has_today_recommendations": has_today,
+        "next_action": next_action,
+    }
+
+
+def build_daily_family_top_pick_schedule(settings: Settings) -> dict[str, Any]:
+    """Report the local 07:10 card gate without generating a card."""
+    now = current_storage_datetime()
+    card_payload = read_daily_family_top_pick_card(settings)
+    schedule = card_payload.get("schedule") if isinstance(card_payload.get("schedule"), dict) else {}
+    hour, minute = parse_daily_family_top_pick_time(settings)
+    scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    last_run_date = str(schedule.get("last_scheduled_run_date") or "")
+    is_current = bool(card_payload.get("is_current"))
+    has_card = isinstance(card_payload.get("card"), dict)
+    if not settings.daily_recommendations_enabled:
+        status = "disabled"
+        next_action = "일일 추천이 비활성화되어 가족 한 종목 카드도 생성하지 않습니다."
+    elif last_run_date == now.date().isoformat() and has_card and is_current:
+        status = "ok"
+        next_action = "오늘 카드가 07:00 추천 결과와 연결되어 저장되었습니다."
+    elif now >= scheduled:
+        status = "due"
+        next_action = "오늘 카드가 아직 생성되지 않았습니다. 07:00 추천 상태를 먼저 확인하세요."
+    else:
+        status = "waiting"
+        next_action = f"{settings.daily_family_top_pick_time} 카드 생성 대기 상태입니다."
+    return {
+        "id": "daily_family_top_pick_card",
+        "time": settings.daily_family_top_pick_time,
+        "task": "가족 전체 보유·관심종목 한 종목 리서치 카드 생성",
+        "status": status,
+        "enabled": bool(settings.daily_recommendations_enabled),
+        "scheduler": "backend_daily_gate",
+        "due_now": now >= scheduled and last_run_date != now.date().isoformat(),
+        "command": "GET /api/v1/daily-top-pick",
+        "latest_recommendation_date": card_payload.get("recommendation_date"),
+        "last_scheduled_run_at": schedule.get("last_scheduled_run_at"),
+        "last_scheduled_status": schedule.get("last_scheduled_status"),
         "next_action": next_action,
     }
 
@@ -220,6 +263,7 @@ def build_status(settings: Settings | None = None) -> dict[str, Any]:
     checks = [
         build_market_close_schedule(settings),
         build_daily_recommendation_schedule(settings),
+        build_daily_family_top_pick_schedule(settings),
         build_favorite_posts_schedule(settings),
     ]
     errors: list[str] = []

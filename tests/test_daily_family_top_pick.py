@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import sys
 
@@ -25,7 +25,7 @@ def _record(
         "market_label": "미국",
         "currency": "USD",
         "recommendation_date": date.today().isoformat(),
-        "generated_at": "2026-09-01T08:00:00+09:00",
+        "generated_at": "2026-09-01T07:00:00+09:00",
         "rank": 1,
         "score": score,
         "baseline_price": 12.34,
@@ -137,15 +137,50 @@ def test_top_pick_fails_closed_to_review_hold_when_every_scoped_candidate_is_blo
     assert payload["card"]["research_stance"] == "근거 보강 전 검토 보류"
 
 
+def test_top_pick_schedule_runs_once_at_0710_after_the_0700_recommendation(tmp_path) -> None:
+    from research_os.daily_family_top_pick import (
+        daily_top_pick_card_scheduler_state_path,
+        parse_daily_family_top_pick_time,
+        record_daily_family_top_pick_schedule_run,
+        should_run_daily_family_top_pick_card,
+    )
+    from research_os.settings import Settings
+    from research_os.state_store import read_json_store
+
+    settings = Settings(
+        research_vault_dir=str(tmp_path / "research_vault"),
+        daily_recommendations_time="07:00",
+        daily_family_top_pick_time="07:10",
+    )
+    before = datetime(2026, 9, 1, 7, 9)
+    scheduled = datetime(2026, 9, 1, 7, 10)
+
+    assert parse_daily_family_top_pick_time(settings) == (7, 10)
+    assert not should_run_daily_family_top_pick_card(settings, before)
+    assert should_run_daily_family_top_pick_card(settings, scheduled)
+
+    record_daily_family_top_pick_schedule_run(
+        settings,
+        {"status": "ready", "generation_status": "generated", "recommendation_date": "2026-09-01"},
+        run_at=scheduled,
+    )
+    assert not should_run_daily_family_top_pick_card(settings, datetime(2026, 9, 1, 7, 11))
+    state = read_json_store(daily_top_pick_card_scheduler_state_path(settings), {})
+    assert state["last_run_date"] == "2026-09-01"
+    assert state["recommendation_date"] == "2026-09-01"
+
+
 def test_console_and_daily_runner_contract_keep_the_card_local_and_non_ordering() -> None:
     backend_source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
     api_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "api.js").read_text(encoding="utf-8")
     console_source = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(encoding="utf-8")
     card_source = (PROJECT_ROOT / "backend" / "research_os" / "daily_family_top_pick.py").read_text(encoding="utf-8")
 
-    assert "run_daily_family_top_pick_card(settings" in backend_source
+    assert "should_run_daily_family_top_pick_card(settings, now)" in backend_source
+    assert "record_daily_family_top_pick_schedule_run(" in backend_source
     assert '"/api/v1/daily-top-pick"' in api_source
     assert '"/api/v1/daily-top-pick/card.svg"' in api_source
     assert "dailyTopPickQuickButton" in console_source
+    assert "카드 자동 생성" in console_source
     assert "매수·매도 지시나 자동 주문이 아닙니다" in card_source
     assert "submit_order" not in card_source

@@ -27,9 +27,9 @@ REQUIRED_EVIDENCE_TOKENS = {
 
 
 def parse_daily_time(value: object) -> tuple[int, int]:
-    match = re.match(r"^(\d{1,2}):(\d{2})$", str(value or "08:00").strip())
+    match = re.match(r"^(\d{1,2}):(\d{2})$", str(value or "07:00").strip())
     if not match:
-        return 8, 0
+        return 7, 0
     return min(max(int(match.group(1)), 0), 23), min(max(int(match.group(2)), 0), 59)
 
 
@@ -37,7 +37,7 @@ def latest_policy_drift_deferred_until_schedule(
     latest_date: str | None,
     *,
     now: datetime,
-    daily_time: object = "08:00",
+    daily_time: object = "07:00",
     enabled: bool = True,
 ) -> bool:
     if not enabled:
@@ -586,7 +586,7 @@ def recommendation_schedule_context(root: Path, latest_date: str | None) -> dict
         from research_os.settings import Settings  # noqa: PLC0415
     except Exception:
         now = datetime.now().replace(microsecond=0)
-        daily_time = "08:00"
+        daily_time = "07:00"
         enabled = True
     else:
         settings = Settings()

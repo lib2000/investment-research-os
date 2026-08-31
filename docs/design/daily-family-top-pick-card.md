@@ -13,7 +13,7 @@ Turn the existing daily review ranking into one evidence-first, shareable resear
 1. The daily recommendation process stores Korean and US review candidates.
 2. The top-pick process reuses that saved result, checks it against the current individual family portfolios and watchlist, and excludes candidates marked `blocks_buy_decision` when possible.
 3. The console shows the selected candidate at the top of the dashboard and allows an SVG copy to be downloaded.
-4. The daily runner and the in-process daily recommendation scheduler both invoke the same local-only card generator after the recommendation result is saved.
+4. The in-process scheduler saves the daily recommendation at 07:00, then the independent 07:10 card gate reuses that saved result. A forced manual recommendation refresh may synchronize the local card immediately; it never sends a message or places an order.
 
 ## Selection contract
 
@@ -33,3 +33,4 @@ Turn the existing daily review ranking into one evidence-first, shareable resear
 - No order, broker mutation, account data, Telegram delivery, or external model request is made.
 - Every card includes the research-only disclaimer and the evidence guardrail.
 - Unit tests cover scope filtering, evidence holds, persistence, and SVG escaping. Browser checks cover desktop and 390×844 rendering.
+- Schedule checks cover the 07:00 recommendation gate and the once-per-day 07:10 card gate; the card does not issue a second market-data request.

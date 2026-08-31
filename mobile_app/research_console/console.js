@@ -10742,6 +10742,7 @@ function renderDailyFamilyTopPickPanel(payload = latestDailyFamilyTopPick) {
   const card = payload?.card || null;
   const scope = payload?.scope || {};
   const selection = payload?.selection || {};
+  const topPickSchedule = payload?.schedule?.daily_top_pick_time || "07:10";
   const dateLabel = payload?.recommendation_date || "오늘";
   const currentLabel = payload?.is_current === false ? "이전 기준일" : "당일 기준";
   const scopeText = `${formatNumber(scope.member_portfolio_count || 0)}개 개인 포트폴리오 · 보유 ${formatNumber(scope.unique_holding_count || 0)}종목 · 관심 ${formatNumber(scope.interest_count || 0)}종목`;
@@ -10752,7 +10753,7 @@ function renderDailyFamilyTopPickPanel(payload = latestDailyFamilyTopPick) {
           <div>
             <span>FAMILY RESEARCH OS · DAILY TOP PICK</span>
             <h2>오늘의 한 종목 카드 대기</h2>
-            <p>${escapeHtml(scopeText)}</p>
+            <p>${escapeHtml(scopeText)} · 카드 자동 생성 ${escapeHtml(topPickSchedule)}</p>
           </div>
           <button data-daily-top-pick-action="generate" type="button">카드 생성</button>
         </header>
@@ -10776,7 +10777,7 @@ function renderDailyFamilyTopPickPanel(payload = latestDailyFamilyTopPick) {
             <h2>${escapeHtml(card.company_name || "종목 확인 필요")}</h2>
             <b>${escapeHtml(card.ticker || "-")}</b>
           </div>
-          <p>${escapeHtml(card.scope_status || "후보 범위 확인 필요")} · 기준일 ${escapeHtml(dateLabel)} · ${escapeHtml(currentLabel)}</p>
+          <p>${escapeHtml(card.scope_status || "후보 범위 확인 필요")} · 기준일 ${escapeHtml(dateLabel)} · ${escapeHtml(currentLabel)} · 카드 자동 생성 ${escapeHtml(topPickSchedule)}</p>
         </div>
         <div class="daily-family-top-pick-actions">
           <button data-daily-top-pick-action="generate" type="button">카드 갱신</button>
@@ -10824,7 +10825,7 @@ function renderDailyFamilyTopPickPanel(payload = latestDailyFamilyTopPick) {
 }
 
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
-  const schedule = payload?.daily_time || "08:00";
+  const schedule = payload?.daily_time || "07:00";
   const records = dailyRecommendationTopRecords(payload || {});
   const policyAlignment = payload?.latest_policy_alignment || {};
   const candidatePreview = payload?.candidate_policy_preview || {};
@@ -10941,7 +10942,7 @@ function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendati
       <div class="daily-recommendation-top-head">
         <div>
           <span>오늘 한국/미국 추천 1~3위</span>
-          <h2>${escapeHtml(records.length ? todayDate : "매일 08:00 자동 실행")}</h2>
+          <h2>${escapeHtml(records.length ? todayDate : "매일 07:00 자동 실행")}</h2>
         </div>
         <button data-workflow-action="daily-recommendations-status" type="button">상태 보기</button>
       </div>

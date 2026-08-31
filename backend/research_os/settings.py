@@ -200,7 +200,8 @@ class Settings(BaseModel):
     telegram_timeout_seconds: float = 10.0
     telegram_brief_delivery_state_file: str = "../research_vault/_system/telegram_brief_delivery_state.json"
     daily_recommendations_enabled: bool = True
-    daily_recommendations_time: str = "08:00"
+    daily_recommendations_time: str = "07:00"
+    daily_family_top_pick_time: str = "07:10"
     daily_recommendations_tracking_enabled: bool = True
     kcif_use_login: bool = True
     kcif_username: str = Field(default="")
@@ -550,8 +551,9 @@ class Settings(BaseModel):
                 "DAILY_RECOMMENDATIONS_ENABLED", True
             ),
             daily_recommendations_time=os.getenv(
-                "DAILY_RECOMMENDATIONS_TIME", "08:00"
+                "DAILY_RECOMMENDATIONS_TIME", "07:00"
             ),
+            daily_family_top_pick_time=os.getenv("DAILY_FAMILY_TOP_PICK_TIME", "07:10"),
             daily_recommendations_tracking_enabled=_read_bool(
                 "DAILY_RECOMMENDATIONS_TRACKING_ENABLED", True
             ),

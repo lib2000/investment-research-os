@@ -154,7 +154,7 @@ def validate_payload(payload: dict[str, Any], markdown: str) -> list[str]:
     if not isinstance(schedule, list) or not schedule:
         raise AssertionError("next_schedule must be non-empty")
     schedule_text = json.dumps(schedule, ensure_ascii=False)
-    for required in ("07:00", "07:20", "08:00", "22:00"):
+    for required in ("07:00", "07:10", "07:20", "22:00"):
         if required not in schedule_text:
             raise AssertionError(f"next_schedule missing required time: {required}")
 

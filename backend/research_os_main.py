@@ -140,9 +140,11 @@ from research_os.daily_recommendations import (
     upsert_daily_recommendations,
 )
 from research_os.daily_family_top_pick import (
+    record_daily_family_top_pick_schedule_run,
     read_daily_family_top_pick_card,
     read_daily_family_top_pick_svg,
     run_daily_family_top_pick_card,
+    should_run_daily_family_top_pick_card,
 )
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
@@ -17628,20 +17630,21 @@ def run_daily_stock_recommendations(
                     "message": result["message"],
                 },
             )
-            # Reuse the persisted candidates for the family-wide one-stock
-            # research card. This is local-only and never triggers a second
-            # market lookup, a delivery, or an order action.
-            try:
-                result["daily_top_pick_card"] = run_daily_family_top_pick_card(
-                    settings,
-                    force=force,
-                )
-            except Exception:
-                result["daily_top_pick_card"] = {
-                    "status": "warning",
-                    "module": "daily_family_top_pick_card",
-                    "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
-                }
+            # The scheduled card has its own 07:10 gate. A user-initiated
+            # force refresh remains synchronized immediately without another
+            # market lookup, delivery, or order action.
+            if force:
+                try:
+                    result["daily_top_pick_card"] = run_daily_family_top_pick_card(
+                        settings,
+                        force=True,
+                    )
+                except Exception:
+                    result["daily_top_pick_card"] = {
+                        "status": "warning",
+                        "module": "daily_family_top_pick_card",
+                        "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
+                    }
             return result
 
     candidate_payload = build_daily_recommendation_candidates(settings, limit=3)
@@ -17697,17 +17700,20 @@ def run_daily_stock_recommendations(
                 "message": result.get("message") or "일일 추천 후보 생성/추적을 완료했습니다.",
             },
         )
-        try:
-            result["daily_top_pick_card"] = run_daily_family_top_pick_card(
-                settings,
-                force=force,
-            )
-        except Exception:
-            result["daily_top_pick_card"] = {
-                "status": "warning",
-                "module": "daily_family_top_pick_card",
-                "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
-            }
+        # The normal scheduler defers card creation to 07:10. A forced manual
+        # refresh may create the matching local card immediately.
+        if force:
+            try:
+                result["daily_top_pick_card"] = run_daily_family_top_pick_card(
+                    settings,
+                    force=True,
+                )
+            except Exception:
+                result["daily_top_pick_card"] = {
+                    "status": "warning",
+                    "module": "daily_family_top_pick_card",
+                    "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
+                }
     return result
 
 
@@ -17766,6 +17772,17 @@ def daily_recommendations_scheduler_loop() -> None:
             now = current_storage_datetime()
             if should_run_daily_recommendations(settings, now):
                 run_daily_stock_recommendations(settings, force=False, save_result=True)
+            elif (
+                should_run_daily_family_top_pick_card(settings, now)
+                and read_json_store(daily_recommendation_state_path(settings), {}).get("last_run_date")
+                == now.date().isoformat()
+            ):
+                card_result = run_daily_family_top_pick_card(settings, force=False)
+                record_daily_family_top_pick_schedule_run(
+                    settings,
+                    card_result,
+                    run_at=now,
+                )
             elif settings.daily_recommendations_tracking_enabled:
                 state = read_json_store(daily_recommendation_state_path(settings), {})
                 today = current_storage_date().isoformat()

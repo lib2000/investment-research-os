@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "",
   [string]$TaskName = "InvestmentJournalApp OpenClaw Context Sync After Recommendations",
-  [string]$At = "08:20"
+  [string]$At = "07:20"
 )
 
 $ErrorActionPreference = "Stop"

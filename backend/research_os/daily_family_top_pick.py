@@ -12,9 +12,9 @@ import hashlib
 import html
 import json
 import math
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from re import sub
+from re import search, sub
 from typing import Any
 from uuid import uuid4
 
@@ -39,6 +39,14 @@ DISCLAIMER = "투자 리서치용 검토 후보입니다. 매수·매도 지시�
 
 def daily_top_pick_card_state_path(settings: Settings) -> Path:
     return resolve_vault_dir(settings.research_vault_dir) / "_system" / "daily_top_pick_card.json"
+
+
+def daily_top_pick_card_scheduler_state_path(settings: Settings) -> Path:
+    return (
+        resolve_vault_dir(settings.research_vault_dir)
+        / "_system"
+        / "daily_top_pick_card_scheduler_state.json"
+    )
 
 
 def daily_top_pick_card_asset_dir(settings: Settings) -> Path:
@@ -71,6 +79,68 @@ def _safe_number(value: object) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def parse_daily_family_top_pick_time(settings: Settings) -> tuple[int, int]:
+    """Return the local card-generation time with a safe 07:10 fallback."""
+    configured = getattr(settings, "daily_family_top_pick_time", "07:10")
+    match = search(r"^(\d{1,2}):(\d{2})$", str(configured or "07:10").strip())
+    if not match:
+        return 7, 10
+    return (
+        min(max(int(match.group(1)), 0), 23),
+        min(max(int(match.group(2)), 0), 59),
+    )
+
+
+def should_run_daily_family_top_pick_card(
+    settings: Settings,
+    now: datetime,
+) -> bool:
+    """Gate the scheduled card to one local execution per calendar day."""
+    if not settings.daily_recommendations_enabled:
+        return False
+    hour, minute = parse_daily_family_top_pick_time(settings)
+    scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now < scheduled:
+        return False
+    state = read_json_store(daily_top_pick_card_scheduler_state_path(settings), {})
+    return state.get("last_run_date") != now.date().isoformat()
+
+
+def record_daily_family_top_pick_schedule_run(
+    settings: Settings,
+    result: dict[str, Any],
+    *,
+    run_at: datetime,
+) -> dict[str, Any]:
+    """Record a scheduler attempt without storing holdings, orders, or secrets."""
+    payload = {
+        "module": MODULE,
+        "last_run_date": run_at.date().isoformat(),
+        "last_run_at": run_at.isoformat(timespec="seconds"),
+        "last_status": str(result.get("status") or "unknown"),
+        "last_generation_status": str(result.get("generation_status") or "unknown"),
+        "recommendation_date": str(result.get("recommendation_date") or ""),
+        "message": _clean_text(result.get("message"), limit=220),
+    }
+    write_json_store(daily_top_pick_card_scheduler_state_path(settings), payload)
+    return payload
+
+
+def _attach_schedule(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose schedule metadata while keeping portfolio membership private."""
+    scheduler_state = read_json_store(daily_top_pick_card_scheduler_state_path(settings), {})
+    return {
+        **payload,
+        "schedule": {
+            "daily_recommendations_time": settings.daily_recommendations_time,
+            "daily_top_pick_time": getattr(settings, "daily_family_top_pick_time", "07:10"),
+            "last_scheduled_run_at": scheduler_state.get("last_run_at"),
+            "last_scheduled_run_date": scheduler_state.get("last_run_date"),
+            "last_scheduled_status": scheduler_state.get("last_status"),
+        },
+    }
 
 
 def _normalized_ticker(value: object) -> str:
@@ -531,13 +601,16 @@ def _write_svg(path: Path, content: str) -> None:
 def read_daily_family_top_pick_card(settings: Settings) -> dict[str, Any]:
     stored = read_json_store(daily_top_pick_card_state_path(settings), {})
     if not stored:
-        return _missing_payload(build_family_candidate_scope(settings), "오늘의 한 종목 카드가 아직 생성되지 않았습니다.")
+        return _attach_schedule(
+            settings,
+            _missing_payload(build_family_candidate_scope(settings), "오늘의 한 종목 카드가 아직 생성되지 않았습니다."),
+        )
     payload = {**stored}
     recommendation_date = str(payload.get("recommendation_date") or "")
     payload["is_current"] = recommendation_date == current_storage_date().isoformat()
     payload.setdefault("module", MODULE)
     payload.setdefault("disclaimer", DISCLAIMER)
-    return payload
+    return _attach_schedule(settings, payload)
 
 
 def run_daily_family_top_pick_card(
@@ -557,11 +630,14 @@ def run_daily_family_top_pick_card(
         and existing.get("status") == payload.get("status")
     )
     if same_source and not force:
-        return {
-            **existing,
-            "generation_status": "skipped_existing",
-            "message": "동일한 후보 범위와 당일 추천 데이터로 만든 카드가 이미 저장되어 있습니다.",
-        }
+        return _attach_schedule(
+            settings,
+            {
+                **existing,
+                "generation_status": "skipped_existing",
+                "message": "동일한 후보 범위와 당일 추천 데이터로 만든 카드가 이미 저장되어 있습니다.",
+            },
+        )
 
     recommendation_date = str(payload.get("recommendation_date") or "")
     if recommendation_date:
@@ -574,7 +650,7 @@ def run_daily_family_top_pick_card(
         }
     payload["generation_status"] = "generated"
     write_json_store(daily_top_pick_card_state_path(settings), payload)
-    return payload
+    return _attach_schedule(settings, payload)
 
 
 def read_daily_family_top_pick_svg(settings: Settings) -> tuple[str | None, str | None]:
