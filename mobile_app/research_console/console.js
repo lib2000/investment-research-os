@@ -63,7 +63,10 @@
   refreshPolicySourcesWatch,
   ingestNewsInbox,
   fetchDailyRecommendationsStatus,
+  fetchDailyFamilyTopPick,
   fetchDailyRecommendationPolicySignals,
+  runDailyFamilyTopPick,
+  downloadDailyFamilyTopPickSvg,
   runDailyRecommendationRepairQueue,
   fetchRecentWeeklyResearchBrief,
   fetchPublicIrSecStatus,
@@ -126,7 +129,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=59b0fbc3d729";
+} from "./api.js?v=ed35f18b948a";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -301,6 +304,8 @@ const elements = {
   naverMarketJournalButton: document.querySelector("#naverMarketJournalButton"),
   dailyRecommendationsButton: document.querySelector("#dailyRecommendationsButton"),
   dailyRecommendationsQuickButton: document.querySelector("#dailyRecommendationsQuickButton"),
+  dailyTopPickButton: document.querySelector("#dailyTopPickButton"),
+  dailyTopPickQuickButton: document.querySelector("#dailyTopPickQuickButton"),
   recentWeeklyBriefButton: document.querySelector("#recentWeeklyBriefButton"),
   recentWeeklyEvidenceSynthesisButton: document.querySelector("#recentWeeklyEvidenceSynthesisButton"),
   dailyRecommendationsStatusButton: document.querySelector("#dailyRecommendationsStatusButton"),
@@ -780,6 +785,7 @@ const openInterestTickerKeys = new Set();
 const openInterestSectorKeys = new Set();
 let lastTodayResearchUpdate = null;
 let latestDailyRecommendations = null;
+let latestDailyFamilyTopPick = null;
 let activeMemoryPreviewFile = null;
 let dashboardTickerGroupsExpanded = false;
 let dashboardSyncTimer = null;
@@ -1453,6 +1459,7 @@ function renderOpenClawStatusCard(status = lastOpenClawStatus) {
 
 function renderDashboardEmptyState() {
   setDashboardCards(`
+    ${renderDailyFamilyTopPickPanel()}
     ${renderDailyRecommendationHomeTopPanel()}
     ${renderOpenClawStatusCard()}
     <div class="dashboard-actions">
@@ -1471,6 +1478,7 @@ function activePanelId() {
 function renderDashboardTickerPending(ticker) {
   const safeTicker = escapeHtml(ticker || "새 티커");
   setDashboardCards(`
+    ${renderDailyFamilyTopPickPanel()}
     ${renderOpenClawStatusCard()}
     <div class="dashboard-empty-note">
       <strong>${safeTicker}</strong>
@@ -8974,6 +8982,7 @@ function renderDashboardCards(dashboard) {
 
   setDashboardCards(`
     <section class="dashboard-clean-layout" aria-label="대시보드 요약">
+      ${renderDailyFamilyTopPickPanel()}
       ${renderDailyRecommendationHomeTopPanel()}
       ${renderOpenClawStatusCard()}
       <section class="dashboard-clean-hero ${escapeHtml(decisionTone)}">
@@ -10722,6 +10731,98 @@ function dailyRecommendationPreviewModeLabel(candidatePreview = {}) {
   return "프리뷰 모드 미확인";
 }
 
+function dailyFamilyTopPickTone(payload = {}) {
+  if (!payload || !payload.card || payload.status === "not_found") return "warning";
+  if (payload.status === "review_hold" || payload.is_current === false) return "warning";
+  return "ok";
+}
+
+function renderDailyFamilyTopPickPanel(payload = latestDailyFamilyTopPick) {
+  const tone = dailyFamilyTopPickTone(payload || {});
+  const card = payload?.card || null;
+  const scope = payload?.scope || {};
+  const selection = payload?.selection || {};
+  const dateLabel = payload?.recommendation_date || "오늘";
+  const currentLabel = payload?.is_current === false ? "이전 기준일" : "당일 기준";
+  const scopeText = `${formatNumber(scope.member_portfolio_count || 0)}개 개인 포트폴리오 · 보유 ${formatNumber(scope.unique_holding_count || 0)}종목 · 관심 ${formatNumber(scope.interest_count || 0)}종목`;
+  if (!card) {
+    return `
+      <section class="daily-family-top-pick ${escapeHtml(tone)} is-empty" aria-label="가족 오늘의 한 종목 리서치 카드">
+        <header class="daily-family-top-pick-head">
+          <div>
+            <span>FAMILY RESEARCH OS · DAILY TOP PICK</span>
+            <h2>오늘의 한 종목 카드 대기</h2>
+            <p>${escapeHtml(scopeText)}</p>
+          </div>
+          <button data-daily-top-pick-action="generate" type="button">카드 생성</button>
+        </header>
+        <p class="daily-family-top-pick-empty">${escapeHtml(payload?.message || "당일 추천 후보가 저장되면 가족 전체 보유·관심 범위에서 한 종목을 근거 기준으로 정리합니다.")}</p>
+        <small>${escapeHtml(payload?.disclaimer || "투자 리서치용 검토 후보입니다. 매수·매도 지시나 자동 주문이 아닙니다.")}</small>
+      </section>
+    `;
+  }
+
+  const metrics = Array.isArray(card.metrics) ? card.metrics.slice(0, 4) : [];
+  const reasons = Array.isArray(card.reasons) ? card.reasons.slice(0, 3) : [];
+  const risks = Array.isArray(card.risks) ? card.risks.slice(0, 2) : [];
+  const evidence = card.evidence_strength || {};
+  const statusText = payload.status === "review_hold" ? "근거 보강 전 검토 보류" : card.research_stance || "근거 기반 우선 검토";
+  return `
+    <section class="daily-family-top-pick ${escapeHtml(tone)}" aria-label="가족 오늘의 한 종목 리서치 카드">
+      <header class="daily-family-top-pick-head">
+        <div>
+          <span>FAMILY RESEARCH OS · DAILY TOP PICK</span>
+          <div class="daily-family-top-pick-title-row">
+            <h2>${escapeHtml(card.company_name || "종목 확인 필요")}</h2>
+            <b>${escapeHtml(card.ticker || "-")}</b>
+          </div>
+          <p>${escapeHtml(card.scope_status || "후보 범위 확인 필요")} · 기준일 ${escapeHtml(dateLabel)} · ${escapeHtml(currentLabel)}</p>
+        </div>
+        <div class="daily-family-top-pick-actions">
+          <button data-daily-top-pick-action="generate" type="button">카드 갱신</button>
+          <button data-daily-top-pick-action="download" class="secondary" type="button">SVG 저장</button>
+        </div>
+      </header>
+      <div class="daily-family-top-pick-thesis">
+        <span>핵심 판단</span>
+        <strong>${escapeHtml(compactOutputText(card.thesis || "확인 필요", 170))}</strong>
+        <p>${escapeHtml(statusText)} · 근거 강도 ${escapeHtml(card.confidence || "확인 필요")} · ${escapeHtml(card.guardrail || "검토 기준 확인")}</p>
+      </div>
+      <div class="daily-family-top-pick-metrics" aria-label="오늘의 한 종목 핵심 지표">
+        ${metrics.map((metric) => `
+          <article>
+            <span>${escapeHtml(metric?.label || "확인 항목")}</span>
+            <strong>${escapeHtml(metric?.value || "확인 필요")}</strong>
+            <small>${escapeHtml(metric?.detail || "확인 필요")}</small>
+          </article>
+        `).join("")}
+      </div>
+      <div class="daily-family-top-pick-detail-grid">
+        <section>
+          <span>WHAT MATTERS</span>
+          <h3>핵심 논거</h3>
+          <ul>
+            ${(reasons.length ? reasons : ["저장된 투자 논거를 확인하세요."]).map((reason) => `<li>${escapeHtml(compactOutputText(reason, 156))}</li>`).join("")}
+          </ul>
+        </section>
+        <section class="risks">
+          <span>RISK · NEXT REVIEW</span>
+          <h3>리스크와 다음 확인</h3>
+          <ul>
+            ${(risks.length ? risks : [card.guardrail_action || "핵심 원문과 최신 가격 조건을 확인하세요."]).map((risk) => `<li>${escapeHtml(compactOutputText(risk, 156))}</li>`).join("")}
+          </ul>
+          <p>다음 추적: ${escapeHtml(card.next_review?.summary || "확인 필요")}</p>
+        </section>
+      </div>
+      <footer class="daily-family-top-pick-footer">
+        <span>범위 ${escapeHtml(scopeText)} · 후보 ${escapeHtml(formatNumber(selection.in_scope_record_count || 0))}개 · 적격 ${escapeHtml(formatNumber(selection.eligible_count || 0))}개</span>
+        <span>근거 문서 ${escapeHtml(formatNumber(evidence.document_count || 0))}건 · 최근 30일 ${escapeHtml(formatNumber(evidence.recent_30d_count || 0))}건</span>
+        <small>${escapeHtml(card.disclaimer || payload.disclaimer || "투자 리서치용 검토 후보입니다. 매수·매도 지시나 자동 주문이 아닙니다.")}</small>
+      </footer>
+    </section>
+  `;
+}
+
 function renderDailyRecommendationHomeTopPanel(payload = latestDailyRecommendations) {
   const schedule = payload?.daily_time || "08:00";
   const records = dailyRecommendationTopRecords(payload || {});
@@ -12184,6 +12285,16 @@ document.addEventListener("click", (event) => {
 });
 
 elements.dashboardCards.addEventListener("click", (event) => {
+  const dailyTopPickAction = event.target.closest("[data-daily-top-pick-action]");
+  if (dailyTopPickAction) {
+    const action = dailyTopPickAction.dataset.dailyTopPickAction;
+    if (action === "download") {
+      downloadDailyFamilyTopPickFlow().catch(setError);
+    } else {
+      runDailyFamilyTopPickFlow().catch(setError);
+    }
+    return;
+  }
   const dailyRecommendationCard = event.target.closest("[data-daily-recommendation-open]");
   if (dailyRecommendationCard) {
     openDailyRecommendationDetailFromDashboard(dailyRecommendationCard).catch(setError);
@@ -15521,10 +15632,66 @@ async function runDailyRecommendationsFlow() {
       ? await fetchDailyRecommendationsStatus(token())
       : await runDailyRecommendations(token(), { force: false, saveResult: true });
     latestDailyRecommendations = result || latestDailyRecommendations;
+    latestDailyFamilyTopPick = result?.daily_top_pick_card || await fetchDailyFamilyTopPick(token()) || latestDailyFamilyTopPick;
     renderDailyRecommendationCards(result);
     refreshDashboardDailyRecommendationTop();
     setOutput(result || "오늘 추천 후보 결과를 확인하지 못했습니다.");
     await runSecondaryRefresh("자동화 상태 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+}
+
+async function runDailyFamilyTopPickFlow() {
+  syncApiBaseUrl();
+  startOutputLoading("가족 오늘의 한 종목 카드 준비 중", [
+    "저장된 당일 추천 후보 확인",
+    "가족 보유·관심 범위 대조",
+    "근거 보류 후보 제외",
+    "리서치 카드와 SVG 저장",
+  ]);
+  try {
+    const result = isClickSmokeMode()
+      ? await fetchDailyFamilyTopPick(token())
+      : await runDailyFamilyTopPick(token(), { force: false });
+    latestDailyFamilyTopPick = result || latestDailyFamilyTopPick;
+    refreshDashboardDailyRecommendationTop();
+    setOutput(summarizeDailyFamilyTopPickOutput(result) || "오늘의 한 종목 카드를 확인하지 못했습니다.");
+  } catch (error) {
+    setError(error);
+  }
+}
+
+function summarizeDailyFamilyTopPickOutput(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const card = payload.card || {};
+  const scope = payload.scope || {};
+  const selection = payload.selection || {};
+  return {
+    상태: payload.status || "확인 필요",
+    생성: payload.generation_status || "확인 필요",
+    기준일: payload.recommendation_date || "확인 필요",
+    당일_여부: payload.is_current === true ? "당일 기준" : "이전 기준일",
+    우선_검토_후보: card.company_name || selection.selected_ticker || "확인 필요",
+    티커: selection.selected_ticker || card.ticker || "확인 필요",
+    후보_범위: {
+      개인_포트폴리오: Number(scope.member_portfolio_count || 0),
+      보유_종목: Number(scope.unique_holding_count || 0),
+      관심_종목: Number(scope.interest_count || 0),
+      범위_내_후보: Number(selection.in_scope_record_count || 0),
+      적격_후보: Number(selection.eligible_count || 0),
+    },
+    카드: payload.asset?.file_name || "화면 카드만 표시",
+    안내: payload.message || "투자 리서치용 검토 후보입니다.",
+  };
+}
+
+async function downloadDailyFamilyTopPickFlow() {
+  syncApiBaseUrl();
+  try {
+    const { blob, filename } = await downloadDailyFamilyTopPickSvg(token());
+    triggerFileDownload(blob, filename || "family-top-pick.svg");
+    showActionFeedback("오늘의 한 종목 SVG 카드를 저장했습니다.");
   } catch (error) {
     setError(error);
   }
@@ -15542,6 +15709,7 @@ async function runDailyRecommendationsStatusFlow() {
     await trackDailyRecommendations(token());
     const result = await fetchDailyRecommendationsStatus(token());
     latestDailyRecommendations = result || latestDailyRecommendations;
+    latestDailyFamilyTopPick = await fetchDailyFamilyTopPick(token()) || latestDailyFamilyTopPick;
     renderDailyRecommendationCards(result);
     refreshDashboardDailyRecommendationTop();
     setOutput(result || "추천 추적 상태를 확인하지 못했습니다.");
@@ -15748,6 +15916,10 @@ async function runRecentWeeklyEvidenceSynthesisFlow() {
 [elements.dailyRecommendationsButton, elements.dailyRecommendationsQuickButton]
   .filter(Boolean)
   .forEach((button) => button.addEventListener("click", runDailyRecommendationsFlow));
+
+[elements.dailyTopPickButton, elements.dailyTopPickQuickButton]
+  .filter(Boolean)
+  .forEach((button) => button.addEventListener("click", runDailyFamilyTopPickFlow));
 
 [elements.dailyRecommendationsStatusButton, elements.dailyRecommendationsStatusQuickButton]
   .filter(Boolean)
@@ -16459,6 +16631,7 @@ async function initializeConsole() {
     refreshPortfolioStore(true),
     refreshInterestList(true),
     fetchDailyRecommendationsStatus(token()),
+    fetchDailyFamilyTopPick(token()),
   ];
   const results = await Promise.allSettled(steps);
   const failed = results.find((result) => result.status === "rejected");
@@ -16467,6 +16640,7 @@ async function initializeConsole() {
     return;
   }
   latestDailyRecommendations = results[3]?.status === "fulfilled" ? results[3].value : null;
+  latestDailyFamilyTopPick = results[4]?.status === "fulfilled" ? results[4].value : null;
   renderDashboardEmptyState();
   renderDashboardTickerPicker();
   setOutput("대시보드 준비 완료\n\n티커 입력칸은 비워두었습니다. 최근 사용/보유/관심종목/섹터에서 종목을 선택하거나 회사명을 직접 입력해 조회하세요.");

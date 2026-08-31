@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from research_os.brokerage import BrokerageClient, get_default_brokerage_client
@@ -137,6 +138,11 @@ from research_os.daily_recommendations import (
     summarize_daily_recommendation_store,
     update_recommendation_tracking,
     upsert_daily_recommendations,
+)
+from research_os.daily_family_top_pick import (
+    read_daily_family_top_pick_card,
+    read_daily_family_top_pick_svg,
+    run_daily_family_top_pick_card,
 )
 from research_os.investment_direction_profile import (
     apply_investment_direction_profile as _apply_investment_direction_profile,
@@ -17622,6 +17628,20 @@ def run_daily_stock_recommendations(
                     "message": result["message"],
                 },
             )
+            # Reuse the persisted candidates for the family-wide one-stock
+            # research card. This is local-only and never triggers a second
+            # market lookup, a delivery, or an order action.
+            try:
+                result["daily_top_pick_card"] = run_daily_family_top_pick_card(
+                    settings,
+                    force=force,
+                )
+            except Exception:
+                result["daily_top_pick_card"] = {
+                    "status": "warning",
+                    "module": "daily_family_top_pick_card",
+                    "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
+                }
             return result
 
     candidate_payload = build_daily_recommendation_candidates(settings, limit=3)
@@ -17677,6 +17697,17 @@ def run_daily_stock_recommendations(
                 "message": result.get("message") or "일일 추천 후보 생성/추적을 완료했습니다.",
             },
         )
+        try:
+            result["daily_top_pick_card"] = run_daily_family_top_pick_card(
+                settings,
+                force=force,
+            )
+        except Exception:
+            result["daily_top_pick_card"] = {
+                "status": "warning",
+                "module": "daily_family_top_pick_card",
+                "message": "오늘의 한 종목 리서치 카드를 갱신하지 못했습니다. 저장된 추천 상태는 유지됩니다.",
+            }
     return result
 
 
@@ -17800,6 +17831,45 @@ def run_daily_recommendations_endpoint(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return run_daily_stock_recommendations(settings, force=force, save_result=save_result)
+
+
+@app.get(
+    "/api/v1/daily-top-pick",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_daily_family_top_pick_card(settings: Settings = Depends(get_settings)) -> dict:
+    """Return the persisted one-stock family research card without reranking."""
+    return read_daily_family_top_pick_card(settings)
+
+
+@app.post(
+    "/api/v1/daily-top-pick/run",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_daily_family_top_pick_card_endpoint(
+    force: bool = False,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Create a local SVG/JSON card from saved daily recommendations only."""
+    return run_daily_family_top_pick_card(settings, force=force)
+
+
+@app.get(
+    "/api/v1/daily-top-pick/card.svg",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_daily_family_top_pick_svg(settings: Settings = Depends(get_settings)) -> Response:
+    svg, filename = read_daily_family_top_pick_svg(settings)
+    if not svg:
+        raise HTTPException(status_code=404, detail="오늘의 한 종목 SVG 카드가 아직 생성되지 않았습니다.")
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename or "family-top-pick.svg"}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.post(

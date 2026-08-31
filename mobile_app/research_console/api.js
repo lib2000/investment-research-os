@@ -1342,6 +1342,45 @@ export async function fetchDailyRecommendationsStatus(accessToken) {
   }
 }
 
+/**
+ * 가족 전체 보유·관심종목 범위에서 저장된 당일 후보를 한 종목 카드로 조회합니다.
+ * 조회 자체는 외부 가격/LLM/주문 요청을 만들지 않습니다.
+ */
+export async function fetchDailyFamilyTopPick(accessToken) {
+  try {
+    return request("/api/v1/daily-top-pick", {
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("오늘의 한 종목 카드 조회 중 오류 발생:", error);
+    return null;
+  }
+}
+
+/**
+ * 저장된 당일 추천 결과에서 SVG/JSON 한 종목 카드를 생성합니다.
+ * 이 API는 기존 저장 상태만 사용하며 주문·발송을 수행하지 않습니다.
+ */
+export async function runDailyFamilyTopPick(accessToken, { force = false } = {}) {
+  try {
+    return request(`/api/v1/daily-top-pick/run?force=${force ? "true" : "false"}`, {
+      method: "POST",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("오늘의 한 종목 카드 생성 중 오류 발생:", error);
+    return null;
+  }
+}
+
+export async function downloadDailyFamilyTopPickSvg(accessToken) {
+  return requestBlob("/api/v1/daily-top-pick/card.svg", {
+    method: "GET",
+    accessToken,
+  });
+}
+
 export async function fetchDailyRecommendationPolicySignals(accessToken) {
   try {
     return request("/api/v1/daily-recommendations/policy-signals", {
