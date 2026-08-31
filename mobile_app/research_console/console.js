@@ -1926,6 +1926,7 @@ function portfolioRefreshStatusMeta(status) {
   const map = {
     updated: ["갱신됨", "success"],
     confirmed: ["동일 확인", "info"],
+    derived: ["개인별 합산", "info"],
     unavailable: ["미확인", "warning"],
     skipped: ["조회 제외", "muted"],
     unknown: ["상태 없음", "muted"],
@@ -1965,6 +1966,7 @@ function portfolioSyncStatusMeta(status, source = "") {
     kiwoom_domestic_missing: ["키움 미확인", "warning"],
     toss_missing: ["토스 미확인", "warning"],
     manual_or_overseas_protected: ["수동 보호", "info"],
+    derived_read_only: ["개인별 자동 합산", "info"],
     kiwoom_not_configured: ["설정 필요", "warning"],
     kiwoom_unavailable: ["연결 실패", "warning"],
     toss_not_configured: ["토스 설정 필요", "warning"],
@@ -4434,6 +4436,7 @@ function updatePortfolioLoadedAt(portfolio, label = "불러온") {
     updatedAt ? `저장 수정: ${formatDateTime(updatedAt)}` : "",
     portfolio.portfolio_name ? `포트폴리오: ${portfolio.portfolio_name}` : "",
     `보유 종목: ${formatNumber(portfolio.holding_count ?? portfolio.holdings?.length ?? 0)}개`,
+    portfolio.is_derived ? "개인별 원장 자동 합산 · 읽기 전용" : "",
   ].filter(Boolean);
   elements.portfolioLoadedAt.textContent = parts.join(" · ");
 }
@@ -4594,6 +4597,7 @@ function fillPortfolioForm(portfolio) {
     makePortfolioHoldingRow,
     () => ({ ticker: "", sector: "Unknown", theme_tags: [] })
   );
+  setPortfolioDerivedReadOnlyState(portfolio);
   clearHoldingRowsUnsaved();
   recalculatePortfolioValues();
   applyPortfolioViewState({ sort: true });
@@ -5504,6 +5508,47 @@ async function refreshPortfolioPerformance({ silent = false } = {}) {
   }
 }
 
+function isDerivedPortfolio(portfolio = {}) {
+  return Boolean(portfolio?.is_derived);
+}
+
+function setPortfolioDerivedReadOnlyState(portfolio = {}) {
+  const derived = isDerivedPortfolio(portfolio);
+  const disabledControls = [
+    elements.portfolioSaveButton,
+    elements.portfolioDeleteButton,
+    elements.portfolioKiwoomSyncButton,
+    elements.portfolioKiwoomApplyButton,
+    elements.portfolioTossSyncButton,
+    elements.portfolioTossApplyButton,
+    elements.portfolioSyncHistoryButton,
+    elements.addHoldingButton,
+    elements.addCashButton,
+    elements.portfolioImportPickButton,
+    elements.portfolioImportButton,
+    elements.portfolioApplyExecutionButton,
+    elements.recalculatePortfolioButton,
+  ].filter(Boolean);
+  disabledControls.forEach((control) => {
+    control.disabled = derived;
+    if (derived) {
+      control.title = "가족 합산은 개인별 포트폴리오에서 자동 계산되는 읽기 전용 보기입니다.";
+    } else {
+      control.removeAttribute("title");
+    }
+  });
+  elements.holdingsEditor
+    ?.querySelectorAll('[data-holding-action="save"], [data-editor-remove]')
+    .forEach((control) => {
+      control.disabled = derived;
+      if (derived) {
+        control.title = "개인별 포트폴리오에서 수정하세요.";
+      } else {
+        control.removeAttribute("title");
+      }
+    });
+}
+
 function renderPortfolioOptions(portfolios = [], selectedName = "") {
   if (!elements.portfolioSelect) {
     return;
@@ -5523,16 +5568,17 @@ function renderPortfolioOptions(portfolios = [], selectedName = "") {
     return;
   }
   portfolios.forEach((item) => {
+    const modeLabel = isDerivedPortfolio(item) ? " · 자동 합산" : "";
     elements.portfolioSelect.append(
       new Option(
-        `${item.portfolio_name} · ${item.holding_count || 0}개`,
+        `${item.portfolio_name}${modeLabel} · ${item.holding_count || 0}개`,
         item.portfolio_name
       )
     );
     if (elements.tradePortfolioSelect) {
       elements.tradePortfolioSelect.append(
         new Option(
-          `${item.portfolio_name} · ${formatMoney(item.portfolio_value, "KRW", "n/a")}`,
+          `${item.portfolio_name}${modeLabel} · ${formatMoney(item.portfolio_value, "KRW", "n/a")}`,
           item.portfolio_name
         )
       );
@@ -5557,6 +5603,7 @@ function renderPortfolioFamilyOverview(portfolios = [], selectedName = "") {
     return;
   }
   const selected = String(selectedName || elements.portfolioSelect?.value || "").trim();
+  const derivedCount = records.filter((portfolio) => isDerivedPortfolio(portfolio)).length;
   const cards = records.map((portfolio) => {
     const name = String(portfolio.portfolio_name || "이름 없는 포트폴리오").trim();
     const holdings = Array.isArray(portfolio.holdings) ? portfolio.holdings : [];
@@ -5571,6 +5618,9 @@ function renderPortfolioFamilyOverview(portfolios = [], selectedName = "") {
       ? `${holdingNames}${remaining ? ` · 외 ${formatNumber(remaining)}개` : ""}`
       : "보유 종목 없음";
     const isSelected = name === selected;
+    const derivedLabel = isDerivedPortfolio(portfolio)
+      ? '<span>개인별 자동 합산 · 읽기 전용</span>'
+      : "";
     return `
       <button class="portfolio-family-card${isSelected ? " selected" : ""}" type="button"
         data-family-portfolio="${escapeHtml(name)}" aria-pressed="${isSelected ? "true" : "false"}">
@@ -5578,6 +5628,7 @@ function renderPortfolioFamilyOverview(portfolios = [], selectedName = "") {
         <span class="portfolio-family-card-meta">
           <span>보유 ${formatNumber(holdings.length)}개</span>
           <span>${escapeHtml(formatMoney(portfolio.portfolio_value, "KRW", "총액 n/a"))}</span>
+          ${derivedLabel}
         </span>
         <span class="portfolio-family-card-holdings">${holdingsText}</span>
       </button>`;
@@ -5585,7 +5636,7 @@ function renderPortfolioFamilyOverview(portfolios = [], selectedName = "") {
   elements.portfolioFamilyOverview.innerHTML = `
     <div class="portfolio-family-overview-head">
       <strong>가족 개인별 보유 종목</strong>
-      <span>${formatNumber(records.length)}개 포트폴리오 · 카드를 누르면 전체 종목 확인</span>
+      <span>${formatNumber(records.length)}개 포트폴리오${derivedCount ? " · 개인별 원장 자동 합산 포함" : ""} · 카드를 누르면 전체 종목 확인</span>
     </div>
     <div class="portfolio-family-grid">${cards}</div>`;
 }

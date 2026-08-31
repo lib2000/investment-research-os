@@ -165,6 +165,12 @@ def main() -> int:
     if args.submit:
         dry_run = False
     cleanup_enabled = bool(args.cleanup_enabled or env_bool("TELEGRAM_BRIEF_CLEANUP_ENABLED", False))
+    if args.sample_state:
+        # Sample mode is an offline safety check.  It must stay non-operative
+        # even when the caller's environment enables a real delivery schedule.
+        enabled = False
+        dry_run = True
+        cleanup_enabled = False
 
     report_alert = None
     if not args.skip_report_alerts:

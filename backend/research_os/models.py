@@ -811,6 +811,8 @@ class SavedPortfolio(BaseModel):
     holding_count: int = 0
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    is_derived: bool = False
+    derived_from_portfolios: List[str] = Field(default_factory=list)
 
 
 class PortfolioStoreResponse(BaseModel):

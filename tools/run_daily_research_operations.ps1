@@ -19,6 +19,7 @@
   [switch]$SkipDartFilingDuplicateCleanup,
   [switch]$SkipResearchSourceStoreCheck,
   [switch]$SkipPortfolioAnalysisCoverage,
+  [switch]$SkipFamilyAggregateAudit,
   [switch]$SkipOpenClawSync,
   [switch]$RequireCompletionAudit,
   [switch]$SkipVerification
@@ -150,6 +151,15 @@ if (-not $SkipPortfolioRefresh.IsPresent) {
         Write-Warning "포트폴리오 저장 상태 검증이 통과해 운영 루틴을 계속합니다."
       }
     }
+  }
+}
+
+if (-not $SkipFamilyAggregateAudit.IsPresent) {
+  Invoke-DailyResearchStep "가족-합산 읽기 전용 무결성 점검" {
+    # Local-only: verifies that the aggregate is derived from individual
+    # records, its archived legacy copy is intact, and no broker/API action is
+    # invoked.
+    python tools\check_family_portfolio_aggregate.py --write-state --strict --json
   }
 }
 

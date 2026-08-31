@@ -376,9 +376,12 @@ from research_os.portfolio_analysis_coverage import (
     portfolio_vault_entries,
 )
 from research_os.portfolio_store import (
+    FAMILY_AGGREGATE_PORTFOLIO_NAME,
+    is_family_aggregate_portfolio_name,
     infer_holding_fx_rate,
     portfolio_name_sort_key,
     portfolio_store_key,
+    prepare_portfolio_store_for_write,
     read_portfolio_store,
 )
 from research_os.portfolio_sync import (
@@ -469,6 +472,19 @@ from research_os.web_capture import (
     render_source_url_context,
     render_url_only_capture_context,
 )
+
+
+def write_portfolio_store(settings: Settings, store: dict[str, Any]) -> None:
+    """Persist mutable portfolio records through this module's storage seam.
+
+    Keeping the final write in ``research_os_main`` preserves the established
+    dependency-injection boundary used by API regression tests while the
+    portfolio-store helper removes the derived family view before persistence.
+    """
+    write_json_store(
+        portfolio_store_path(settings),
+        prepare_portfolio_store_for_write(store),
+    )
 
 
 @asynccontextmanager
@@ -5370,7 +5386,7 @@ def sync_toss_owner_portfolio(settings: Settings) -> tuple[SavedPortfolio | None
     sync_summary["mode"] = "automatic_owner_sync"
     sync_summary["owner_portfolio_name"] = synced_portfolio.portfolio_name
     store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
-    write_json_store(portfolio_store_path(settings), store)
+    write_portfolio_store(settings, store)
     append_portfolio_sync_history(
         settings,
         portfolio_name=synced_portfolio.portfolio_name,
@@ -5807,9 +5823,9 @@ def build_portfolio_research_batch_payload(
                     "ticker": ticker,
                     "company_name": holding.name,
                     "portfolios": [],
-                    # The saved family aggregate can overlap its members.  Keep
-                    # the largest same-ticker value as a reference instead of
-                    # summing overlapping account views.
+                    # The family aggregate is derived at read time. Keep one
+                    # underlying source value here rather than treating the
+                    # display aggregate as a second account.
                     "market_value": market_value,
                 },
             )
@@ -15517,6 +15533,11 @@ def save_portfolio(
     request: PortfolioSaveRequest,
     settings: Settings = Depends(get_settings),
 ) -> PortfolioStoreResponse:
+    if is_family_aggregate_portfolio_name(portfolio_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}은(는) 개인별 포트폴리오에서 자동 계산되는 읽기 전용 보기입니다.",
+        )
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     request = request.model_copy(update={"portfolio_name": portfolio_name})
@@ -15526,7 +15547,7 @@ def save_portfolio(
         settings,
     )
     store.setdefault("portfolios", {})[key] = saved.model_dump(mode="json")
-    write_json_store(portfolio_store_path(settings), store)
+    write_portfolio_store(settings, store)
     return portfolio_store_response(settings, active_portfolio=saved)
 
 
@@ -15550,6 +15571,11 @@ def get_portfolio_sync_history(
     limit: int = 10,
     settings: Settings = Depends(get_settings),
 ) -> dict:
+    if is_family_aggregate_portfolio_name(portfolio_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}은(는) 개인별 동기화 이력을 합산한 읽기 전용 보기입니다.",
+        )
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)
@@ -15606,6 +15632,11 @@ def build_portfolio_kiwoom_domestic_sync_response(
     *,
     apply_changes: bool,
 ) -> dict:
+    if is_family_aggregate_portfolio_name(portfolio_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}에는 키움 계좌 동기화를 직접 적용할 수 없습니다. 개인별 포트폴리오를 선택하세요.",
+        )
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)
@@ -15654,7 +15685,7 @@ def build_portfolio_kiwoom_domestic_sync_response(
     sync_summary["mode"] = "apply" if apply_changes else "preview"
     if apply_changes:
         store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
-        write_json_store(portfolio_store_path(settings), store)
+        write_portfolio_store(settings, store)
         append_portfolio_sync_history(
             settings,
             portfolio_name=synced_portfolio.portfolio_name,
@@ -15702,6 +15733,11 @@ def build_portfolio_toss_sync_response(
     *,
     apply_changes: bool,
 ) -> dict:
+    if is_family_aggregate_portfolio_name(portfolio_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}에는 토스 계좌 동기화를 직접 적용할 수 없습니다. 개인별 포트폴리오를 선택하세요.",
+        )
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     payload = store.get("portfolios", {}).get(key)
@@ -15746,7 +15782,7 @@ def build_portfolio_toss_sync_response(
     sync_summary["mode"] = "apply" if apply_changes else "preview"
     if apply_changes:
         store.setdefault("portfolios", {})[key] = synced_portfolio.model_dump(mode="json")
-        write_json_store(portfolio_store_path(settings), store)
+        write_portfolio_store(settings, store)
         append_portfolio_sync_history(
             settings,
             portfolio_name=synced_portfolio.portfolio_name,
@@ -16426,8 +16462,11 @@ def build_portfolio_performance(
     if not payload:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
 
+    saved_portfolio = SavedPortfolio.model_validate(payload)
+    if saved_portfolio.is_derived:
+        force_price_refresh = False
     portfolio = sort_and_weight_portfolio(
-        SavedPortfolio.model_validate(payload),
+        saved_portfolio,
         settings,
         refresh_prices=force_price_refresh,
         force_price_refresh=force_price_refresh,
@@ -16803,8 +16842,16 @@ def build_portfolio_intelligent_table(
     if not payload:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
 
+    saved_portfolio = SavedPortfolio.model_validate(payload)
+    if saved_portfolio.is_derived:
+        if persist_refresh:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}은(는) 가격을 직접 저장하지 않는 읽기 전용 보기입니다.",
+            )
+        refresh_prices = False
     portfolio = sort_and_weight_portfolio(
-        SavedPortfolio.model_validate(payload),
+        saved_portfolio,
         settings,
         refresh_prices=refresh_prices,
         force_price_refresh=force_price_refresh,
@@ -16812,7 +16859,7 @@ def build_portfolio_intelligent_table(
     if refresh_prices and persist_refresh:
         portfolio = portfolio.model_copy(update={"updated_at": current_storage_timestamp()})
         store.setdefault("portfolios", {})[key] = portfolio.model_dump(mode="json")
-        write_json_store(portfolio_store_path(settings), store)
+        write_portfolio_store(settings, store)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     portfolio_tickers = [
         normalize_ticker(holding.ticker)
@@ -17855,6 +17902,11 @@ def get_portfolio(
     if not payload:
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
     active_portfolio = SavedPortfolio.model_validate(payload)
+    if active_portfolio.is_derived and (refresh_prices or persist_refresh):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}은(는) 저장 가격을 직접 갱신하지 않습니다. 개인별 포트폴리오의 장 종료 가격을 갱신하세요.",
+        )
     if refresh_prices:
         active_portfolio = sort_and_weight_portfolio(
             active_portfolio,
@@ -17864,7 +17916,7 @@ def get_portfolio(
         ).model_copy(update={"updated_at": current_storage_timestamp()})
         if persist_refresh:
             store.setdefault("portfolios", {})[key] = active_portfolio.model_dump(mode="json")
-            write_json_store(portfolio_store_path(settings), store)
+            write_portfolio_store(settings, store)
     return portfolio_store_response(
         settings,
         active_portfolio=active_portfolio,
@@ -17880,12 +17932,17 @@ def delete_portfolio(
     portfolio_name: str,
     settings: Settings = Depends(get_settings),
 ) -> PortfolioStoreResponse:
+    if is_family_aggregate_portfolio_name(portfolio_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{FAMILY_AGGREGATE_PORTFOLIO_NAME}은(는) 자동 계산 보기이므로 삭제할 수 없습니다. 개인별 포트폴리오를 관리하세요.",
+        )
     store = read_portfolio_store(settings)
     key = portfolio_store_key(portfolio_name)
     if key not in store.get("portfolios", {}):
         raise HTTPException(status_code=404, detail=f"{portfolio_name} 포트폴리오를 찾을 수 없습니다.")
     del store["portfolios"][key]
-    write_json_store(portfolio_store_path(settings), store)
+    write_portfolio_store(settings, store)
     return portfolio_store_response(settings)
 
 

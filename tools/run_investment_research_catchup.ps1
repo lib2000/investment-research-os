@@ -18,6 +18,7 @@ $Watchdog = Join-Path $ProjectRootPath "scripts\ensure-research-backend.ps1"
 $Sync = Join-Path $ProjectRootPath "tools\sync_openclaw_investment_context.ps1"
 $StatePath = Join-Path $ProjectRootPath "tmp\investment_research_catchup_state.json"
 $DailyOperationsRunner = Join-Path $ProjectRootPath "tools\run_daily_research_operations.ps1"
+$FamilyAggregateAudit = Join-Path $ProjectRootPath "tools\check_family_portfolio_aggregate.py"
 $StrategyValidationRunner = Join-Path $ProjectRootPath "tools\run_daily_strategy_validation.ps1"
 $StrategyValidationStatePath = Join-Path $ProjectRootPath "tmp\daily_strategy_validation_state.json"
 $ResearchAutomationStatusPath = Join-Path $ProjectRootPath "research_vault\_system\research_automation_status.json"
@@ -133,7 +134,7 @@ try {
   }
   $headers = @{ Authorization = "Bearer $token" }
   $catchupFailures = @()
-  $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_portfolios.json"
+$portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_portfolios.json"
   $portfolioDue = Test-PortfolioRefreshDue -StorePath $portfolioStorePath
   $portfolioOperation = [ordered]@{
     id = "portfolio_close_prices"
@@ -157,6 +158,32 @@ try {
     }
   }
   $operations += [pscustomobject]$portfolioOperation
+
+  $familyAggregateOperation = [ordered]@{
+    id = "family_portfolio_aggregate_integrity"
+    enabled = $true
+    due_before = $true
+    action = "skipped"
+    result_status = "unknown"
+    external_api_called = $false
+    broker_order_endpoint_called = $false
+  }
+  if ($DryRun) {
+    $familyAggregateOperation.action = "would_run"
+    $familyAggregateOperation.result_status = "dry_run"
+  } else {
+    if (-not (Test-Path -LiteralPath $FamilyAggregateAudit)) {
+      throw "가족-합산 무결성 점검 도구를 찾지 못했습니다: $FamilyAggregateAudit"
+    }
+    & python $FamilyAggregateAudit --write-state --strict --json | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      throw "가족-합산 읽기 전용 무결성 점검에 실패했습니다."
+    }
+    $familyAggregateOperation.action = "ran"
+    $familyAggregateOperation.result_status = "success"
+  }
+  $operations += [pscustomobject]$familyAggregateOperation
+
   $plans = @(
     @{ id="daily_recommendations"; status="/api/v1/daily-recommendations/status"; run="/api/v1/daily-recommendations/run?force=false&save_result=true" },
     @{ id="naver_market_close_journal"; status="/api/v1/naver-research/market-close-journal/task-status"; run="/api/v1/naver-research/market-close-journal/refresh?force=false" },
