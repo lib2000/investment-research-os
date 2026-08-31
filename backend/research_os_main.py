@@ -846,6 +846,17 @@ OFFICIAL_TICKER_REGISTRY = {
         "analysis_focus": "미국 대형주 이익 사이클, 달러/원 환율, S&P 500 밸류에이션, 분배금, 환노출",
         "watch_kpis": ["S&P 500 EPS 전망", "미국 10년물 금리", "달러/원", "상위 빅테크 비중", "분배금"],
     },
+    "B0634": {
+        "company_name": "미래에셋글로벌인컴증권자투자신탁1호(채권혼합)종류C-e",
+        "exchange": "KOFIA Fund",
+        "country": "KR",
+        "asset_type": "mutual_fund",
+        "sector": "Global Income / Bond Blend",
+        "industry": "Global Income Fund",
+        "business_context": "글로벌 채권·인컴 자산에 투자하는 채권혼합형 공모펀드",
+        "analysis_focus": "편입 자산, 듀레이션·신용위험, 환헤지, 분배 정책, 보수와 기준가격 변동",
+        "watch_kpis": ["기준가격", "채권 듀레이션", "신용등급 구성", "환율", "총보수"],
+    },
     "395160": {
         "company_name": "KODEX AI반도체 ETF",
         "exchange": "KRX",
