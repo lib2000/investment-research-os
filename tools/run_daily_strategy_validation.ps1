@@ -11,7 +11,9 @@ param(
   [switch]$Force,
   [switch]$StartServicesIfNeeded,
   [switch]$StartDockerIfNeeded,
-  [int]$DockerStartupTimeoutSeconds = 180
+  [int]$DockerStartupTimeoutSeconds = 180,
+  [ValidateRange(1, 3)]
+  [int]$BacktestRetryCount = 2
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +72,25 @@ function Test-AllServices {
     (Test-ApiEndpoint -Uri "$BuilderApiBase/api/strategies") -and
     (Test-ApiEndpoint -Uri "$BacktesterApiBase/api/strategies")
   )
+}
+
+function Test-TransientBacktestTransportFailure {
+  param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+  # Inspect exception classes/statuses rather than localized message text.
+  # Windows PowerShell 5.1 scheduled tasks may read UTF-8 source through a
+  # legacy code page, so language-specific text matching is not reliable.
+  $exception = $ErrorRecord.Exception
+  while ($null -ne $exception) {
+    if ($exception -is [System.Net.WebException]) {
+      return [string]$exception.Status -in @("ConnectFailure", "ConnectionClosed", "KeepAliveFailure", "ReceiveFailure", "SendFailure", "Timeout")
+    }
+    if ($exception.GetType().FullName -eq "System.Net.Http.HttpRequestException") {
+      return $true
+    }
+    $exception = $exception.InnerException
+  }
+  return $false
 }
 
 function Invoke-BoundedDocker {
@@ -220,11 +241,58 @@ function Start-RequiredServices {
   while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 5
     if (Test-AllServices) {
-      Write-TaskLog "service_start_ready"
-      return
+      # A process can briefly listen before its startup parent exits.  Require
+      # a second probe so a scheduled run does not immediately post a large
+      # backtest request to a disappearing backtester process.
+      Start-Sleep -Seconds 2
+      if (Test-AllServices) {
+        Write-TaskLog "service_start_ready"
+        return
+      }
     }
   }
   throw "Integrated workbench services did not become ready within four minutes."
+}
+
+function Invoke-BacktestWithRetry {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Request
+  )
+
+  $serializedRequest = $Request | ConvertTo-Json -Depth 8
+  $lastError = $null
+  for ($attempt = 1; $attempt -le $BacktestRetryCount; $attempt++) {
+    try {
+      if (-not (Test-ApiEndpoint -Uri "$BacktesterApiBase/api/strategies")) {
+        Start-RequiredServices
+      }
+      $result = Invoke-RestMethod `
+        -Method Post `
+        -Uri "$BacktesterApiBase/api/backtest/run" `
+        -ContentType "application/json; charset=utf-8" `
+        -Body $serializedRequest `
+        -TimeoutSec 1800
+      return [pscustomobject]@{
+        Result = $result
+        Attempts = $attempt
+      }
+    } catch {
+      $lastError = $_
+      $message = [string]$_.Exception.Message
+      if ($attempt -ge $BacktestRetryCount -or -not (Test-TransientBacktestTransportFailure -ErrorRecord $_)) {
+        throw
+      }
+
+      Write-TaskLog "backtest_transport_retry: attempt=$attempt/$BacktestRetryCount, error=$message"
+      Start-Sleep -Seconds 4
+      if (-not (Test-AllServices)) {
+        Start-RequiredServices
+      }
+    }
+  }
+
+  throw $lastError
 }
 
 $previousState = $null
@@ -355,15 +423,12 @@ try {
     }
   }
   Write-TaskLog "backtest_start: ticker=$($target.ticker), start=$($backtestRequest.start_date), end=$($backtestRequest.end_date)"
-  $backtestResult = Invoke-RestMethod `
-    -Method Post `
-    -Uri "$BacktesterApiBase/api/backtest/run" `
-    -ContentType "application/json; charset=utf-8" `
-    -Body ($backtestRequest | ConvertTo-Json -Depth 8) `
-    -TimeoutSec 1800
+  $backtestAttempt = Invoke-BacktestWithRetry -Request $backtestRequest
+  $backtestResult = $backtestAttempt.Result
   if (-not $backtestResult.success -or -not $backtestResult.data) {
     throw "Backtest API returned an unsuccessful result."
   }
+  Write-TaskLog "backtest_complete: attempts=$($backtestAttempt.Attempts)"
 
   $data = $backtestResult.data
   $storedRunId = ("daily_{0}_{1}_{2}" -f $RunDate.Replace("-", ""), $StrategyId, $target.ticker)

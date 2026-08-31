@@ -44,6 +44,48 @@ def test_runner_recovers_docker_and_requires_lean_image() -> None:
     assert "-WindowStyle Hidden" in source
 
 
+def test_runner_retries_only_transient_backtester_transport_failures() -> None:
+    source = read_script("run_daily_strategy_validation.ps1")
+
+    assert "[int]$BacktestRetryCount = 2" in source
+    assert "Test-TransientBacktestTransportFailure" in source
+    assert "Invoke-BacktestWithRetry" in source
+    assert "backtest_transport_retry" in source
+    assert "backtest_complete: attempts=" in source
+    assert "[System.Net.WebException]" in source
+    assert "ConnectionClosed" in source
+    assert "System.Net.Http.HttpRequestException" in source
+    assert "$backtestAttempt = Invoke-BacktestWithRetry" in source
+    assert '"$BacktesterApiBase/api/strategies"' in source
+
+
+def test_daily_operations_uses_exit_codes_when_capturing_native_diagnostics() -> None:
+    source = read_script("run_daily_research_operations.ps1")
+
+    assert '$previousErrorActionPreference = $ErrorActionPreference' in source
+    assert '$ErrorActionPreference = "Continue"' in source
+    assert "$stepOutput = @(& $Block 2>&1)" in source
+    assert "$stepExitCode = $LASTEXITCODE" in source
+
+
+def test_verify_console_uses_exit_codes_when_capturing_native_diagnostics() -> None:
+    source = read_script("verify_research_console.ps1")
+
+    assert '$previousErrorActionPreference = $ErrorActionPreference' in source
+    assert '$ErrorActionPreference = "Continue"' in source
+    assert "$stepOutput = @(& $Block 2>&1)" in source
+    assert "$stepExitCode = $LASTEXITCODE" in source
+
+
+def test_boot_catchup_uses_explicit_project_python_for_family_audit() -> None:
+    source = read_script("run_investment_research_catchup.ps1")
+
+    assert "Set-Location -LiteralPath $ProjectRootPath" in source
+    assert '$ProjectPython = Join-Path $ProjectRootPath ".venv-win\\Scripts\\python.exe"' in source
+    assert "& $ProjectPython $FamilyAggregateAudit --write-state --strict --json" in source
+    assert "Task Scheduler does not guarantee that a global Python PATH is present." in source
+
+
 def test_scheduled_task_catches_up_and_does_not_expose_token() -> None:
     source = read_script("register_daily_strategy_validation_task.ps1")
 

@@ -150,9 +150,24 @@ function Invoke-VerifyStep {
   Write-Host ""
   Write-Host "==> $Name"
   $global:LASTEXITCODE = 0
-  & $Block
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Name 실패: 종료 코드 $LASTEXITCODE"
+  # Several regression cases intentionally print a fallback diagnostic to
+  # stderr while exiting 0.  Windows PowerShell 5.1 otherwise upgrades that
+  # native stderr into a terminating error before the real exit code can be
+  # evaluated. Preserve diagnostics as output and retain exit code/throw
+  # behavior as the verification contract.
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $stepOutput = @(& $Block 2>&1)
+    $stepExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  foreach ($entry in $stepOutput) {
+    Write-Output $entry
+  }
+  if ($stepExitCode -ne 0) {
+    throw "$Name 실패: 종료 코드 $stepExitCode"
   }
   Write-Host "정상 $Name"
 }

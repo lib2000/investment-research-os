@@ -13,6 +13,7 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
+Set-Location -LiteralPath $ProjectRootPath
 $CredentialHelper = Join-Path $ProjectRootPath "tools\investment_research_credential.ps1"
 $Watchdog = Join-Path $ProjectRootPath "scripts\ensure-research-backend.ps1"
 $Sync = Join-Path $ProjectRootPath "tools\sync_openclaw_investment_context.ps1"
@@ -22,6 +23,14 @@ $FamilyAggregateAudit = Join-Path $ProjectRootPath "tools\check_family_portfolio
 $StrategyValidationRunner = Join-Path $ProjectRootPath "tools\run_daily_strategy_validation.ps1"
 $StrategyValidationStatePath = Join-Path $ProjectRootPath "tmp\daily_strategy_validation_state.json"
 $ResearchAutomationStatusPath = Join-Path $ProjectRootPath "research_vault\_system\research_automation_status.json"
+$ProjectPython = Join-Path $ProjectRootPath ".venv-win\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $ProjectPython)) {
+  $pythonCommand = Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -eq $pythonCommand) {
+    throw "Project Python runtime was not found: $ProjectPython"
+  }
+  $ProjectPython = $pythonCommand.Source
+}
 . $CredentialHelper
 
 function Invoke-ResearchApi {
@@ -175,7 +184,10 @@ $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_po
     if (-not (Test-Path -LiteralPath $FamilyAggregateAudit)) {
       throw "가족-합산 무결성 점검 도구를 찾지 못했습니다: $FamilyAggregateAudit"
     }
-    & python $FamilyAggregateAudit --write-state --strict --json | Out-Host
+    # Task Scheduler does not guarantee that a global Python PATH is present.
+    # Use the project's Windows runtime so boot catch-up has the same imports
+    # and encoding behavior as the scheduled daily operations task.
+    & $ProjectPython $FamilyAggregateAudit --write-state --strict --json | Out-Host
     if ($LASTEXITCODE -ne 0) {
       throw "가족-합산 읽기 전용 무결성 점검에 실패했습니다."
     }

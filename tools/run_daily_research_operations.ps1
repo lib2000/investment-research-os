@@ -104,8 +104,19 @@ function Invoke-DailyResearchStep {
   $script:DailyResearchOperationsCurrentStep = $Name
   Write-DailyResearchOperationsLog -Level "START" -Message "$Name started"
   $global:LASTEXITCODE = 0
-  $stepOutput = @(& $Block 2>&1)
-  $stepExitCode = $LASTEXITCODE
+  # Some passing Python regression tests intentionally exercise a fallback that
+  # writes a diagnostic to stderr.  Windows PowerShell can promote that native
+  # stderr record to a terminating error while this wrapper captures output.
+  # Capture it as diagnostic output and use the child's real exit code as the
+  # success contract; PowerShell throws and non-zero native exits still fail.
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $stepOutput = @(& $Block 2>&1)
+    $stepExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   foreach ($entry in $stepOutput) {
     Write-Output $entry
   }
