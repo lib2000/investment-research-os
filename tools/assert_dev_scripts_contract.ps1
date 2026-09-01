@@ -491,7 +491,7 @@ $contracts = @(
       '전체 포트폴리오 저장 구조',
       '--max-price-age-hours',
       '--max-sync-age-hours',
-      '--expected-holdings-count',
+      '--min-holdings',
       'check_research_source_store.py',
       'check_public_ir_sec_store.py',
       '공개 IR/SEC 저장 품질',
