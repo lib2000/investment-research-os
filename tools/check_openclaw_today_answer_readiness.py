@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, time
 from pathlib import Path
 from typing import Any
+
+
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 
 from workspace_paths import openclaw_investment_dir
 

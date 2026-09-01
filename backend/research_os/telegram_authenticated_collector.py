@@ -179,6 +179,7 @@ async def _collect_authenticated_posts_async(settings: Settings) -> tuple[list[T
                         published_at=_message_published_at(message),
                         view_count=view_count,
                         popularity_score=view_count,
+                        forward_count=int(getattr(message, "forwards", 0) or 0),
                     )
                 )
     posts.sort(key=telegram_favorite_post_sort_key, reverse=True)

@@ -45,6 +45,8 @@ apps/research-console/dist/
 # Local data, generated research, and private DBs
 research_vault/
 research_vault_*_tmp/
+apps/daily-research-site/data/public-daily-research.json
+apps/daily-research-site/.vercel/
 *.sqlite
 *.sqlite3
 *.sqlite-shm

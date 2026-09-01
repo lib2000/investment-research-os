@@ -567,6 +567,18 @@ def load_telegram_favorite_posts_check_tool():
     return module
 
 
+def load_telegram_deep_analysis_check_tool():
+    tools_dir = PROJECT_ROOT / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+    tool_path = tools_dir / "check_telegram_deep_analysis.py"
+    spec = spec_from_file_location("check_telegram_deep_analysis", tool_path)
+    module = module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_telegram_authenticated_collector_check_tool():
     tools_dir = PROJECT_ROOT / "tools"
     if str(tools_dir) not in sys.path:
@@ -4995,6 +5007,93 @@ class PortfolioReportAlertPostrunTests(unittest.TestCase):
         self.assertFalse(result["payload"]["should_send"])
         self.assertEqual(result["payload"]["message_count"], 0)
         delivery.assert_called_once()
+
+
+class TelegramDeepAnalysisTests(unittest.TestCase):
+    def test_deep_analysis_renders_evidence_links_and_does_not_invent_forwards(self):
+        from research_os.telegram_deep_analysis import (
+            build_telegram_deep_analysis,
+            build_telegram_deep_analysis_payload,
+            render_telegram_deep_analysis_report,
+        )
+
+        analysis = build_telegram_deep_analysis(
+            [
+                {
+                    "channel_username": "alpha",
+                    "channel_label": "Alpha 리서치",
+                    "post_id": "101",
+                    "url": "https://t.me/alpha/101",
+                    "title": "삼성전자 실적 개선",
+                    "text": "삼성전자 AI 반도체 수요 개선과 계약 확대",
+                    "view_count": 7311,
+                    "forward_count": None,
+                },
+                {
+                    "channel_username": "beta",
+                    "channel_label": "Beta 매크로",
+                    "post_id": "202",
+                    "url": "https://t.me/beta/202",
+                    "title": "NVIDIA 금리 리스크",
+                    "text": "NVIDIA 밸류에이션 리스크와 주가 하락 우려. ROA와 OPM은 지표이고 (CME)는 거래소입니다.",
+                    "view_count": 4219,
+                    "forward_count": 63,
+                },
+            ],
+            configured_channel_count=2,
+        )
+        report = render_telegram_deep_analysis_report(analysis)
+        payload = build_telegram_deep_analysis_payload(analysis, chat_id="12345")
+
+        self.assertEqual(analysis["design"], "telegram_deep_analysis_v1")
+        self.assertEqual(analysis["channel_count"], 2)
+        self.assertEqual(analysis["post_count"], 2)
+        self.assertTrue(any(item["label"] == "삼성전자" for item in analysis["entities"]))
+        self.assertFalse(any(item["label"] in {"ROA", "OPM", "CME"} for item in analysis["entities"]))
+        self.assertIn("https://t.me/alpha/101", report)
+        self.assertIn("공유 미제공", report)
+        self.assertTrue(payload["chat_id_configured"])
+        self.assertEqual(payload["messages"][0]["priority"], "must_keep")
+        self.assertEqual(payload["messages"][0]["category"], "telegram_deep_analysis")
+
+    def test_deep_analysis_alias_parser_keeps_defaults_on_invalid_json(self):
+        from research_os.telegram_deep_analysis import parse_entity_aliases_json
+
+        aliases, warnings = parse_entity_aliases_json("not-json")
+
+        self.assertIn("삼성전자", aliases)
+        self.assertTrue(warnings)
+
+    def test_deep_analysis_check_loads_current_holding_aliases(self):
+        tool = load_telegram_deep_analysis_check_tool()
+
+        test_tmp_root = PROJECT_ROOT / ".test-tmp"
+        test_tmp_root.mkdir(exist_ok=True)
+        with TemporaryDirectory(dir=test_tmp_root) as temp_dir:
+            portfolio_path = Path(temp_dir) / "user_portfolios.json"
+            portfolio_path.write_text(
+                json.dumps(
+                    {
+                        "portfolios": {
+                            "sample": {
+                                "holdings": [
+                                    {"name": "테스트 보유주", "ticker": "000001"},
+                                    {"name": "테스트 보유주", "ticker": "000001"},
+                                ]
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            aliases, warnings = tool.load_holding_aliases(portfolio_path)
+            merged, merge_warnings = tool.merge_aliases_json("[]", aliases)
+
+        self.assertFalse(warnings)
+        self.assertFalse(merge_warnings)
+        self.assertEqual(aliases, [{"alias": "테스트 보유주", "label": "테스트 보유주", "ticker": "000001"}])
+        self.assertIn("테스트 보유주", merged)
 
 
 class TelegramFavoritePostsCheckToolTests(unittest.TestCase):
@@ -22262,9 +22361,9 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                     "latest_commits": [{"hash": "abc1234", "subject": "Speed up research console click smoke"}],
                 },
                 "next_schedule": [
-                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:00", "title": "daily recommendations"},
+                    {"time": "07:10", "title": "family top pick card"},
                     {"time": "07:20", "title": "US market journal"},
-                    {"time": "08:00", "title": "daily recommendations"},
                     {"time": "22:00", "title": "Telegram favorite posts"},
                 ],
                 "answer_correction": {
@@ -22335,9 +22434,9 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                 ],
                 "today_work_report": {"has_implementation_today": False, "commit_count": 0},
                 "next_schedule": [
-                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:00", "title": "daily recommendations"},
+                    {"time": "07:10", "title": "family top pick card"},
                     {"time": "07:20", "title": "US market journal"},
-                    {"time": "08:00", "title": "daily recommendations"},
                     {"time": "22:00", "title": "Telegram favorite posts"},
                 ],
                 "answer_correction": {
@@ -22386,9 +22485,9 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                     "operational_updates": [],
                 },
                 "next_schedule": [
-                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:00", "title": "daily recommendations"},
+                    {"time": "07:10", "title": "family top pick card"},
                     {"time": "07:20", "title": "US market journal"},
-                    {"time": "08:00", "title": "daily recommendations"},
                     {"time": "22:00", "title": "Telegram favorite posts"},
                 ],
                 "answer_correction": {
@@ -22408,7 +22507,7 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                 "## Today Implementation Report\n"
                 "today_work_report 기준으로 당일 정기 운영 시작 전 상태와 다음 스케줄을 답합니다.\n"
                 "## Latest Today Commits\n- scheduled operations have not started\n"
-                "## Next Schedule\n- 07:00\n- 07:20\n- 08:00\n- 22:00\n",
+                "## Next Schedule\n- 07:00\n- 07:10\n- 07:20\n- 22:00\n",
                 encoding="utf-8",
             )
 
@@ -22442,9 +22541,9 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                     ],
                 },
                 "next_schedule": [
-                    {"time": "07:00", "title": "portfolio report alert"},
+                    {"time": "07:00", "title": "daily recommendations"},
+                    {"time": "07:10", "title": "family top pick card"},
                     {"time": "07:20", "title": "US market journal"},
-                    {"time": "08:00", "title": "daily recommendations"},
                     {"time": "22:00", "title": "Telegram favorite posts"},
                 ],
                 "answer_correction": {
@@ -22464,7 +22563,7 @@ class OpenClawTodayAnswerReadinessTests(unittest.TestCase):
                 "## Today Implementation Report\n"
                 "today_work_report 기준으로 오늘 운영 작업과 다음 스케줄을 답합니다.\n"
                 "## Latest Today Commits\n- operational update only\n"
-                "## Next Schedule\n- 07:00\n- 07:20\n- 08:00\n- 22:00\n",
+                "## Next Schedule\n- 07:00\n- 07:10\n- 07:20\n- 22:00\n",
                 encoding="utf-8",
             )
 

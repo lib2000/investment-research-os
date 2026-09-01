@@ -192,6 +192,11 @@ class Settings(BaseModel):
     telegram_session_file: str = "../research_vault/_private/telegram_user"
     telegram_authenticated_max_posts: int = 30
     telegram_authenticated_top_n: int = 10
+    telegram_deep_analysis_enabled: bool = False
+    telegram_deep_analysis_time: str = "23:08"
+    telegram_deep_analysis_top_n: int = 10
+    telegram_deep_analysis_chat_id: str = Field(default="")
+    telegram_deep_analysis_entity_aliases_json: str = ""
     telegram_brief_delivery_enabled: bool = False
     telegram_brief_delivery_dry_run: bool = True
     telegram_brief_cleanup_enabled: bool = False
@@ -533,6 +538,15 @@ class Settings(BaseModel):
             ),
             telegram_authenticated_top_n=int(
                 os.getenv("TELEGRAM_AUTHENTICATED_TOP_N", "10")
+            ),
+            telegram_deep_analysis_enabled=_read_bool("TELEGRAM_DEEP_ANALYSIS_ENABLED", False),
+            telegram_deep_analysis_time=os.getenv("TELEGRAM_DEEP_ANALYSIS_TIME", "23:08"),
+            telegram_deep_analysis_top_n=int(os.getenv("TELEGRAM_DEEP_ANALYSIS_TOP_N", "10")),
+            telegram_deep_analysis_chat_id=os.getenv(
+                "TELEGRAM_DEEP_ANALYSIS_CHAT_ID", os.getenv("TELEGRAM_CHAT_ID", "")
+            ),
+            telegram_deep_analysis_entity_aliases_json=os.getenv(
+                "TELEGRAM_DEEP_ANALYSIS_ENTITY_ALIASES_JSON", ""
             ),
             telegram_brief_delivery_enabled=_read_bool("TELEGRAM_BRIEF_DELIVERY_ENABLED", False),
             telegram_brief_delivery_dry_run=_read_bool("TELEGRAM_BRIEF_DELIVERY_DRY_RUN", True),

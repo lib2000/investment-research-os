@@ -10,6 +10,7 @@
   [switch]$SkipPortfolioRefresh,
   [switch]$SkipRecommendationRun,
   [switch]$SkipRecommendationPreview,
+  [switch]$SkipPublicDailyResearchExport,
   [switch]$SkipTelegramBriefDelivery,
   [switch]$SubmitTelegramBriefDelivery,
   [switch]$EnableTelegramBriefCleanup,
@@ -214,6 +215,14 @@ if (-not $SkipRecommendationPreview.IsPresent) {
       --require-hold-warning `
       --expected-held-ticker 112610 `
       --output-json tmp\daily_recommendation_candidate_policy_preview.json
+  }
+}
+
+if (-not $SkipPublicDailyResearchExport.IsPresent) {
+  Invoke-DailyResearchStep "공개 일일 리서치 피드 내보내기" {
+    # This emits only the allow-listed static site feed from saved local state.
+    # It never calls the authenticated API, sends Telegram, or places orders.
+    python tools\export_public_daily_research.py
   }
 }
 

@@ -1,0 +1,11 @@
+# Public deployment allowlist. Nothing outside this small static surface is
+# uploaded to the public host.
+/*
+!index.html
+!styles.css
+!app.js
+!favicon.svg
+!vercel.json
+!data
+!data/**
+data/.gitkeep

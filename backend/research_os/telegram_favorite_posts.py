@@ -42,6 +42,7 @@ class TelegramFavoritePopularPost:
     published_at: str | None
     view_count: int
     popularity_score: int
+    forward_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -143,7 +144,16 @@ def telegram_favorite_post_sort_key(post: TelegramFavoritePopularPost) -> tuple[
 def collect_telegram_favorite_popular_posts(
     runtime: TelegramFavoritePostsRuntime,
     settings: Settings,
+    *,
+    limit: int | None = None,
 ) -> tuple[list[TelegramFavoritePopularPost], list[str]]:
+    """Collect configured posts, optionally retaining the full analysis set.
+
+    The historical default remains ``TELEGRAM_FAVORITE_POSTS_TOP_N``.  The
+    deep-analysis report deliberately passes a larger limit so its channel and
+    post counts describe the collected universe rather than only the popular
+    post preview.
+    """
     channels, warnings = parse_telegram_favorite_channels_json(settings.telegram_favorite_channels_json)
     selected: list[TelegramFavoritePopularPost] = []
     for channel in channels:
@@ -178,7 +188,10 @@ def collect_telegram_favorite_popular_posts(
                 )
             )
     selected.sort(key=telegram_favorite_post_sort_key, reverse=True)
-    return selected[: max(int(settings.telegram_favorite_posts_top_n or 10), 1)], warnings
+    effective_limit = settings.telegram_favorite_posts_top_n if limit is None else limit
+    if effective_limit is None or int(effective_limit) <= 0:
+        return selected, warnings
+    return selected[: max(int(effective_limit), 1)], warnings
 
 
 def _news_item_from_popular_post(

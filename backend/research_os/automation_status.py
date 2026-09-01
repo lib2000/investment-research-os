@@ -434,7 +434,7 @@ def build_research_automation_dashboard_digest(
         "daily_recommendations": {
             "enabled": settings.daily_recommendations_enabled,
             "daily_time": settings.daily_recommendations_time,
-            "daily_family_top_pick_time": settings.daily_family_top_pick_time,
+            "daily_family_top_pick_time": getattr(settings, "daily_family_top_pick_time", "07:10"),
             "due": daily_recommendations_due,
             "latest_recommendation_date": daily_recommendations.get("latest_recommendation_date"),
             "record_count": daily_recommendations.get("record_count"),

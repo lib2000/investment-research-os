@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="공시·IR·실적·산업 자료를 대조한 X10THINK Daily Research의 하루 한 종목 리서치"
+    />
+    <meta name="theme-color" content="#f4f0e6" />
+    <title>X10THINK Daily Research</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#latest">오늘 리서치로 이동</a>
+    <div class="site-shell">
+      <header class="site-header">
+        <a class="wordmark" href="#top" aria-label="X10THINK Daily Research 처음으로">
+          <span class="wordmark-mark">X10</span>
+          <span>DAILY RESEARCH</span>
+        </a>
+        <nav class="site-nav" aria-label="페이지 탐색">
+          <a href="#latest">오늘의 카드</a>
+          <a href="#method">방법</a>
+          <a href="#archive">아카이브</a>
+        </nav>
+        <p class="header-status" id="headerStatus">발행 상태 확인 중</p>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="heroTitle">
+          <div class="hero-copy">
+            <p class="eyebrow">EVIDENCE-LED INVESTMENT NOTE · KST</p>
+            <h1 id="heroTitle">하루 한 종목,<br />근거와 리스크를<br />한 장에.</h1>
+            <p class="hero-lede">
+              공시, 기업 IR, 실적, 산업 자료를 대조한 하루 한 종목 공개 리서치.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#latest">오늘 리서치</a>
+              <a class="button button-secondary" href="#method">리서치 원칙</a>
+            </div>
+          </div>
+          <aside class="hero-ledger" aria-label="발행 원칙">
+            <p>PUBLICATION RULES</p>
+            <ol>
+              <li><span>01</span>원문 우선</li>
+              <li><span>02</span>리스크 동시 표기</li>
+              <li><span>03</span>매매 실행과 분리</li>
+            </ol>
+          </aside>
+        </section>
+
+        <section class="latest-section section-rule" id="latest" aria-labelledby="latestTitle">
+          <header class="section-heading">
+            <div>
+              <p class="eyebrow">DAILY ISSUE</p>
+              <h2 id="latestTitle">오늘의 공개 리서치</h2>
+            </div>
+            <p class="section-note" id="publicationNote">발행 데이터 불러오는 중</p>
+          </header>
+          <div id="latestCard" class="latest-card-region" aria-live="polite">
+            <div class="research-state loading">공개 리서치 데이터 불러오는 중</div>
+          </div>
+        </section>
+
+        <section class="method-section section-rule" id="method" aria-labelledby="methodTitle">
+          <header class="section-heading">
+            <div>
+              <p class="eyebrow">HOW IT IS MADE</p>
+              <h2 id="methodTitle">결론보다 검토 과정</h2>
+            </div>
+            <p class="section-note">매매 지시 없음. 투자 판단과 책임은 각자에게.</p>
+          </header>
+          <div class="method-grid" id="methodGrid">
+            <article>
+              <span>01</span>
+              <h3>원문 수집</h3>
+              <p>공시, 기업 IR, 실적, 산업·정책 자료 대조.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>근거 품질 점검</h3>
+              <p>문서 수보다 출처, 최신성, 핵심 원문 확인 여부.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>리스크와 다음 일정</h3>
+              <p>낙관과 리스크를 함께 기록. 다음 확인 조건과 날짜 포함.</p>
+            </article>
+          </div>
+          <div class="source-ledger" id="sourceLedger" aria-live="polite"></div>
+        </section>
+
+        <section class="archive-section section-rule" id="archive" aria-labelledby="archiveTitle">
+          <header class="section-heading">
+            <div>
+              <p class="eyebrow">RESEARCH ARCHIVE</p>
+              <h2 id="archiveTitle">발행 기록</h2>
+            </div>
+            <p class="section-note" id="archiveNote">공개 발행 이력: 2026년 9월 1일 시작</p>
+          </header>
+          <div id="archiveList" class="archive-list" aria-live="polite">
+            <p class="archive-empty">발행 이력 불러오는 중</p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>© X10THINK Daily Research</p>
+        <p id="footerDisclaimer">참고용 리서치 기록. 매수·매도 지시 아님.</p>
+      </footer>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
