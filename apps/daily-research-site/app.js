@@ -103,36 +103,68 @@ function renderLatest(feed) {
   const reasons = Array.isArray(card.reasons) ? card.reasons : [];
   const risks = Array.isArray(card.risks) ? card.risks : [];
   const sourceTypes = Array.isArray(card.evidence?.source_types) ? card.evidence.source_types : [];
+  const sourceLedger = Array.isArray(card.evidence?.source_ledger) && card.evidence.source_ledger.length
+    ? card.evidence.source_ledger
+    : sourceTypes.map((sourceType, index) => ({
+        sequence: String(index + 1).padStart(2, "0"),
+        source_type: sourceType,
+        purpose: "공개 자료 대조",
+        publication_basis: "공개 자료 기준",
+        role: "검증 근거",
+      }));
+  const researchSignals = Array.isArray(card.research_signals) ? card.research_signals : [];
+  const referencePrice = card.reference_price || {};
   const issueDate = formatDate(card.report_date);
+  const publishedAt = formatTimestamp(card.published_at);
 
   elements.latestCard.innerHTML = `
     <article class="featured-card" aria-label="${escapeHtml(card.company_name)} 공개 리서치 카드">
-      <div class="featured-card-head">
-        <div class="issue-kicker">
-          <span class="issue-state ${escapeHtml(state.className)}">${escapeHtml(card.edition_label || state.label)}</span>
-          <span>${escapeHtml(issueDate)}</span>
-          <span>${escapeHtml(card.market || "시장 확인 중")}</span>
-        </div>
-        <div class="company-line">
-          <h3>${escapeHtml(card.company_name)}</h3>
-          <span class="ticker">${escapeHtml(card.ticker)}</span>
-        </div>
-        <p class="stance">${escapeHtml(card.stance || "근거 우선 검토")}</p>
-        <p class="thesis">${escapeHtml(card.headline)}</p>
-        <div class="metric-grid" aria-label="핵심 리서치 지표">
+      <header class="card-utility-bar">
+        <span>X10THINK DAILY RESEARCH · PUBLIC EVIDENCE DOSSIER</span>
+        <span>${escapeHtml(issueDate)} · ${escapeHtml(card.edition_label || state.label)}</span>
+      </header>
+      <div class="card-main">
+        <section class="card-identity">
+          <div class="issue-kicker">
+            <span class="issue-state ${escapeHtml(state.className)}">${escapeHtml(card.edition_label || state.label)}</span>
+            <span>${escapeHtml(card.market || "시장 확인 중")}</span>
+          </div>
+          <div class="company-line">
+            <h3>${escapeHtml(card.company_name)}</h3>
+            <span class="ticker">${escapeHtml(card.ticker)}</span>
+          </div>
+          <p class="stance">${escapeHtml(card.stance || "근거 우선 검토")}</p>
+          <p class="identity-meta">발행 시각 ${escapeHtml(publishedAt)}</p>
+        </section>
+        <section class="thesis-panel" aria-label="리서치 핵심 테마">
+          <span>RESEARCH THESIS</span>
+          <p>${escapeHtml(card.headline)}</p>
+          <div class="reference-price">
+            <span>REFERENCE PRICE</span>
+            <strong>${escapeHtml(referencePrice.value || "확인 필요")}</strong>
+            <small>${escapeHtml(referencePrice.detail || "리서치 기준 정보")}</small>
+          </div>
+        </section>
+        <aside class="evidence-grade-panel" aria-label="근거 품질">
+          <span>EVIDENCE GRADE</span>
+          <strong>${escapeHtml(card.evidence?.grade || "검토")}</strong>
+          <p>문서 ${escapeHtml(card.evidence?.document_count ?? 0)}건 · 최근 30일 ${escapeHtml(card.evidence?.recent_30d_count ?? 0)}건</p>
+          <small>${escapeHtml(card.evidence?.review_gate || "핵심 원문 재확인 뒤 검토")}</small>
+        </aside>
+        <section class="metric-grid" aria-label="핵심 리서치 지표">
           ${metrics
             .map(
-              (metric) => `
+              (metric, index) => `
                 <div class="metric">
-                  <span>${escapeHtml(metric.label)}</span>
+                  <span>${String(index + 1).padStart(2, "0")} · ${escapeHtml(metric.label)}</span>
                   <strong>${escapeHtml(metric.value)}</strong>
                   <small>${escapeHtml(metric.detail)}</small>
                 </div>
               `,
             )
             .join("")}
-        </div>
-        <div class="detail-columns">
+        </section>
+        <section class="detail-columns" aria-label="핵심 논거와 리스크">
           <section class="detail-block">
             <span>WHAT MATTERS</span>
             <h4>핵심 논거</h4>
@@ -143,25 +175,59 @@ function renderLatest(feed) {
             <h4>리스크</h4>
             <ul>${risks.map((risk) => `<li>${escapeHtml(risk)}</li>`).join("")}</ul>
           </section>
-        </div>
+        </section>
+        <section class="signal-rail" aria-label="검토 기준">
+          <header>
+            <span>RESEARCH CHECKPOINTS</span>
+            <strong>검토 기준</strong>
+          </header>
+          <div class="signal-list">
+            ${researchSignals
+              .map(
+                (signal) => `
+                  <div class="signal-item">
+                    <span>${escapeHtml(signal.label)}</span>
+                    <strong>${escapeHtml(signal.value)}</strong>
+                    <small>${escapeHtml(signal.detail)}</small>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        </section>
+        <section class="evidence-ledger" aria-label="근거 및 출처 장부">
+          <header>
+            <div>
+              <span>EVIDENCE LEDGER</span>
+              <h4>근거 및 출처 장부</h4>
+            </div>
+            <p>원문 제목·URL·비공개 메모는 공개하지 않습니다.</p>
+          </header>
+          <div class="ledger-table" role="table" aria-label="공개 근거 범주와 역할">
+            <div class="ledger-row ledger-head" role="row">
+              <span role="columnheader">구분</span>
+              <span role="columnheader">출처 범주</span>
+              <span role="columnheader">확인 목적</span>
+              <span role="columnheader">발행 기준</span>
+              <span role="columnheader">근거 역할</span>
+            </div>
+            ${sourceLedger
+              .map(
+                (entry) => `
+                  <div class="ledger-row" role="row">
+                    <span role="cell" data-label="구분">${escapeHtml(entry.sequence)}</span>
+                    <span role="cell" data-label="출처 범주">${escapeHtml(entry.source_type)}</span>
+                    <span role="cell" data-label="확인 목적">${escapeHtml(entry.purpose)}</span>
+                    <span role="cell" data-label="발행 기준">${escapeHtml(entry.publication_basis)}</span>
+                    <span role="cell" data-label="근거 역할">${escapeHtml(entry.role)}</span>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        </section>
       </div>
-      <aside class="featured-card-side" aria-label="근거 품질과 다음 확인">
-        <h4>근거 장부</h4>
-        <div class="evidence-grade">
-          <strong>${escapeHtml(card.evidence?.grade || "검토")}</strong>
-          <span>근거 품질<br />문서 ${escapeHtml(card.evidence?.document_count ?? 0)}건</span>
-        </div>
-        <ul class="source-type-list">
-          ${sourceTypes.map((source) => `<li>${escapeHtml(source)}</li>`).join("")}
-        </ul>
-        <p class="side-review">${escapeHtml(card.evidence?.review_gate || "핵심 원문 재확인 후 검토")}</p>
-        <div class="next-review">
-          <span>NEXT REVIEW</span>
-          <strong>${escapeHtml(formatDate(card.next_review?.date))}</strong>
-          <p>${escapeHtml(card.next_review?.label || "후속 공개 자료 점검")}</p>
-        </div>
-      </aside>
-      <p class="card-disclaimer">${escapeHtml(card.disclaimer || feed.disclaimer || "")}</p>
+      <footer class="card-disclaimer">${escapeHtml(card.disclaimer || feed.disclaimer || "")}</footer>
     </article>
   `;
 }

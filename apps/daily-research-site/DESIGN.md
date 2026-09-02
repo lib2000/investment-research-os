@@ -14,6 +14,9 @@
 - Treat the featured research card as the primary visual asset. It shows the actual publication state rather than a generic stock-photo metaphor.
 - Prefer ruled columns, clear labels, and compact factual blocks to decorative cards. Card corners stay square or nearly square.
 - Headline type uses a serif Korean stack; utility labels use a compact sans-serif stack. Never use a purple gradient, glass panel, or decorative orb.
+- The featured card may become a dark research dossier inside the warm-paper page: near-black evergreen ground, thin amber rules, large evidence grade, and no rounded sub-cards.
+- Its reading order is fixed: company/market and issue context → thesis and reference price → evidence metrics → reasons and risks → review checkpoints → source-role ledger → disclaimer.
+- “More information” means more public, reviewable context. It never means exposing source titles, URLs, private notes, portfolio scope, accounts, quantities, internal scores, or Telegram content.
 
 ## Interaction and responsive behavior
 

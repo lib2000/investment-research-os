@@ -104,8 +104,30 @@ def test_public_feed_removes_private_scope_and_internal_selection_fields() -> No
 
     assert feed["publication"]["state"] == "published"
     assert feed["publication"]["archive_start_date"] == "2026-09-01"
+    assert feed["publication"]["next_scheduled_issue"] == "매일 07:10 KST 이후"
+    assert feed["schema_version"] == "1.1"
     assert feed["latest"]["ticker"] == "EXAI"
+    assert feed["latest"]["reference_price"] == {
+        "value": "$12.34",
+        "detail": "리서치 생성 당시 기준 · 실시간 시세 아님",
+    }
+    assert [item["label"] for item in feed["latest"]["metrics"]] == [
+        "근거 문서",
+        "최근 업데이트",
+        "출처 범주",
+        "다음 확인",
+    ]
+    assert [item["value"] for item in feed["latest"]["research_signals"]] == ["B", "3개", "3개", "1행"]
     assert feed["latest"]["evidence"]["source_types"] == ["공시 원문"]
+    assert feed["latest"]["evidence"]["source_ledger"] == [
+        {
+            "sequence": "01",
+            "source_type": "공시 원문",
+            "purpose": "사실·일정 확인",
+            "publication_basis": "공개 자료 기준",
+            "role": "핵심 사실",
+        }
+    ]
     assert [item["report_date"] for item in feed["archive"]] == ["2026-09-01"]
     serialized = str(feed)
     assert "가족" not in serialized
@@ -115,6 +137,7 @@ def test_public_feed_removes_private_scope_and_internal_selection_fields() -> No
     assert "Dossier" not in serialized
     assert "팀 리포트" not in serialized
     assert "170" not in serialized
+    assert "https://" not in serialized
 
 
 def test_stale_public_card_is_labelled_as_recent_not_today() -> None:
@@ -164,6 +187,9 @@ def test_public_site_contract_uses_generated_feed_not_private_api() -> None:
 
     assert "public-daily-research.json" in app_source
     assert "/api/v1/" not in app_source
+    assert "research_signals" in app_source
+    assert "source_ledger" in app_source
+    assert "PUBLIC EVIDENCE DOSSIER" in app_source
     assert "write_public_daily_research_feed" in exporter_source
 
 

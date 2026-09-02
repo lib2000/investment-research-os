@@ -23,6 +23,16 @@ research date, a clearly dated baseline price, evidence quality, a short
 thesis, public-safe reasons and risks, generic source categories, next review
 date, freshness metadata, archive summaries, and the investment disclaimer.
 
+## Featured-card information architecture
+
+The public card is an evidence dossier, not a mini trading dashboard. It may
+show the evidence grade, public-document count, recent-30-day document count,
+number of public source categories, reference price with its non-real-time
+label, a dated next review, public-safe reasons and risks, review checkpoints,
+and a source-role ledger. The ledger may describe generic source categories and
+their verification role, but never titles, URLs, private annotations, or raw
+private evidence.
+
 ## Publication gate
 
 1. The normal daily recommendation workflow persists its result.
