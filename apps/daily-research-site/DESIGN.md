@@ -15,8 +15,10 @@
 - Prefer ruled columns, clear labels, and compact factual blocks to decorative cards. Card corners stay square or nearly square.
 - Headline type uses a serif Korean stack; utility labels use a compact sans-serif stack. Never use a purple gradient, glass panel, or decorative orb.
 - The featured card may become a dark research dossier inside the warm-paper page: near-black evergreen ground, thin amber rules, large evidence grade, and no rounded sub-cards.
-- Its reading order is fixed: company/market and issue context → thesis and reference price → evidence metrics → reasons and risks → review checkpoints → source-role ledger → disclaimer.
+- Its reading order is fixed: company/market and issue context → thesis and evidence grade → current public facts → publication/refresh record → reasons and risks → research readouts → source-role ledger → disclaimer.
 - “More information” means more public, reviewable context. It never means exposing source titles, URLs, private notes, portfolio scope, accounts, quantities, internal scores, or Telegram content.
+- Do not fill the dossier with document counts, source counts, or reason counts. Each visible field must instead show the corresponding public fact: reference price, source category and verification purpose, refresh timestamp, next review, thesis, risk, or review gate.
+- Dense does not mean cramped: use ruled records and short factual paragraphs to occupy the card, while retaining a readable single-column order on mobile.
 
 ## Interaction and responsive behavior
 

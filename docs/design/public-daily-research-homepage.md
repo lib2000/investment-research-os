@@ -26,12 +26,16 @@ date, freshness metadata, archive summaries, and the investment disclaimer.
 ## Featured-card information architecture
 
 The public card is an evidence dossier, not a mini trading dashboard. It may
-show the evidence grade, public-document count, recent-30-day document count,
-number of public source categories, reference price with its non-real-time
-label, a dated next review, public-safe reasons and risks, review checkpoints,
-and a source-role ledger. The ledger may describe generic source categories and
-their verification role, but never titles, URLs, private annotations, or raw
-private evidence.
+show the evidence grade, reference price with its non-real-time label, a dated
+next review, public-safe reasons and risks, review checkpoints, a publication
+record, and a source-role ledger. The ledger may describe generic source
+categories and their verification role, but never titles, URLs, private
+annotations, or raw private evidence.
+
+The presentation favors actual, reviewable content over count badges: reference
+price, the concrete source categories and their purposes, source refresh time,
+publication record, next review, thesis, risks, and review-gate action. Document
+or source totals are not part of the public card or exported public payload.
 
 ## Publication gate
 

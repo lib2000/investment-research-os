@@ -51,6 +51,9 @@ def _top_pick(*, status: str = "ready", recommendation_date: str = "2026-09-01")
                 "document_count": 5,
                 "recent_30d_count": 3,
             },
+            "evidence_summary": "추적 5/5 · 출처 2종 · 최근 30일 3건",
+            "guardrail": "원문 1회 확인 후 검토",
+            "guardrail_action": "핵심 원문 1개 이상을 확인한 뒤 검토합니다.",
             "next_review": {
                 "target_date": "2026-09-07",
                 "label": "다음 실적 확인",
@@ -105,23 +108,39 @@ def test_public_feed_removes_private_scope_and_internal_selection_fields() -> No
     assert feed["publication"]["state"] == "published"
     assert feed["publication"]["archive_start_date"] == "2026-09-01"
     assert feed["publication"]["next_scheduled_issue"] == "매일 07:10 KST 이후"
-    assert feed["schema_version"] == "1.1"
+    assert feed["schema_version"] == "1.2"
     assert feed["latest"]["ticker"] == "EXAI"
-    assert feed["latest"]["reference_price"] == {
-        "value": "$12.34",
-        "detail": "리서치 생성 당시 기준 · 실시간 시세 아님",
-    }
-    assert [item["label"] for item in feed["latest"]["metrics"]] == [
-        "근거 문서",
-        "최근 업데이트",
-        "출처 범주",
+    assert [item["label"] for item in feed["latest"]["context_fields"]] == [
+        "기준 가격",
+        "공개 근거",
+        "근거 갱신",
         "다음 확인",
     ]
-    assert [item["value"] for item in feed["latest"]["research_signals"]] == ["B", "3개", "3개", "1행"]
+    assert [item["value"] for item in feed["latest"]["context_fields"]] == [
+        "$12.34",
+        "공시 원문",
+        "2026-09-01T07:55:00+09:00",
+        "2026-09-07",
+    ]
+    assert [item["label"] for item in feed["latest"]["research_readouts"]] == [
+        "근거 해석",
+        "출처 역할",
+        "검증 게이트",
+        "다음 검증",
+    ]
+    assert feed["latest"]["research_readouts"][0] == {
+        "label": "근거 해석",
+        "value": "핵심 원문과 최신 공개 자료의 일치 여부를 확인합니다.",
+        "detail": "리서치 태도: 근거 기반 우선 검토",
+    }
+    assert feed["latest"]["research_readouts"][2] == {
+        "label": "검증 게이트",
+        "value": "핵심 원문 재확인 뒤 검토",
+        "detail": "신규 공시·실적 발표 시 핵심 논거와 리스크를 다시 대조합니다.",
+    }
     assert feed["latest"]["evidence"]["source_types"] == ["공시 원문"]
     assert feed["latest"]["evidence"]["source_ledger"] == [
         {
-            "sequence": "01",
             "source_type": "공시 원문",
             "purpose": "사실·일정 확인",
             "publication_basis": "공개 자료 기준",
@@ -138,6 +157,13 @@ def test_public_feed_removes_private_scope_and_internal_selection_fields() -> No
     assert "팀 리포트" not in serialized
     assert "170" not in serialized
     assert "https://" not in serialized
+    assert "document_count" not in serialized
+    assert "recent_30d_count" not in serialized
+    assert "research_signals" not in serialized
+    assert "5건" not in serialized
+    assert "5/5" not in serialized
+    assert "2종" not in serialized
+    assert "1회" not in serialized
 
 
 def test_stale_public_card_is_labelled_as_recent_not_today() -> None:
@@ -187,7 +213,8 @@ def test_public_site_contract_uses_generated_feed_not_private_api() -> None:
 
     assert "public-daily-research.json" in app_source
     assert "/api/v1/" not in app_source
-    assert "research_signals" in app_source
+    assert "context_fields" in app_source
+    assert "research_readouts" in app_source
     assert "source_ledger" in app_source
     assert "PUBLIC EVIDENCE DOSSIER" in app_source
     assert "write_public_daily_research_feed" in exporter_source

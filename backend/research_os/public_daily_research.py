@@ -23,7 +23,7 @@ from research_os.settings import Settings
 from research_os.state_store import current_storage_date, current_storage_timestamp
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 SITE_NAME = "X10THINK Daily Research"
 PUBLICATION_START_DATE = date(2026, 9, 1)
 PUBLIC_DISCLAIMER = (
@@ -47,6 +47,7 @@ PRIVATE_TEXT_MARKERS = (
     "내부 메모",
     "참고자료)",
 )
+COUNT_DENSE_SUMMARY_PATTERN = re.compile(r"(?:\d+\s*(?:건|종|개|행|회|점|일)|\d+\s*/\s*\d+)")
 
 SOURCE_LEDGER_ROLES = {
     "공시 원문": ("사실·일정 확인", "핵심 사실"),
@@ -102,6 +103,14 @@ def _public_text(value: object, *, limit: int = 160, fallback: str = "") -> str:
     return _clean_text(text, limit=limit, fallback=fallback)
 
 
+def _public_narrative_text(value: object, *, limit: int, fallback: str) -> str:
+    """Keep public narrative slots factual instead of leaking count-heavy score summaries."""
+    text = _public_text(value, limit=limit, fallback="")
+    if not text or COUNT_DENSE_SUMMARY_PATTERN.search(text):
+        return fallback
+    return text
+
+
 def _public_list(values: object, *, limit: int, fallback: list[str]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -152,14 +161,13 @@ def _source_types(values: object) -> list[str]:
 def _public_source_ledger(source_types: list[str]) -> list[dict[str, str]]:
     """Describe source roles without exposing titles, URLs, or private notes."""
     ledger: list[dict[str, str]] = []
-    for index, source_type in enumerate(source_types, start=1):
+    for source_type in source_types:
         purpose, role = SOURCE_LEDGER_ROLES.get(
             source_type,
             ("공개 자료 대조", "검증 근거"),
         )
         ledger.append(
             {
-                "sequence": f"{index:02d}",
                 "source_type": source_type,
                 "purpose": purpose,
                 "publication_basis": "공개 자료 기준",
@@ -179,7 +187,12 @@ def _metric_value(card: dict[str, Any], label: str) -> str | None:
     return None
 
 
-def _public_latest_card(top_pick: dict[str, Any], *, publication_state: str) -> dict[str, Any] | None:
+def _public_latest_card(
+    top_pick: dict[str, Any],
+    *,
+    publication_state: str,
+    freshness: dict[str, Any],
+) -> dict[str, Any] | None:
     card = top_pick.get("card")
     if not isinstance(card, dict) or publication_state not in {"published", "awaiting_daily_refresh"}:
         return None
@@ -189,8 +202,6 @@ def _public_latest_card(top_pick: dict[str, Any], *, publication_state: str) -> 
     grade = str(evidence_strength.get("grade") or "").upper()
     if grade not in {"A", "B", "C"}:
         grade = "검토 필요"
-    document_count = max(0, _safe_int(evidence_strength.get("document_count")))
-    recent_30d_count = max(0, _safe_int(evidence_strength.get("recent_30d_count")))
     next_review = card.get("next_review")
     next_review = next_review if isinstance(next_review, dict) else {}
     target_date = _valid_iso_date(next_review.get("target_date")) or "추후 공지"
@@ -199,25 +210,54 @@ def _public_latest_card(top_pick: dict[str, Any], *, publication_state: str) -> 
     market = _clean_text(card.get("market"), limit=16, fallback="시장 확인 중")
     baseline_price = _metric_value(card, "기준 가격")
 
-    metrics = [
+    source_types = _source_types(card.get("evidence"))
+    source_ledger = _public_source_ledger(source_types)
+    source_summary = " · ".join(source_types)
+    source_purposes = " · ".join(item["purpose"] for item in source_ledger)
+    refreshed_at = _clean_text(freshness.get("evidence_refreshed_at"), limit=40, fallback="확인 필요")
+    refresh_status = _public_text(freshness.get("source_refresh_status"), limit=48, fallback="점검 이력 준비 중")
+    research_stance = _public_text(
+        card.get("research_stance"),
+        limit=64,
+        fallback="근거 기반 우선 검토",
+    )
+    evidence_summary = _public_narrative_text(
+        card.get("evidence_summary"),
+        limit=160,
+        fallback="핵심 원문과 최신 공개 자료의 일치 여부를 확인합니다.",
+    )
+    guardrail = _public_narrative_text(
+        card.get("guardrail"),
+        limit=80,
+        fallback="핵심 원문 재확인 뒤 검토",
+    )
+    guardrail_action = _public_narrative_text(
+        card.get("guardrail_action"),
+        limit=160,
+        fallback="신규 공시·실적 발표 시 핵심 논거와 리스크를 다시 대조합니다.",
+    )
+
+    context_fields = [
         {
-            "label": "근거 문서",
-            "value": f"{document_count}건",
-            "detail": "공시·IR·실적·산업 자료를 대조",
+            "label": "기준 가격",
+            "value": baseline_price or "확인 필요",
+            "detail": "리서치 생성 당시 기준 · 실시간 시세 아님",
         },
         {
-            "label": "최근 업데이트",
-            "value": f"{recent_30d_count}건",
-            "detail": "최근 30일 공개 자료 기준",
+            "label": "공개 근거",
+            "value": source_summary,
+            "detail": source_purposes,
         },
         {
-            "label": "출처 범주",
-            "value": "-",
-            "detail": "공개 자료 유형을 대조",
+            "label": "근거 갱신",
+            "value": refreshed_at,
+            "format": "timestamp",
+            "detail": refresh_status,
         },
         {
             "label": "다음 확인",
             "value": target_date,
+            "format": "date",
             "detail": _public_text(next_review.get("label"), limit=48, fallback="후속 공개 자료 점검"),
         },
     ]
@@ -238,30 +278,27 @@ def _public_latest_card(top_pick: dict[str, Any], *, publication_state: str) -> 
             "신규 공시·실적 발표 시 핵심 논거와 리스크 재확인.",
         ],
     )
-    source_types = _source_types(card.get("evidence"))
-    metrics[2]["value"] = f"{len(source_types)}종"
     report_date = _valid_iso_date(top_pick.get("recommendation_date"))
-    source_ledger = _public_source_ledger(source_types)
-    research_signals = [
+    research_readouts = [
         {
-            "label": "근거 품질",
-            "value": grade,
-            "detail": "핵심 원문 재확인 뒤 검토",
+            "label": "근거 해석",
+            "value": evidence_summary,
+            "detail": f"리서치 태도: {research_stance}",
         },
         {
-            "label": "핵심 논거",
-            "value": f"{len(reasons)}개",
-            "detail": "공개 자료 기준의 확인 포인트",
+            "label": "출처 역할",
+            "value": source_purposes,
+            "detail": source_summary,
         },
         {
-            "label": "리스크 항목",
-            "value": f"{len(risks)}개",
-            "detail": "반증·변동성 요인을 함께 기록",
+            "label": "검증 게이트",
+            "value": guardrail,
+            "detail": guardrail_action,
         },
         {
-            "label": "출처 장부",
-            "value": f"{len(source_ledger)}행",
-            "detail": "제목·URL·비공개 메모는 미공개",
+            "label": "다음 검증",
+            "value": _public_text(next_review.get("label"), limit=48, fallback="후속 공개 자료 점검"),
+            "detail": f"{target_date}에 공개 자료를 다시 대조합니다.",
         },
     ]
 
@@ -273,27 +310,21 @@ def _public_latest_card(top_pick: dict[str, Any], *, publication_state: str) -> 
         "company_name": company_name,
         "ticker": ticker,
         "market": market,
-        "stance": "근거 우선 검토",
-        "reference_price": {
-            "value": baseline_price or "확인 필요",
-            "detail": "리서치 생성 당시 기준 · 실시간 시세 아님",
-        },
+        "stance": research_stance,
         "headline": _public_text(
             card.get("thesis"),
             limit=150,
             fallback="핵심 원문과 최근 업데이트 중심의 우선 검토 기록.",
         ),
-        "metrics": metrics[:4],
-        "research_signals": research_signals,
+        "context_fields": context_fields,
+        "research_readouts": research_readouts,
         "reasons": reasons,
         "risks": risks,
         "evidence": {
             "grade": grade,
-            "document_count": document_count,
-            "recent_30d_count": recent_30d_count,
             "source_types": source_types,
             "source_ledger": source_ledger,
-            "review_gate": "핵심 원문 재확인 뒤 검토",
+            "review_gate": guardrail,
         },
         "next_review": {
             "date": target_date,
@@ -361,7 +392,6 @@ def _public_archive(
                     fallback="시장 확인 중",
                 ),
                 "evidence_grade": grade,
-                "evidence_document_count": max(0, _safe_int(quality.get("document_count"))),
                 "label": "발행 기록",
             }
         )
@@ -396,6 +426,7 @@ def build_public_daily_research_feed(
 
     today_value = (today or current_storage_date()).isoformat()
     publication_start_date = PUBLICATION_START_DATE.isoformat()
+    freshness = _public_freshness(evidence_status or {})
     card = top_pick.get("card") if isinstance(top_pick.get("card"), dict) else None
     recommendation_date = _valid_iso_date(top_pick.get("recommendation_date"))
     status = str(top_pick.get("status") or "").lower()
@@ -430,7 +461,11 @@ def build_public_daily_research_feed(
             "archive_start_date": publication_start_date,
             "next_scheduled_issue": "매일 07:10 KST 이후",
         },
-        "latest": _public_latest_card(top_pick, publication_state=publication_state),
+        "latest": _public_latest_card(
+            top_pick,
+            publication_state=publication_state,
+            freshness=freshness,
+        ),
         "archive": _public_archive(recommendations, start_date=publication_start_date),
         "methodology": {
             "summary": "후보 점검, 공개 원문·최신성 대조, 리스크와 다음 확인 일정 기록.",
@@ -441,7 +476,7 @@ def build_public_daily_research_feed(
             ],
             "human_review": "자동 주문·매매 실행과 분리된 리서치 기록.",
         },
-        "data_freshness": _public_freshness(evidence_status or {}),
+        "data_freshness": freshness,
         "disclaimer": PUBLIC_DISCLAIMER,
     }
 
