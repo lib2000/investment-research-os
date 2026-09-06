@@ -65,6 +65,13 @@ The 18:30 daily research operation writes the latest portfolio-analysis backlog 
 - If a brokerage sync says a holding is missing, the packet records that uncertainty and preserves the stored quantity until a person confirms it.
 - The analysis-status response exposes a read-only human-review queue for stored packets. Quantity-confirmation conflicts sort ahead of ordinary source review, but the queue cannot edit holdings or mark review work complete.
 
+## Review-priority queue
+
+- The same analysis-status response exposes `review_priority_queue` for the actual review backlog: positions blocked by an incomplete review gate and explicit quantity-confirmation conflicts.
+- Quantity-confirmation conflicts sort first; all remaining rows sort by stored market value, then ticker. The ordering is triage only, not an investment recommendation.
+- Each row shows the affected portfolio, missing document/review modules, checklist reason when relevant, and the next manual action. It is explicitly `read_only`, `automatic_completion: false`, and never changes a checklist, a report, a holding, or an order.
+- The existing `human_review_queue` remains packet-only for compatible clients. It is not replaced by the broader review-priority queue.
+
 ## Verification
 
 - Unit tests cover document-only checklist presence, partial checklist rejection, and threshold acceptance.

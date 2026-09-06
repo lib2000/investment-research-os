@@ -173,7 +173,7 @@ export function App() {
       {activeTab === "earnings" ? <EarningsPage researchApi={researchApi} initialTicker={selectedTicker} /> : null}
       {activeTab === "sector" ? <SectorOpportunityPage researchApi={researchApi} /> : null}
       {activeTab === "compounder" ? <CompounderPage researchApi={researchApi} /> : null}
-      {activeTab === "checklist" ? <ChecklistPage researchApi={researchApi} /> : null}
+      {activeTab === "checklist" ? <ChecklistPage researchApi={researchApi} initialTicker={selectedTicker} /> : null}
       {activeTab === "storage" ? (
         <StoragePage
           researchApi={researchApi}

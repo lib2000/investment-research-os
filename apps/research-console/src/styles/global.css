@@ -1069,6 +1069,92 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
+.portfolio-review-priority-card {
+  border-color: #ecd9a5;
+  background: #fffdf7;
+}
+
+.portfolio-review-priority-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portfolio-review-priority-heading p {
+  max-width: 760px;
+  color: #64748b;
+}
+
+.portfolio-review-priority-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-review-priority-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid #f0e3bf;
+}
+
+.portfolio-review-priority-rank,
+.portfolio-review-priority-kind {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff0c8;
+  color: #955b00;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.portfolio-review-priority-kind {
+  background: #eef2f6;
+  color: #475569;
+}
+
+.portfolio-review-priority-copy {
+  min-width: 0;
+}
+
+.portfolio-review-priority-copy strong,
+.portfolio-review-priority-copy small {
+  display: block;
+}
+
+.portfolio-review-priority-copy small,
+.portfolio-review-priority-copy p {
+  margin-top: 3px;
+  color: #526173;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.portfolio-review-priority-copy p {
+  margin-bottom: 0;
+}
+
+.portfolio-review-priority-copy b {
+  color: #334155;
+}
+
+.portfolio-review-priority-action {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .portfolio-status-table td {
   vertical-align: top;
 }
@@ -1110,7 +1196,7 @@ button:disabled {
     .trade-form-grid,
   .module-status-grid,
   .toolbar,
-    .portfolio-toolbar,
+  .portfolio-toolbar,
     .interest-add-grid,
     .interest-row,
     .sector-interest-row,
@@ -1121,6 +1207,17 @@ button:disabled {
     .risk-metrics,
   .two-column {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-review-priority-heading,
+  .portfolio-review-priority-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portfolio-review-priority-action,
+  .portfolio-review-priority-kind {
+    justify-self: start;
   }
 
   .check-row,

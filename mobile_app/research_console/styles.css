@@ -3311,6 +3311,129 @@ label {
   line-height: 1.35;
 }
 
+.portfolio-review-priority {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.portfolio-review-priority.warning {
+  border-color: #f7c873;
+  background: #fffdf7;
+}
+
+.portfolio-review-priority.ok {
+  border-color: #99d5cb;
+  background: #f3fcf9;
+}
+
+.portfolio-review-priority header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.portfolio-review-priority header > div {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.portfolio-review-priority header span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.portfolio-review-priority header strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 17px;
+}
+
+.portfolio-review-priority header p,
+.portfolio-review-priority-note {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.portfolio-review-priority ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-review-priority-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid #f0e3bf;
+}
+
+.portfolio-review-priority-rank,
+.portfolio-review-priority-kind {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.portfolio-review-priority-rank {
+  color: #9a5c00;
+  background: #fff0c8;
+}
+
+.portfolio-review-priority-kind {
+  color: #475569;
+  background: #eef2f6;
+}
+
+.portfolio-review-priority-row > div {
+  min-width: 0;
+}
+
+.portfolio-review-priority-row strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.portfolio-review-priority-row p {
+  margin: 3px 0 0;
+  color: #526173;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.portfolio-review-priority-row b {
+  color: #334155;
+}
+
+.portfolio-review-priority-note {
+  margin-top: 10px;
+}
+
 .portfolio-performance-overview {
   display: grid;
   gap: 10px;
@@ -7194,6 +7317,24 @@ pre {
 
   .daily-recommendation-top-rank {
     grid-template-columns: 1fr;
+  }
+
+  .portfolio-review-priority {
+    padding: 13px;
+  }
+
+  .portfolio-review-priority header,
+  .portfolio-review-priority-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portfolio-review-priority header {
+    display: grid;
+  }
+
+  .portfolio-review-priority-rank,
+  .portfolio-review-priority-kind {
+    justify-self: start;
   }
 
   .daily-recommendation-rank-label {

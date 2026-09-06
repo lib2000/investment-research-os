@@ -355,6 +355,106 @@ def portfolio_human_review_queue(items: list[dict[str, Any]]) -> list[dict[str, 
     return queue
 
 
+def portfolio_review_priority_queue(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the human-visible review backlog without changing any review state.
+
+    This queue intentionally includes both incomplete review gates and explicit
+    quantity-confirmation conflicts.  It is a presentation helper only: no
+    row can mark a checklist complete, create a report, or approve a holding.
+    """
+    queue: list[dict[str, Any]] = []
+    for item in items:
+        review_state = item.get("review_state")
+        review_payload = review_state if isinstance(review_state, dict) else {}
+        review_ready = bool(review_payload) and all(bool(value) for value in review_payload.values())
+        review_packet = item.get("human_review_packet")
+        packet = review_packet if isinstance(review_packet, dict) else {}
+        quantity_confirmation_required = bool(packet.get("quantity_confirmation_required"))
+        if review_ready and not quantity_confirmation_required:
+            continue
+
+        review_missing_modules = [
+            str(label)
+            for label in item.get("review_missing_modules") or []
+            if str(label).strip()
+        ]
+        missing_modules = [
+            str(label)
+            for label in item.get("missing_modules") or []
+            if str(label).strip()
+        ]
+        checklist_status = item.get("checklist_status")
+        checklist = checklist_status if isinstance(checklist_status, dict) else {}
+        if quantity_confirmation_required:
+            reason = "계좌 동기화 미검출로 보유 수량 확인 필요"
+            next_action = "실제 계좌 수량을 확인한 뒤, 불일치 여부만 별도로 기록하세요."
+            queue_kind = "quantity_confirmation"
+        elif "체크리스트" in review_missing_modules and "체크리스트" not in missing_modules:
+            reason = str(checklist.get("reason") or "체크리스트 검토 보강 필요")
+            next_action = str(
+                item.get("next_action") or "16개 리서치 체크리스트를 사람이 검토한 뒤 필요한 항목만 기록하세요."
+            )
+            queue_kind = "checklist_review"
+        elif missing_modules:
+            reason = f"문서 근거 보강 필요: {', '.join(missing_modules)}"
+            next_action = str(
+                item.get("next_action")
+                or "공식 원문·티커·본문을 검토한 뒤 필요한 근거만 사람이 명시적으로 작성하세요."
+            )
+            queue_kind = "document_gap"
+        else:
+            reason = "검토 게이트 보강 필요"
+            next_action = str(item.get("next_action") or "저장 근거와 검토 항목을 사람이 확인하세요.")
+            queue_kind = "review_gate"
+
+        try:
+            market_value = float(item.get("market_value") or 0)
+        except (TypeError, ValueError):
+            market_value = 0
+        try:
+            completion_rate = float(item.get("completion_rate") or 0)
+        except (TypeError, ValueError):
+            completion_rate = 0
+        queue.append(
+            {
+                "ticker": item.get("ticker"),
+                "official_symbol": item.get("official_symbol"),
+                "company_name": item.get("company_name"),
+                "portfolios": item.get("portfolios") or [],
+                "market_value": item.get("market_value"),
+                "document_ready": completion_rate >= 1,
+                "review_ready": review_ready,
+                "completion_rate": item.get("completion_rate"),
+                "review_completion_rate": item.get("review_completion_rate"),
+                "missing_modules": missing_modules,
+                "review_missing_modules": review_missing_modules,
+                "checklist_status": checklist,
+                "quantity_confirmation_required": quantity_confirmation_required,
+                "has_human_review_packet": bool(packet),
+                "reason": reason,
+                "next_action": next_action,
+                "queue_kind": queue_kind,
+                "action_mode": "read_only",
+                "automatic_completion": False,
+                "review_gate_effect": "none" if packet else "read_only",
+                "_priority": 0 if quantity_confirmation_required else 1,
+                "_market_value": market_value,
+            }
+        )
+
+    queue.sort(
+        key=lambda item: (
+            item["_priority"],
+            -item["_market_value"],
+            str(item.get("ticker") or ""),
+        )
+    )
+    for item in queue:
+        item.pop("_priority", None)
+        item.pop("_market_value", None)
+    return queue
+
+
 def missing_portfolio_analysis_labels(module_state: dict[str, bool]) -> list[str]:
     return [
         label

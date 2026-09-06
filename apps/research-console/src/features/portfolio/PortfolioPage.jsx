@@ -229,7 +229,7 @@ export function PortfolioPage({ portfolioApi, onOpenModule }) {
   }
 
   async function loadAnalysisStatus() {
-    setStatus("분석 현황 조회 중");
+    setStatus("검토 우선 큐 조회 중");
     setError("");
     try {
       const [connectivity, analysis] = await Promise.all([
@@ -237,9 +237,9 @@ export function PortfolioPage({ portfolioApi, onOpenModule }) {
         portfolioApi.analysisStatus(),
       ]);
       setAnalysisStatus({ connectivity, analysis });
-      setStatus("분석 현황 조회 완료");
+      setStatus("검토 우선 큐 조회 완료");
     } catch (nextError) {
-      setStatus("분석 현황 조회 실패");
+      setStatus("검토 우선 큐 조회 실패");
       setError(nextError.message);
     }
   }
@@ -313,7 +313,7 @@ export function PortfolioPage({ portfolioApi, onOpenModule }) {
           리스크 스캔
         </button>
         <button type="button" onClick={loadAnalysisStatus}>
-          분석 현황
+          검토 우선·분석 현황
         </button>
         <button type="button" onClick={loadTeamReportQueue}>
           팀리포트 큐
@@ -332,7 +332,12 @@ export function PortfolioPage({ portfolioApi, onOpenModule }) {
         onSelect={setSelectedRowId}
       />
 
-      <ResultPanels riskResult={riskResult} analysisStatus={analysisStatus} teamReportQueue={teamReportQueue} />
+      <ResultPanels
+        riskResult={riskResult}
+        analysisStatus={analysisStatus}
+        teamReportQueue={teamReportQueue}
+        onOpenModule={onOpenModule}
+      />
     </section>
   );
 }
@@ -479,7 +484,7 @@ function PortfolioEditor({ holdings, onChange, onDelete, selectedRowId, onSelect
   );
 }
 
-function ResultPanels({ riskResult, analysisStatus, teamReportQueue }) {
+function ResultPanels({ riskResult, analysisStatus, teamReportQueue, onOpenModule }) {
   if (!riskResult && !analysisStatus && !teamReportQueue) {
     return null;
   }
@@ -510,6 +515,9 @@ function ResultPanels({ riskResult, analysisStatus, teamReportQueue }) {
         </article>
       ) : null}
       {analysisStatus ? (
+        <ReviewPriorityQueueCard analysis={analysisStatus.analysis} onOpenModule={onOpenModule} />
+      ) : null}
+      {analysisStatus ? (
         <AnalysisStatusCard analysisStatus={analysisStatus} />
       ) : null}
       {teamReportQueue ? (
@@ -530,9 +538,9 @@ function AnalysisStatusCard({ analysisStatus }) {
       <p>{analysis.summary || "분석 현황 요약이 없습니다."}</p>
       <div className="risk-metrics">
         <Metric label="고유 종목" value={`${analysis.holding_count ?? items.length}개`} />
-        <Metric label="준비 완료" value={`${analysis.ready_count ?? 0}개`} />
-        <Metric label="평균 완료율" value={formatPercent(analysis.average_completion, "0%")} />
-        <Metric label="팀리포트 필요" value={`${analysis.needs_team_report_count ?? 0}개`} />
+        <Metric label="문서 세트 완료" value={`${analysis.documented_ready_count ?? analysis.ready_count ?? 0}개`} />
+        <Metric label="검토 게이트 통과" value={`${analysis.review_ready_count ?? 0}개`} />
+        <Metric label="검토 충족률" value={formatPercent(analysis.average_review_completion, "0%")} />
       </div>
       <table className="mini-table portfolio-status-table">
         <thead>
@@ -564,6 +572,87 @@ function AnalysisStatusCard({ analysisStatus }) {
       ) : null}
     </article>
   );
+}
+
+function ReviewPriorityQueueCard({ analysis, onOpenModule }) {
+  const queue = Array.isArray(analysis?.review_priority_queue) ? analysis.review_priority_queue : [];
+  const visibleQueue = queue.slice(0, 6);
+  const quantityCount = analysis?.review_priority_quantity_confirmation_count ?? queue.filter((item) => item.quantity_confirmation_required).length;
+  const reviewPendingCount = analysis?.review_gate_pending_count ?? queue.filter((item) => !item.review_ready).length;
+
+  return (
+    <article className="result-card portfolio-status-card portfolio-review-priority-card">
+      <div className="portfolio-review-priority-heading">
+        <div>
+          <h3>검토 게이트 우선 큐</h3>
+          <p>수량 확인 필요 항목을 먼저, 그 다음 평가금액 높은 순으로 정렬합니다. 자동 체크·보고서 생성·주문은 하지 않습니다.</p>
+        </div>
+        <span className="status-pill">읽기 전용</span>
+      </div>
+      <div className="risk-metrics">
+        <Metric label="검토 대기" value={`${reviewPendingCount}개`} />
+        <Metric label="수량 확인" value={`${quantityCount}개`} />
+        <Metric label="문서 세트 완료" value={`${analysis?.documented_ready_count ?? analysis?.ready_count ?? 0}개`} />
+        <Metric label="검토 기준" value="체크 75%" />
+      </div>
+      {visibleQueue.length ? (
+        <ol className="portfolio-review-priority-list">
+          {visibleQueue.map((item, index) => {
+            const action = reviewQueueAction(item);
+            const reviewBlockers = formatMissingModules(item.review_missing_modules);
+            const documentBlockers = formatMissingModules(item.missing_modules);
+            const blockerText = item.quantity_confirmation_required
+              ? "계좌 수량 확인 필요"
+              : reviewBlockers !== "없음"
+                ? `검토 게이트: ${reviewBlockers}`
+                : `문서 근거: ${documentBlockers}`;
+            return (
+              <li className="portfolio-review-priority-row" key={item.ticker || `${item.company_name}-${index}`}>
+                <span className="portfolio-review-priority-rank">{String(index + 1).padStart(2, "0")}</span>
+                <div className="portfolio-review-priority-copy">
+                  <strong>{item.company_name || item.official_symbol || item.ticker}</strong>
+                  <small>
+                    {(item.portfolios || []).join(", ") || "포트폴리오 미확인"} · {formatMoney(item.market_value, "KRW", "평가금액 미확인")}
+                  </small>
+                  <p><b>차단:</b> {blockerText}</p>
+                  <p><b>다음 수동 검토:</b> {item.next_action || "저장 근거를 사람이 확인하세요."}</p>
+                </div>
+                {action ? (
+                  <button
+                    type="button"
+                    className="secondary-button portfolio-review-priority-action"
+                    onClick={() => onOpenModule?.(action.module, item.official_symbol || item.ticker)}
+                  >
+                    {action.label}
+                  </button>
+                ) : (
+                  <span className="portfolio-review-priority-kind">수량 확인</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="muted-text">저장 근거 기준으로 검토 대기 또는 수량 확인 대상이 없습니다.</p>
+      )}
+      {queue.length > visibleQueue.length ? (
+        <p className="muted-text">상위 {visibleQueue.length}개만 표시했습니다. 전체 {queue.length}개는 API 기준으로 관리됩니다.</p>
+      ) : null}
+    </article>
+  );
+}
+
+function reviewQueueAction(item) {
+  if (item?.quantity_confirmation_required) {
+    return null;
+  }
+  const missing = Array.isArray(item?.review_missing_modules) ? item.review_missing_modules : [];
+  if (missing.includes("기준 리포트")) return { module: "team", label: "기준 리포트 열기" };
+  if (missing.includes("매매 전략")) return { module: "trade", label: "매매 전략 열기" };
+  if (missing.includes("실적 분석")) return { module: "earnings", label: "실적 분석 열기" };
+  if (missing.includes("체크리스트")) return { module: "checklist", label: "체크리스트 열기" };
+  if (missing.includes("최근 정보 입력")) return { module: "capture", label: "정보 입력 열기" };
+  return { module: "dashboard", label: "대시보드 열기" };
 }
 
 function TeamReportQueueCard({ queueResult }) {

@@ -19,8 +19,8 @@ const CHECKLIST_ITEMS = [
   ["exit_criteria", "투자 철회 기준"],
 ];
 
-export function ChecklistPage({ researchApi }) {
-  const [ticker, setTicker] = useState("PL");
+export function ChecklistPage({ researchApi, initialTicker = "PL" }) {
+  const [ticker, setTicker] = useState(() => String(initialTicker || "PL").trim().toUpperCase() || "PL");
   const [checkedItems, setCheckedItems] = useState(() => new Set());
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("idle");

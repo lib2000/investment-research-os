@@ -16,6 +16,7 @@ from research_os.portfolio_analysis_coverage import (  # noqa: E402
     portfolio_analysis_module_state,
     portfolio_human_review_packet,
     portfolio_human_review_queue,
+    portfolio_review_priority_queue,
     portfolio_vault_entries,
 )
 from research_os.portfolio_review_packet import (  # noqa: E402
@@ -133,3 +134,58 @@ class PortfolioReviewPacketTests(unittest.TestCase):
             self.assertEqual([item["ticker"] for item in queue], ["300080", "OTHER"])
             self.assertEqual(queue[0]["reason"], "계좌 동기화 미검출로 보유 수량 확인 필요")
             self.assertEqual(queue[0]["review_gate_effect"], "none")
+
+    def test_review_priority_queue_is_read_only_and_uses_quantity_then_market_value(self):
+        queue = portfolio_review_priority_queue(
+            [
+                {
+                    "ticker": "COMPLETE",
+                    "company_name": "수량 확인 종목",
+                    "portfolios": ["이형주"],
+                    "market_value": 100,
+                    "completion_rate": 1,
+                    "review_completion_rate": 1,
+                    "review_state": {"checklist": True, "team_report": True},
+                    "human_review_packet": {"quantity_confirmation_required": True},
+                },
+                {
+                    "ticker": "HIGH",
+                    "company_name": "체크리스트 보강 종목",
+                    "portfolios": ["가족 합산"],
+                    "market_value": 10_000_000,
+                    "completion_rate": 1,
+                    "review_completion_rate": 5 / 6,
+                    "review_state": {"checklist": False, "team_report": True},
+                    "missing_modules": [],
+                    "review_missing_modules": ["체크리스트"],
+                    "checklist_status": {"reason": "체크리스트 8/16; 검토 게이트 75% 미만입니다."},
+                    "next_action": "16개 리서치 체크리스트로 투자 준비도를 수치화하세요.",
+                },
+                {
+                    "ticker": "LOW",
+                    "company_name": "기준 근거 보강 종목",
+                    "portfolios": ["가족 합산"],
+                    "market_value": 1_000_000,
+                    "completion_rate": 0,
+                    "review_completion_rate": 0,
+                    "review_state": {"checklist": False, "team_report": False},
+                    "missing_modules": ["기준 리포트", "체크리스트"],
+                    "review_missing_modules": ["기준 리포트", "체크리스트"],
+                },
+            ]
+        )
+
+        self.assertEqual([item["ticker"] for item in queue], ["COMPLETE", "HIGH", "LOW"])
+        self.assertEqual(queue[0]["queue_kind"], "quantity_confirmation")
+        self.assertEqual(queue[1]["queue_kind"], "checklist_review")
+        self.assertEqual(queue[2]["queue_kind"], "document_gap")
+        self.assertTrue(all(item["action_mode"] == "read_only" for item in queue))
+        self.assertTrue(all(item["automatic_completion"] is False for item in queue))
+        self.assertEqual(queue[0]["review_gate_effect"], "none")
+        self.assertEqual(queue[1]["review_gate_effect"], "read_only")
+
+    def test_react_research_console_local_origin_is_allowlisted(self):
+        source = (PROJECT_ROOT / "backend" / "research_os_main.py").read_text(encoding="utf-8")
+
+        self.assertIn('"http://127.0.0.1:5173"', source)
+        self.assertIn('"http://localhost:5173"', source)
