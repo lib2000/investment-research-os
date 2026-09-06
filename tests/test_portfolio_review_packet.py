@@ -4,6 +4,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 
@@ -24,6 +26,7 @@ from research_os.portfolio_review_packet import (  # noqa: E402
     render_portfolio_human_review_packet_markdown,
     write_portfolio_human_review_packet,
 )
+import research_os_main as main  # noqa: E402
 
 
 class PortfolioReviewPacketTests(unittest.TestCase):
@@ -189,3 +192,37 @@ class PortfolioReviewPacketTests(unittest.TestCase):
 
         self.assertIn('"http://127.0.0.1:5173"', source)
         self.assertIn('"http://localhost:5173"', source)
+
+    def test_analysis_status_uses_local_cached_ticker_verification(self):
+        holding = SimpleNamespace(ticker="300080", name="플리토", market_value=1_000_000)
+        portfolio = SimpleNamespace(portfolio_name="이형주", holdings=[holding])
+        response = SimpleNamespace(portfolios=[portfolio])
+        verification = SimpleNamespace(
+            official_symbol="300080",
+            company_name="플리토",
+            verified=True,
+        )
+        settings = SimpleNamespace(research_vault_dir=str(PROJECT_ROOT / "research_vault"))
+
+        with (
+            patch.object(main, "portfolio_store_response", return_value=response) as portfolio_store_response,
+            patch.object(main, "read_manifest", return_value=[]),
+            patch.object(main, "portfolio_vault_entries", return_value=[]),
+            patch.object(main, "merge_portfolio_analysis_entries", return_value=[]),
+            patch.object(
+                main,
+                "verify_ticker_symbol",
+                side_effect=AssertionError("analysis status must not call external ticker verification"),
+            ),
+            patch.object(
+                main,
+                "verify_ticker_symbol_local_cached",
+                return_value=verification,
+            ) as verify_local,
+        ):
+            status = main.check_portfolio_analysis_status(settings)
+
+        verify_local.assert_called_once_with("300080", settings)
+        portfolio_store_response.assert_called_once_with(settings, include_research_context=False)
+        self.assertEqual(status["holding_count"], 1)
+        self.assertEqual(status["items"][0]["company_name"], "플리토")

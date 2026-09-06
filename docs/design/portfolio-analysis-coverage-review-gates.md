@@ -71,6 +71,7 @@ The 18:30 daily research operation writes the latest portfolio-analysis backlog 
 - Quantity-confirmation conflicts sort first; all remaining rows sort by stored market value, then ticker. The ordering is triage only, not an investment recommendation.
 - Each row shows the affected portfolio, missing document/review modules, checklist reason when relevant, and the next manual action. It is explicitly `read_only`, `automatic_completion: false`, and never changes a checklist, a report, a holding, or an order.
 - The existing `human_review_queue` remains packet-only for compatible clients. It is not replaced by the broader review-priority queue.
+- `analysis-status` uses only the local official registry and stored dynamic ticker cache. It also skips unrelated holding research-context enrichment; provider profile lookup and full context refresh are explicit paths, not part of opening the review queue, so a slow external provider or broad vault scan cannot block the local review screen.
 
 ## Verification
 

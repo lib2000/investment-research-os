@@ -5789,6 +5789,7 @@ def portfolio_store_response(
     active_portfolio: SavedPortfolio | None = None,
     active_refresh_prices: bool = False,
     force_active_price_refresh: bool = False,
+    include_research_context: bool = True,
 ) -> PortfolioStoreResponse:
     store = read_portfolio_store(settings)
     records = [
@@ -5796,7 +5797,7 @@ def portfolio_store_response(
             SavedPortfolio.model_validate(item),
             settings,
             refresh_prices=False,
-            include_research_context=True,
+            include_research_context=include_research_context,
         )
         for item in store.get("portfolios", {}).values()
     ]
@@ -5807,7 +5808,7 @@ def portfolio_store_response(
             settings,
             refresh_prices=active_refresh_prices,
             force_price_refresh=force_active_price_refresh,
-            include_research_context=True,
+            include_research_context=include_research_context,
         )
     return PortfolioStoreResponse(
         portfolios=records,
@@ -15953,7 +15954,7 @@ def check_portfolio_connectivity(
 def check_portfolio_analysis_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    response = portfolio_store_response(settings)
+    response = portfolio_store_response(settings, include_research_context=False)
     vault_dir = resolve_vault_dir(settings.research_vault_dir)
     manifest_entries = read_manifest(vault_dir)
     by_ticker: dict[str, dict] = {}
@@ -15983,7 +15984,9 @@ def check_portfolio_analysis_status(
 
     items = []
     for ticker, record in sorted(by_ticker.items()):
-        verification = verify_ticker_symbol(ticker, settings)
+        # Analysis status is a local evidence view. Do not serially trigger
+        # FMP/KIS profile lookups for every holding while rendering the queue.
+        verification = verify_ticker_symbol_local_cached(ticker, settings)
         official_symbol = verification.official_symbol
         ticker_entries = portfolio_analysis_entries_for_ticker(
             analysis_entries,
