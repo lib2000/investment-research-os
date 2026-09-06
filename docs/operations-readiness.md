@@ -170,6 +170,8 @@ python tools\check_nps_domestic_equity_allocation.py --rebalance-plan
 
 장 종료 후 보완 작업은 `InvestmentResearchOS-DailyResearchOperations-1830`이 평일/휴일과 무관하게 매일 18:30에 실행하며 `StartWhenAvailable`로 PC가 꺼져 있던 실행을 다음 부팅 때 보충한다. 명령줄에는 토큰을 넣지 않고 Windows Credential Manager의 `InvestmentResearchOS/DEV_USER_TOKEN`만 사용한다. 부팅 catch-up은 가장 최근 평일 18:30을 기준으로 모든 가족 포트폴리오의 `updated_at`을 확인하므로, 같은 날 장 종료 전 저장을 신선한 데이터로 오판하지 않는다. 가격 갱신은 종목별 기본 시장 가격 공급자만 조회하며 재무·뉴스·공시·보조 가격 공급자 수집을 함께 실행하지 않는다. 가격 요청은 포트폴리오별 최대 300초로 제한하고 주문·계정 변경·텔레그램 전송은 수행하지 않는다. 각 실행의 단계 시작·완료·실패 원인은 `research_vault\_system\daily_research_operations_task.log`에 기록하며, 토큰 원문은 `[REDACTED]`로 가린다.
 
+포트폴리오 문서 커버리지가 운영 목표(현재 95%)보다 낮으면 일일 작업은 `WARN`과 로컬 backlog로 완료되며, 수집·저장·검사 자체의 오류만 작업 실패로 남는다. 엄격한 배포/사전점검은 별도 `python tools\check_portfolio_analysis_coverage.py --all-portfolios --min-average-completion 0.95 --write-backlog --strict`로 수행한다.
+
 전략 설계/검증은 `InvestmentResearchOS-DailyStrategyValidation-0845`가 매일 08:45 실행되고 `StartWhenAvailable`로 누락분을 보충한다. Docker Desktop과 `quantconnect/lean:latest`를 짧은 bounded probe로 확인한 뒤 필요한 경우 숨김 모드로 Docker와 분석 서비스만 시작한다. 추천 1위 한국 종목에 SMA 5/20 설계 검증과 LEAN 백테스트를 실행해 `/api/v1/backtest-runs`에 연구 근거로 저장하며, `/api/order`나 전략 실행 엔드포인트는 호출하지 않고 상태 파일의 `live_order_endpoint_called=false`를 검증한다.
 
 로그인 자동시작은 `InvestmentResearchOS-Autostart`가 숨김 WSL keepalive 클라이언트를 유지한 뒤 OpenClaw user service를 시작한다. `active` 문자열만 보지 않고 WSL 내부 18789 소켓 개방까지 최대 90초 확인한다. `GET /api/v1/system/workbench/status`의 OpenClaw 상태도 오래 남은 Windows 포트 프록시가 아니라 HTTP 또는 WSL 내부 소켓으로 검증하며, 자동시작 상태 JSON에 유효한 `status`가 없으면 정상으로 간주하지 않는다.

@@ -1154,6 +1154,24 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("리서치 상태 저장 무결성 점검", script_source)
         self.assertIn("tools\\check_research_source_store.py --strict", script_source)
 
+    def test_daily_research_operations_logs_coverage_backlog_without_failing_schedule(self):
+        script_source = (PROJECT_ROOT / "tools" / "run_daily_research_operations.ps1").read_text(
+            encoding="utf-8-sig"
+        )
+        coverage_block = script_source.split("포트폴리오 분석 문서/검토 게이트 backlog 갱신", 1)[1].split(
+            "if (-not $SkipOpenClawSync.IsPresent)", 1
+        )[0]
+
+        self.assertIn("tools\\check_portfolio_analysis_coverage.py", coverage_block)
+        self.assertIn("--write-backlog", coverage_block)
+        self.assertIn("--json", coverage_block)
+        checker_call = coverage_block.split("$coverageOutput", 1)[1].split("$coverageExitCode", 1)[0]
+        self.assertNotIn("--strict", checker_call)
+        self.assertIn('$coverage.status -ne "ok"', coverage_block)
+        self.assertIn('Write-DailyResearchOperationsLog -Level "WARN"', coverage_block)
+        self.assertIn("research_vault/_system/portfolio_analysis_backlog.json", coverage_block)
+        self.assertNotIn("Write-Output $line", coverage_block)
+
     def test_openclaw_sync_script_validates_after_copy(self):
         script_source = (PROJECT_ROOT / "tools" / "sync_openclaw_investment_context.ps1").read_text(
             encoding="utf-8"

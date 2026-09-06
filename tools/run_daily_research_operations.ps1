@@ -307,12 +307,34 @@ if (-not $SkipPortfolioAnalysisCoverage.IsPresent) {
     # sends a notification, or submits an order.
     # Keep scheduled-task logs compact; the complete per-holding backlog is
     # persisted locally in research_vault/_system/portfolio_analysis_backlog.json.
-    python tools\check_portfolio_analysis_coverage.py `
+    # A coverage deficit is actionable review backlog, not an operational
+    # failure. Keep --strict for an explicit release/preflight check so the
+    # scheduled task only fails for a real checker or storage error.
+    $coverageOutput = @(python tools\check_portfolio_analysis_coverage.py `
       --all-portfolios `
       --min-average-completion 0.95 `
       --write-backlog `
-      --strict `
-      --limit 0
+      --limit 0 `
+      --json)
+    $coverageExitCode = $LASTEXITCODE
+    if ($coverageExitCode -ne 0) {
+      throw "포트폴리오 분석 backlog 검사기가 종료 코드 $coverageExitCode 로 종료되었습니다."
+    }
+
+    try {
+      $coverage = (($coverageOutput | Out-String) | ConvertFrom-Json -ErrorAction Stop)
+    } catch {
+      throw "포트폴리오 분석 backlog 결과 JSON을 읽을 수 없습니다: $($_.Exception.Message)"
+    }
+    if ($coverage.status -ne "ok") {
+      $coverageMessage = (
+        "문서/검토 backlog 유지: 문서 완료 {0}/{1} ({2:P1}), 검토 통과 {3}개 ({4:P1}). " +
+        "다음 조치는 research_vault/_system/portfolio_analysis_backlog.json 확인입니다."
+      ) -f $coverage.ready_count, $coverage.holding_count, $coverage.average_completion, `
+        $coverage.review_ready_count, $coverage.average_review_completion
+      Write-Warning $coverageMessage
+      Write-DailyResearchOperationsLog -Level "WARN" -Message $coverageMessage
+    }
   }
 }
 

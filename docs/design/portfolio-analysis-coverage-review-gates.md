@@ -57,6 +57,8 @@ For each ticker, the service publishes:
 
 The 18:30 daily research operation writes the latest portfolio-analysis backlog after its normal research-source refresh. This is local-only bookkeeping. It does not generate reports, call an LLM, send Telegram messages, or place orders.
 
+The scheduled operation records a coverage shortfall as `WARN` with the saved backlog path, rather than failing the whole end-of-day refresh. A malformed backlog result, storage/checker failure, or other real operation error still fails the task. The 95% coverage gate remains strict for explicit release and preflight checks.
+
 ## Human-review evidence packets
 
 - A packet may inventory already stored official filings, price-refresh metadata, and portfolio-sync status for one holding.
