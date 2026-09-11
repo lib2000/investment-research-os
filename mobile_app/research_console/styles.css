@@ -910,6 +910,11 @@ label {
   color: #991b1b;
 }
 
+.service-status.degraded {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 @media (max-width: 720px) {
   .integrated-tools-heading {
     align-items: start;
@@ -7138,6 +7143,16 @@ pre {
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   summary {
+    min-height: 44px;
+  }
+
+  .chart-copilot-timeframes label {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .output-header button {
     min-height: 44px;
   }
 

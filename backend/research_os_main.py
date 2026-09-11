@@ -3,7 +3,6 @@ import hashlib
 import json
 import math
 import os
-import socket
 import subprocess
 import sys
 import threading
@@ -463,10 +462,13 @@ from research_os.storage_quality import (
     storage_quality_entry_needs_ocr,
 )
 from research_os.system_health import (
+    TRADING_TOOL_SERVICES,
     build_investment_workbench_status,
     build_data_provider_status_payload,
     build_safety_config_payload,
     build_system_health_payload,
+    probe_trading_tool_service,
+    probe_trading_tool_services,
 )
 from research_os.ticker_registry import (
     fetch_ticker_registry_sources,
@@ -12129,12 +12131,6 @@ def read_investment_workbench_status(settings: Settings = Depends(get_settings))
     return {**current, "history": events[:20]}
 
 
-TRADING_TOOL_SERVICES = (
-    ("strategy_api", 8000, "전략 API"),
-    ("strategy_builder", 3100, "전략 빌더"),
-    ("backtester_api", 8002, "백테스터 API"),
-    ("backtester", 3200, "백테스터"),
-)
 BACKTEST_RUNS_LOCK = threading.Lock()
 CHART_COPILOT_EVALUATIONS_LOCK = threading.Lock()
 
@@ -12203,18 +12199,13 @@ def _backtest_symbol_details(symbols: Any, settings: Settings) -> list[dict[str,
     return details
 
 
-def _local_port_is_listening(port: int) -> bool:
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=0.35):
-            return True
-    except OSError:
-        return False
-
-
 def _trading_tool_status_payload() -> dict:
     services = [
-        {"id": service_id, "label": label, "port": port, "running": _local_port_is_listening(port)}
-        for service_id, port, label in TRADING_TOOL_SERVICES
+        {
+            **service,
+            "running": service.get("status") == "ready",
+        }
+        for service in probe_trading_tool_services(TRADING_TOOL_SERVICES)
     ]
     master: dict[str, Any] = {"available": False, "total_count": 0, "needs_update": True}
     paper_auth: dict[str, Any] = {"available": False, "authenticated": False, "mode": "vps", "mode_display": "모의투자"}
@@ -12262,6 +12253,26 @@ def read_trading_tool_status() -> dict:
     return _trading_tool_status_payload()
 
 
+def _run_trading_tool_launcher(root: Path, action: str, *, timeout: int) -> subprocess.CompletedProcess[str]:
+    launcher = root / "investment-web.ps1"
+    return subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(launcher),
+            action,
+        ],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
 @app.post(
     "/api/v1/system/trading-tools/start",
     dependencies=[Depends(verify_user_token)],
@@ -12277,26 +12288,21 @@ def start_trading_tools() -> dict:
         raise HTTPException(status_code=503, detail=f"로컬 분석 도구 실행기를 찾지 못했습니다: {launcher}")
 
     try:
-        completed = subprocess.run(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(launcher),
-                "start",
-            ],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=90,
-            check=False,
-        )
+        unresponsive = any(service.get("port_open") and not service.get("running") for service in current["services"])
+        if unresponsive:
+            stopped = _run_trading_tool_launcher(root, "stop", timeout=30)
+            if stopped.returncode != 0:
+                error_tail = (stopped.stderr or stopped.stdout or "실행 로그 없음").strip()[-1200:]
+                raise HTTPException(status_code=503, detail=f"응답 없는 로컬 분석 도구 정리 실패: {error_tail}")
+        completed = _run_trading_tool_launcher(root, "start", timeout=90)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(status_code=503, detail=f"로컬 분석 도구 시작 실패: {exc}") from exc
 
     result = _trading_tool_status_payload()
+    ready_deadline = time.monotonic() + 90
+    while completed.returncode == 0 and not result["all_running"] and time.monotonic() < ready_deadline:
+        time.sleep(1)
+        result = _trading_tool_status_payload()
     if completed.returncode != 0 or not result["all_running"]:
         error_tail = (completed.stderr or completed.stdout or "실행 로그 없음").strip()[-1200:]
         raise HTTPException(status_code=503, detail=f"로컬 분석 도구가 모두 시작되지 않았습니다: {error_tail}")
@@ -12308,7 +12314,8 @@ def start_trading_tools() -> dict:
     dependencies=[Depends(verify_user_token)],
 )
 def refresh_trading_tool_symbol_master() -> dict:
-    if not _local_port_is_listening(8002):
+    backtester_api = next(service for service in TRADING_TOOL_SERVICES if service[0] == "backtester_api")
+    if probe_trading_tool_service(backtester_api).get("status") != "ready":
         raise HTTPException(status_code=503, detail="백테스터 API가 실행 중이 아닙니다. 분석 서비스를 먼저 시작하세요.")
     try:
         response = httpx.post("http://127.0.0.1:8002/api/symbols/collect", timeout=120.0)

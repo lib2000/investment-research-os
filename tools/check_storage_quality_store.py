@@ -48,6 +48,36 @@ def is_indexed_or_stored(item: dict[str, Any]) -> bool:
     return bool(storage or rag)
 
 
+def research_json_paths(vault: Path) -> tuple[list[Path], str]:
+    """Return manifest sidecars, falling back only when the manifest is unusable."""
+    manifest = load_json(vault / "manifest.json")
+    if isinstance(manifest, list):
+        vault_root = vault.resolve()
+        paths: list[Path] = []
+        seen: set[Path] = set()
+        for entry in manifest:
+            if not isinstance(entry, dict):
+                continue
+            raw_path = entry.get("json_relative_path")
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                raw_path = entry.get("relative_path")
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+            relative = Path(raw_path.replace("\\", "/"))
+            if relative.parts and relative.parts[0].lower() == vault.name.lower():
+                relative = Path(*relative.parts[1:])
+            candidate = (vault / relative).with_suffix(".json").resolve()
+            try:
+                candidate.relative_to(vault_root)
+            except ValueError:
+                continue
+            if candidate.exists() and candidate not in seen:
+                paths.append(candidate)
+                seen.add(candidate)
+        return paths, "manifest"
+    return list(vault.glob("*/*.json")), "filesystem_fallback"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="저장 자료 품질 플래그를 백엔드 없이 점검합니다.")
     parser.add_argument("--max-active-body-missing", type=int, default=0)
@@ -62,11 +92,14 @@ def main() -> int:
     body_missing: list[Path] = []
     ocr_needed: list[Path] = []
     advisory_body: list[Path] = []
+    inspected_count = 0
+    paths, scan_source = research_json_paths(vault)
 
-    for path in vault.glob("*/*.json"):
+    for path in paths:
         item = load_json(path)
         if not isinstance(item, dict):
             continue
+        inspected_count += 1
         tags = tags_from(item)
         text = json.dumps(item, ensure_ascii=False).lower()
         has_body_issue = bool(tags & BODY_TAGS) or "needs_body_copy" in text or "url_text_unavailable" in text
@@ -85,6 +118,8 @@ def main() -> int:
         "status": "ok" if ok else "warning",
         "project_root": str(root),
         "vault_path": str(vault),
+        "scan_source": scan_source,
+        "inspected_count": inspected_count,
         "active_body_missing_count": len(body_missing),
         "active_ocr_needed_count": len(ocr_needed),
         "advisory_body_count": len(advisory_body),
@@ -99,6 +134,7 @@ def main() -> int:
         return 0 if ok else (1 if args.strict else 0)
 
     print(f"저장소: {vault}")
+    print(f"검사 범위: {scan_source} ({inspected_count}개 JSON)")
     print(f"활성 본문 보강 필요: {len(body_missing)}개")
     print(f"활성 OCR 확인 필요: {len(ocr_needed)}개")
     print(f"비활성/미색인/메모리-only URL-only 참고 항목: {len(advisory_body)}개")

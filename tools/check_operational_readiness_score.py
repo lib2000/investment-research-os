@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from check_storage_quality_store import research_json_paths
+
 BODY_TAGS = {"needs_body_copy", "url_text_unavailable"}
 OCR_MARKERS = {"ocr_needed", "ocr_required", "ocr_unavailable", "needs_ocr"}
 
@@ -202,7 +204,8 @@ def storage_signal(vault_dir: Path) -> dict[str, Any]:
     body_missing = 0
     ocr_needed = 0
     inspected_count = 0
-    for path in vault_dir.glob("*/*.json"):
+    paths, scan_source = research_json_paths(vault_dir)
+    for path in paths:
         item = load_json(path, {})
         if not isinstance(item, dict):
             continue
@@ -220,7 +223,7 @@ def storage_signal(vault_dir: Path) -> dict[str, Any]:
         "storage_quality_open_issues",
         "저장/RAG 품질",
         score,
-        f"검사 JSON {inspected_count}개, 활성 본문 보강 {body_missing}개, 활성 OCR 보강 {ocr_needed}개",
+        f"검사 JSON {inspected_count}개({scan_source}), 활성 본문 보강 {body_missing}개, 활성 OCR 보강 {ocr_needed}개",
         "python tools\\check_storage_quality_store.py --strict",
     )
 

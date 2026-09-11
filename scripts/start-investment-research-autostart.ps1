@@ -2,6 +2,7 @@
   [string]$ProjectRoot = "D:\workspace\InvestmentJournalApp",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [string]$OpenClawWslDistro = "Ubuntu-24.04",
+  [string]$OpenClawWslUser = "lib2000",
   [string]$StateFile = ""
 )
 
@@ -67,15 +68,12 @@ try {
   if (-not $wslKeepaliveReady) {
     throw "WSL keepalive 프로세스를 시작하지 못했습니다."
   }
+  $userMachine = "$OpenClawWslUser@"
   $userBusReady = $false
   for ($attempt = 1; $attempt -le 8; $attempt++) {
-    # Use WSL's direct exec path.  A login shell can wait on a systemd user
-    # session during cold boot and make the logon task time out even though
-    # the user bus is already usable.
-    # WSL can emit a transient systemd-session warning on stderr even when the
-    # command succeeds. Do not let Windows PowerShell turn that warning into a
-    # terminating NativeCommandError; the exit code and stdout are authoritative.
-    $userBusState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active default.target 2>$null
+    # Address the user's systemd manager from WSL root. This avoids the
+    # transient user-session startup failure seen during a cold logon task.
+    $userBusState = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine is-active default.target 2>$null
     if ($LASTEXITCODE -eq 0 -and "$userBusState" -match "(?m)^active\s*$") {
       $userBusReady = $true
       break
@@ -85,13 +83,13 @@ try {
   if (-not $userBusReady) {
     throw "WSL systemd 사용자 세션이 준비되지 않았습니다. 로그인 직후 사용자 버스가 늦게 올라왔을 수 있습니다."
   }
-  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user start openclaw-gateway.service 2>$null
+  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine start openclaw-gateway.service 2>$null
   if ($LASTEXITCODE -ne 0) {
     throw "WSL OpenClaw 게이트웨이 사용자 서비스를 시작하지 못했습니다."
   }
   $listenerProbe = "import socket; s=socket.socket(); s.settimeout(0.5); r=s.connect_ex(('127.0.0.1',18789)); s.close(); print(1 if r == 0 else 0)"
   for ($attempt = 1; $attempt -le 18; $attempt++) {
-    $openClawState = & wsl.exe -d $OpenClawWslDistro --user lib2000 --exec systemctl --user is-active openclaw-gateway.service 2>$null
+    $openClawState = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine is-active openclaw-gateway.service 2>$null
     $serviceActive = $LASTEXITCODE -eq 0 -and "$openClawState" -match "(?m)^active\s*$"
     $listenerState = & wsl.exe -d $OpenClawWslDistro --user root --exec python3 -c $listenerProbe 2>$null
     $listenerReady = $LASTEXITCODE -eq 0 -and "$listenerState" -match "(?m)^1\s*$"
@@ -132,6 +130,7 @@ try {
     wsl_keepalive_ready = $wslKeepaliveReady
     wsl_keepalive_mode = if ($existingKeepalive.Count -gt 0) { "existing" } else { "direct_root_sleep" }
     openclaw_gateway_ready = $openClawGatewayReady
+    openclaw_service_probe_mode = "root_machine_user_bus"
     message = $message
     project_root = $ProjectRootPath
   }

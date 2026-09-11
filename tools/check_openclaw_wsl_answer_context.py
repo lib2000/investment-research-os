@@ -15,7 +15,7 @@ QUESTION_READ_ORDER_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_question_rea
 ANSWER_SAMPLES_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_answer_samples.py"
 ACTUAL_ANSWER_AUDIT_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_audit.py"
 ACTUAL_ANSWER_CAPTURE_STATUS_TOOL = PROJECT_ROOT / "tools" / "check_openclaw_actual_answer_capture_status.py"
-DEFAULT_SESSION_KEYS = ["agent:pa:main", "agent:pa:main2"]
+DEFAULT_SESSION_KEYS = ["agent:pa:main"]
 REQUIRED_TEXT = [
     "오늘 시스템에서 구현한 작업",
     "오늘 구현 작업 없음",
@@ -75,6 +75,7 @@ def build_result(
     actual_answer_capture_status_tool: Path = ACTUAL_ANSWER_CAPTURE_STATUS_TOOL,
     require_fresh_bootstrap: bool = False,
 ) -> dict[str, Any]:
+    require_all_session_keys = session_keys is not None
     session_keys = session_keys or list(DEFAULT_SESSION_KEYS)
     today_tool_wsl = windows_to_wsl_path(today_tool)
     question_read_order_tool_wsl = windows_to_wsl_path(question_read_order_tool)
@@ -84,6 +85,7 @@ def build_result(
     script = f"""
 import json
 import pathlib
+import sqlite3
 import subprocess
 import sys
 
@@ -92,6 +94,7 @@ session_keys = {session_keys!r}
 required_text = {REQUIRED_TEXT!r}
 disabled_heartbeat_markers = {list(DISABLED_HEARTBEAT_MARKERS)!r}
 require_fresh_bootstrap = {require_fresh_bootstrap!r}
+require_all_session_keys = {require_all_session_keys!r}
 today_tool = pathlib.Path({today_tool_wsl!r})
 question_read_order_tool = pathlib.Path({question_read_order_tool_wsl!r})
 answer_samples_tool = pathlib.Path({answer_samples_tool_wsl!r})
@@ -104,7 +107,11 @@ for name in ['AGENTS.md', 'MEMORY.md', 'HEARTBEAT.md']:
     path = workspace / name
     item = {{'path': str(path), 'exists': path.exists(), 'missing': []}}
     if not path.exists():
-        errors.append(f'missing startup note: {{path}}')
+        if name == 'HEARTBEAT.md':
+            item['disabled'] = True
+            item['reason'] = 'not_configured'
+        else:
+            errors.append(f'missing startup note: {{path}}')
     else:
         text = path.read_text(encoding='utf-8-sig', errors='replace')
         if name == 'HEARTBEAT.md' and all(marker in text for marker in disabled_heartbeat_markers):
@@ -168,18 +175,51 @@ else:
             daily['missing'].append(token)
             errors.append(f'daily memory missing {{token}}')
 
-sessions_path = pathlib.Path.home() / '.openclaw' / 'agents' / 'pa' / 'sessions' / 'sessions.json'
-sessions = {{'path': str(sessions_path), 'exists': sessions_path.exists(), 'items': {{}}}}
+sqlite_path = pathlib.Path.home() / '.openclaw' / 'agents' / 'pa' / 'agent' / 'openclaw-agent.sqlite'
+legacy_sessions_path = pathlib.Path.home() / '.openclaw' / 'agents' / 'pa' / 'sessions' / 'sessions.json'
+data = {{}}
+session_format = None
+sessions_path = sqlite_path if sqlite_path.exists() else legacy_sessions_path
+if sqlite_path.exists():
+    session_format = 'sqlite'
+    connection = sqlite3.connect(f'file:{{sqlite_path}}?mode=ro', uri=True)
+    try:
+        placeholders = ','.join('?' for _ in session_keys)
+        rows = connection.execute(
+            f'SELECT session_key, entry_json FROM session_nodes WHERE session_key IN ({{placeholders}})',
+            session_keys,
+        ).fetchall()
+        for key, raw_entry in rows:
+            try:
+                entry = json.loads(raw_entry) if isinstance(raw_entry, str) else raw_entry
+            except json.JSONDecodeError:
+                warnings.append(f'session {{key}} has invalid entry_json')
+                continue
+            if isinstance(entry, dict):
+                data[key] = entry
+    finally:
+        connection.close()
+elif legacy_sessions_path.exists():
+    session_format = 'json'
+    loaded = json.loads(legacy_sessions_path.read_text(encoding='utf-8'))
+    if isinstance(loaded, dict):
+        data = loaded
+
+sessions = {{'path': str(sessions_path), 'format': session_format, 'exists': sessions_path.exists(), 'items': {{}}}}
 if not sessions_path.exists():
-    errors.append(f'missing PA sessions file: {{sessions_path}}')
+    errors.append(f'missing PA session store: {{sessions_path}}')
 else:
-    data = json.loads(sessions_path.read_text(encoding='utf-8'))
+    found_session_count = 0
     for key in session_keys:
         entry = data.get(key)
         item = {{'exists': entry is not None}}
         if entry is None:
-            errors.append(f'missing session key: {{key}}')
+            if require_all_session_keys:
+                errors.append(f'missing session key: {{key}}')
+            else:
+                warnings.append(f'optional session key is not present: {{key}}')
         else:
+            found_session_count += 1
             report = entry.get('systemPromptReport') or {{}}
             injected = {{row.get('name'): row for row in report.get('injectedWorkspaceFiles') or []}}
             item.update({{
@@ -205,9 +245,10 @@ else:
             else:
                 if report.get('workspaceDir') != str(workspace):
                     errors.append(f'session {{key}} workspaceDir mismatch: {{report.get("workspaceDir")}}')
-                for name, minimum in [('AGENTS.md', 1000), ('MEMORY.md', 1000), ('HEARTBEAT.md', 1000)]:
-                    if name == 'HEARTBEAT.md' and startup.get(name, {{}}).get('disabled'):
-                        continue
+                required_injected = [('AGENTS.md', 1000), ('MEMORY.md', 1000)]
+                if not startup.get('HEARTBEAT.md', {{}}).get('disabled'):
+                    required_injected.append(('HEARTBEAT.md', 1000))
+                for name, minimum in required_injected:
                     row = injected.get(name)
                     if not row:
                         errors.append(f'session {{key}} missing injected {{name}}')
@@ -219,6 +260,8 @@ else:
                     if int(row.get('rawChars') or 0) < minimum:
                         errors.append(f'session {{key}} injected {{name}} too small: {{row.get("rawChars")}}')
         sessions['items'][key] = item
+    if found_session_count == 0:
+        errors.append('no requested PA sessions found in the current session store')
 
 print(json.dumps({{
     'status': 'failure' if errors else 'warning' if warnings else 'ok',

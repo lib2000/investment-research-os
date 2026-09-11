@@ -62,6 +62,8 @@ def source_family(source_url: object) -> str:
     host = (urlparse(str(source_url or "")).hostname or "").lower()
     if host.endswith("sec.gov"):
         return "sec"
+    if host == "kind.krx.co.kr":
+        return "krx"
     if "benzinga.com" in host:
         return "benzinga"
     if host.startswith("ir.") or "investor" in host:
@@ -73,6 +75,8 @@ def expected_source_type(entry: dict) -> set[str]:
     family = source_family(entry.get("source_url"))
     if family == "sec":
         return {"official_filing", "sec_company_submissions"}
+    if family == "krx":
+        return {"krx_etf_product"}
     if family == "benzinga":
         return {"earnings_data"}
     if family == "company_ir":

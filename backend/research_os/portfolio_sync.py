@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from statistics import median
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from research_os.models import PortfolioHolding, SavedPortfolio
@@ -13,8 +14,13 @@ from research_os.portfolio_import import (
     normalize_import_ticker,
     portfolio_currency_for_ticker,
 )
+from research_os.portfolio_store import infer_holding_fx_rate
 from research_os.research_memory import resolve_vault_dir
 from research_os.settings import Settings
+
+
+MIN_PLAUSIBLE_KRW_FX_RATE = 100.0
+MAX_PLAUSIBLE_KRW_FX_RATE = 10_000.0
 
 
 def _current_sync_timestamp() -> str:
@@ -23,6 +29,74 @@ def _current_sync_timestamp() -> str:
     except ZoneInfoNotFoundError:
         korea_timezone = timezone(timedelta(hours=9))
     return datetime.now(korea_timezone).isoformat(timespec="seconds")
+
+
+def _number(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+def _plausible_krw_fx_rate(value: float | None) -> bool:
+    return bool(
+        value is not None
+        and MIN_PLAUSIBLE_KRW_FX_RATE <= value <= MAX_PLAUSIBLE_KRW_FX_RATE
+    )
+
+
+def _holding_krw_fx_rate(holding: PortfolioHolding) -> float | None:
+    rate = infer_holding_fx_rate(holding)
+    return rate if _plausible_krw_fx_rate(rate) else None
+
+
+def _portfolio_usd_krw_fx_rate(portfolio: SavedPortfolio) -> float | None:
+    rates = [
+        rate
+        for holding in portfolio.holdings
+        if holding.currency.upper() == "USD"
+        and (rate := _holding_krw_fx_rate(holding)) is not None
+    ]
+    return float(median(rates)) if rates else None
+
+
+def _convert_toss_usd_valuation(
+    source: dict,
+    *,
+    fx_rate: float,
+    fallback: PortfolioHolding | None = None,
+) -> dict[str, float | None]:
+    """Convert Toss-native USD totals into the portfolio's KRW value basis."""
+    source_market_value = _number(source.get("market_value"))
+    source_cost_basis = _number(source.get("cost_basis"))
+    market_value = (
+        round(source_market_value * fx_rate, 2)
+        if source_market_value is not None
+        else fallback.market_value if fallback else None
+    )
+    cost_basis = (
+        round(source_cost_basis * fx_rate, 2)
+        if source_cost_basis is not None
+        else fallback.cost_basis if fallback else None
+    )
+    if market_value is not None and cost_basis is not None:
+        unrealized_gain = round(market_value - cost_basis, 2)
+    else:
+        source_gain = _number(source.get("unrealized_gain"))
+        unrealized_gain = (
+            round(source_gain * fx_rate, 2)
+            if source_gain is not None
+            else fallback.unrealized_gain if fallback else None
+        )
+    return {
+        "market_value": market_value,
+        "cost_basis": cost_basis,
+        "unrealized_gain": unrealized_gain,
+    }
 
 
 def portfolio_sync_history_path(settings: Settings) -> Path:
@@ -249,30 +323,84 @@ def apply_toss_holdings_to_portfolio(
     skipped: list[dict] = []
     synced_holdings: list[PortfolioHolding] = []
     matched_tickers: set[str] = set()
+    applied_fx_rates: dict[str, float] = {}
+    fallback_usd_fx_rate = _portfolio_usd_krw_fx_rate(portfolio)
 
     for holding in portfolio.holdings:
         ticker = normalize_import_ticker(holding.ticker)
         source = balance_by_ticker.get(ticker)
         if source:
             matched_tickers.add(ticker)
+            source_currency = portfolio_currency_for_ticker(
+                ticker,
+                source.get("currency") or holding.currency,
+            )
+            valuation_update: dict[str, float | None]
+            applied_fx_rate: float | None = None
+            if source_currency == "USD":
+                applied_fx_rate = _holding_krw_fx_rate(holding) or fallback_usd_fx_rate
+                if applied_fx_rate is None:
+                    synced_holdings.append(
+                        holding.model_copy(
+                            update={
+                                "sync_status": "toss_fx_unavailable",
+                                "sync_source": "toss_holdings",
+                                "sync_checked_at": checked_at,
+                                "sync_message": (
+                                    "토스증권의 USD 보유자산은 확인했지만 원화 환산 기준을 "
+                                    "확인하지 못해 기존 수량과 평가금액을 보존했습니다."
+                                ),
+                            }
+                        )
+                    )
+                    skipped.append(
+                        {
+                            "ticker": ticker,
+                            "name": holding.name or source.get("name") or ticker,
+                            "quantity": holding.quantity,
+                            "reason": "toss_fx_unavailable",
+                        }
+                    )
+                    continue
+                valuation_update = _convert_toss_usd_valuation(
+                    source,
+                    fx_rate=applied_fx_rate,
+                    fallback=holding,
+                )
+                applied_fx_rates[ticker] = round(applied_fx_rate, 4)
+            else:
+                valuation_update = {
+                    "market_value": source.get("market_value")
+                    if source.get("market_value") is not None
+                    else holding.market_value,
+                    "cost_basis": source.get("cost_basis")
+                    if source.get("cost_basis") is not None
+                    else holding.cost_basis,
+                    "unrealized_gain": source.get("unrealized_gain")
+                    if source.get("unrealized_gain") is not None
+                    else holding.unrealized_gain,
+                }
             update = {
                 "ticker": ticker,
                 "name": holding.name or source.get("name"),
                 "quantity": source.get("quantity") if source.get("quantity") is not None else holding.quantity,
                 "average_cost": source.get("average_cost") if source.get("average_cost") is not None else holding.average_cost,
                 "current_price": source.get("current_price") if source.get("current_price") is not None else holding.current_price,
-                "market_value": source.get("market_value") if source.get("market_value") is not None else holding.market_value,
-                "cost_basis": source.get("cost_basis") if source.get("cost_basis") is not None else holding.cost_basis,
-                "unrealized_gain": source.get("unrealized_gain") if source.get("unrealized_gain") is not None else holding.unrealized_gain,
+                **valuation_update,
                 "unrealized_return": source.get("unrealized_return") if source.get("unrealized_return") is not None else holding.unrealized_return,
-                "currency": source.get("currency") or holding.currency,
+                "currency": source_currency,
                 "price_source": "toss_holdings",
                 "price_refresh_status": "account_synced",
                 "price_checked_at": checked_at,
                 "sync_status": "account_synced",
                 "sync_source": "toss_holdings",
                 "sync_checked_at": checked_at,
-                "sync_message": "토스증권 보유자산과 매칭되어 수량/평단/평가금액을 갱신했습니다.",
+                "sync_message": (
+                    f"토스증권 보유자산과 매칭되어 수량/평단/평가금액을 갱신했습니다. "
+                    f"USD 평가는 저장 포트폴리오 기준환율 {applied_fx_rate:,.2f}원을 적용했습니다."
+                    if applied_fx_rate is not None
+                    else "토스증권 보유자산과 매칭되어 수량/평단/평가금액을 갱신했습니다."
+                ),
             }
             synced = holding.model_copy(update=update)
             synced_holdings.append(synced)
@@ -286,6 +414,7 @@ def apply_toss_holdings_to_portfolio(
                     "new_average_cost": synced.average_cost,
                     "old_market_value": holding.market_value,
                     "new_market_value": synced.market_value,
+                    "valuation_fx_rate": applied_fx_rate,
                     "changed": (holding.quantity != synced.quantity)
                     or (holding.average_cost != synced.average_cost)
                     or (holding.market_value != synced.market_value),
@@ -337,9 +466,34 @@ def apply_toss_holdings_to_portfolio(
         if ticker not in matched_tickers
     ]
     imported_remote: list[dict] = []
+    untracked_remote: list[dict] = []
     if import_untracked:
         for remote in remote_candidates:
             source = balance_by_ticker[remote["ticker"]]
+            source_currency = portfolio_currency_for_ticker(
+                remote["ticker"],
+                source.get("currency"),
+            )
+            valuation_update: dict[str, float | None]
+            applied_fx_rate: float | None = None
+            if source_currency == "USD":
+                applied_fx_rate = fallback_usd_fx_rate
+                if applied_fx_rate is None:
+                    unavailable = {**remote, "reason": "toss_fx_unavailable"}
+                    untracked_remote.append(unavailable)
+                    skipped.append(unavailable)
+                    continue
+                valuation_update = _convert_toss_usd_valuation(
+                    source,
+                    fx_rate=applied_fx_rate,
+                )
+                applied_fx_rates[remote["ticker"]] = round(applied_fx_rate, 4)
+            else:
+                valuation_update = {
+                    "market_value": source.get("market_value"),
+                    "cost_basis": source.get("cost_basis"),
+                    "unrealized_gain": source.get("unrealized_gain"),
+                }
             synced_holdings.append(
                 PortfolioHolding(
                     ticker=remote["ticker"],
@@ -347,21 +501,30 @@ def apply_toss_holdings_to_portfolio(
                     quantity=source.get("quantity"),
                     average_cost=source.get("average_cost"),
                     current_price=source.get("current_price"),
-                    market_value=source.get("market_value"),
-                    cost_basis=source.get("cost_basis"),
-                    unrealized_gain=source.get("unrealized_gain"),
+                    **valuation_update,
                     unrealized_return=source.get("unrealized_return"),
-                    currency=source.get("currency") or "USD",
+                    currency=source_currency,
                     price_source="toss_holdings",
                     price_refresh_status="account_synced",
                     price_checked_at=checked_at,
                     sync_status="account_synced",
                     sync_source="toss_holdings",
                     sync_checked_at=checked_at,
-                    sync_message="토스증권 보유자산에서 확인되어 지정 포트폴리오에 자동 편입했습니다.",
+                    sync_message=(
+                        "토스증권 보유자산에서 확인되어 지정 포트폴리오에 자동 편입했습니다. "
+                        f"USD 평가는 저장 포트폴리오 기준환율 {applied_fx_rate:,.2f}원을 적용했습니다."
+                        if applied_fx_rate is not None
+                        else "토스증권 보유자산에서 확인되어 지정 포트폴리오에 자동 편입했습니다."
+                    ),
                 )
             )
-            imported_remote.append({**remote, "reason": "imported_remote"})
+            imported_remote.append(
+                {
+                    **remote,
+                    "reason": "imported_remote",
+                    "valuation_fx_rate": applied_fx_rate,
+                }
+            )
             changes.append(
                 {
                     "ticker": remote["ticker"],
@@ -371,12 +534,14 @@ def apply_toss_holdings_to_portfolio(
                     "old_average_cost": None,
                     "new_average_cost": source.get("average_cost"),
                     "old_market_value": None,
-                    "new_market_value": source.get("market_value"),
+                    "new_market_value": valuation_update.get("market_value"),
+                    "valuation_fx_rate": applied_fx_rate,
                     "changed": True,
                     "reason": "imported_remote",
                 }
             )
-    untracked_remote = [] if import_untracked else remote_candidates
+    else:
+        untracked_remote = remote_candidates
     synced_portfolio = portfolio.model_copy(
         update={
             "holdings": synced_holdings,
@@ -385,7 +550,9 @@ def apply_toss_holdings_to_portfolio(
         }
     )
     return synced_portfolio, {
-        "status": "success",
+        "status": "warning" if any(
+            item.get("reason") == "toss_fx_unavailable" for item in skipped
+        ) else "success",
         "broker": "TOSS",
         "scope": "kr_us_holdings",
         "api_id": balance.get("api_path", "/api/v1/holdings"),
@@ -399,6 +566,8 @@ def apply_toss_holdings_to_portfolio(
         "skipped": skipped,
         "imported_remote": imported_remote,
         "untracked_remote": untracked_remote,
+        "valuation_currency": "KRW",
+        "applied_fx_rates": applied_fx_rates,
         "message": (
             "토스증권 보유자산을 지정 포트폴리오에 반영하고 다른 증권사·수동 보유 종목은 보존했습니다."
             if import_untracked and preserve_non_toss_holdings

@@ -137,7 +137,18 @@ def test_apply_toss_holdings_imports_owner_positions_and_preserves_other_sources
     portfolio = SavedPortfolio(
         portfolio_name="이형주",
         holdings=[
-            PortfolioHolding(ticker="JOBY", name="Joby Aviation", quantity=10, sync_source="toss_holdings"),
+            PortfolioHolding(
+                ticker="JOBY",
+                name="Joby Aviation",
+                quantity=10,
+                average_cost=9,
+                current_price=8,
+                market_value=116800,
+                cost_basis=131400,
+                unrealized_gain=-14600,
+                currency="USD",
+                sync_source="toss_holdings",
+            ),
             PortfolioHolding(ticker="005930", name="삼성전자", quantity=3, sync_source="kis_holdings"),
         ],
     )
@@ -145,7 +156,18 @@ def test_apply_toss_holdings_imports_owner_positions_and_preserves_other_sources
         portfolio,
         {
             "holdings": [
-                {"ticker": "JOBY", "name": "Joby Aviation", "quantity": 12, "currency": "USD"},
+                {
+                    "ticker": "JOBY",
+                    "name": "Joby Aviation",
+                    "quantity": 12,
+                    "average_cost": 9.5,
+                    "current_price": 8.5,
+                    "market_value": 102,
+                    "cost_basis": 114,
+                    "unrealized_gain": -12,
+                    "unrealized_return": -0.1053,
+                    "currency": "USD",
+                },
                 {
                     "ticker": "300080",
                     "name": "플리토",
@@ -164,14 +186,114 @@ def test_apply_toss_holdings_imports_owner_positions_and_preserves_other_sources
 
     holdings = {item.ticker: item for item in synced.holdings}
     assert holdings["JOBY"].quantity == 12
+    assert holdings["JOBY"].current_price == 8.5
+    assert holdings["JOBY"].market_value == 148920
+    assert holdings["JOBY"].cost_basis == 166440
+    assert holdings["JOBY"].unrealized_gain == -17520
     assert holdings["300080"].sync_source == "toss_holdings"
     assert holdings["300080"].sync_status == "account_synced"
     assert holdings["005930"].quantity == 3
     assert holdings["005930"].sync_source == "kis_holdings"
     assert summary["imported_count"] == 1
+    assert summary["applied_fx_rates"] == {"JOBY": 1460.0}
     assert summary["imported_remote"][0]["ticker"] == "300080"
     assert summary["untracked_remote"] == []
     assert any(item["reason"] == "non_toss_holding_preserved" for item in summary["skipped"])
+
+
+def test_apply_toss_holdings_uses_portfolio_fx_for_new_us_position() -> None:
+    portfolio = SavedPortfolio(
+        portfolio_name="이형주",
+        holdings=[
+            PortfolioHolding(
+                ticker="AAPL",
+                name="Apple",
+                quantity=2,
+                average_cost=100,
+                current_price=120,
+                market_value=350400,
+                cost_basis=292000,
+                currency="USD",
+            )
+        ],
+    )
+
+    synced, summary = apply_toss_holdings_to_portfolio(
+        portfolio,
+        {
+            "holdings": [
+                {
+                    "ticker": "MSFT",
+                    "name": "Microsoft",
+                    "quantity": 1,
+                    "average_cost": 300,
+                    "current_price": 320,
+                    "market_value": 320,
+                    "cost_basis": 300,
+                    "unrealized_gain": 20,
+                    "unrealized_return": 0.0667,
+                    "currency": "USD",
+                }
+            ]
+        },
+        checked_at="2026-09-11T08:00:00+09:00",
+        import_untracked=True,
+        preserve_non_toss_holdings=True,
+    )
+
+    holdings = {item.ticker: item for item in synced.holdings}
+    assert holdings["MSFT"].current_price == 320
+    assert holdings["MSFT"].market_value == 467200
+    assert holdings["MSFT"].cost_basis == 438000
+    assert holdings["MSFT"].unrealized_gain == 29200
+    assert summary["applied_fx_rates"] == {"MSFT": 1460.0}
+    assert summary["status"] == "success"
+
+
+def test_apply_toss_holdings_does_not_mix_native_usd_without_fx_basis() -> None:
+    portfolio = SavedPortfolio(
+        portfolio_name="이형주",
+        holdings=[
+            PortfolioHolding(
+                ticker="JOBY",
+                name="Joby Aviation",
+                quantity=50,
+                average_cost=9.6386,
+                current_price=6.28,
+                market_value=314,
+                cost_basis=481.93,
+                currency="USD",
+                sync_source="toss_holdings",
+            )
+        ],
+    )
+
+    synced, summary = apply_toss_holdings_to_portfolio(
+        portfolio,
+        {
+            "holdings": [
+                {
+                    "ticker": "JOBY",
+                    "name": "Joby Aviation",
+                    "quantity": 60,
+                    "average_cost": 9.5,
+                    "current_price": 7,
+                    "market_value": 420,
+                    "cost_basis": 570,
+                    "currency": "USD",
+                }
+            ]
+        },
+        checked_at="2026-09-11T08:00:00+09:00",
+    )
+
+    holding = synced.holdings[0]
+    assert holding.quantity == 50
+    assert holding.market_value == 314
+    assert holding.cost_basis == 481.93
+    assert holding.sync_status == "toss_fx_unavailable"
+    assert summary["status"] == "warning"
+    assert summary["skipped"][0]["reason"] == "toss_fx_unavailable"
 
 
 def test_normalize_toss_order_masks_id_and_keeps_execution_summary() -> None:

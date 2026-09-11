@@ -94,8 +94,8 @@ def get_git_state(project_root: Path) -> dict:
 
 def validate_git_state(git_state: dict, *, allow_working_tree: bool = False) -> list[str]:
     errors: list[str] = []
-    if git_state["branch"] != "main" and not allow_working_tree:
-        errors.append(f"source branch must be main: {git_state['branch']}")
+    if git_state["branch"] == "HEAD":
+        errors.append("source git must be on a named branch")
     if git_state["dirty"] and not allow_working_tree:
         errors.append("source git worktree must be clean")
     if (git_state["ahead"] != 0 or git_state["behind"] != 0) and not allow_working_tree:
@@ -252,10 +252,6 @@ def validate_openclaw_workspace(workspace: Path, bridge_status: dict | None = No
         if source_git and source_git not in text:
             errors.append(f"OpenClaw startup note missing source git {source_git}: {path}")
 
-    heartbeat_path = workspace / "HEARTBEAT.md"
-    if not heartbeat_path.exists():
-        errors.append(f"OpenClaw heartbeat note missing: {heartbeat_path}")
-
     daily_date = infer_daily_memory_date(bridge_status)
     daily_path = workspace / "memory" / f"{daily_date}.md"
     daily_required = [
@@ -393,8 +389,8 @@ def build_result(
     details["completion_requirements"] = [
         "source and OpenClaw bundles validate",
         "OpenClaw first-read packet validates before larger context ingestion",
-        "source git branch is main",
-        "source git is clean and synced with upstream",
+        "source git is on a named branch",
+        "source git is clean and synced with its upstream",
         "OpenClaw bridge_status references current clean commit",
         "OpenClaw bridge_status file hashes match copied files",
         "OpenClaw personal knowledge graph artifacts validate",
@@ -597,7 +593,7 @@ def main() -> int:
     parser.add_argument(
         "--allow-working-tree",
         action="store_true",
-        help="feature 브랜치 또는 미커밋 변경이 있는 기존 checkout에서도 콘텐츠 감사만 수행합니다.",
+        help="미커밋 변경 또는 업스트림과 차이가 있는 기존 checkout에서도 콘텐츠 감사만 수행합니다.",
     )
     args = parser.parse_args()
 

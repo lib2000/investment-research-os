@@ -12,6 +12,8 @@ from typing import Any
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
 DEFAULT_EXPECTED = "PL=100:USD,JOBY=50:USD,CHPT=22:USD,ABSI=29:USD,GOTU=50:USD,OTLY=8:USD,RXRX=9:USD,253450=36:KRW"
 AUTHORITATIVE_ACCOUNT_SYNC_SOURCES = {"toss_holdings", "kiwoom_holdings", "kis_holdings"}
+MIN_PLAUSIBLE_KRW_FX_RATE = 100.0
+MAX_PLAUSIBLE_KRW_FX_RATE = 10_000.0
 
 
 def project_root(start: Path) -> Path:
@@ -111,6 +113,13 @@ def implied_fx(value_krw: float | None, value_foreign: float | None) -> float | 
     if value_krw is None or value_foreign is None or value_foreign <= 0:
         return None
     return value_krw / value_foreign
+
+
+def plausible_krw_fx(value: float | None) -> bool:
+    return bool(
+        value is not None
+        and MIN_PLAUSIBLE_KRW_FX_RATE <= value <= MAX_PLAUSIBLE_KRW_FX_RATE
+    )
 
 
 def main() -> int:
@@ -230,6 +239,11 @@ def main() -> int:
                 cost_fx = implied_fx(cost_basis, quantity * average_cost)
                 if market_fx is None or cost_fx is None:
                     errors.append(f"{ticker} 해외 평가/투자금 환율 역산 실패")
+                elif not plausible_krw_fx(market_fx) or not plausible_krw_fx(cost_fx):
+                    errors.append(
+                        f"{ticker} 해외 평가금액 KRW 환산 누락/비정상: "
+                        f"평가 {market_fx:.2f} / 투자 {cost_fx:.2f}"
+                    )
                 elif not is_close(market_fx, cost_fx, abs_tolerance=1.0, rel_tolerance=args.calculation_relative_tolerance):
                     errors.append(f"{ticker} 해외 평가/투자금 환율 불일치: 평가 {market_fx:.2f} / 투자 {cost_fx:.2f}")
             expected_gain = market_value - cost_basis

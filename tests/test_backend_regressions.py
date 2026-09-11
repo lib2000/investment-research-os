@@ -1231,6 +1231,16 @@ class ConsoleSmokeToolTests(unittest.TestCase):
 
 
 class PublicIrSecStoreCheckToolTests(unittest.TestCase):
+    def test_public_ir_sec_store_check_accepts_official_krx_etf_product_type(self):
+        tool = load_public_ir_sec_store_check_tool()
+        entry = {
+            "source_url": "https://kind.krx.co.kr/disclosure/etfisudetail.do?method=searchEftIsuDetail",
+            "source_type": "krx_etf_product",
+        }
+
+        self.assertEqual(tool.source_family(entry["source_url"]), "krx")
+        self.assertEqual(tool.expected_source_type(entry), {"krx_etf_product"})
+
     def test_public_ir_sec_store_check_uses_clear_body_followup_label(self):
         tool_source = (PROJECT_ROOT / "tools" / "check_public_ir_sec_store.py").read_text(
             encoding="utf-8"
@@ -1679,6 +1689,8 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"errors"', source)
         self.assertIn("AUTHORITATIVE_ACCOUNT_SYNC_SOURCES", source)
         self.assertIn('sync_status == "account_synced"', source)
+        self.assertIn("plausible_krw_fx", source)
+        self.assertIn("해외 평가금액 KRW 환산 누락/비정상", source)
 
     def test_all_portfolio_store_check_supports_json_result_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_all_portfolio_store.py").read_text(encoding="utf-8")
@@ -1689,6 +1701,8 @@ class PortfolioStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"total_overseas_protected_count"', source)
         self.assertIn('"freshness_warning_count"', source)
         self.assertIn("AUTHORITATIVE_ACCOUNT_SYNC_SOURCES", source)
+        self.assertIn("plausible_krw_fx", source)
+        self.assertIn("해외 평가금액 KRW 환산 누락/비정상", source)
 
 
 class PortfolioAnalysisCoverageCheckToolTests(unittest.TestCase):
@@ -1749,6 +1763,32 @@ class StorageQualityStoreCheckToolTests(unittest.TestCase):
         self.assertIn('"active_ocr_needed_count"', source)
         self.assertIn('"advisory_body_count"', source)
         self.assertIn('"advisory_body_paths"', source)
+
+    def test_manifest_limits_storage_quality_scan_to_current_sidecars(self):
+        tool = load_operational_readiness_tool()
+        with TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "research_vault"
+            ticker_dir = vault / "005930"
+            ticker_dir.mkdir(parents=True)
+            current = ticker_dir / "current.json"
+            stale = ticker_dir / "stale.json"
+            current.write_text(json.dumps({"storage": {"status": "stored"}}), encoding="utf-8")
+            stale.write_text(
+                json.dumps({"storage": {"status": "stored"}, "tags": ["needs_body_copy"]}),
+                encoding="utf-8",
+            )
+            (vault / "manifest.json").write_text(
+                json.dumps([{"json_relative_path": "research_vault/005930/current.json"}]),
+                encoding="utf-8",
+            )
+
+            paths, scan_source = tool.research_json_paths(vault)
+            result = tool.storage_signal(vault)
+
+        self.assertEqual("manifest", scan_source)
+        self.assertEqual([current.resolve()], paths)
+        self.assertEqual(100.0, result["score"])
+        self.assertIn("검사 JSON 1개(manifest)", result["message"])
 
 
 class RagFailureDiagnosticsCheckToolTests(unittest.TestCase):
@@ -21382,6 +21422,17 @@ class OpenClawInvestmentContextTests(unittest.TestCase):
 
 
 class OpenClawBridgeCompletionTests(unittest.TestCase):
+    def test_completion_audit_accepts_clean_synced_named_feature_branch(self):
+        tool = load_openclaw_bridge_completion_tool()
+        git_state = {
+            "branch": "codex/telegram-message-consolidation",
+            "dirty": False,
+            "ahead": 0,
+            "behind": 0,
+        }
+
+        self.assertEqual([], tool.validate_git_state(git_state))
+
     def test_completion_audit_validates_bridge_git_state_and_startup_notes(self):
         tool = load_openclaw_bridge_completion_tool()
 
@@ -21616,6 +21667,8 @@ class OpenClawBridgeCompletionTests(unittest.TestCase):
                 "source git main abc1234\\n",
                 encoding="utf-8",
             )
+            self.assertEqual([], tool.validate_openclaw_workspace(root, status))
+            (root / "HEARTBEAT.md").unlink()
             self.assertEqual([], tool.validate_openclaw_workspace(root, status))
 
     def test_openclaw_status_summary_reads_bridge_files(self):
@@ -23642,6 +23695,9 @@ class OpenClawWslAnswerContextTests(unittest.TestCase):
         self.assertEqual("ok", result["status"])
         self.assertIn("require_fresh_bootstrap = True", captured["script"])
         self.assertIn("systemPromptReport must be absent before next PA answer", captured["script"])
+        self.assertIn("openclaw-agent.sqlite", captured["script"])
+        self.assertIn("session_nodes", captured["script"])
+        self.assertIn("require_all_session_keys = True", captured["script"])
 
     def test_wsl_answer_context_fails_when_pa_session_keeps_system_prompt(self):
         tool = load_openclaw_wsl_answer_context_tool()

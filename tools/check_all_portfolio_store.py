@@ -12,6 +12,8 @@ from typing import Any
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
 CASH_TICKERS = {"CASH", "예수금"}
 AUTHORITATIVE_ACCOUNT_SYNC_SOURCES = {"toss_holdings", "kiwoom_holdings", "kis_holdings"}
+MIN_PLAUSIBLE_KRW_FX_RATE = 100.0
+MAX_PLAUSIBLE_KRW_FX_RATE = 10_000.0
 
 
 def project_root(start: Path) -> Path:
@@ -67,6 +69,19 @@ def age_hours(value: Any) -> float | None:
 
 def holding_ticker(item: dict[str, Any]) -> str:
     return str(item.get("ticker") or "").strip().upper()
+
+
+def implied_fx(value_krw: float | None, value_foreign: float | None) -> float | None:
+    if value_krw is None or value_foreign is None or value_foreign <= 0:
+        return None
+    return value_krw / value_foreign
+
+
+def plausible_krw_fx(value: float | None) -> bool:
+    return bool(
+        value is not None
+        and MIN_PLAUSIBLE_KRW_FX_RATE <= value <= MAX_PLAUSIBLE_KRW_FX_RATE
+    )
 
 
 def overseas_quantity_is_protected(item: dict[str, Any]) -> bool:
@@ -170,10 +185,33 @@ def validate_portfolio(
                         f"{label}: {ticker_or_name} 수량 동기화 확인 시각 오래됨/누락 "
                         f"{item.get('sync_checked_at')}"
                     )
-            if number(item.get("market_value")) is None:
+            market_value = number(item.get("market_value"))
+            cost_basis = number(item.get("cost_basis"))
+            if market_value is None:
                 errors.append(f"{label}: {ticker_or_name} 평가금액 숫자 변환 실패")
-            if number(item.get("cost_basis")) is None:
+            if cost_basis is None:
                 errors.append(f"{label}: {ticker_or_name} 투자금 숫자 변환 실패")
+            if currency and currency != "KRW":
+                quantity = number(item.get("quantity"))
+                current_price = number(item.get("current_price"))
+                average_cost = number(item.get("average_cost"))
+                market_fx = implied_fx(
+                    market_value,
+                    quantity * current_price
+                    if quantity is not None and current_price is not None
+                    else None,
+                )
+                cost_fx = implied_fx(
+                    cost_basis,
+                    quantity * average_cost
+                    if quantity is not None and average_cost is not None
+                    else None,
+                )
+                if not plausible_krw_fx(market_fx) or not plausible_krw_fx(cost_fx):
+                    errors.append(
+                        f"{label}: {ticker_or_name} 해외 평가금액 KRW 환산 누락/비정상 "
+                        f"(평가 {market_fx}, 투자 {cost_fx})"
+                    )
 
     market_sum = sum(number(item.get("market_value")) or 0 for item in rows)
     stored_value = number(portfolio.get("portfolio_value"))

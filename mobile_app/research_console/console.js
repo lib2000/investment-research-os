@@ -419,9 +419,17 @@ function renderIntegratedServicesStatus(payload) {
     elements.integratedServicesStatus.textContent = "서비스 상태를 확인하지 못했습니다.";
     return;
   }
-  const serviceBadges = services.map((service) => (
-    `<span class="service-status ${service.running ? "running" : "stopped"}">${escapeHtml(service.label)} ${service.running ? "실행 중" : "중지"}</span>`
-  ));
+  const serviceBadges = services.map((service) => {
+    const state = service.running
+      ? { className: "running", label: "정상" }
+      : service.port_open
+        ? { className: "degraded", label: "응답 지연" }
+        : { className: "stopped", label: "중지" };
+    const latency = service.running && Number.isFinite(Number(service.response_ms))
+      ? ` · ${formatNumber(service.response_ms)}ms`
+      : "";
+    return `<span class="service-status ${state.className}">${escapeHtml(service.label)} ${state.label}${latency}</span>`;
+  });
   const auth = payload?.paper_auth;
   if (auth?.available) {
     serviceBadges.push(`<span class="service-status ${auth.authenticated ? "running" : "stopped"}">모의투자 ${auth.authenticated ? "인증됨" : "인증 필요"}</span>`);
@@ -429,7 +437,12 @@ function renderIntegratedServicesStatus(payload) {
   elements.integratedServicesStatus.innerHTML = serviceBadges.join("");
   if (elements.integratedServicesStart) {
     elements.integratedServicesStart.disabled = Boolean(payload.all_running);
-    elements.integratedServicesStart.textContent = payload.all_running ? "분석 서비스 정상" : "중지된 서비스 시작";
+    const hasUnresponsive = services.some((service) => service.port_open && !service.running);
+    elements.integratedServicesStart.textContent = payload.all_running
+      ? "분석 서비스 정상"
+      : hasUnresponsive
+        ? "응답 없는 서비스 복구"
+        : "중지된 서비스 시작";
   }
   const master = payload?.symbol_master;
   if (elements.integratedSymbolMasterRefresh) {
@@ -5855,12 +5868,12 @@ async function refreshPortfolioStore(keepOutput = true, preferredPortfolioName =
   const optionalSummaries = await Promise.allSettled([
     withTimeout(
       refreshPortfolioAnalysisOverview({ silent: true }),
-      5000,
+      12000,
       "포트폴리오 연결 상태 조회가 지연되어 초기 화면에서는 건너뜁니다."
     ),
     withTimeout(
       refreshPortfolioTeamReportQueue({ silent: true }),
-      5000,
+      12000,
       "기준 리포트 큐 조회가 지연되어 초기 화면에서는 건너뜁니다."
     ),
   ]);

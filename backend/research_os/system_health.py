@@ -1,9 +1,13 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
 import os
+import shutil
 import socket
 import subprocess
 from pathlib import Path
+from time import perf_counter
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
@@ -20,27 +24,88 @@ SYSTEM_HEALTH_CHECK_ROUTES = {
 }
 
 TRADING_TOOL_SERVICES = (
-    ("strategy_api", 8000, "전략 API"),
-    ("strategy_builder", 3100, "전략 빌더"),
-    ("backtester_api", 8002, "백테스터 API"),
-    ("backtester", 3200, "백테스터"),
+    ("strategy_api", 8000, "전략 API", "/"),
+    ("strategy_builder", 3100, "전략 빌더", "/builder"),
+    ("backtester_api", 8002, "백테스터 API", "/"),
+    ("backtester", 3200, "백테스터", "/backtest"),
 )
 
 
-def _probe_local_service(service: tuple[str, int, str]) -> dict:
-    service_id, port, label = service
+def _local_port_is_listening(port: int) -> bool:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.35):
-            ready = True
+            return True
     except OSError:
-        ready = False
-    return {
+        return False
+
+
+def probe_trading_tool_service(service: tuple[str, int, str, str], *, timeout: float = 2.0) -> dict:
+    """Probe a local tool by TCP and HTTP so a hung listener is not reported ready."""
+
+    service_id, port, label, probe_path = service
+    port_open = _local_port_is_listening(port)
+    base = {
         "id": service_id,
         "label": label,
-        "status": "ready" if ready else "needs_attention",
         "port": port,
-        "next_action": None if ready else f"{label}를 시작하세요.",
+        "probe_path": probe_path,
+        "port_open": port_open,
+        "http_ready": False,
+        "http_status": None,
+        "response_ms": None,
     }
+    if not port_open:
+        return {
+            **base,
+            "status": "needs_attention",
+            "readiness": "stopped",
+            "next_action": f"{label}를 시작하세요.",
+        }
+
+    started = perf_counter()
+    probe_url = f"http://127.0.0.1:{port}{probe_path}"
+    try:
+        with urlopen(probe_url, timeout=timeout) as response:
+            http_status = getattr(response, "status", None)
+            if http_status is None and callable(getattr(response, "getcode", None)):
+                http_status = response.getcode()
+            http_status = int(http_status or 200)
+        http_ready = 200 <= http_status < 400
+        readiness = "ready" if http_ready else "http_error"
+    except HTTPError as exc:
+        http_status = int(exc.code)
+        http_ready = False
+        readiness = "http_error"
+    except (URLError, OSError, TimeoutError, ValueError):
+        http_status = None
+        http_ready = False
+        readiness = "unresponsive"
+
+    response_ms = max(0, round((perf_counter() - started) * 1000))
+    return {
+        **base,
+        "status": "ready" if http_ready else "needs_attention",
+        "readiness": readiness,
+        "http_ready": http_ready,
+        "http_status": http_status,
+        "response_ms": response_ms,
+        "next_action": None if http_ready else f"{label} 응답을 기다리거나 서비스를 다시 시작하세요.",
+    }
+
+
+def _probe_local_service(service: tuple[str, int, str, str]) -> dict:
+    return probe_trading_tool_service(service)
+
+
+def probe_trading_tool_services(
+    services: tuple[tuple[str, int, str, str], ...] = TRADING_TOOL_SERVICES,
+) -> list[dict]:
+    """Probe all local tools concurrently to keep the status endpoint responsive."""
+
+    if not services:
+        return []
+    with ThreadPoolExecutor(max_workers=min(4, len(services))) as executor:
+        return list(executor.map(_probe_local_service, services))
 
 
 def _docker_status() -> dict:
@@ -131,41 +196,62 @@ def _openclaw_mobile_status() -> dict:
         except OSError:
             gateway_ready = False
     paired_devices = 0
+    paired_devices_total = 0
+    pairing_store = "unavailable"
     try:
-        # Avoid `bash -lc` here.  On a cold WSL boot it can wait for the user
-        # shell/systemd session and make the whole workbench status endpoint
-        # look down.  Direct `wsl --exec` returns the same count quickly.
         wsl_user = os.getenv("OPENCLAW_WSL_USER", "lib2000")
-        # The Windows backend can read the WSL UNC mount directly.  This
-        # avoids starting a cold WSL VM for every status request (which can
-        # take longer than the HTTP health budget) and keeps the check on the
-        # OpenClaw user's home rather than the default WSL root account.
-        pairing_path = Path(fr"\\wsl$\{distro}\home\{wsl_user}\.openclaw\nodes\paired.json")
-        if pairing_path.exists():
-            payload = json.loads(pairing_path.read_text(encoding="utf-8"))
-            devices = payload.get("devices", payload) if isinstance(payload, dict) else payload
-            paired_devices = len(devices) if isinstance(devices, (dict, list)) else 0
-        else:
-            pairing_probe = (
-                "import json; from pathlib import Path; "
-                f"p=Path('/home/{wsl_user}/.openclaw/nodes/paired.json'); "
-                "d=json.loads(p.read_text()) if p.exists() else {}; "
-                "print(len(d) if isinstance(d, dict) else 0)"
-            )
-            result = subprocess.run(
-                ["wsl.exe", "-d", distro, "--user", "root", "--exec", "python3", "-c", pairing_probe],
-                capture_output=True,
-                text=True,
-                timeout=3,
-                check=False,
-            )
-            if result.returncode == 0:
-                try:
-                    payload = json.loads(result.stdout or "{}")
-                    devices = payload.get("devices", payload) if isinstance(payload, dict) else payload
-                    paired_devices = len(devices) if isinstance(devices, (dict, list)) else int(str(result.stdout).strip() or 0)
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    paired_devices = int(str(result.stdout).strip() or 0)
+        # OpenClaw 2026.9+ stores paired devices in state/openclaw.sqlite.
+        # Query aggregate counts only; identifiers, keys, tokens, and scopes
+        # remain inside WSL.
+        pairing_probe = "\n".join(
+            [
+                "import json, sqlite3",
+                "from pathlib import Path",
+                f"root = Path('/home/{wsl_user}/.openclaw')",
+                "db = root / 'state' / 'openclaw.sqlite'",
+                "result = {'mobile_count': 0, 'total_count': 0, 'store': 'unavailable'}",
+                "if db.exists():",
+                "    connection = sqlite3.connect(f'file:{db}?mode=ro', uri=True)",
+                "    try:",
+                "        total = connection.execute('select count(*) from device_pairing_paired').fetchone()[0]",
+                "        mobile = connection.execute(\"select count(*) from device_pairing_paired where lower(coalesce(client_id, '')) = 'openclaw-ios' or lower(coalesce(device_family, '')) in ('iphone', 'ipad')\").fetchone()[0]",
+                "        result = {'mobile_count': int(mobile), 'total_count': int(total), 'store': 'state_sqlite'}",
+                "    finally:",
+                "        connection.close()",
+                "else:",
+                "    for path in (root / 'devices' / 'paired.json', root / 'nodes' / 'paired.json'):",
+                "        if not path.exists():",
+                "            continue",
+                "        payload = json.loads(path.read_text(encoding='utf-8'))",
+                "        devices = payload.get('devices', payload) if isinstance(payload, dict) else payload",
+                "        count = len(devices) if isinstance(devices, (dict, list)) else 0",
+                "        result = {'mobile_count': count, 'total_count': count, 'store': 'legacy_json'}",
+                "        break",
+                "print(json.dumps(result))",
+            ]
+        )
+        result = subprocess.run(
+            ["wsl.exe", "-d", distro, "--user", "root", "--exec", "python3", "-c", pairing_probe],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=3,
+            check=False,
+        )
+        if result.returncode == 0:
+            try:
+                payload = json.loads(result.stdout or "{}")
+                if isinstance(payload, dict):
+                    paired_devices = max(0, int(payload.get("mobile_count") or 0))
+                    paired_devices_total = max(paired_devices, int(payload.get("total_count") or 0))
+                    pairing_store = str(payload.get("store") or "unavailable")
+                else:
+                    paired_devices = max(0, int(payload or 0))
+                    paired_devices_total = paired_devices
+            except (TypeError, ValueError, json.JSONDecodeError):
+                paired_devices = max(0, int(str(result.stdout).strip() or 0))
+                paired_devices_total = paired_devices
     except (OSError, subprocess.TimeoutExpired, ValueError):
         paired_devices = 0
     ready = gateway_ready and paired_devices > 0
@@ -176,17 +262,22 @@ def _openclaw_mobile_status() -> dict:
         "gateway_ready": gateway_ready,
         "gateway_listener_source": gateway_listener_source,
         "paired_devices": paired_devices,
+        "paired_devices_total": paired_devices_total,
+        "pairing_store": pairing_store,
         "next_action": None if ready else "OpenClaw 게이트웨이와 iPhone 페어링을 확인하세요.",
     }
 
 
 def _windows_autostart_status() -> dict:
     script = Path(__file__).resolve().parents[2] / "tools" / "check_investment_research_autostart.ps1"
+    powershell = shutil.which("pwsh.exe") or "powershell.exe"
     try:
         result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-Json"],
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-Json"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
@@ -209,7 +300,7 @@ def _windows_autostart_status() -> dict:
 
 def build_investment_workbench_status() -> dict:
     checks = [
-        *(_probe_local_service(service) for service in TRADING_TOOL_SERVICES),
+        *probe_trading_tool_services(),
         _docker_status(),
         _lean_data_status(),
         _kis_paper_status(),
