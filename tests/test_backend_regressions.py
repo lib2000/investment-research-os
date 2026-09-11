@@ -23518,6 +23518,57 @@ class OpenClawAnswerCaptureCycleTests(unittest.TestCase):
 
 
 class OpenClawAnswerCaptureTaskStatusTests(unittest.TestCase):
+    def test_answer_capture_task_status_prefers_utf8_pwsh(self):
+        tool = load_openclaw_answer_capture_task_status_tool()
+        observed = {}
+
+        def fake_run(args, **kwargs):
+            observed["args"] = args
+            observed["kwargs"] = kwargs
+            return SimpleNamespace(returncode=1, stdout="", stderr="예약 작업 없음")
+
+        with patch.object(tool.shutil, "which", return_value="C:\\Program Files\\PowerShell\\7\\pwsh.exe"), patch.object(
+            tool.subprocess, "run", side_effect=fake_run
+        ):
+            result = tool.read_scheduled_task("optional task")
+
+        self.assertFalse(result["found"])
+        self.assertEqual("C:\\Program Files\\PowerShell\\7\\pwsh.exe", observed["args"][0])
+        self.assertEqual("utf-8", observed["kwargs"]["encoding"])
+        self.assertEqual("replace", observed["kwargs"]["errors"])
+
+    def test_answer_capture_task_status_treats_missing_optional_task_as_not_configured(self):
+        tool = load_openclaw_answer_capture_task_status_tool()
+
+        with TemporaryDirectory() as tmp:
+            result = tool.evaluate_task_status(
+                {"found": False, "error": "task not found"},
+                state_file=Path(tmp) / "state.json",
+                max_state_age_hours=24,
+                require_state_fresh=False,
+                now=datetime.fromisoformat("2026-09-11T12:00:00+09:00"),
+            )
+
+        self.assertEqual("not_configured", result["status"])
+        self.assertEqual([], result["errors"])
+        self.assertTrue(any("on-demand capture" in warning for warning in result["warnings"]))
+
+    def test_answer_capture_task_status_can_require_registered_task(self):
+        tool = load_openclaw_answer_capture_task_status_tool()
+
+        with TemporaryDirectory() as tmp:
+            result = tool.evaluate_task_status(
+                {"found": False, "error": "task not found"},
+                state_file=Path(tmp) / "state.json",
+                max_state_age_hours=24,
+                require_state_fresh=False,
+                require_task=True,
+                now=datetime.fromisoformat("2026-09-11T12:00:00+09:00"),
+            )
+
+        self.assertEqual("failure", result["status"])
+        self.assertTrue(any("task not found" in error for error in result["errors"]))
+
     def test_answer_capture_task_status_accepts_registered_task_with_fresh_state(self):
         tool = load_openclaw_answer_capture_task_status_tool()
 

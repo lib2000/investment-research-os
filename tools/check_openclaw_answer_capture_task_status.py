@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -65,8 +66,9 @@ $trigger = $task.Triggers[0]
 } | ConvertTo-Json -Depth 4
 """
     env = {**os.environ, "OPENCLAW_ANSWER_CAPTURE_TASK_NAME": task_name}
+    powershell = shutil.which("pwsh.exe") or "powershell.exe"
     completed = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", ps],
+        [powershell, "-NoProfile", "-Command", ps],
         cwd=PROJECT_ROOT,
         env=env,
         check=False,
@@ -94,6 +96,7 @@ def evaluate_task_status(
     state_file: Path,
     max_state_age_hours: float,
     require_state_fresh: bool,
+    require_task: bool = False,
     expected_time: str = "00:05",
     expected_interval: str = "PT15M",
     required_args: tuple[str, ...] = DEFAULT_REQUIRED_ARGS,
@@ -103,7 +106,23 @@ def evaluate_task_status(
     errors: list[str] = []
     warnings: list[str] = []
     if not task.get("found"):
-        errors.append(_safe_text(task.get("error")) or "OpenClaw answer capture scheduled task not found")
+        message = "OpenClaw answer capture scheduled task is not configured; on-demand capture remains available"
+        if require_task:
+            errors.append(_safe_text(task.get("error")) or message)
+        else:
+            warnings.append(message)
+            state_age = _age_hours(state_file, now=now)
+            return {
+                "status": "not_configured",
+                "errors": [],
+                "warnings": warnings,
+                "task": task,
+                "state_file": str(state_file),
+                "state_file_exists": state_age is not None,
+                "state_file_age_hours": state_age,
+                "never_run": True,
+                "checked_at": now.isoformat(timespec="seconds"),
+            }
 
     arguments = _safe_text(task.get("Arguments"))
     missing_args = [item for item in required_args if item not in arguments]
@@ -192,6 +211,11 @@ def main() -> int:
     parser.add_argument("--state-file", type=Path, default=DEFAULT_STATE_FILE)
     parser.add_argument("--max-state-age-hours", type=float, default=24)
     parser.add_argument("--require-state-fresh", action="store_true")
+    parser.add_argument(
+        "--require-task",
+        action="store_true",
+        help="예약 캡처 작업을 의도적으로 운영하는 환경에서만 미등록을 실패로 처리합니다.",
+    )
     parser.add_argument("--expected-time", default="00:05")
     parser.add_argument("--expected-interval", default="PT15M")
     parser.add_argument("--required-arg", action="append", default=None)
@@ -204,6 +228,7 @@ def main() -> int:
         state_file=state_file,
         max_state_age_hours=args.max_state_age_hours,
         require_state_fresh=args.require_state_fresh,
+        require_task=args.require_task,
         expected_time=args.expected_time,
         expected_interval=args.expected_interval,
         required_args=tuple(args.required_arg) if args.required_arg is not None else DEFAULT_REQUIRED_ARGS,
@@ -212,7 +237,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_text(result))
-    return 0 if result.get("status") == "ok" else 1
+    return 0 if result.get("status") in {"ok", "not_configured"} else 1
 
 
 if __name__ == "__main__":
