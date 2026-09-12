@@ -189,6 +189,31 @@ class OpenDartClient:
             )
         return corp, normalized
 
+    def fetch_insider_ownership(self, stock_code: str) -> tuple[dict, dict]:
+        """Return official executive/major-shareholder ownership reports.
+
+        OpenDART's ``elestock`` response does not guarantee a transaction
+        price, so callers must keep price/value fields missing when the API
+        omits them.
+        """
+        corp = self.find_corp_by_stock_code(stock_code)
+        if not corp:
+            raise RuntimeError(f"OpenDART corp_code를 찾지 못했습니다: {stock_code}")
+        response = httpx.get(
+            f"{self.base_url}/elestock.json",
+            params={
+                "crtfc_key": self.api_key,
+                "corp_code": corp["corp_code"],
+            },
+            timeout=self.timeout_seconds,
+            trust_env=False,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("status") not in {"000", "013"}:
+            raise RuntimeError(str(payload.get("message") or payload.get("status")))
+        return corp, payload
+
 
 class OpenDartFinancialDataProvider(FinancialDataProvider):
     def __init__(self, client: OpenDartClient) -> None:

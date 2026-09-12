@@ -17,6 +17,7 @@
   [switch]$SkipPortfolioReportAlert,
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
+  [switch]$SkipInsiderTradingResearch,
   [switch]$SkipDartFilingDuplicateCleanup,
   [switch]$SkipResearchSourceStoreCheck,
   [switch]$SkipPortfolioAnalysisCoverage,
@@ -282,6 +283,18 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
         return
       }
     }
+  }
+}
+
+if (-not $SkipInsiderTradingResearch.IsPresent) {
+  Invoke-DailyResearchStep "내부자거래 6축 리서치 순환 점검" {
+    # Public SEC/OpenDART evidence only. The bounded cursor eventually covers
+    # the family holdings/watchlist without creating a second scheduled task.
+    # This step never sends a message, changes an account, or places an order.
+    python tools\run_insider_trading_research.py `
+      --max-tickers 8 `
+      --max-filings 24 `
+      --json
   }
 }
 

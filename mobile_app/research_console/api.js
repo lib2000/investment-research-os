@@ -1342,6 +1342,38 @@ export async function fetchDailyRecommendationsStatus(accessToken) {
   }
 }
 
+export async function fetchInsiderTradingStatus(accessToken) {
+  return request("/api/v1/insider-trading/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function analyzeInsiderTrading(accessToken, payload) {
+  return request("/api/v1/insider-trading/analyze", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 180000,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function refreshInsiderTrading(accessToken, options = {}) {
+  return request("/api/v1/insider-trading/refresh", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 600000,
+    body: JSON.stringify({
+      max_tickers: options.maxTickers || 8,
+      max_filings: options.maxFilings || 24,
+      save_result: options.saveResult !== false,
+      ...(Array.isArray(options.tickers) && options.tickers.length
+        ? { tickers: options.tickers }
+        : {}),
+    }),
+  });
+}
+
 /**
  * 가족 전체 보유·관심종목 범위에서 저장된 당일 후보를 한 종목 카드로 조회합니다.
  * 조회 자체는 외부 가격/LLM/주문 요청을 만들지 않습니다.

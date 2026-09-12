@@ -239,6 +239,13 @@ from research_os.public_ir_sec import (
     collect_public_ir_sec_url as _collect_public_ir_sec_url,
     public_ir_sec_status_payload,
 )
+from research_os.insider_trading import (
+    InsiderAnalysisRequest,
+    InsiderBatchRequest,
+    analyze_insider_trading,
+    read_insider_trading_status,
+    run_insider_trading_batch,
+)
 from research_os.firecrawl_ir_collector import build_firecrawl_ir_hosted_dry_run_result
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_dry_run_result
 from research_os.firecrawl_monitor_events import (
@@ -14644,6 +14651,52 @@ def collect_public_ir_sec(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/insider-trading/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_insider_trading_status(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Return persisted coverage and latest six-axis insider research results."""
+    return read_insider_trading_status(settings)
+
+
+@app.post(
+    "/api/v1/insider-trading/analyze",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_insider_trading_analysis(
+    request: InsiderAnalysisRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Normalize one manual/official filing and build the comparable report."""
+    try:
+        return analyze_insider_trading(request, settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/insider-trading/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_insider_trading_research(
+    request: InsiderBatchRequest = Body(default_factory=InsiderBatchRequest),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Run a bounded family holdings/watchlist batch without orders or delivery."""
+    return run_insider_trading_batch(
+        settings,
+        tickers=request.tickers,
+        max_tickers=request.max_tickers,
+        max_filings=request.max_filings,
+        save_result=request.save_result,
+    )
 
 
 @app.post(

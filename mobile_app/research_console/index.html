@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
-    <link rel="stylesheet" href="./styles.css?v=5ca33f0c7937" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 43V21h7v22zm11 0V29h7v14zm11 0V16h7v27z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css?v=6bdcd1c02c5e" />
   </head>
   <body>
     <main class="app-shell">
@@ -51,6 +52,7 @@
         <button class="tab" data-tab="trade" type="button">매매 전략</button>
         <button class="tab" data-tab="chart" type="button">차트 분석</button>
         <button class="tab" data-tab="earnings" type="button">실적 분석</button>
+        <button class="tab" data-tab="insider" type="button">내부자 거래</button>
         <button class="tab" data-tab="macro" type="button">매크로 분석</button>
         <button class="tab" data-tab="sector" type="button">섹터 발굴</button>
         <button class="tab" data-tab="compounder" type="button">복리 성장주</button>
@@ -495,6 +497,96 @@
           </label>
           <button type="submit">실적 반응 분석</button>
         </form>
+      </section>
+
+      <section id="insider" class="panel">
+        <div class="panel-intro">
+          <h2>내부자거래 6축 리서치</h2>
+          <p>미국 SEC Form 4와 한국 OpenDART 소유보고를 같은 기준으로 정규화합니다. 확인되지 않은 값은 추정하지 않으며 주문·메시지 발송은 실행하지 않습니다.</p>
+        </div>
+        <form id="insiderForm" class="form-grid">
+          <label>
+            티커 또는 종목코드
+            <input name="ticker" required placeholder="예: CELH, TSLA, 005930" />
+          </label>
+          <label>
+            시장
+            <select name="market">
+              <option value="AUTO" selected>자동 판별</option>
+              <option value="US">미국 · SEC Form 4</option>
+              <option value="KR">한국 · OpenDART</option>
+            </select>
+          </label>
+          <label>
+            내부자 이름
+            <input name="insiderName" placeholder="원문에 있을 때 입력" />
+          </label>
+          <label>
+            직함·관계
+            <input name="title" placeholder="예: CFO, 대표이사, 이사" />
+          </label>
+          <label>
+            거래일
+            <input name="txDate" type="date" />
+          </label>
+          <label>
+            거래코드
+            <select name="txType">
+              <option value="">공시에서 자동 확인</option>
+              <option value="P">P · 매수</option>
+              <option value="S">S · 매도</option>
+              <option value="A">A · 부여/취득</option>
+              <option value="M">M · 옵션행사</option>
+              <option value="F">F · 세금 원천징수</option>
+            </select>
+          </label>
+          <label>
+            거래 주식수
+            <input name="shares" type="number" min="0" step="any" placeholder="예: 5000" />
+          </label>
+          <label>
+            평균 단가
+            <input name="avgPrice" type="number" min="0" step="any" placeholder="예: 210" />
+          </label>
+          <label>
+            거래 후 보유량
+            <input name="postShares" type="number" min="0" step="any" placeholder="예: 120000" />
+          </label>
+          <label>
+            10b5-1 계획
+            <select name="is10b51">
+              <option value="">공시에서 확인</option>
+              <option value="true">계획 거래</option>
+              <option value="false">계획 거래 아님</option>
+            </select>
+          </label>
+          <label class="wide">
+            공시 URL
+            <input name="sourceUrl" type="url" placeholder="https://www.sec.gov/... 또는 https://dart.fss.or.kr/..." />
+          </label>
+          <label class="wide">
+            공시 요약 또는 원문 발췌
+            <textarea name="sourceText" class="small-code" placeholder="$TSLA 내부자 매수 공시: CFO, 2026-09-11, 5,000주, $210, 거래 후 보유 120,000주"></textarea>
+          </label>
+          <label class="wide">
+            밸류에이션·촉매 보강 메모
+            <textarea name="researchContext" class="small-code" placeholder="공식 실적, 밸류에이션 밴드, 제품·M&A·규제 촉매를 줄 단위로 입력"></textarea>
+          </label>
+          <label class="switch">
+            <input name="fetchExternal" type="checkbox" checked />
+            공식 공시·가격 자동 조회
+          </label>
+          <label class="switch">
+            <input name="saveResult" type="checkbox" checked />
+            Markdown·JSON·RAG 저장
+          </label>
+          <button type="submit">6축 분석 실행</button>
+          <button id="insiderStatusButton" type="button" class="secondary">자동화 상태</button>
+          <button id="insiderBatchButton" type="button" class="secondary">가족 보유·관심 순환 점검</button>
+        </form>
+        <div id="insiderResult" class="insider-result" aria-live="polite">
+          <p class="empty-state">티커만 입력해 공식 공시를 조회하거나, 구조화 필드·공시 URL·텍스트 요약을 함께 입력하세요.</p>
+        </div>
       </section>
 
       <section id="macro" class="panel">
@@ -1353,6 +1445,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=02f53abe6f69"></script>
+  <script type="module" src="./console.js?v=0ad6fdf3f778"></script>
 </body>
 </html>

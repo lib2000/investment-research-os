@@ -71,6 +71,9 @@
   fetchRecentWeeklyResearchBrief,
   fetchPublicIrSecStatus,
   collectPublicIrSec,
+  fetchInsiderTradingStatus,
+  analyzeInsiderTrading,
+  refreshInsiderTrading,
   runPublicIrSecFirecrawlDryRun,
   runPublicIrSecFirecrawlMonitorDryRun,
   fetchInvestmentCalendar,
@@ -129,7 +132,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=ed35f18b948a";
+} from "./api.js?v=cf63f575b8bc";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -174,6 +177,10 @@ const elements = {
   chartVisualization: document.querySelector("#chartVisualization"),
   tradePortfolioSelect: document.querySelector("#tradePortfolioSelect"),
   earningsForm: document.querySelector("#earningsForm"),
+  insiderForm: document.querySelector("#insiderForm"),
+  insiderResult: document.querySelector("#insiderResult"),
+  insiderStatusButton: document.querySelector("#insiderStatusButton"),
+  insiderBatchButton: document.querySelector("#insiderBatchButton"),
   macroForm: document.querySelector("#macroForm"),
   kcifReportsWatchButton: document.querySelector("#kcifReportsWatchButton"),
   kcifReportsRefreshButton: document.querySelector("#kcifReportsRefreshButton"),
@@ -12917,6 +12924,234 @@ elements.memoryList.addEventListener("change", (event) => {
   }
 });
 
+function insiderValue(value, suffix = "") {
+  if (value == null || value === "" || value === "확인 필요") {
+    return "확인 필요";
+  }
+  if (typeof value === "number") {
+    return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 4 }).format(value)}${suffix}`;
+  }
+  return `${String(value)}${suffix}`;
+}
+
+function insiderFacts(rows) {
+  return `<ul class="insider-fact-list">${rows
+    .map(
+      ([label, value, suffix = ""]) => `
+        <li><strong>${escapeHtml(label)}</strong><span>${escapeHtml(insiderValue(value, suffix))}</span></li>`
+    )
+    .join("")}</ul>`;
+}
+
+function insiderSourceLink(url) {
+  if (!url || url === "확인 필요") {
+    return "확인 필요";
+  }
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">공식 원문 열기</a>`;
+}
+
+function renderInsiderTradingReport(report) {
+  if (!elements.insiderResult) return;
+  if (!report || report.status === "no_events") {
+    elements.insiderResult.innerHTML = `
+      <div class="insider-warning"><strong>분석할 공시 없음</strong><br />${escapeHtml(
+        report?.message || "공식 공시 URL 또는 거래일·거래코드가 포함된 요약을 입력하세요."
+      )}</div>`;
+    return;
+  }
+  const axes = report.axes || {};
+  const tx = axes.transaction_context || {};
+  const price = axes.price_and_volatility || {};
+  const flow = axes.insider_flow_history?.windows || {};
+  const signal = axes.signal_strength || {};
+  const pattern = axes.historical_pattern || {};
+  const checkpoints = axes.investment_checkpoints || {};
+  const flowRows = ["6m", "12m", "24m"].map((window) => {
+    const row = flow[window] || {};
+    const value = row.known_open_market_net_value == null ? "장내 거래금액 확인 필요" : `장내 P/S 알려진 순금액 ${insiderValue(row.known_open_market_net_value)}`;
+    return [
+      window.toUpperCase(),
+      `${insiderValue(row.event_count)}건 · 보고상 순변동 ${insiderValue(row.net_shares)}주 · 장내 P/S 순변동 ${insiderValue(row.open_market_net_shares)}주 · ${value} · ${row.coverage_complete ? "전체 범위" : "부분 범위"}`,
+    ];
+  });
+  const sameInsiderRows = axes.insider_flow_history?.same_insider_history || [];
+  const sameInsiderPattern = axes.insider_flow_history?.same_insider_price_pattern || {};
+  const moves = (price.representative_moves || [])
+    .map((row) => `${row.date} ${insiderValue(row.return_pct, "%")}`)
+    .join(" · ") || "확인 필요";
+  const contributions = (signal.contributions || [])
+    .map((row) => `${row.evidence} (${Number(row.points || 0) >= 0 ? "+" : ""}${row.points || 0})`)
+    .join(" · ") || "가중 근거 확인 필요";
+  const cases = (pattern.cases || [])
+    .slice(0, 6)
+    .map((row) => `${row.filing_date} ${row.insider_name || "내부자 미확인"}: 1개월 ${insiderValue(row.one_month?.return_pct, "%")}, 3개월 ${insiderValue(row.three_month?.return_pct, "%")}`)
+    .join(" · ") || pattern.message || "비교 가능한 과거 사례 확인 필요";
+  const linkedResearch = (checkpoints.linked_research || [])
+    .map((row) => `${row.date || "일자 미확인"} ${row.title || row.type || "저장 리서치"}: ${row.summary || "요약 확인 필요"}`)
+    .join(" · ") || "연결된 실적·밸류에이션 리서치 확인 필요";
+  const warningHtml = (report.warnings || []).length
+    ? `<div class="insider-warning">${report.warnings.map(escapeHtml).join("<br />")}</div>`
+    : "";
+  elements.insiderResult.innerHTML = `
+    <header class="insider-report-head">
+      <div>
+        <h3>${escapeHtml(report.company_name || report.ticker)} (${escapeHtml(report.ticker || "-")})</h3>
+        <p>${escapeHtml(report.summary || "내부자거래 6축 분석")}</p>
+        <p>근거 강도 ${escapeHtml(report.evidence?.strength || "확인 필요")} · 투자 논거 영향 ${escapeHtml(report.thesis_impact || "중립")}</p>
+      </div>
+      <span class="insider-signal-badge">${escapeHtml(signal.signal_label || "신호 확인 필요")}</span>
+    </header>
+    ${warningHtml}
+    <div class="insider-axis-grid">
+      <article class="insider-axis-card">
+        <span>01 · Transaction</span><h3>거래 맥락</h3>
+        ${insiderFacts([
+          ["내부자", tx.insider_name], ["직함·관계", [tx.title, tx.relationship].filter(Boolean).join(" · ")],
+          ["거래일 / 공시일", `${insiderValue(tx.transaction_date)} / ${insiderValue(tx.filing_date)}`],
+          ["거래코드", `${insiderValue(tx.transaction_code)} · ${insiderValue(tx.transaction_code_note)}`],
+          ["주식수", tx.shares], ["평균 단가", tx.average_price], ["거래금액", tx.transaction_value],
+          ["거래 후 보유", tx.post_transaction_shares],
+        ])}
+        <ul class="insider-fact-list"><li><strong>근거</strong><span>${insiderSourceLink(tx.source_url)}</span></li></ul>
+      </article>
+      <article class="insider-axis-card">
+        <span>02 · Price</span><h3>가격·변동성 위치</h3>
+        ${insiderFacts([
+          ["최근 종가", `${insiderValue(price.latest_close)} · ${insiderValue(price.as_of)}`],
+          ["공시 기준 일등락", price.event_day_change_pct, "%"],
+          ["52주 범위", `${insiderValue(price.week52_low)} ~ ${insiderValue(price.week52_high)}`],
+          ["52주 위치", price.week52_percentile, "%ile"],
+          ["1개월 절대 일등락", price.one_month_avg_abs_daily_pct, "%"],
+          ["3개월 절대 일등락", price.three_month_avg_abs_daily_pct, "%"],
+          ["대표 급등락", moves],
+        ])}
+      </article>
+      <article class="insider-axis-card">
+        <span>03 · Flow</span><h3>내부자 수급 히스토리</h3>
+        ${insiderFacts([
+          ...flowRows,
+          ["동일 내부자 이력", sameInsiderRows.length ? sameInsiderRows.map((row) => `${row.tx_date} ${row.tx_code} ${insiderValue(row.shares)}주 @ ${insiderValue(row.avg_price)}`).join(" · ") : "확인 필요"],
+          ["고가 매도/저가 매수", sameInsiderPattern.interpretation],
+        ])}
+      </article>
+      <article class="insider-axis-card">
+        <span>04 · Signal</span><h3>신호 강도</h3>
+        ${insiderFacts([
+          ["판정", signal.signal_label], ["비교 점수", signal.score, "/100"],
+          ["보유량 변화", signal.ownership_change_pct, "%"], ["가중 근거", contributions],
+          ["보정", signal.calibration_note], ["미확인", (signal.missing_inputs || []).join(" · ") || "없음"],
+        ])}
+      </article>
+      <article class="insider-axis-card">
+        <span>05 · History</span><h3>과거 유사 공시 후 반응</h3>
+        ${insiderFacts([
+          ["표본", pattern.summary?.sample_size, "건"],
+          ["평균 1개월", pattern.summary?.average_one_month_return_pct, "%"],
+          ["평균 3개월", pattern.summary?.average_three_month_return_pct, "%"],
+          ["실제 사례", cases], ["주의", pattern.summary?.warning],
+        ])}
+      </article>
+      <article class="insider-axis-card">
+        <span>06 · Checkpoints</span><h3>투자 체크포인트</h3>
+        ${insiderFacts([
+          ["밸류에이션", checkpoints.valuation_band],
+          ["촉매", (checkpoints.fundamental_catalysts || []).join(" · ")],
+          ["변동성 관리", (checkpoints.risk_management || []).join(" · ")],
+          ["연결 리서치", linkedResearch],
+        ])}
+      </article>
+    </div>
+    <div class="insider-warning">${escapeHtml(report.disclaimer || "투자 리서치용이며 매수·매도 지시가 아닙니다.")}</div>`;
+}
+
+function renderInsiderTradingStatus(status) {
+  if (!elements.insiderResult) return;
+  const run = status?.last_run || {};
+  const scope = status?.candidate_scope || {};
+  const recent = status?.recent_reports || [];
+  elements.insiderResult.innerHTML = `
+    <header class="insider-report-head"><div><h3>내부자거래 자동화 상태</h3><p>${escapeHtml(
+      status?.updated_at ? `최근 실행 ${status.updated_at}` : "아직 일일 순환 점검 기록이 없습니다."
+    )}</p></div><span class="insider-signal-badge">주문·발송 없음</span></header>
+    <div class="insider-axis-grid">
+      <article class="insider-axis-card"><span>Coverage</span><h3>가족 보유·관심 범위</h3>${insiderFacts([
+        ["후보", scope.candidate_scope_count, "종목"], ["이번 점검", run.selected_count, "종목"],
+        ["다음 커서", status?.cursor], ["누적 상태", status?.processed_ticker_count, "종목"],
+      ])}</article>
+      <article class="insider-axis-card"><span>Recent</span><h3>최근 생성 리포트</h3>${insiderFacts(
+        recent.length ? recent.map((row) => [row.ticker || "티커", `${row.company_name || row.ticker} · ${row.signal || "신호 확인 필요"} · ${row.summary || ""}`]) : [["상태", "최근 생성 리포트 없음"]]
+      )}</article>
+    </div>`;
+}
+
+elements.insiderForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  syncApiBaseUrl();
+  const data = formDataObject(event.currentTarget);
+  const contextRows = String(data.researchContext || "").split(/\r?\n/).map((row) => row.trim()).filter(Boolean);
+  startOutputLoading("내부자거래 6축 분석 중", [
+    "SEC Form 4 또는 OpenDART 공식 공시 확인",
+    "가격·52주 위치·변동성 계산",
+    "6/12/24개월 수급과 과거 반응 비교",
+    "확인 필요 항목을 분리해 보고서 저장",
+  ]);
+  try {
+    const result = await analyzeInsiderTrading(token(), {
+      ticker: data.ticker,
+      market: data.market || "AUTO",
+      insider_name: data.insiderName || null,
+      title: data.title || null,
+      tx_date: data.txDate || null,
+      tx_type: data.txType || null,
+      shares: numberOrNull(data.shares),
+      avg_price: numberOrNull(data.avgPrice),
+      post_shares: numberOrNull(data.postShares),
+      is_10b5_1: data.is10b51 === "true" ? true : data.is10b51 === "false" ? false : null,
+      source_url: data.sourceUrl || null,
+      source_text: data.sourceText || null,
+      valuation_context: data.researchContext || null,
+      catalysts: contextRows,
+      fetch_external: data.fetchExternal === "on",
+      save_result: data.saveResult === "on" && !isClickSmokeMode(),
+    });
+    renderInsiderTradingReport(result);
+    setOutput(result);
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+    if (elements.insiderResult) {
+      elements.insiderResult.innerHTML = `<div class="insider-warning"><strong>분석 실패</strong><br />${escapeHtml(error?.message || String(error))}</div>`;
+    }
+  }
+});
+
+elements.insiderStatusButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("내부자거래 자동화 상태 조회 중", ["순환 점검 진행률", "최근 리포트", "공시 캐시 상태"]);
+  try {
+    const result = await fetchInsiderTradingStatus(token());
+    renderInsiderTradingStatus(result);
+    setOutput(result);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.insiderBatchButton?.addEventListener("click", async () => {
+  syncApiBaseUrl();
+  startOutputLoading("가족 보유·관심종목 내부자거래 순환 점검 중", [
+    "이번 회차 8종목 선택", "공식 공시 증분 수집", "6축 리포트 저장", "다음 회차 커서 기록",
+  ]);
+  try {
+    const result = await refreshInsiderTrading(token(), { maxTickers: 8, maxFilings: 24, saveResult: !isClickSmokeMode() });
+    renderInsiderTradingStatus({ ...result, processed_ticker_count: Object.keys(result?.ticker_results || {}).length });
+    setOutput(result);
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    setError(error);
+  }
+});
+
 elements.earningsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncApiBaseUrl();
@@ -20980,6 +21215,8 @@ function tabHelpText(tabName) {
       "차트분석 탭입니다.\n\n네이버 증권 국내 종목 일별 시세로 거래량, 볼린저 밴드, 이동평균선, MACD, RSI 14, DMI를 계산해 매매전략에 쓸 차트 상태를 저장합니다.",
     earnings:
       "실적 분석 탭입니다.\n\n분기 실적 수치, 주가 반응, 가이던스 변경을 입력하면 시장 반응 패턴과 다음 실적 전 추적 항목을 생성합니다.",
+    insider:
+      "내부자 거래 탭입니다.\n\n미국 SEC Form 4와 한국 OpenDART 소유보고를 거래 맥락, 가격·변동성, 수급, 신호, 과거 반응, 투자 체크포인트의 같은 6축으로 비교합니다. 미확인 값은 추정하지 않습니다.",
     macro:
       "매크로 분석 탭입니다.\n\n금리, 환율, 정책, 수급, 원자재 같은 거시 변수를 정리하고 유리한 섹터와 리스크 체크포인트를 연결합니다.",
     sector:

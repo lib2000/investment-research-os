@@ -3662,6 +3662,117 @@ label {
   font-size: 16px;
 }
 
+.insider-result {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  min-width: 0;
+}
+
+.insider-report-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent) 14%);
+}
+
+.insider-report-head h3,
+.insider-axis-card h3 {
+  margin: 0;
+  color: var(--text);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.insider-report-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.insider-signal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-strong, var(--accent));
+  background: var(--surface);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.insider-axis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.insider-axis-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.insider-axis-card > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insider-fact-list {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.insider-fact-list li {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.36fr) minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line, var(--border));
+  min-width: 0;
+  line-height: 1.4;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.insider-fact-list strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.insider-fact-list a {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.insider-warning {
+  padding: 12px 14px;
+  border: 1px solid #e8bd67;
+  border-radius: 8px;
+  color: #76500b;
+  background: #fff9e9;
+  line-height: 1.5;
+}
+
 .toss-workflow-block {
   margin-top: 18px;
 }
@@ -7206,6 +7317,17 @@ pre {
   .interest-ticker-row,
   .interest-sector-row {
     grid-template-columns: 1fr;
+  }
+
+  .insider-report-head,
+  .insider-axis-grid,
+  .insider-fact-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .insider-signal-badge {
+    justify-self: start;
+    white-space: normal;
   }
 
   .dossier-workspace-head {
