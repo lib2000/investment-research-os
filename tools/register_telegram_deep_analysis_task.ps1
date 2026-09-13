@@ -3,11 +3,16 @@ param(
   [string]$TaskName = "InvestmentResearchOS-TelegramDeepAnalysis-0700",
   [string]$At = "07:00",
   [string]$EnvFile = "",
+  [string]$ExpectedTimeZoneId = "Korea Standard Time",
   [switch]$Enable
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRootPath = & (Join-Path $PSScriptRoot "assert_project_root.ps1") -ProjectRoot $ProjectRoot -PassThru
+$CurrentTimeZone = Get-TimeZone
+if ($CurrentTimeZone.Id -ne $ExpectedTimeZoneId) {
+  throw "Windows time zone must be '$ExpectedTimeZoneId' for the $At Asia/Seoul schedule; current='$($CurrentTimeZone.Id)'."
+}
 $Runner = Join-Path $ProjectRootPath "tools\check_telegram_deep_analysis.py"
 if (-not (Test-Path -LiteralPath $Runner)) { throw "Telegram deep-analysis runner not found: $Runner" }
 if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $ProjectRootPath "backend\.env" }
@@ -37,14 +42,14 @@ $principal = New-ScheduledTaskPrincipal `
   -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
   -LogonType Interactive `
   -RunLevel Limited
-$description = "Publishes the 07:00 Telegram deep-analysis report from explicitly configured channels. It stops on missing live-delivery configuration and never places trades."
+$description = "Publishes the 07:00 Asia/Seoul Telegram deep-analysis report from explicitly configured channels. It stops on missing live-delivery configuration and never places trades."
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description $description -Force | Out-Null
 if (-not $Enable.IsPresent) {
   Disable-ScheduledTask -TaskName $TaskName | Out-Null
 }
 
 Write-Host "Registered: $TaskName"
-Write-Host "Trigger: daily $At, start when available"
+Write-Host "Trigger: daily $At Asia/Seoul ($($CurrentTimeZone.Id)), start when available"
 Write-Host "Runner: $Runner"
 Write-Host "Env file: $EnvFile"
 Write-Host "Result: $resultPath"

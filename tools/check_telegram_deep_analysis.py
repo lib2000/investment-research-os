@@ -33,7 +33,7 @@ from research_os.telegram_market_journal import TelegramMarketPost, fetch_telegr
 ENV_TEMPLATE = """# Telegram deep-analysis report. Keep this ignored, never commit tokens.
 TELEGRAM_FAVORITE_CHANNELS_JSON=[{\"username\":\"example_channel\",\"label\":\"Example\",\"max_posts\":30}]
 TELEGRAM_DEEP_ANALYSIS_ENABLED=false
-TELEGRAM_DEEP_ANALYSIS_TIME=23:08
+TELEGRAM_DEEP_ANALYSIS_TIME=07:00
 TELEGRAM_DEEP_ANALYSIS_TOP_N=10
 TELEGRAM_DEEP_ANALYSIS_CHAT_ID=
 TELEGRAM_DEEP_ANALYSIS_ENTITY_ALIASES_JSON=[]

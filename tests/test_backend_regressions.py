@@ -5104,15 +5104,68 @@ class TelegramDeepAnalysisTests(unittest.TestCase):
         payload = build_telegram_deep_analysis_payload(analysis, chat_id="12345")
 
         self.assertEqual(analysis["design"], "telegram_deep_analysis_v1")
+        self.assertEqual(analysis["timezone"], "Asia/Seoul")
+        self.assertTrue(analysis["analyzed_at"].endswith("+09:00"))
         self.assertEqual(analysis["channel_count"], 2)
         self.assertEqual(analysis["post_count"], 2)
         self.assertTrue(any(item["label"] == "삼성전자" for item in analysis["entities"]))
         self.assertFalse(any(item["label"] in {"ROA", "OPM", "CME"} for item in analysis["entities"]))
         self.assertIn("https://t.me/alpha/101", report)
         self.assertIn("공유 미제공", report)
+        self.assertIn("투자 권유 아님", report)
         self.assertTrue(payload["chat_id_configured"])
         self.assertEqual(payload["messages"][0]["priority"], "must_keep")
         self.assertEqual(payload["messages"][0]["category"], "telegram_deep_analysis")
+
+    def test_deep_analysis_entity_aliases_use_korean_word_boundaries(self):
+        from research_os.telegram_deep_analysis import build_telegram_deep_analysis
+
+        aliases = json.dumps(
+            [
+                {"alias": "카카오", "label": "카카오", "ticker": "035720.KS"},
+                {"alias": "미코", "label": "미코", "ticker": "059090.KQ"},
+            ],
+            ensure_ascii=False,
+        )
+        analysis = build_telegram_deep_analysis(
+            [
+                {"title": "카카오뱅크 실적", "text": "미코바이오메드 임상", "url": "https://t.me/a/1"},
+                {"title": "카카오는 신규 서비스 발표", "text": "카카오의 성장 전략", "url": "https://t.me/a/2"},
+            ],
+            entity_aliases_json=aliases,
+        )
+        rows = {row["label"]: row for row in analysis["entities"]}
+
+        self.assertEqual(rows["카카오"]["mentions"], 1)
+        self.assertNotIn("미코", rows)
+
+    def test_deep_analysis_converts_timestamp_to_explicit_kst(self):
+        from research_os.telegram_deep_analysis import build_telegram_deep_analysis, render_telegram_deep_analysis_report
+
+        analysis = build_telegram_deep_analysis(
+            [],
+            analyzed_at=datetime(2026, 9, 13, 22, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(analysis["analyzed_at"], "2026-09-14T07:00+09:00")
+        self.assertIn("07시 00분", render_telegram_deep_analysis_report(analysis))
+
+    def test_deep_analysis_task_registration_requires_korea_timezone(self):
+        script = (PROJECT_ROOT / "tools" / "register_telegram_deep_analysis_task.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('ExpectedTimeZoneId = "Korea Standard Time"', script)
+        self.assertIn("Get-TimeZone", script)
+        self.assertIn("Asia/Seoul", script)
+
+    def test_deep_analysis_defaults_to_0700_everywhere(self):
+        from research_os.settings import Settings
+
+        tool = load_telegram_deep_analysis_check_tool()
+        env_example = (PROJECT_ROOT / "backend" / ".env.example").read_text(encoding="utf-8")
+
+        self.assertEqual(Settings().telegram_deep_analysis_time, "07:00")
+        self.assertIn("TELEGRAM_DEEP_ANALYSIS_TIME=07:00", tool.ENV_TEMPLATE)
+        self.assertIn("TELEGRAM_DEEP_ANALYSIS_TIME=07:00", env_example)
 
     def test_deep_analysis_alias_parser_keeps_defaults_on_invalid_json(self):
         from research_os.telegram_deep_analysis import parse_entity_aliases_json

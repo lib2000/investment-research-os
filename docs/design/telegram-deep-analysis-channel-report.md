@@ -1,7 +1,7 @@
 # Telegram Deep Analysis Channel Report
 
 - Status: implemented, delivery disabled by default
-- Updated: 2026-08-29
+- Updated: 2026-09-13
 - Authoritative code: `backend/research_os/telegram_deep_analysis.py`
 
 ## Objective
@@ -22,9 +22,12 @@ flowchart LR
 
 - The report includes channel/post counts, deterministic lexicon sentiment, keyword frequency, configured entity/ticker aliases, and a top-post list with source URLs.
 - The `-100..100` sentiment value is an observed text signal, not a price target, recommendation, or confidence score.
+- The generated timestamp is normalized to `Asia/Seoul`. The Windows task registrar refuses to register the 07:00 trigger when the host is not using `Korea Standard Time`.
+- Korean entity aliases require a real word boundary while allowing grammatical particles. A longer company name such as `카카오뱅크` does not become a `카카오` hit.
 - Forward counts are reported only by authenticated Telegram collection. Public `t.me/s` previews label sharing as unavailable rather than estimating it.
 - `TELEGRAM_DEEP_ANALYSIS_ENABLED=false` and normal Telegram delivery dry-run remain the default. A live post additionally requires the bot to be an administrator, a configured channel chat id, and an explicit `--submit`.
 - Optional aliases use `TELEGRAM_DEEP_ANALYSIS_ENTITY_ALIASES_JSON`; additionally, the runner reads the current `user_portfolios.json` holdings at execution time and merges their names as aliases. This keeps the analysis aligned with the user's portfolio without storing a duplicate list in `.env`.
+- Every rendered message ends with `투자 권유 아님` and asks the reader to verify the original post, filing, and earnings evidence.
 
 ## Verification
 

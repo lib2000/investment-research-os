@@ -14,12 +14,50 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from re import findall, sub
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 from research_os.telegram_brief_sender import chunk_telegram_message
 
 
 DESIGN_NAME = "telegram_deep_analysis_v1"
 DEFAULT_TOP_N = 10
+KOREA_TIMEZONE = ZoneInfo("Asia/Seoul")
+KOREAN_PARTICLES = tuple(
+    sorted(
+        {
+            "으로부터",
+            "에게서",
+            "한테서",
+            "으로써",
+            "으로서",
+            "에서",
+            "에게",
+            "한테",
+            "까지",
+            "부터",
+            "처럼",
+            "보다",
+            "으로",
+            "라고",
+            "이라",
+            "은",
+            "는",
+            "이",
+            "가",
+            "을",
+            "를",
+            "의",
+            "와",
+            "과",
+            "도",
+            "만",
+            "에",
+            "로",
+        },
+        key=len,
+        reverse=True,
+    )
+)
 DEFAULT_ENTITY_ALIASES = {
     "삼성전자": {"label": "삼성전자", "ticker": "005930.KS"},
     "SK하이닉스": {"label": "SK하이닉스", "ticker": "000660.KS"},
@@ -58,6 +96,50 @@ def _as_int(value: Any) -> int:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _as_korea_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(KOREA_TIMEZONE)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=KOREA_TIMEZONE)
+    return value.astimezone(KOREA_TIMEZONE)
+
+
+def _alias_matches(text: str, alias: str) -> bool:
+    """Match an entity alias without treating a longer company name as a hit.
+
+    Korean company names are commonly followed directly by a grammatical
+    particle (for example ``삼성전자는``).  That suffix is accepted only when
+    the particle itself ends at a word boundary.  Longer names such as
+    ``카카오뱅크`` therefore do not match a configured ``카카오`` alias.
+    """
+    haystack = str(text or "").casefold()
+    needle = str(alias or "").strip().casefold()
+    if not needle:
+        return False
+    start = 0
+    while True:
+        index = haystack.find(needle, start)
+        if index < 0:
+            return False
+        end = index + len(needle)
+        before = haystack[index - 1] if index else ""
+        suffix = haystack[end:]
+        before_ok = not before or not (before.isalnum() or before == "_")
+        after_ok = not suffix or not (suffix[0].isalnum() or suffix[0] == "_")
+        if not after_ok:
+            after_ok = any(
+                suffix.startswith(particle)
+                and (
+                    len(suffix) == len(particle)
+                    or not (suffix[len(particle)].isalnum() or suffix[len(particle)] == "_")
+                )
+                for particle in KOREAN_PARTICLES
+            )
+        if before_ok and after_ok:
+            return True
+        start = index + max(len(needle), 1)
 
 
 def parse_entity_aliases_json(raw_value: str | None) -> tuple[dict[str, dict[str, str]], list[str]]:
@@ -129,10 +211,9 @@ def _entity_rows(posts: Iterable[dict[str, Any]], aliases: dict[str, dict[str, s
     rows: dict[str, dict[str, Any]] = {}
     for post in posts:
         text = f"{post.get('title') or ''}\n{post.get('text') or ''}"
-        lowered = text.casefold()
         candidates: dict[str, dict[str, str]] = {}
         for alias, entity in aliases.items():
-            if alias in lowered:
+            if _alias_matches(text, alias):
                 key = entity.get("ticker") or entity.get("label") or alias
                 candidates[key] = entity
         # A bare capitalized word is too ambiguous in Korean market posts
@@ -190,7 +271,8 @@ def build_telegram_deep_analysis(
     )
     return {
         "design": DESIGN_NAME,
-        "analyzed_at": (analyzed_at or datetime.now().astimezone()).isoformat(timespec="minutes"),
+        "analyzed_at": _as_korea_datetime(analyzed_at).isoformat(timespec="minutes"),
+        "timezone": "Asia/Seoul",
         "channel_count": int(channel_count or 0),
         "post_count": len(normalized),
         "sentiment_score": aggregate,
@@ -211,7 +293,8 @@ def _delta(value: int) -> str:
 def render_telegram_deep_analysis_report(analysis: dict[str, Any]) -> str:
     timestamp = str(analysis.get("analyzed_at") or "")
     try:
-        display_time = datetime.fromisoformat(timestamp).strftime("%H시 %M분")
+        parsed_time = datetime.fromisoformat(timestamp)
+        display_time = _as_korea_datetime(parsed_time).strftime("%H시 %M분")
     except ValueError:
         display_time = "시간 미확인"
     lines = [
@@ -240,7 +323,7 @@ def render_telegram_deep_analysis_report(analysis: dict[str, Any]) -> str:
         lines.extend([f"[{index}위] {views} | {forwards}", f"📺 {_compact(post.get('channel_label') or post.get('channel_username'), 80)}", f"📝 {_compact(post.get('title') or post.get('text'), 190)}", f"🔗 {_compact(post.get('url'), 220)}"])
     lines.extend([
         "ℹ️ 스코어링: 최근 게시글 감정(-100~100)과 공유 횟수(제공 시)를 합산하며, 조회수는 공개 preview의 동률 정렬에만 사용합니다.",
-        "⚠️ 이 리포트는 채널 게시글 기반 참고 정보이며, 투자 판단 전 원문과 공시·실적을 직접 확인하세요.",
+        "⚠️ 투자 권유 아님 · 이 리포트는 채널 게시글 기반 참고 정보이며, 투자 판단 전 원문과 공시·실적을 직접 확인하세요.",
     ])
     return "\n".join(lines)
 
