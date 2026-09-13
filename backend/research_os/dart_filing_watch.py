@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from re import fullmatch
+import threading
 
 from research_os import dart_watch_universe as dart_watch_universe_helpers
 from research_os import dart_filing_metadata
+
+
+_DART_FILING_REFRESH_LOCK = threading.Lock()
 
 
 def recent_dart_cache_entries(runtime, cache: dict, ticker: str | None = None, limit: int = 5) -> list[dict]:
@@ -112,10 +116,30 @@ def summarize_dart_filing_context(signal: dict | None) -> str:
 
 def dart_cache_needs_ticker_refresh(runtime, cache: dict, ticker: str, settings) -> bool:
     normalized_ticker = runtime.normalize_ticker(ticker)
+    max_age = timedelta(hours=max(float(settings.dart_filing_refresh_hours), 1.0))
+    ticker_checks = cache.get("ticker_checks") if isinstance(cache, dict) else {}
+    ticker_check = ticker_checks.get(normalized_ticker) if isinstance(ticker_checks, dict) else None
+    if isinstance(ticker_check, dict) and ticker_check.get("status") == "success":
+        checked_at = runtime.parse_iso_datetime(ticker_check.get("checked_at"))
+        if checked_at and runtime.current_storage_datetime() - checked_at <= max_age:
+            return False
+
+    daily_check = cache.get("daily_check") if isinstance(cache, dict) else {}
+    if isinstance(daily_check, dict) and str(daily_check.get("date") or "") == runtime.current_storage_date().isoformat():
+        checked_tickers = {
+            runtime.normalize_ticker(str(item))
+            for item in (daily_check.get("checked_tickers") or [])
+        }
+        failed_tickers = {
+            runtime.normalize_ticker(str(item))
+            for item in (daily_check.get("failed_tickers") or [])
+        }
+        if normalized_ticker in checked_tickers and normalized_ticker not in failed_tickers:
+            return False
+
     updated_at = runtime.parse_iso_datetime(cache.get("updated_at"))
     if not updated_at:
         return True
-    max_age = timedelta(minutes=max(float(settings.live_data_max_age_minutes), 1.0))
     if runtime.current_storage_datetime() - updated_at > max_age:
         return True
     return not recent_dart_cache_entries(runtime, cache, normalized_ticker, limit=1)
@@ -270,7 +294,48 @@ def classify_dart_filing_refresh_error(exc: Exception) -> dict:
 
 
 def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = None, *, force: bool = False, save_result: bool = True) -> dict:
-    cache = runtime.read_dart_filing_cache(settings)
+    """Serialize cache writes and suppress duplicate same-day full-universe runs."""
+
+    with _DART_FILING_REFRESH_LOCK:
+        cache = runtime.read_dart_filing_cache(settings)
+        if tickers is None and not force:
+            daily_check = runtime.dart_daily_check_status(cache, settings)
+            if not daily_check.get("due", True):
+                return {
+                    "status": "skipped",
+                    "module": "dart_filing_watch",
+                    "reason": "오늘 전체 보유·관심 유니버스 점검이 이미 완료되어 중복 호출을 생략했습니다.",
+                    "target_count": int(daily_check.get("current_target_count") or 0),
+                    "target_universe": daily_check.get("target_universe") or {},
+                    "daily_check": daily_check,
+                    "saved_count": 0,
+                    "skipped_count": 0,
+                    "failed_count": 0,
+                    "saved": [],
+                    "skipped": [],
+                    "failed": [],
+                    "cache_path": str(runtime.dart_filing_cache_path(settings)),
+                }
+        return _refresh_dart_filing_watch_unlocked(
+            runtime,
+            settings,
+            tickers,
+            force=force,
+            save_result=save_result,
+            initial_cache=cache,
+        )
+
+
+def _refresh_dart_filing_watch_unlocked(
+    runtime,
+    settings,
+    tickers: list[str] | None = None,
+    *,
+    force: bool = False,
+    save_result: bool = True,
+    initial_cache: dict | None = None,
+) -> dict:
+    cache = initial_cache if isinstance(initial_cache, dict) else runtime.read_dart_filing_cache(settings)
     entries = cache.setdefault("entries", {})
     full_universe_refresh = tickers is None
     target_universe = runtime.dart_watch_universe(settings)
@@ -284,6 +349,10 @@ def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = Non
     saved: list[dict] = []
     skipped: list[dict] = []
     failed: list[dict] = []
+    ticker_checks = cache.setdefault("ticker_checks", {})
+    if not isinstance(ticker_checks, dict):
+        ticker_checks = {}
+        cache["ticker_checks"] = ticker_checks
     if not client.is_configured:
         return {
             "status": "skipped",
@@ -331,6 +400,11 @@ def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = Non
                 }
                 entries[key] = entry
                 saved.append(entry)
+            ticker_checks[ticker] = {
+                "checked_at": runtime.current_storage_timestamp(),
+                "status": "success",
+                "filing_count": len(filings),
+            }
         except Exception as exc:
             failure_info = runtime.classify_dart_filing_refresh_error(exc)
             failed.append(
@@ -343,6 +417,12 @@ def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = Non
                     "next_action": failure_info.get("next_action"),
                 }
             )
+            ticker_checks[ticker] = {
+                "checked_at": runtime.current_storage_timestamp(),
+                "status": "failed",
+                "filing_count": 0,
+                "category": failure_info.get("category"),
+            }
 
     cache["updated_at"] = runtime.current_storage_timestamp()
     cache["last_run"] = runtime.current_storage_timestamp()
@@ -351,6 +431,7 @@ def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = Non
     cache["source"] = "OpenDART list.json"
     cache["last_failures"] = failed
     cache["entries"] = dict(list(entries.items())[-800:])
+    cache["ticker_checks"] = dict(list(ticker_checks.items())[-500:])
     if full_universe_refresh:
         cache["daily_check"] = {
             "date": runtime.current_storage_date().isoformat(),
@@ -364,6 +445,18 @@ def refresh_dart_filing_watch(runtime, settings, tickers: list[str] | None = Non
             "lookback_days": settings.dart_filing_lookback_days,
             "source": "portfolio_and_interest_daily_watch",
         }
+    else:
+        daily_check = cache.get("daily_check")
+        if isinstance(daily_check, dict) and str(daily_check.get("date") or "") == runtime.current_storage_date().isoformat():
+            succeeded_tickers = set(selected_tickers) - {
+                str(item.get("ticker") or "") for item in failed
+            }
+            checked_tickers = set(daily_check.get("checked_tickers") or []) | set(selected_tickers)
+            failed_tickers = (
+                set(daily_check.get("failed_tickers") or []) - succeeded_tickers
+            ) | {str(item.get("ticker") or "") for item in failed if item.get("ticker")}
+            daily_check["checked_tickers"] = sorted(checked_tickers)
+            daily_check["failed_tickers"] = sorted(failed_tickers)
     runtime.write_dart_filing_cache(settings, cache)
     return {
         "status": "success" if not failed else "partial_success",

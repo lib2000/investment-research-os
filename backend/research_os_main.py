@@ -80,6 +80,11 @@ from research_os.nps_portfolio_changes import (
     save_nps_portfolio_change_snapshot,
 )
 from research_os.opendart_data_provider import OpenDartClient
+from research_os.dart_annual_report_lab import (
+    MAX_BATCH_TICKERS as DART_ANNUAL_REPORT_MAX_BATCH_TICKERS,
+    build_dart_annual_report_lab_status,
+    refresh_dart_annual_report_index,
+)
 from research_os.dossier_text import (
     DOSSIER_ALLOWED_REPORT_TYPES,
     DOSSIER_EXCLUDED_REPORT_TYPES,
@@ -1989,6 +1994,33 @@ def refresh_earnings_calendar_cache(settings: Settings, tickers: list[str] | Non
     }
 
 
+def refresh_due_earnings_calendar_cache(settings: Settings) -> dict:
+    """Refresh only scheduler entries older than the configured scheduler interval."""
+
+    cache = read_earnings_calendar_cache(settings)
+    entries = cache.get("entries") if isinstance(cache, dict) else {}
+    if not isinstance(entries, dict):
+        entries = {}
+    max_age = timedelta(hours=max(float(settings.earnings_calendar_refresh_hours), 1.0))
+    due_tickers: list[str] = []
+    for ticker in portfolio_calendar_tickers(settings):
+        entry = entries.get(ticker)
+        updated_at = parse_iso_datetime(entry.get("updated_at")) if isinstance(entry, dict) else None
+        if not updated_at or current_storage_datetime() - updated_at > max_age:
+            due_tickers.append(ticker)
+    if not due_tickers:
+        return {
+            "status": "skipped",
+            "module": "earnings_calendar_cache",
+            "reason": "모든 포트폴리오 실적 일정 캐시가 스케줄 주기 안에 있어 중복 갱신을 생략했습니다.",
+            "requested_count": 0,
+            "refreshed_count": 0,
+            "failed_count": 0,
+            "cache_path": str(earnings_calendar_cache_path(settings)),
+        }
+    return refresh_earnings_calendar_cache(settings, due_tickers)
+
+
 _EARNINGS_CALENDAR_SCHEDULER_STARTED = False
 
 
@@ -1997,7 +2029,7 @@ def earnings_calendar_scheduler_loop() -> None:
     interval_seconds = max(settings.earnings_calendar_refresh_hours, 1) * 3600
     while True:
         try:
-            refresh_earnings_calendar_cache(settings)
+            refresh_due_earnings_calendar_cache(settings)
         except Exception:
             pass
         threading.Event().wait(interval_seconds)
@@ -15067,6 +15099,24 @@ def get_dart_filing_watch_status(
 
 
 @app.get(
+    "/api/v1/dart/annual-report-lab/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_dart_annual_report_lab_status(
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Return secret-free A001 collection, quota, policy, and coverage state."""
+
+    cache = read_dart_filing_cache(settings)
+    target_universe = dart_watch_universe(settings)
+    return build_dart_annual_report_lab_status(
+        settings,
+        dart_cache=cache,
+        target_universe=target_universe,
+    )
+
+
+@app.get(
     "/api/v1/research/recent-weekly-brief",
     dependencies=[Depends(verify_user_token)],
 )
@@ -15111,6 +15161,50 @@ def run_dart_filing_watch_refresh(
         tickers=[str(item) for item in tickers] if tickers else None,
         force=force,
         save_result=save_result,
+    )
+
+
+@app.post(
+    "/api/v1/dart/annual-report-lab/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_dart_annual_report_lab_refresh(
+    request: dict = Body(default_factory=dict),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Run one bounded cursor batch using OpenDART's A001 filter."""
+
+    payload = request if isinstance(request, dict) else {}
+    raw_tickers = payload.get("tickers")
+    if isinstance(raw_tickers, str):
+        raw_tickers = [item.strip() for item in raw_tickers.split(",") if item.strip()]
+    if raw_tickers is not None and not isinstance(raw_tickers, list):
+        raise HTTPException(status_code=422, detail="tickers는 문자열 배열이어야 합니다.")
+    try:
+        max_tickers = int(payload.get("max_tickers", 12))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="max_tickers는 정수여야 합니다.") from exc
+    if not 1 <= max_tickers <= DART_ANNUAL_REPORT_MAX_BATCH_TICKERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"max_tickers는 1~{DART_ANNUAL_REPORT_MAX_BATCH_TICKERS} 범위여야 합니다.",
+        )
+    cache = read_dart_filing_cache(settings)
+    target_universe = dart_watch_universe(settings)
+    client = OpenDartClient(settings, job_name="dart_annual_report_a001")
+    return refresh_dart_annual_report_index(
+        settings,
+        dart_cache=cache,
+        target_universe=target_universe,
+        client=client,
+        normalize_ticker=normalize_ticker,
+        cache_key=dart_filing_cache_key,
+        filing_importance=dart_filing_importance,
+        save_item=save_dart_filing_watch_item,
+        write_cache=write_dart_filing_cache,
+        tickers=[str(item) for item in raw_tickers] if raw_tickers else None,
+        max_tickers=max_tickers,
+        save_result=bool(payload.get("save_result", True)),
     )
 
 

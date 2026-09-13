@@ -6,6 +6,8 @@
   fetchOcrStatus,
   fetchDartFilingWatchStatus,
   refreshDartFilingWatch,
+  fetchDartAnnualReportLabStatus,
+  refreshDartAnnualReportLab,
   reportBackendHealthAlert,
   fetchTickerDashboard,
   fetchResearchManifest,
@@ -132,7 +134,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=cf63f575b8bc";
+} from "./api.js?v=f8d4afc3c8c4";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -181,6 +183,9 @@ const elements = {
   insiderResult: document.querySelector("#insiderResult"),
   insiderStatusButton: document.querySelector("#insiderStatusButton"),
   insiderBatchButton: document.querySelector("#insiderBatchButton"),
+  dartAnnualLabContent: document.querySelector("#dartAnnualLabContent"),
+  dartAnnualLabStatusButton: document.querySelector("#dartAnnualLabStatusButton"),
+  dartAnnualLabRunButton: document.querySelector("#dartAnnualLabRunButton"),
   macroForm: document.querySelector("#macroForm"),
   kcifReportsWatchButton: document.querySelector("#kcifReportsWatchButton"),
   kcifReportsRefreshButton: document.querySelector("#kcifReportsRefreshButton"),
@@ -827,6 +832,7 @@ let ragSortMode = "relevance_desc";
 
 let lastBackendHealthState = "unknown";
 let lastBackendAlertAt = 0;
+let dartAnnualLabLoaded = false;
 
 const BACKEND_ALERT_COOLDOWN_MS = 5 * 60 * 1000;
 const TODAY_RESEARCH_UPDATE_STORAGE_KEY = "research_os_today_research_update";
@@ -11725,6 +11731,12 @@ function activateTab(tabName, options = {}) {
   if (tabName === "investmentCalendar") {
     loadInvestmentCalendar({ showOutput: false }).catch(setError);
   }
+  if (tabName === "dartAnnualLab" && !dartAnnualLabLoaded) {
+    loadDartAnnualReportLab({ showOutput: false }).catch((error) => {
+      renderDartAnnualReportLabError(error);
+      setError(error);
+    });
+  }
   if (!options.keepOutput) {
     setOutput(tabHelpText(tabName));
   }
@@ -12921,6 +12933,240 @@ elements.memoryList.addEventListener("change", (event) => {
       renderRagMemoryList(lastRagSearchResult);
       setOutput("저장 데이터 정렬 기준을 적용했습니다.");
     }
+  }
+});
+
+function dartLabOverallLabel(value) {
+  return {
+    ready: "정상",
+    needs_configuration: "인증 설정 필요",
+    quota_stopped: "쿼터 차단",
+    degraded: "정책 점검 필요",
+  }[value] || "상태 확인 필요";
+}
+
+function dartLabActivityLabel(value) {
+  return {
+    normal: "정상",
+    partial_failure: "일부 실패",
+    failed: "실패 10%↑",
+    quota_stopped: "쿼터 중단",
+    no_run: "NO RUN",
+  }[value] || "확인 필요";
+}
+
+function dartLabTickerChips(values, emptyText) {
+  const items = Array.isArray(values) ? values.filter(Boolean) : [];
+  if (!items.length) {
+    return `<p class="dart-lab-empty">${escapeHtml(emptyText)}</p>`;
+  }
+  return `<div class="dart-lab-ticker-chips">${items
+    .map((item) => `<span>${escapeHtml(item)}</span>`)
+    .join("")}</div>`;
+}
+
+function renderDartAnnualReportLabError(error) {
+  if (!elements.dartAnnualLabContent) return;
+  elements.dartAnnualLabContent.innerHTML = `
+    <div class="dart-lab-error" role="alert">
+      <strong>사업보고서 랩을 불러오지 못했습니다.</strong>
+      <p>${escapeHtml(error?.message || String(error || "알 수 없는 오류"))}</p>
+      <p>백엔드 상태와 개발 토큰을 확인한 뒤 상태 새로고침을 다시 실행하세요.</p>
+    </div>`;
+}
+
+function renderDartAnnualReportLab(payload) {
+  if (!elements.dartAnnualLabContent) return;
+  if (!payload || payload.module !== "dart_annual_report_lab") {
+    renderDartAnnualReportLabError(new Error("DART 사업보고서 랩 응답 형식이 올바르지 않습니다."));
+    return;
+  }
+  const environment = payload.environment || {};
+  const quota = payload.quota || {};
+  const coverage = payload.coverage || {};
+  const policies = Array.isArray(payload.policy_checks) ? payload.policy_checks : [];
+  const activity = Array.isArray(payload.activity_30d) ? payload.activity_30d : [];
+  const failures = Array.isArray(payload.recent_failures) ? payload.recent_failures : [];
+  const milestones = Array.isArray(payload.milestones) ? payload.milestones : [];
+  const recentReports = Array.isArray(coverage.recent_reports) ? coverage.recent_reports : [];
+  const quotaRate = Math.max(0, Math.min(100, Number(quota.self_cap_usage_rate || 0) * 100));
+  const coverageRate = Math.max(0, Math.min(100, Number(coverage.coverage_rate || 0) * 100));
+  const quotaClampNote = quota.self_cap_clamped
+    ? `환경 설정 ${formatNumber(quota.configured_self_cap || 0)}건은 75% 안전 상한을 넘어 실제 실행 한도를 ${formatNumber(quota.self_cap || 0)}건으로 낮췄습니다.`
+    : "";
+  const policyRows = policies.length
+    ? policies
+        .map(
+          (item) => `<li class="${item.passed ? "pass" : "fail"}">
+            <span aria-hidden="true">${item.passed ? "✓" : "!"}</span>
+            <div><strong>${escapeHtml(item.key)}</strong><p>${escapeHtml(item.detail || "검증 설명 없음")}</p></div>
+            <b>${item.passed ? "PASS" : "FAIL"}</b>
+          </li>`
+        )
+        .join("")
+    : `<li class="fail"><span>!</span><div><strong>정책 검사 없음</strong><p>자가검증 결과를 확인하지 못했습니다.</p></div><b>FAIL</b></li>`;
+  const activityCells = activity.length
+    ? activity
+        .map(
+          (item) => `<div class="dart-lab-day ${escapeHtml(item.status)}" title="${escapeHtml(
+            `${item.date_kst} · ${dartLabActivityLabel(item.status)} · 요청 ${item.request_count || 0} · 실패 ${item.failure_count || 0}`
+          )}">
+            <span>${escapeHtml(String(item.date_kst || "").slice(5).replace("-", "/"))}</span>
+            <strong>${escapeHtml(dartLabActivityLabel(item.status))}</strong>
+            <small>${item.status === "no_run" ? "기록 없음" : `요청 ${formatNumber(item.request_count || 0)} · 실패 ${formatNumber(item.failure_count || 0)}`}</small>
+          </div>`
+        )
+        .join("")
+    : `<p class="dart-lab-empty">30일 활동 원장을 확인하지 못했습니다.</p>`;
+  const failureRows = failures.length
+    ? failures
+        .map(
+          (item) => `<tr>
+            <td data-label="시각(KST)">${escapeHtml(item.requested_at_kst || "확인 필요")}</td>
+            <td data-label="작업">${escapeHtml(item.job_name || "확인 필요")}</td>
+            <td data-label="API">${escapeHtml(item.api_name || "확인 필요")}</td>
+            <td data-label="대상">${escapeHtml(item.target || "-")}</td>
+            <td data-label="상태"><span class="dart-lab-state ${escapeHtml(item.outcome || "exception")}">${escapeHtml(item.outcome || "확인 필요")}</span></td>
+            <td data-label="HTTP">${escapeHtml(item.http_status ?? "-")}</td>
+            <td data-label="DART">${escapeHtml(item.dart_status || "-")}</td>
+            <td data-label="메시지">${escapeHtml(item.message || "기록된 메시지 없음")}</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="8" class="dart-lab-table-empty">관측 원장 도입 이후 기록된 실패가 없습니다.</td></tr>`;
+  const reportRows = recentReports.length
+    ? recentReports
+        .map(
+          (item) => `<li>
+            <div><strong>${escapeHtml(item.company_name || item.ticker || "회사명 확인 필요")}</strong><span>${escapeHtml(item.ticker || "-")} · ${escapeHtml(item.receipt_date || "접수일 확인 필요")}</span></div>
+            <p>${escapeHtml(item.report_name || "사업보고서")}</p>
+            ${item.source_url ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">DART 원문</a>` : `<span>원문 링크 확인 필요</span>`}
+          </li>`
+        )
+        .join("")
+    : `<li class="dart-lab-empty">아직 저장된 A001 사업보고서가 없습니다. A001 순환 점검을 실행하면 실제 공시가 여기에 표시됩니다.</li>`;
+  const milestoneByKey = Object.fromEntries(milestones.map((item) => [item.key, item]));
+  const milestoneCard = (key, id, eyebrow, fallbackTitle, fallbackDetail) => {
+    const item = milestoneByKey[key] || {};
+    const active = item.state === "active";
+    return `<section id="${id}" class="dart-lab-milestone ${active ? "active" : "planned"}">
+      <div class="dart-lab-section-heading">
+        <div><span>${escapeHtml(eyebrow)}</span><h3>${escapeHtml(item.label || fallbackTitle)}</h3></div>
+        <b>${active ? "활성" : "다음 마일스톤"}</b>
+      </div>
+      <p>${escapeHtml(item.detail || fallbackDetail)}</p>
+    </section>`;
+  };
+
+  elements.dartAnnualLabContent.innerHTML = `
+    <section id="dartLabCollection" class="dart-lab-section">
+      <div class="dart-lab-section-heading">
+        <div><span>COLLECTION CONTROL</span><h3>환경 진단</h3></div>
+        <b class="dart-lab-overall ${escapeHtml(payload.overall_state || "degraded")}">${escapeHtml(dartLabOverallLabel(payload.overall_state))}</b>
+      </div>
+      <div class="dart-lab-metric-grid">
+        <article><span>인증키</span><strong>${environment.api_key_configured ? "설정됨" : "설정 필요"}</strong><p>값은 화면·원장·로그에 표시하지 않습니다.</p></article>
+        <article><span>API 원점</span><strong>${escapeHtml(environment.api_origin || "확인 필요")}</strong><p>A001 최종보고서 전용 · 로컬 실행</p></article>
+        <article><span>기록 시간대</span><strong>${escapeHtml(environment.timezone || "확인 필요")}</strong><p>${escapeHtml(payload.generated_at_kst || "생성 시각 확인 필요")}</p></article>
+        <article><span>수집 범위</span><strong>${escapeHtml(payload.scope?.universe || "확인 필요")}</strong><p>${escapeHtml(payload.scope?.pblntf_detail_ty || "-")} · 최종보고서 ${escapeHtml(payload.scope?.last_reprt_at || "-")}</p></article>
+      </div>
+
+      <div class="dart-lab-two-column">
+        <article class="dart-lab-quota-card">
+          <div class="dart-lab-card-heading"><div><span>DAILY QUOTA · KST</span><h3>일일 쿼터</h3></div><strong>${formatNumber(quota.recorded_requests || 0)} / ${formatNumber(quota.self_cap || 0)}</strong></div>
+          <div class="dart-lab-progress" role="progressbar" aria-label="DART 자체 한도 사용률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${quotaRate.toFixed(1)}"><span style="width:${quotaRate}%"></span></div>
+          <dl>
+            <div><dt>자체 한도까지 남음</dt><dd>${formatNumber(quota.remaining_before_self_cap || 0)}건</dd></div>
+            <div><dt>공식 안내 기준값</dt><dd>${formatNumber(quota.provider_limit_reference || 0)}건</dd></div>
+            <div><dt>선제 중단 비율</dt><dd>${formatNumber(Number(quota.self_cap_of_reference_rate || 0) * 100)}%</dd></div>
+          </dl>
+          <p>${escapeHtml(quota.reference_note || "공식 제한 기준을 확인하지 못했습니다.")}</p>
+          ${quotaClampNote ? `<p class="dart-lab-cap-note">${escapeHtml(quotaClampNote)}</p>` : ""}
+        </article>
+
+        <article class="dart-lab-policy-card">
+          <div class="dart-lab-card-heading"><div><span>EXECUTABLE POLICY</span><h3>정책 자동 검증</h3></div><strong>${policies.filter((item) => item.passed).length}/${policies.length} PASS</strong></div>
+          <p>자동 검증할 수 없는 정책은 완료된 운영 규칙으로 표시하지 않습니다.</p>
+          <ul>${policyRows}</ul>
+        </article>
+      </div>
+
+      <article class="dart-lab-activity-card">
+        <div class="dart-lab-card-heading"><div><span>30-DAY LEDGER</span><h3>최근 30일 수집 이력</h3></div><strong>회색은 NO RUN</strong></div>
+        <p>로그가 아예 없는 날도 빈칸으로 숨기지 않습니다. 원장 도입 이전 날짜는 NO RUN으로 표시됩니다.</p>
+        <div class="dart-lab-legend"><span class="normal">정상</span><span class="partial_failure">일부 실패</span><span class="failed">실패 10%↑</span><span class="quota_stopped">쿼터 중단</span><span class="no_run">NO RUN</span></div>
+        <div class="dart-lab-activity-grid">${activityCells}</div>
+      </article>
+
+      <article class="dart-lab-failure-card">
+        <div class="dart-lab-card-heading"><div><span>BODY STATUS AWARE</span><h3>최근 실패 내역</h3></div><strong>${formatNumber(failures.length)}개 표시</strong></div>
+        <p>DART는 HTTP 200 응답에서도 본문 status로 오류를 알릴 수 있습니다. 인증키와 전체 요청 파라미터는 저장하지 않습니다.</p>
+        <div class="dart-lab-table-wrap"><table><thead><tr><th>시각(KST)</th><th>작업</th><th>API</th><th>대상</th><th>상태</th><th>HTTP</th><th>DART</th><th>메시지</th></tr></thead><tbody>${failureRows}</tbody></table></div>
+      </article>
+
+      <article class="dart-lab-coverage-card">
+        <div class="dart-lab-card-heading"><div><span>FAMILY UNIVERSE</span><h3>수집 커버리지</h3></div><strong>${coverageRate.toFixed(1)}%</strong></div>
+        <div class="dart-lab-progress coverage" role="progressbar" aria-label="사업보고서 수집 커버리지" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${coverageRate.toFixed(1)}"><span style="width:${coverageRate}%"></span></div>
+        <div class="dart-lab-coverage-grid">
+          <section><span>사업보고서 확인 종목</span>${dartLabTickerChips(coverage.covered_tickers, "확인된 종목 없음")}</section>
+          <section><span>아직 확인할 종목</span>${dartLabTickerChips(coverage.missing_tickers, "현재 누락 종목 없음")}</section>
+        </div>
+        <div class="dart-lab-report-list"><h4>최근 실제 사업보고서</h4><ul>${reportRows}</ul></div>
+      </article>
+    </section>
+
+    ${milestoneCard("governance", "dartLabGovernance", "MILESTONE 2", "지배구조·주주·보수", "최대주주 변동, 임원 현황, 직원수·1인평균급여, 이사·감사 보수, 배당, 주식총수를 다룹니다.")}
+    ${milestoneCard("business_text", "dartLabBusiness", "MILESTONE 3", "사업의 내용 분석", "원문 파싱 후 연도 간 문구 diff와 위험 키워드 추이를 제공합니다.")}
+    ${milestoneCard("screening", "dartLabScreening", "MILESTONE 4", "스크리닝", "불리언 필터만 제공하며 종합 점수와 랭킹은 만들지 않습니다.")}
+    <div class="dart-lab-screening-rule"><strong>스크리닝 설계 결정</strong><p>명시적 조건의 참·거짓만 비교합니다. 사후 검증 수단이 없는 종합 점수와 랭킹은 산출하지 않습니다.</p></div>
+  `;
+}
+
+async function loadDartAnnualReportLab({ showOutput = true } = {}) {
+  syncApiBaseUrl();
+  if (elements.dartAnnualLabContent) {
+    elements.dartAnnualLabContent.innerHTML = `<p class="empty-state">환경·쿼터·수집 원장을 불러오는 중입니다.</p>`;
+  }
+  const result = await fetchDartAnnualReportLabStatus(token());
+  renderDartAnnualReportLab(result);
+  dartAnnualLabLoaded = true;
+  if (showOutput) setOutput(result);
+  return result;
+}
+
+elements.dartAnnualLabStatusButton?.addEventListener("click", async () => {
+  const button = elements.dartAnnualLabStatusButton;
+  button.disabled = true;
+  startOutputLoading("DART 사업보고서 랩 상태 조회 중", ["환경·쿼터 원장", "정책 자동 검증", "30일 실행 이력", "A001 수집 커버리지"]);
+  try {
+    await loadDartAnnualReportLab({ showOutput: true });
+  } catch (error) {
+    renderDartAnnualReportLabError(error);
+    setError(error);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+elements.dartAnnualLabRunButton?.addEventListener("click", async () => {
+  const button = elements.dartAnnualLabRunButton;
+  syncApiBaseUrl();
+  button.disabled = true;
+  startOutputLoading("A001 사업보고서 순환 점검 중", ["가족 보유·관심 한국 종목 중 12개 선택", "A001·최종보고서 필터 적용", "본문 status 오류 판정", "공시 저장·커서·쿼터 원장 갱신"]);
+  try {
+    const result = await refreshDartAnnualReportLab(token(), {
+      maxTickers: 12,
+      saveResult: !isClickSmokeMode(),
+    });
+    dartAnnualLabLoaded = false;
+    await loadDartAnnualReportLab({ showOutput: false });
+    setOutput(result);
+    await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    renderDartAnnualReportLabError(error);
+    setError(error);
+  } finally {
+    button.disabled = false;
   }
 });
 
@@ -21217,6 +21463,8 @@ function tabHelpText(tabName) {
       "실적 분석 탭입니다.\n\n분기 실적 수치, 주가 반응, 가이던스 변경을 입력하면 시장 반응 패턴과 다음 실적 전 추적 항목을 생성합니다.",
     insider:
       "내부자 거래 탭입니다.\n\n미국 SEC Form 4와 한국 OpenDART 소유보고를 거래 맥락, 가격·변동성, 수급, 신호, 과거 반응, 투자 체크포인트의 같은 6축으로 비교합니다. 미확인 값은 추정하지 않습니다.",
+    dartAnnualLab:
+      "사업보고서 랩 탭입니다.\n\n가족 보유·관심 한국 종목의 A001 사업보고서를 수집 원장, 쿼터 차단, 정책 자가검증, 30일 NO RUN 이력과 함께 확인합니다. 실제 주문이나 메시지는 실행하지 않습니다.",
     macro:
       "매크로 분석 탭입니다.\n\n금리, 환율, 정책, 수급, 원자재 같은 거시 변수를 정리하고 유리한 섹터와 리스크 체크포인트를 연결합니다.",
     sector:

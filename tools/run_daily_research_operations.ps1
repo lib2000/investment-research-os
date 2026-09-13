@@ -18,6 +18,7 @@
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
   [switch]$SkipInsiderTradingResearch,
+  [switch]$SkipDartAnnualReportLab,
   [switch]$SkipDartFilingDuplicateCleanup,
   [switch]$SkipResearchSourceStoreCheck,
   [switch]$SkipPortfolioAnalysisCoverage,
@@ -283,6 +284,33 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
         return
       }
     }
+  }
+}
+
+if (-not $SkipDartAnnualReportLab.IsPresent) {
+  Invoke-DailyResearchStep "DART A001 사업보고서 순환 점검" {
+    # Reuse the existing daily operations task instead of creating a second
+    # scheduler. The backend enforces a KST daily quota before network access.
+    $headers = @{
+      Authorization = "Bearer $DevUserToken"
+      "Content-Type" = "application/json"
+    }
+    $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/dart/annual-report-lab/refresh"
+    $body = @{ max_tickers = 12; save_result = $true } | ConvertTo-Json -Compress
+    $result = Invoke-RestMethod `
+      -Method Post `
+      -Uri $uri `
+      -Headers $headers `
+      -Body $body `
+      -TimeoutSec $ResearchAutomationTimeoutSeconds
+    Write-Host (
+      "상태={0}; 선택={1}; 저장={2}; 실패={3}; 다음커서={4}" -f
+      $result.status,
+      $result.selected_count,
+      $result.saved_count,
+      $result.failed_count,
+      $result.next_cursor
+    )
   }
 }
 

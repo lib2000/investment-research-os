@@ -1342,6 +1342,35 @@ export async function fetchDailyRecommendationsStatus(accessToken) {
   }
 }
 
+/**
+ * DART 사업보고서(A001) 랩의 환경, 쿼터, 실행 이력, 실패, 커버리지를 조회합니다.
+ * 조회 자체는 외부 DART 요청을 만들지 않습니다.
+ */
+export async function fetchDartAnnualReportLabStatus(accessToken) {
+  return request("/api/v1/dart/annual-report-lab/status", {
+    method: "GET",
+    accessToken,
+  });
+}
+
+/**
+ * 가족 보유·관심 한국 종목의 A001 사업보고서를 제한된 순환 묶음으로 확인합니다.
+ */
+export async function refreshDartAnnualReportLab(accessToken, options = {}) {
+  return request("/api/v1/dart/annual-report-lab/refresh", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 300000,
+    body: JSON.stringify({
+      max_tickers: options.maxTickers || 12,
+      save_result: options.saveResult !== false,
+      ...(Array.isArray(options.tickers) && options.tickers.length
+        ? { tickers: options.tickers }
+        : {}),
+    }),
+  });
+}
+
 export async function fetchInsiderTradingStatus(accessToken) {
   return request("/api/v1/insider-trading/status", {
     method: "GET",

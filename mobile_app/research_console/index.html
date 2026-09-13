@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 43V21h7v22zm11 0V29h7v14zm11 0V16h7v27z' fill='white'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css?v=6bdcd1c02c5e" />
+    <link rel="stylesheet" href="./styles.css?v=f191134d9af7" />
   </head>
   <body>
     <main class="app-shell">
@@ -53,6 +53,7 @@
         <button class="tab" data-tab="chart" type="button">차트 분석</button>
         <button class="tab" data-tab="earnings" type="button">실적 분석</button>
         <button class="tab" data-tab="insider" type="button">내부자 거래</button>
+        <button class="tab" data-tab="dartAnnualLab" type="button">사업보고서 랩</button>
         <button class="tab" data-tab="macro" type="button">매크로 분석</button>
         <button class="tab" data-tab="sector" type="button">섹터 발굴</button>
         <button class="tab" data-tab="compounder" type="button">복리 성장주</button>
@@ -586,6 +587,37 @@
         </form>
         <div id="insiderResult" class="insider-result" aria-live="polite">
           <p class="empty-state">티커만 입력해 공식 공시를 조회하거나, 구조화 필드·공시 URL·텍스트 요약을 함께 입력하세요.</p>
+        </div>
+      </section>
+
+      <section id="dartAnnualLab" class="panel dart-annual-lab">
+        <header class="dart-lab-hero">
+          <div>
+            <span class="dart-lab-kicker">REGULATORY EVIDENCE · A001 ONLY · LOCAL</span>
+            <h2>DART 사업보고서 분석 랩</h2>
+            <p>가족 보유·관심 한국 종목의 최종 사업보고서를 수집 원장과 함께 관측합니다. 수집되지 않은 날과 실패도 숨기지 않습니다.</p>
+          </div>
+          <div class="dart-lab-actions">
+            <button id="dartAnnualLabStatusButton" class="secondary" type="button">상태 새로고침</button>
+            <button id="dartAnnualLabRunButton" type="button">A001 순환 점검</button>
+            <a href="https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&amp;apiId=2019001" target="_blank" rel="noreferrer">공식 API 가이드</a>
+          </div>
+        </header>
+
+        <aside class="dart-lab-disclaimer" aria-label="DART 이용 고지">
+          <strong>고지</strong>
+          <p>출처: 금융감독원 전자공시시스템(DART) 오픈API. 금융감독원은 공시정보의 정확성·완전성을 보장하지 않으며 이용 결과에 대해 책임지지 않습니다(오픈API 이용약관 제23조). 본 화면은 정보 제공 목적의 관측·분석 도구이며 <b>투자 권유나 매매 신호가 아닙니다.</b></p>
+        </aside>
+
+        <nav class="dart-lab-section-nav" aria-label="사업보고서 랩 영역">
+          <a href="#dartLabCollection">수집 상태</a>
+          <a href="#dartLabGovernance">지배구조·주주·보수</a>
+          <a href="#dartLabBusiness">사업의 내용 분석</a>
+          <a href="#dartLabScreening">스크리닝</a>
+        </nav>
+
+        <div id="dartAnnualLabContent" class="dart-lab-content" aria-live="polite">
+          <p class="empty-state">환경 진단과 A001 수집 원장을 불러오는 중입니다.</p>
         </div>
       </section>
 
@@ -1445,6 +1477,6 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=0ad6fdf3f778"></script>
+  <script type="module" src="./console.js?v=c24e3ee33fd8"></script>
 </body>
 </html>

@@ -6,6 +6,8 @@ from datetime import datetime, timezone, timedelta
 import io
 import json
 from pathlib import Path
+import threading
+from time import perf_counter
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -20,16 +22,28 @@ from research_os.data_provider_utils import (
 from research_os.kis_data_provider import _looks_like_korean_security_code
 from research_os.models import DataSourceType, InjectedDataPoint
 from research_os.settings import Settings
+from research_os.dart_annual_report_lab import (
+    DartQuotaExceeded,
+    begin_dart_request,
+    classify_dart_response,
+    complete_dart_request,
+)
+
+
+CORP_CODE_CACHE_MAX_AGE = timedelta(hours=24)
+_CORP_CODE_DOWNLOAD_LOCK = threading.Lock()
 
 
 class OpenDartClient:
     REPORT_CODE_BY_PRIORITY = ["11011", "11014", "11012", "11013"]
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, job_name: str = "opendart_client") -> None:
+        self.settings = settings
         self.api_key = settings.dart_api_key.strip()
         self.base_url = settings.dart_base_url.rstrip("/")
         self.cache_file = self._resolve_path(settings.dart_corp_code_cache_file)
         self.timeout_seconds = settings.dart_timeout_seconds
+        self.job_name = job_name
 
     @property
     def is_configured(self) -> bool:
@@ -67,16 +81,168 @@ class OpenDartClient:
         except Exception:
             return
 
-    def _download_corp_codes(self) -> dict:
-        response = httpx.get(
-            f"{self.base_url}/corpCode.xml",
-            params={"crtfc_key": self.api_key},
-            timeout=self.timeout_seconds,
-            trust_env=False,
+    def _corp_code_cache_is_fresh(self) -> bool:
+        try:
+            age_seconds = datetime.now(timezone.utc).timestamp() - self.cache_file.stat().st_mtime
+        except OSError:
+            return False
+        return age_seconds <= CORP_CODE_CACHE_MAX_AGE.total_seconds()
+
+    def _get_json(self, api_name: str, *, params: dict, target: str | None = None) -> dict:
+        event_id = begin_dart_request(
+            self.settings,
+            job_name=self.job_name,
+            api_name=api_name,
+            target=target,
         )
-        response.raise_for_status()
+        started = perf_counter()
+        completed = False
+        try:
+            response = httpx.get(
+                f"{self.base_url}/{api_name}",
+                params=params,
+                timeout=self.timeout_seconds,
+                trust_env=False,
+            )
+            http_status = int(response.status_code)
+            try:
+                payload = response.json()
+            except Exception as exc:
+                outcome = "http_err" if not 200 <= http_status < 300 else "invalid_payload"
+                complete_dart_request(
+                    self.settings,
+                    event_id,
+                    outcome=outcome,
+                    http_status=http_status,
+                    message="OpenDART JSON 응답을 해석할 수 없습니다.",
+                    duration_ms=round((perf_counter() - started) * 1000),
+                    secret=self.api_key,
+                )
+                completed = True
+                response.raise_for_status()
+                raise RuntimeError("OpenDART JSON 응답을 해석할 수 없습니다.") from exc
+            if not isinstance(payload, dict):
+                complete_dart_request(
+                    self.settings,
+                    event_id,
+                    outcome="invalid_payload",
+                    http_status=http_status,
+                    message="OpenDART JSON 최상위 값이 객체가 아닙니다.",
+                    duration_ms=round((perf_counter() - started) * 1000),
+                    secret=self.api_key,
+                )
+                completed = True
+                raise RuntimeError("OpenDART JSON 최상위 값이 객체가 아닙니다.")
+            dart_status = str(payload.get("status") or "").strip() or None
+            outcome = classify_dart_response(http_status=http_status, dart_status=dart_status)
+            complete_dart_request(
+                self.settings,
+                event_id,
+                outcome=outcome,
+                http_status=http_status,
+                dart_status=dart_status,
+                message=payload.get("message") or "",
+                duration_ms=round((perf_counter() - started) * 1000),
+                secret=self.api_key,
+            )
+            completed = True
+            response.raise_for_status()
+            return payload
+        except DartQuotaExceeded:
+            raise
+        except Exception as exc:
+            if not completed:
+                complete_dart_request(
+                    self.settings,
+                    event_id,
+                    outcome="exception",
+                    message=exc,
+                    duration_ms=round((perf_counter() - started) * 1000),
+                    secret=self.api_key,
+                )
+            raise
+
+    def _get_binary(self, api_name: str, *, params: dict, target: str | None = None) -> bytes:
+        event_id = begin_dart_request(
+            self.settings,
+            job_name=self.job_name,
+            api_name=api_name,
+            target=target,
+        )
+        started = perf_counter()
+        completed = False
+        try:
+            response = httpx.get(
+                f"{self.base_url}/{api_name}",
+                params=params,
+                timeout=self.timeout_seconds,
+                trust_env=False,
+            )
+            http_status = int(response.status_code)
+            dart_status: str | None = None
+            dart_message = ""
+            content = bytes(response.content)
+            if not content.startswith(b"PK"):
+                try:
+                    payload = response.json()
+                except Exception:
+                    payload = None
+                if isinstance(payload, dict):
+                    dart_status = str(payload.get("status") or "").strip() or None
+                    dart_message = str(payload.get("message") or "")
+                if not dart_status:
+                    try:
+                        root = ET.fromstring(content)
+                        dart_status = (root.findtext("status") or "").strip() or None
+                        dart_message = (root.findtext("message") or "").strip()
+                    except Exception:
+                        pass
+            if dart_status:
+                outcome = classify_dart_response(http_status=http_status, dart_status=dart_status)
+            elif not 200 <= http_status < 300:
+                outcome = "http_err"
+            elif content.startswith(b"PK"):
+                outcome = "ok"
+            else:
+                outcome = "invalid_payload"
+                dart_message = dart_message or "OpenDART 압축 응답 형식을 확인할 수 없습니다."
+            complete_dart_request(
+                self.settings,
+                event_id,
+                outcome=outcome,
+                http_status=http_status,
+                dart_status=dart_status,
+                message=dart_message,
+                duration_ms=round((perf_counter() - started) * 1000),
+                secret=self.api_key,
+            )
+            completed = True
+            response.raise_for_status()
+            if outcome != "ok":
+                raise RuntimeError(dart_message or dart_status or "OpenDART 바이너리 호출 실패")
+            return content
+        except DartQuotaExceeded:
+            raise
+        except Exception as exc:
+            if not completed:
+                complete_dart_request(
+                    self.settings,
+                    event_id,
+                    outcome="exception",
+                    message=exc,
+                    duration_ms=round((perf_counter() - started) * 1000),
+                    secret=self.api_key,
+                )
+            raise
+
+    def _download_corp_codes(self) -> dict:
+        content = self._get_binary(
+            "corpCode.xml",
+            params={"crtfc_key": self.api_key},
+            target="listed_corporations",
+        )
         by_stock_code: dict[str, dict] = {}
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
             xml_name = archive.namelist()[0]
             root = ET.fromstring(archive.read(xml_name))
         for item in root.findall("list"):
@@ -97,7 +263,21 @@ class OpenDartClient:
         if not _looks_like_korean_security_code(normalized):
             return None
         by_stock_code = self._read_cached_corp_codes()
-        if normalized not in by_stock_code:
+        if normalized in by_stock_code:
+            return by_stock_code.get(normalized)
+        # A valid, fresh full-corporation cache is also a negative cache.  ETFs
+        # and other non-DART securities are absent by design; downloading the
+        # complete corpCode archive for every such lookup wastes daily quota.
+        if by_stock_code and self._corp_code_cache_is_fresh():
+            return None
+        # Different console/status requests can reach this branch together on
+        # startup.  Recheck inside a process-wide lock before one bounded fetch.
+        with _CORP_CODE_DOWNLOAD_LOCK:
+            by_stock_code = self._read_cached_corp_codes()
+            if normalized in by_stock_code:
+                return by_stock_code.get(normalized)
+            if by_stock_code and self._corp_code_cache_is_fresh():
+                return None
             by_stock_code = self._download_corp_codes()
         return by_stock_code.get(normalized)
 
@@ -110,8 +290,8 @@ class OpenDartClient:
         for business_year in [current_year - 1, current_year - 2]:
             for report_code in self.REPORT_CODE_BY_PRIORITY:
                 try:
-                    response = httpx.get(
-                        f"{self.base_url}/fnlttSinglAcntAll.json",
+                    payload = self._get_json(
+                        "fnlttSinglAcntAll.json",
                         params={
                             "crtfc_key": self.api_key,
                             "corp_code": corp["corp_code"],
@@ -119,11 +299,8 @@ class OpenDartClient:
                             "reprt_code": report_code,
                             "fs_div": "CFS",
                         },
-                        timeout=self.timeout_seconds,
-                        trust_env=False,
+                        target=stock_code,
                     )
-                    response.raise_for_status()
-                    payload = response.json()
                     if payload.get("status") == "000" and payload.get("list"):
                         return corp, {
                             "business_year": business_year,
@@ -141,29 +318,29 @@ class OpenDartClient:
         *,
         lookback_days: int = 14,
         page_count: int = 20,
+        detail_type: str | None = None,
+        final_reports_only: bool = False,
     ) -> tuple[dict, list[dict]]:
         corp = self.find_corp_by_stock_code(stock_code)
         if not corp:
             raise RuntimeError(f"OpenDART corp_code를 찾지 못했습니다: {stock_code}")
         end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=max(int(lookback_days), 1))
-        response = httpx.get(
-            f"{self.base_url}/list.json",
-            params={
-                "crtfc_key": self.api_key,
-                "corp_code": corp["corp_code"],
-                "bgn_de": start_date.strftime("%Y%m%d"),
-                "end_de": end_date.strftime("%Y%m%d"),
-                "page_no": "1",
-                "page_count": str(max(1, min(int(page_count), 100))),
-                "sort": "date",
-                "sort_mth": "desc",
-            },
-            timeout=self.timeout_seconds,
-            trust_env=False,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        params = {
+            "crtfc_key": self.api_key,
+            "corp_code": corp["corp_code"],
+            "bgn_de": start_date.strftime("%Y%m%d"),
+            "end_de": end_date.strftime("%Y%m%d"),
+            "page_no": "1",
+            "page_count": str(max(1, min(int(page_count), 100))),
+            "sort": "date",
+            "sort_mth": "desc",
+        }
+        if detail_type:
+            params["pblntf_detail_ty"] = str(detail_type)
+        if final_reports_only:
+            params["last_reprt_at"] = "Y"
+        payload = self._get_json("list.json", params=params, target=stock_code)
         if payload.get("status") not in {"000", "013"}:
             raise RuntimeError(str(payload.get("message") or payload.get("status")))
         filings = payload.get("list") or []
@@ -199,17 +376,14 @@ class OpenDartClient:
         corp = self.find_corp_by_stock_code(stock_code)
         if not corp:
             raise RuntimeError(f"OpenDART corp_code를 찾지 못했습니다: {stock_code}")
-        response = httpx.get(
-            f"{self.base_url}/elestock.json",
+        payload = self._get_json(
+            "elestock.json",
             params={
                 "crtfc_key": self.api_key,
                 "corp_code": corp["corp_code"],
             },
-            timeout=self.timeout_seconds,
-            trust_env=False,
+            target=stock_code,
         )
-        response.raise_for_status()
-        payload = response.json()
         if payload.get("status") not in {"000", "013"}:
             raise RuntimeError(str(payload.get("message") or payload.get("status")))
         return corp, payload

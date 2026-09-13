@@ -111,6 +111,11 @@ class Settings(BaseModel):
     dart_filing_refresh_hours: float = 6.0
     dart_filing_lookback_days: int = 45
     dart_filing_max_items_per_ticker: int = 20
+    # OpenDART documents status=020 as generally occurring above 20,000
+    # requests, while noting that an account can have a different limit.  The
+    # platform therefore enforces its own lower cap before network access.
+    dart_provider_limit_reference: int = 20_000
+    dart_daily_self_cap: int = 15_000
     financial_datasets_api_key: str = Field(default="")
     financial_datasets_base_url: str = "https://api.financialdatasets.ai"
     financial_datasets_timeout_seconds: float = 10.0
@@ -168,7 +173,7 @@ class Settings(BaseModel):
     naver_research_pdf_extract_enabled: bool = True
     naver_research_pdf_snippet_max_chars: int = 900
     naver_market_close_auto_journal: bool = True
-    naver_market_close_journal_time: str = "08:30"
+    naver_market_close_journal_time: str = "20:10"
     telegram_market_close_auto_journal: bool = True
     telegram_market_close_journal_time: str = "07:20"
     telegram_market_close_channel_username: str = "ehdwl"
@@ -345,6 +350,8 @@ class Settings(BaseModel):
             dart_filing_max_items_per_ticker=int(
                 os.getenv("DART_FILING_MAX_ITEMS_PER_TICKER", "20")
             ),
+            dart_provider_limit_reference=_read_int("DART_PROVIDER_LIMIT_REFERENCE", 20_000),
+            dart_daily_self_cap=_read_int("DART_DAILY_SELF_CAP", 15_000),
             financial_datasets_api_key=os.getenv("FINANCIAL_DATASETS_API_KEY", ""),
             financial_datasets_base_url=os.getenv(
                 "FINANCIAL_DATASETS_BASE_URL", "https://api.financialdatasets.ai"
@@ -468,7 +475,7 @@ class Settings(BaseModel):
                 "NAVER_MARKET_CLOSE_AUTO_JOURNAL", True
             ),
             naver_market_close_journal_time=os.getenv(
-                "NAVER_MARKET_CLOSE_JOURNAL_TIME", "08:30"
+                "NAVER_MARKET_CLOSE_JOURNAL_TIME", "20:10"
             ),
             telegram_market_close_auto_journal=_read_bool(
                 "TELEGRAM_MARKET_CLOSE_AUTO_JOURNAL", True

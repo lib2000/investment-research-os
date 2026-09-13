@@ -25,6 +25,7 @@ CHECKS = [
     ("클래식 콘솔 정적 계약", ["tools/check_console_static_contract.py", "--strict"]),
     ("클래식 콘솔 자산/JS", ["tools/check_console_asset_and_js.py"]),
     ("내부자거래 6축 리서치", ["tools/check_insider_trading_research.py", "--json"]),
+    ("DART 사업보고서 분석 랩", ["tools/check_dart_annual_report_lab.py", "--json"]),
     (
         "포트폴리오 분석 커버리지",
         [
