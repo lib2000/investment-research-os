@@ -176,12 +176,35 @@ def _report_alert_count(report_alert: dict[str, Any] | None) -> int:
         return 0
 
 
+def _has_portfolio_change(change_result: dict[str, Any]) -> bool:
+    if any(isinstance(item, dict) for item in change_result.get("top_movers") or []):
+        return True
+    if any(isinstance(item, dict) for item in change_result.get("watch_items") or []):
+        return True
+    counts = change_result.get("change_counts") if isinstance(change_result.get("change_counts"), dict) else {}
+    for key in ("changed_count", "stance_changed_count", "confidence_changed_count", "watch_item_count"):
+        try:
+            if int(counts.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _has_deliverable_content(
+    change_result: dict[str, Any],
+    recommendations: list[dict[str, Any]],
+    report_count: int,
+) -> bool:
+    return bool(recommendations or report_count or _has_portfolio_change(change_result))
+
+
 def build_priority_filter_summary(
     change_result: dict[str, Any],
     today_recommendations: list[dict[str, Any]] | None = None,
     portfolio_report_alert: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    delivered_sections = ["portfolio_health"]
+    delivered_sections: list[str] = []
     if today_recommendations:
         delivered_sections.insert(0, "today_recommendations")
     if _report_alert_count(portfolio_report_alert):
@@ -191,6 +214,8 @@ def build_priority_filter_summary(
         delivered_sections.append("top_movers")
     if change_result.get("watch_items"):
         delivered_sections.append("watch_items")
+    if _has_portfolio_change(change_result):
+        delivered_sections.append("portfolio_health")
     return {
         "mode": "important_only",
         "delivered_sections": delivered_sections,
@@ -276,11 +301,16 @@ def build_telegram_brief_payload(
 ) -> dict[str, Any]:
     recommendations = [item for item in today_recommendations or [] if isinstance(item, dict)]
     report_count = _report_alert_count(portfolio_report_alert)
-    text = render_portfolio_telegram_brief(
-        change_result,
-        max_items=max_items,
-        today_recommendations=recommendations,
-        portfolio_report_alert=portfolio_report_alert,
+    should_send = _has_deliverable_content(change_result, recommendations, report_count)
+    text = (
+        render_portfolio_telegram_brief(
+            change_result,
+            max_items=max_items,
+            today_recommendations=recommendations,
+            portfolio_report_alert=portfolio_report_alert,
+        )
+        if should_send
+        else ""
     )
     messages = chunk_telegram_message(text, max_chars=max_message_chars)
     payloads = [
@@ -292,10 +322,13 @@ def build_telegram_brief_payload(
             "category": "integrated_investment_brief",
         }
         for message in messages
+        if message.strip()
     ]
     return {
         "design": DESIGN_NAME,
         "status": "success",
+        "should_send": should_send,
+        "empty_content_suppressed": not should_send,
         "message_count": len(payloads),
         "chat_id_configured": bool(chat_id),
         "messages": payloads,

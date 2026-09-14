@@ -163,7 +163,6 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         target_bot=target_bot,
         max_message_chars=args.max_message_chars,
         max_items=args.max_items,
-        send_empty=args.send_empty,
     )
     delivery = execute_telegram_delivery(
         payload,
@@ -250,7 +249,6 @@ def main() -> int:
     parser.add_argument("--chat-id", default=None)
     parser.add_argument("--enabled", action="store_true")
     parser.add_argument("--submit", action="store_true")
-    parser.add_argument("--send-empty", action="store_true")
     parser.add_argument("--include-previously-sent", action="store_true")
     parser.add_argument("--write-state", action="store_true")
     parser.add_argument("--api-base-url", default=os.getenv("TELEGRAM_API_BASE_URL", "https://api.telegram.org"))

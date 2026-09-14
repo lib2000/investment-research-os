@@ -234,6 +234,8 @@ def evaluate_task_status(
     missing_args = [item for item in required_args if item not in arguments]
     if missing_args:
         errors.append("scheduled task missing required arguments: " + ", ".join(missing_args))
+    if "-SendEmpty" in arguments or "--send-empty" in arguments:
+        errors.append("scheduled task must not request empty portfolio-report delivery")
     standalone_live_submit = "-Enabled" in arguments and "-Submit" in arguments
     if task.get("found") and not standalone_live_submit:
         info.append("standalone Telegram send is disabled; integrated Investment Priority Brief owns live delivery")

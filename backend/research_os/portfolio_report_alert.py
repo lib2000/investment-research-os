@@ -225,15 +225,14 @@ def select_new_holding_reports(
 
 def render_report_alert_text(result: dict[str, Any], *, max_items: int = 8) -> str:
     reports = [item for item in result.get("reports") or [] if isinstance(item, dict)]
+    if not reports:
+        return ""
     lines = [
         REPORT_ALERT_TITLE,
         f"기준일: {_safe_text(result.get('as_of')) or datetime.now().isoformat(timespec='seconds')}",
         f"스캔 보유 종목: {result.get('holding_count', 0)}개",
         f"신규 리포트/공시: {len(reports)}건",
     ]
-    if not reports:
-        lines.append("새로 확인된 보유 종목 리포트/공시는 없습니다.")
-        return "\n".join(lines)
     lines.append("")
     for index, item in enumerate(reports[: max(1, max_items)], start=1):
         ticker = _safe_text(item.get("ticker"))
@@ -275,10 +274,12 @@ def build_report_alert_payload(
     target_bot: str = DEFAULT_TARGET_BOT,
     max_message_chars: int = 3600,
     max_items: int = 8,
-    send_empty: bool = False,
 ) -> dict[str, Any]:
     reports = [item for item in result.get("reports") or [] if isinstance(item, dict)]
-    should_send = bool(reports or send_empty)
+    # Empty report status is operational metadata, not a Telegram notification.
+    # This guard must remain independent of caller flags so a scheduled task or
+    # ad-hoc invocation can never turn an empty result into a delivery.
+    should_send = bool(reports)
     text = render_report_alert_text(result, max_items=max_items) if should_send else ""
     messages = [
         {
@@ -298,6 +299,8 @@ def build_report_alert_payload(
         "send_time": "07:00",
         "target_bot": normalize_target_bot_username(target_bot),
         "chat_id_configured": bool(chat_id),
+        "should_send": should_send,
+        "empty_report_suppressed": not should_send,
         "message_count": len(messages),
         "candidate_count": len(reports),
         "messages": messages,

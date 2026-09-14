@@ -5,7 +5,6 @@ param(
   [string]$ChatId = "",
   [switch]$Enabled,
   [switch]$Submit,
-  [switch]$SendEmpty,
   [switch]$IncludePreviouslySent,
   [switch]$WriteState
 )
@@ -56,9 +55,6 @@ if ($Enabled.IsPresent) {
 }
 if ($Submit.IsPresent) {
   $argsList += "--submit"
-}
-if ($SendEmpty.IsPresent) {
-  $argsList += "--send-empty"
 }
 if ($IncludePreviouslySent.IsPresent) {
   $argsList += "--include-previously-sent"

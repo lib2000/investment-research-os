@@ -5,8 +5,7 @@ param(
   [int]$LookbackDays = 3,
   [int]$MaxItems = 8,
   [switch]$Enabled,
-  [switch]$Submit,
-  [switch]$SendEmpty
+  [switch]$Submit
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,9 +29,6 @@ $argumentParts = @(
   "$MaxItems",
   "-WriteState"
 )
-if ($SendEmpty.IsPresent) {
-  $argumentParts += "-SendEmpty"
-}
 if ($Enabled.IsPresent) {
   $argumentParts += "-Enabled"
 }
@@ -57,5 +53,5 @@ Register-ScheduledTask `
 Write-Host "등록 완료: $TaskName"
 Write-Host "실행 시각: 매일 $At"
 Write-Host "실행 파일: $runner"
-Write-Host "빈 결과 알림: Enabled=$($SendEmpty.IsPresent)"
+Write-Host "빈 리포트: 발송하지 않음"
 Write-Host "실제 전송: Enabled=$($Enabled.IsPresent), Submit=$($Submit.IsPresent)"
