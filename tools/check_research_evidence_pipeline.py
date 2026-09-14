@@ -351,7 +351,7 @@ def dart_refresh_postcondition_is_complete(dart: dict[str, Any]) -> bool:
 
 
 def dart_pending_before_daily_operations_is_expected(dart: dict[str, Any], *, now: datetime) -> bool:
-    """Allow the next daily DART run to remain pending until its 18:30 KST slot.
+    """Allow the next daily DART run to remain pending until its 20:20 KST slot.
 
     A new calendar day begins before the after-market research task.  Treating
     that short, scheduled gap as an outage turns every midnight bridge refresh
@@ -476,7 +476,7 @@ def collect_pipeline_status(
         blocking_issues.append("DART is not configured or enabled")
     if dart_scheduled_refresh_pending:
         warnings.append(
-            "DART daily refresh is pending for the scheduled 18:30 KST operations run; the prior day completed cleanly."
+            "DART daily refresh is pending for the scheduled 20:20 KST operations run; the prior day completed cleanly."
         )
     elif dart["daily_status"] != "complete" or dart["failure_count"]:
         blocking_issues.append(

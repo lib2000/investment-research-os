@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "",
-  [string]$TaskName = "InvestmentResearchOS-DailyResearchOperations-1830",
-  [string]$At = "18:30",
+  [string]$TaskName = "InvestmentResearchOS-DailyResearchOperations-2020",
+  [string]$At = "20:20",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN"
 )
 
@@ -35,7 +35,7 @@ $principal = New-ScheduledTaskPrincipal `
   -LogonType Interactive `
   -RunLevel Limited
 
-$description = "Refreshes persisted end-of-day portfolio prices and daily research data without sending Telegram messages or placing live orders; catches up after the next sign-in when missed."
+$description = "Refreshes persisted end-of-day portfolio prices and daily research data after the KRX 20:00 after-market close; never sends Telegram messages or places live orders, and catches up after the next sign-in when missed."
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description $description -Force | Out-Null
 
 Write-Host "Registered: $TaskName"

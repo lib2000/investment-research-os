@@ -3,7 +3,7 @@ param(
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
   [int]$Port = 8001,
   [string]$StrategyValidationTime = "08:45",
-  [string]$ResearchOperationsTime = "18:30",
+  [string]$ResearchOperationsTime = "20:20",
   [int]$DockerStartupTimeoutSeconds = 180,
   [switch]$DryRun
 )

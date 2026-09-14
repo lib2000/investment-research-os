@@ -269,9 +269,9 @@ def refresh_naver_market_close_journal(
 
 
 def parse_naver_market_close_journal_time(settings: Settings) -> tuple[int, int]:
-    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.naver_market_close_journal_time or "08:30").strip())
+    match = search(r"^(\d{1,2}):(\d{2})$", str(settings.naver_market_close_journal_time or "20:10").strip())
     if not match:
-        return 8, 30
+        return 20, 10
     hour = min(max(int(match.group(1)), 0), 23)
     minute = min(max(int(match.group(2)), 0), 59)
     return hour, minute
@@ -346,7 +346,7 @@ def build_naver_market_close_task_status(
         next_action = "중복 시장일지 후보가 있어 네이버 리서치 정리로 soft_archive 처리하세요."
         status = "needs_attention"
     elif not log.get("exists"):
-        next_action = "작업 스케줄러 첫 실행 전입니다. 08:30 이후 로그가 생성되는지 확인하세요."
+        next_action = "작업 스케줄러 첫 실행 전입니다. 20:10 이후 로그가 생성되는지 확인하세요."
         status = "waiting_for_first_run"
     elif runtime.should_run_naver_market_close_journal_fn(settings):
         next_action = "오늘 자동 반영이 아직 실행되지 않았습니다. 스케줄러 또는 수동 반영을 확인하세요."
@@ -365,7 +365,7 @@ def build_naver_market_close_task_status(
         "module": "naver_market_close_task_status",
         "enabled": enabled,
         "daily_time": settings.naver_market_close_journal_time,
-        "scheduled_task_name": "InvestmentResearchOS-NaverMarketCloseJournal-0830",
+        "scheduled_task_name": "InvestmentResearchOS-NaverMarketCloseJournal-2010",
         "due_now": runtime.should_run_naver_market_close_journal_fn(settings) if enabled else False,
         "state": state,
         "task_log": log,

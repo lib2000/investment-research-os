@@ -23,7 +23,7 @@ flowchart LR
 ## Operational contract
 
 - Scheduled task: `InvestmentResearchOS-DailyStrategyValidation-0845`.
-- Daily time: 08:45 KST, after the 08:00 recommendation generation and 08:30 market-journal task.
+- Daily time: 08:45 KST, after the 08:00 recommendation generation. The domestic market-close journal runs separately at 20:10 KST after the KRX after-market close.
 - Catch-up: Task Scheduler `StartWhenAvailable` runs the missed task after the next sign-in/startup opportunity. 로그인 catch-up도 최신 예정일의 성공 상태를 확인해, 누락된 경우 같은 안전한 러너를 한 번 실행한다.
 - Idempotency: a successful result is produced at most once per local calendar day unless an operator passes `-Force`.
 - Retry: a failed task may retry twice at 15-minute intervals; a successful retry remains protected by the daily idempotency state.

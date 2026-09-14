@@ -1061,7 +1061,7 @@ class ConsoleSmokeToolTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("InvestmentResearchOS-DailyResearchOperations-1830", script_source)
+        self.assertIn("InvestmentResearchOS-DailyResearchOperations-2020", script_source)
         self.assertIn("-StartWhenAvailable", script_source)
         self.assertIn("-CredentialTarget", script_source)
         self.assertNotIn("dev-local-token", script_source)
@@ -23202,7 +23202,7 @@ class OpenClawAnswerSamplesTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("오늘 18:30 정기 갱신 대기", answer)
+        self.assertIn("오늘 20:20 정기 갱신 대기", answer)
         self.assertIn("전일 2026-07-07 완료 확인", answer)
         self.assertNotIn("DART: 0/93", answer)
 

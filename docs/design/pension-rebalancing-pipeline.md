@@ -61,7 +61,7 @@ flowchart LR
 
 ## Scheduling and recovery
 
-- Windows Task Scheduler invokes the safe runner daily at 19:00 KST.
+- Windows Task Scheduler invokes the safe runner daily at 20:45 KST, after the KRX 20:00 after-market close.
 - The runner's period ledger emits the monthly check once per month and the quarterly check once per configured quarter, so a PC that was off on the first day catches up after it next runs.
 - Task Scheduler uses `StartWhenAvailable`, `IgnoreNew`, and two bounded retries.
 

@@ -207,6 +207,7 @@ from research_os.kcif_reports import (
     should_refresh_kcif_cache,
 )
 from research_os.market_journal import naver_market_close_source_metadata
+from research_os.domestic_market_hours import build_domestic_market_hours_status
 import research_os.naver_market_close_automation as naver_market_close_automation
 import research_os.telegram_favorite_posts as telegram_favorite_posts
 import research_os.telegram_market_close_automation as telegram_market_close_automation
@@ -12125,6 +12126,12 @@ def load_latest_investment_calendar_payload(settings: Settings) -> dict:
 @app.get("/")
 def read_root() -> dict:
     return {"message": "매매일지 백엔드 서버가 정상 작동 중입니다."}
+
+
+@app.get("/api/v1/market/domestic-hours")
+def read_domestic_market_hours() -> dict:
+    """Return the research-only KRX/NXT session schedule in Korea time."""
+    return build_domestic_market_hours_status()
 
 
 @app.get("/api/v1/config/safety")

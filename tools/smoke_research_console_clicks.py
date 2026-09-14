@@ -408,12 +408,12 @@ def assert_partial_click_smoke(result: dict) -> None:
             ("publicIrSecFirecrawlDryRunShowsSafeStatus", "Firecrawl IR Dry-run 버튼에 키 없음/안전 상태 안내가 표시되지 않았습니다."),
             ("codeKnowledgeGraphShowsFlows", "시스템 구조 맵 버튼 결과에 운영 흐름 연결 상태가 표시되지 않았습니다."),
             ("naverStatusShowsDuplicateGuard", "네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다."),
-            ("naverStatusShowsTaskLog", "네이버 리서치 상태 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
+            ("naverStatusShowsTaskLog", "네이버 리서치 상태 화면에 20:10 자동 작업 로그가 표시되지 않았습니다."),
             ("naverStatusShowsKoreanTaskLog", "네이버 리서치 상태 화면의 작업 로그 한글 제목이 정상 표시되지 않았습니다."),
             ("naverStatusShowsJournalSource", "시장일지 화면 연결 요약에 자동/수동 입력 구분이 표시되지 않았습니다."),
             ("naverStatusUsesCompactDebug", "네이버 리서치 상태 화면에 recent_entries 원본 JSON이 과도하게 표시됩니다."),
             ("naverMarketJournalShowsDigest", "시황 시장일지 반영 화면에 시장일지 연결 요약이 표시되지 않았습니다."),
-            ("naverMarketJournalShowsTaskLog", "시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다."),
+            ("naverMarketJournalShowsTaskLog", "시황 시장일지 반영 화면에 20:10 자동 작업 로그가 표시되지 않았습니다."),
         ]
         if not (result.get("naverRepairShowsSoftArchive") or result.get("naverRepairShowsProgress")):
             raise AssertionError("네이버 리서치 정리 화면에 소프트 보관 정책 또는 처리 진행 피드백이 표시되지 않았습니다.")
@@ -828,7 +828,7 @@ def run_click_smoke(
                       "네이버 리서치 자동 수집 상태",
                       `전체 캐시: ${{cacheCount || "확인"}}`,
                       `중복 시장일지 후보: ${{duplicateCount}}`,
-                      "08:30 자동 작업 로그",
+                      "20:10 자동 작업 로그",
                       "최근 로그",
                       "국내 주식 마감 시황",
                       `시장일지 화면 연결: ${{hasMarketJournal ? "확인" : "상태 확인"}}`,
@@ -1767,7 +1767,7 @@ def run_click_smoke(
                         const text = document.querySelector("#output")?.innerText || "";
                         return text.includes("네이버 리서치 자동 수집 상태") &&
                           text.includes("중복 시장일지 후보") &&
-                          text.includes("08:30 자동 작업 로그") &&
+                          text.includes("20:10 자동 작업 로그") &&
                           text.includes("시장일지 화면 연결") &&
                           text.includes("전체 캐시:")
                           ? text
@@ -1817,7 +1817,7 @@ def run_click_smoke(
                     () => {{
                       const text = document.querySelector("#output")?.innerText || "";
                       return text.includes("국내 마감 시황 시장일지") &&
-                        text.includes("08:30 자동 작업 로그") &&
+                          text.includes("20:10 자동 작업 로그") &&
                         text.includes("시장일지 화면 연결")
                         ? text
                         : "";
@@ -1859,7 +1859,7 @@ def run_click_smoke(
                         codeKnowledgeGraphText.includes("운영 주의 신호") &&
                         codeKnowledgeGraphText.includes("백엔드 모듈 헬스"),
                       naverStatusShowsDuplicateGuard: naverStatusText.includes("중복 시장일지 후보"),
-                      naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
+                      naverStatusShowsTaskLog: naverStatusText.includes("20:10 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                       naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
                       naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
                       naverStatusUsesCompactDebug:
@@ -1880,7 +1880,7 @@ def run_click_smoke(
                           naverRepairText.includes("중복")
                         ),
                       naverMarketJournalShowsDigest: naverMarketJournalText.includes("시장일지 화면 연결"),
-                      naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
+                      naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("20:10 자동 작업 로그"),
                       memoryFilterResults,
                       memoryQualityFilterPreview: memoryQualityFilterText.split("\\n").slice(0, 8).join("\\n"),
                       publicIrSecStatusPreview: publicIrSecStatusText.split("\\n").slice(0, 20).join("\\n"),
@@ -2232,7 +2232,7 @@ def run_click_smoke(
                     telegramBriefDeliveryVisible: systemCheckText.includes("텔레그램 중요 브리프 delivery"),
                     telegramBriefDeliveryShowsSafety: systemCheckText.includes("delivery 안전값"),
                     naverStatusShowsDuplicateGuard: naverStatusText.includes("중복 시장일지 후보"),
-                    naverStatusShowsTaskLog: naverStatusText.includes("08:30 자동 작업 로그") && naverStatusText.includes("최근 로그"),
+                      naverStatusShowsTaskLog: naverStatusText.includes("20:10 자동 작업 로그") && naverStatusText.includes("최근 로그"),
                     naverStatusShowsKoreanTaskLog: naverStatusText.includes("국내 주식 마감 시황"),
                     naverStatusShowsJournalSource: naverStatusText.includes("입력 구분:"),
                     naverStatusUsesCompactDebug:
@@ -2289,7 +2289,7 @@ def run_click_smoke(
                         naverRepairText.includes("중복")
                       ),
                     naverMarketJournalShowsDigest: naverMarketJournalText.includes("시장일지 화면 연결"),
-                    naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("08:30 자동 작업 로그"),
+                      naverMarketJournalShowsTaskLog: naverMarketJournalText.includes("20:10 자동 작업 로그"),
                     dailyRecommendationsShowsTopThree:
                       ((dailyRecommendationsText.includes("오늘의 추천 결과") ||
                         dailyRecommendationsText.includes("매일 한국/미국 추천 후보 1~3위")) &&
@@ -2455,7 +2455,7 @@ def run_click_smoke(
             if not result["naverStatusShowsDuplicateGuard"]:
                 raise AssertionError("네이버 리서치 상태 화면에 중복 시장일지 가드가 표시되지 않았습니다.")
             if not result["naverStatusShowsTaskLog"]:
-                raise AssertionError("네이버 리서치 상태 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
+                raise AssertionError("네이버 리서치 상태 화면에 20:10 자동 작업 로그가 표시되지 않았습니다.")
             if not result["naverStatusShowsKoreanTaskLog"]:
                 raise AssertionError("네이버 리서치 상태 화면의 작업 로그 한글 제목이 정상 표시되지 않았습니다.")
             if not result["naverStatusShowsJournalSource"]:
@@ -2479,7 +2479,7 @@ def run_click_smoke(
             if not result["naverMarketJournalShowsDigest"]:
                 raise AssertionError("시황 시장일지 반영 화면에 시장일지 연결 요약이 표시되지 않았습니다.")
             if not result["naverMarketJournalShowsTaskLog"]:
-                raise AssertionError("시황 시장일지 반영 화면에 08:30 자동 작업 로그가 표시되지 않았습니다.")
+                raise AssertionError("시황 시장일지 반영 화면에 20:10 자동 작업 로그가 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsTopThree"]:
                 raise AssertionError("오늘 한국/미국 추천 1~3위 버튼 결과가 화면에 표시되지 않았습니다.")
             if not result["dailyRecommendationsShowsExposure"]:

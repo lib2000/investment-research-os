@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "",
-  [string]$TaskName = "InvestmentResearchOS-PensionRebalancingReview-1900",
-  [string]$At = "19:00"
+  [string]$TaskName = "InvestmentResearchOS-PensionRebalancingReview-2045",
+  [string]$At = "20:45"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,7 +32,7 @@ $principal = New-ScheduledTaskPrincipal `
   -LogonType Interactive `
   -RunLevel Limited
 
-$description = "Checks monthly/quarterly pension allocation drift after 19:00, catches up after missed runs, saves a manual-review report, and never calls a broker order endpoint."
+$description = "Checks monthly/quarterly pension allocation drift after the KRX 20:00 after-market close, catches up after missed runs, saves a manual-review report, and never calls a broker order endpoint."
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description $description -Force | Out-Null
 
 Write-Host "Registered: $TaskName"

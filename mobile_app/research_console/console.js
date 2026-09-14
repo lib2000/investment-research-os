@@ -6946,7 +6946,7 @@ function summarizeSystemCheckValue(label, value) {
     const pdfCounts = value.pdf_extraction_counts || {};
     const marketJournal = value.market_close_journal || {};
     const sourceLabel = marketJournal.source_origin === "naver_research_auto" ? "자동 반영" : "수동/기타";
-    return `캐시 ${value.entry_count || 0}건 · RAG ${value.active_rag_count || 0}건 · 저장 누락 ${value.missing_storage_count || 0}건 · PDF 성공 ${pdfCounts.success || 0}건/미분석 ${pdfCounts.unknown || 0}건 · 시장일지 ${marketJournal.last_run_date || "미실행"} · ${sourceLabel} ${marketJournal.daily_time || "08:30"}`;
+    return `캐시 ${value.entry_count || 0}건 · RAG ${value.active_rag_count || 0}건 · 저장 누락 ${value.missing_storage_count || 0}건 · PDF 성공 ${pdfCounts.success || 0}건/미분석 ${pdfCounts.unknown || 0}건 · 시장일지 ${marketJournal.last_run_date || "미실행"} · ${sourceLabel} ${marketJournal.daily_time || "20:10"}`;
   }
   if (label.includes("텔레그램 미국 시장일지")) {
     const state = value.state || {};
@@ -16682,7 +16682,7 @@ function renderNaverResearchStatusText(result) {
     "## 국내 마감 시황 시장일지",
     "",
     `- 자동 반영: ${marketJournal.enabled ? "사용" : "중지"}`,
-    `- 실행 시간: ${marketJournal.daily_time || "08:30"}`,
+    `- 실행 시간: ${marketJournal.daily_time || "20:10"}`,
     `- 마지막 실행: ${marketJournal.last_run_at || "없음"}`,
     `- 마지막 리포트: ${marketJournal.source_title || "없음"}`,
     `- 리포트 발행일: ${marketJournal.source_published_at || "미확인"}`,
@@ -16749,18 +16749,18 @@ function renderMarketCloseJournalDigest(result) {
 
 function renderNaverMarketCloseTaskStatusText(result) {
   if (!result) {
-    return "## 08:30 자동 작업 로그\n\n- 상태 응답이 없습니다.";
+    return "## 20:10 자동 작업 로그\n\n- 상태 응답이 없습니다.";
   }
   const state = result.state || {};
   const log = result.task_log || {};
   const duplicateArchive = result.duplicate_archive || {};
   const recentLines = Array.isArray(log.recent_lines) ? log.recent_lines.slice(-5) : [];
   return [
-    "## 08:30 자동 작업 로그",
+    "## 20:10 자동 작업 로그",
     "",
     `- 작업 상태: ${result.status || "미확인"} · 다음 조치: ${result.next_action || "확인 필요"}`,
     `- 작업 이름: ${result.scheduled_task_name || "미확인"}`,
-    `- 실행 시간: ${result.daily_time || "08:30"} · 오늘 실행 필요: ${result.due_now ? "예" : "아니오"}`,
+    `- 실행 시간: ${result.daily_time || "20:10"} · 오늘 실행 필요: ${result.due_now ? "예" : "아니오"}`,
     `- 마지막 실행: ${state.last_run_at || "없음"}`,
     `- 마지막 반영 리포트: ${state.source_title || "없음"}`,
     `- 로그 파일: ${log.exists ? "확인됨" : "아직 없음"} (${log.line_count || 0}줄)`,
@@ -16796,7 +16796,7 @@ function renderNaverMarketJournalSmokeStatus({ result = null, status = null, jou
   const taskText = taskStatus
     ? renderNaverMarketCloseTaskStatusText(taskStatus)
     : [
-        "## 08:30 자동 작업 로그",
+        "## 20:10 자동 작업 로그",
         "",
         "- 작업 상태: 캐시 확인",
         "- 작업 이름: 국내 주식 마감 시황",
@@ -16835,12 +16835,12 @@ function renderNaverResearchSmokeStatus({ result = null, journal = null, taskSta
         "## 국내 마감 시황 시장일지",
         "",
         "- 자동 반영: 스모크 검증 중",
-        "- 실행 시간: 08:30",
+        "- 실행 시간: 20:10",
       ].join("\n");
   const taskText = taskStatus
     ? renderNaverMarketCloseTaskStatusText(taskStatus)
     : [
-        "## 08:30 자동 작업 로그",
+        "## 20:10 자동 작업 로그",
         "",
         "- 작업 상태: 캐시 확인",
         "- 작업 이름: 국내 주식 마감 시황",
@@ -16868,7 +16868,7 @@ elements.naverResearchStatusButton?.addEventListener("click", async () => {
   startOutputLoading("네이버 리서치 상태 조회 중", [
     "캐시/RAG 저장 건수 확인",
     "PDF 구조화 분석 상태 집계",
-    "08:30 시장일지 자동 반영 상태 확인",
+    "20:10 시장일지 자동 반영 상태 확인",
   ]);
   const smokeMode = isClickSmokeMode();
   const errors = [];
@@ -16879,12 +16879,12 @@ elements.naverResearchStatusButton?.addEventListener("click", async () => {
     ? await Promise.all([
         readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 8000, errors),
         readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 5000, errors),
-        readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
+        readOptionalWithTimeout("20:10 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
       ])
     : [
         await readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 30000, errors),
         await readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 15000, errors),
-        await readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 15000, errors),
+        await readOptionalWithTimeout("20:10 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 15000, errors),
       ];
   const statusText = result
     ? renderNaverResearchStatusText(result)
@@ -16898,7 +16898,7 @@ elements.naverResearchStatusButton?.addEventListener("click", async () => {
   const taskText = taskStatus
       ? renderNaverMarketCloseTaskStatusText(taskStatus)
       : [
-        "## 08:30 자동 작업 로그",
+        "## 20:10 자동 작업 로그",
         "",
         "- 작업 상태: 확인 지연",
         "- 작업 이름: 국내 주식 마감 시황",
@@ -16984,7 +16984,7 @@ elements.naverMarketJournalButton?.addEventListener("click", async () => {
       const [status, journal, taskStatus] = await Promise.all([
         readOptionalWithTimeout("네이버 리서치 상태", fetchNaverResearchStatus(token()), 8000, errors),
         readOptionalWithTimeout("시장일지 화면 연결", fetchMarketCloseJournal(token(), "KR"), 5000, errors),
-        readOptionalWithTimeout("08:30 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
+        readOptionalWithTimeout("20:10 자동 작업 로그", fetchNaverMarketCloseTaskStatus(token(), 20), 5000, errors),
       ]);
       setOutput(renderNaverMarketJournalSmokeStatus({
         result: { status: "smoke_cached", module: "naver_market_close_journal_refresh", save_result: false },

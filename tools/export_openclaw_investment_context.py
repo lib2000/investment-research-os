@@ -1555,7 +1555,7 @@ def render_first_read_markdown(packet: dict) -> str:
     dossier_queue = ((evidence_checks.get("automation") or {}).get("dossier_refresh_queue") or {})
     if research_evidence.get("dart_scheduled_refresh_pending") is True:
         dart_summary = (
-            f"today 18:30 refresh pending; prior day {dart.get('last_checked_date')} complete; "
+            f"today 20:20 refresh pending; prior day {dart.get('last_checked_date')} complete; "
             f"targets {dart.get('target_count', 0)}; failures {dart.get('failure_count', 0)}"
         )
     else:

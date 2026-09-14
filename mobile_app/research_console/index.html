@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 43V21h7v22zm11 0V29h7v14zm11 0V16h7v27z' fill='white'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css?v=f191134d9af7" />
+    <link rel="stylesheet" href="./styles.css?v=ea801d85e2d1" />
   </head>
   <body>
     <main class="app-shell">
@@ -43,6 +43,11 @@
         <div>
           <span>OpenClaw</span>
           <strong id="openClawStatus">대기</strong>
+        </div>
+        <div class="domestic-market-status-card">
+          <span>국내 주식 세션</span>
+          <strong id="domesticMarketStatus">확인 중</strong>
+          <small id="domesticMarketHours">KRX·NXT 거래시간을 불러오는 중입니다.</small>
         </div>
       </section>
 
@@ -1477,6 +1482,7 @@
       </section>
     </main>
 
-  <script type="module" src="./console.js?v=c24e3ee33fd8"></script>
+  <script type="module" src="./console.js?v=2faa86eb0dff"></script>
+  <script type="module" src="./domestic-market-hours.js?v=736ac1b180f9"></script>
 </body>
 </html>

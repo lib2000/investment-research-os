@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "",
-  [string]$TaskName = "InvestmentResearchOS-NaverMarketCloseJournal-0830",
-  [string]$At = "08:30",
+  [string]$TaskName = "InvestmentResearchOS-NaverMarketCloseJournal-2010",
+  [string]$At = "20:10",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN"
 )
 
@@ -22,6 +22,6 @@ $settings.DisallowStartIfOnBatteries = $false
 $settings.StopIfGoingOnBatteries = $false
 $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Creates the daily Naver market-close journal and catches up after the next sign-in when the PC was off." -Force | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Creates the daily Naver market-close journal after the KRX 20:00 after-market close and catches up after the next sign-in when the PC was off." -Force | Out-Null
 Write-Host "Registered: $TaskName"
 Write-Host "Trigger: daily $At, start when available"

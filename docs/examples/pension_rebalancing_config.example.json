@@ -17,13 +17,13 @@
   "monthly_schedule": {
     "enabled": true,
     "day": 1,
-    "time": "19:00"
+    "time": "20:45"
   },
   "quarterly_schedule": {
     "enabled": true,
     "months": [1, 4, 7, 10],
     "day": 1,
-    "time": "19:00"
+    "time": "20:45"
   },
   "google_calendar": {
     "enabled": false,

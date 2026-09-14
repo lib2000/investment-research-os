@@ -160,7 +160,7 @@ def build_research_evidence_answer(first_read: dict[str, Any]) -> str:
     dossier_queue = ((checks.get("automation") or {}).get("dossier_refresh_queue") or {})
     if evidence.get("dart_scheduled_refresh_pending") is True:
         dart_line = (
-            f"- DART: 오늘 18:30 정기 갱신 대기, 전일 {dart.get('last_checked_date')} 완료 확인, "
+            f"- DART: 오늘 20:20 정기 갱신 대기, 전일 {dart.get('last_checked_date')} 완료 확인, "
             f"대상 {dart.get('target_count', 0)}개, failures {dart.get('failure_count', 0)}건"
         )
     else:

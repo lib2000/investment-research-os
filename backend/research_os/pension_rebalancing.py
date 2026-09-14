@@ -59,13 +59,13 @@ def default_pension_rebalancing_config() -> dict[str, Any]:
         "monthly_schedule": {
             "enabled": True,
             "day": 1,
-            "time": "19:00",
+            "time": "20:45",
         },
         "quarterly_schedule": {
             "enabled": True,
             "months": [1, 4, 7, 10],
             "day": 1,
-            "time": "19:00",
+            "time": "20:45",
         },
         "google_calendar": {
             "enabled": False,
@@ -427,7 +427,7 @@ def build_pension_rebalancing_snapshot(
 
 
 def _schedule_time(value: Any) -> tuple[int, int]:
-    raw = str(value or "19:00").strip()
+    raw = str(value or "20:45").strip()
     try:
         hours, minutes = raw.split(":", 1)
         hour = int(hours)

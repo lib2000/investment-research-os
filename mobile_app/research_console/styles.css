@@ -288,6 +288,16 @@ label {
   font-size: 18px;
 }
 
+.status-grid small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
