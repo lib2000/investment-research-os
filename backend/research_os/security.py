@@ -1,3 +1,4 @@
+import secrets
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, status
@@ -16,7 +17,13 @@ def verify_user_token(
         )
 
     token = authorization.removeprefix("Bearer ").strip()
-    if token != settings.dev_user_token:
+    expected_token = str(settings.dev_user_token or "").strip()
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="서버 인증 설정이 비어 있습니다.",
+        )
+    if not secrets.compare_digest(token, expected_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="인증되지 않은 사용자입니다.",

@@ -11,6 +11,7 @@
 - Maintainer: `lib2000` / HYUNGJU LEE
 - Repository: `https://github.com/lib2000/investment-research-os`
 - Public safety check: `python tools\check_public_repo_safety.py`
+- Safe public source ZIP: `python tools\build_public_source_bundle.py --output output\InvestmentJournalApp-public-source.zip`
 - Security policy: [SECURITY.md](SECURITY.md)
 - Contribution and maintenance workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Codex support application notes: [docs/open-source-support-application.md](docs/open-source-support-application.md)

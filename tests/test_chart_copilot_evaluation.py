@@ -89,7 +89,7 @@ def test_payload_rejects_credential_like_text_and_unknown_fields():
         valid_request(evidence=["Authorization: Bearer secret-value"])
 
     with pytest.raises(ValidationError):
-        valid_request(evidence=["123456789:abcdefghijklmnopqrstuvwxyzABCDE12345"])
+        valid_request(evidence=[f"{123456789}:{'x' * 35}"])
 
     with pytest.raises(ValidationError):
         ChartCopilotEvaluationRequest(**{**valid_request().model_dump(mode="json"), "account_number": "123"})

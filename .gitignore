@@ -62,6 +62,7 @@ backend/tessdata/*.traineddata
 # Logs and temporary local artifacts
 output/
 tmp/
+/attachments/
 *.log
 *.out.log
 *.err.log

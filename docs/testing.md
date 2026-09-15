@@ -129,6 +129,8 @@ python tools\check_operational_readiness_score.py --strict --min-score 95
 python tools\check_portfolio_analysis_coverage.py --all-portfolios --min-average-completion 0.95 --write-backlog --strict
 python tools\check_git_sync_status.py
 python tools\check_public_repo_safety.py
+python tools\build_public_source_bundle.py --output output\InvestmentJournalApp-public-source.zip
+python tools\check_public_repo_safety.py --archive output\InvestmentJournalApp-public-source.zip
 python tools\check_backend_runtime_env.py --check-daily-tests
 python tools\check_backend_module_health.py --strict
 python tools\check_console_static_contract.py --strict

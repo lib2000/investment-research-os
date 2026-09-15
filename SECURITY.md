@@ -40,3 +40,22 @@ python tools\check_backend_runtime_env.py --strict
 ```
 
 If a check reports tracked secrets or private data paths, remove the files from Git tracking before pushing.
+
+## Public source ZIP
+
+Do not create a public ZIP by selecting a working folder in Explorer. That can
+accidentally include chat exports, screenshots, local attachments, token caches,
+or `.env` files that Git does not track.
+
+Build the review ZIP from Git-tracked source only, then keep the generated ZIP
+outside the repository history:
+
+```powershell
+python tools\check_public_repo_safety.py
+python tools\build_public_source_bundle.py --output output\InvestmentJournalApp-public-source.zip
+python tools\check_public_repo_safety.py --archive output\InvestmentJournalApp-public-source.zip
+```
+
+The checks print file paths only; they never print a suspected secret value.
+If a public ZIP has already contained a credential, treat that credential as
+exposed: revoke/rotate it with the provider before creating a replacement ZIP.
