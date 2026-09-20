@@ -4366,6 +4366,101 @@ label {
   background: #edf1f3;
 }
 
+.dart-governance-policy {
+  padding: 9px 11px;
+  border-left: 3px solid var(--dart-blue);
+  color: #36546d;
+  background: var(--dart-blue-soft);
+  font-size: 12px;
+}
+
+.dart-governance-snapshots {
+  display: grid;
+  gap: 12px;
+}
+
+.dart-governance-snapshot {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #cbd9e3;
+  border-radius: 7px;
+  background: #fbfdff;
+}
+
+.dart-governance-snapshot > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dart-governance-snapshot header span,
+.dart-governance-snapshot header small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dart-governance-snapshot h4 {
+  margin: 3px 0 0;
+  color: var(--dart-ink);
+  font-size: 16px;
+}
+
+.dart-governance-fact-grid,
+.dart-governance-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dart-governance-fact-grid section,
+.dart-governance-detail-grid section {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbe5ec;
+  border-radius: 6px;
+  background: white;
+}
+
+.dart-governance-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dart-governance-fact-grid strong,
+.dart-governance-detail-grid strong {
+  display: block;
+  color: #456075;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.dart-governance-fact-grid p,
+.dart-governance-detail-grid p,
+.dart-governance-detail-grid ul {
+  margin: 5px 0 0;
+  color: var(--dart-ink);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dart-governance-detail-grid ul {
+  padding-left: 17px;
+}
+
+.dart-governance-detail-grid a {
+  color: var(--dart-blue);
+  font-weight: 850;
+}
+
+.dart-governance-endpoints {
+  color: var(--muted) !important;
+  font-size: 11px !important;
+}
+
 .dart-lab-screening-rule {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -7950,6 +8045,8 @@ pre {
   .dart-lab-metric-grid,
   .dart-lab-coverage-grid,
   .dart-lab-report-list li,
+  .dart-governance-fact-grid,
+  .dart-governance-detail-grid,
   .dart-lab-screening-rule {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -7963,6 +8060,11 @@ pre {
   .dart-lab-actions a {
     grid-column: 1;
     min-height: 44px;
+  }
+
+  .dart-governance-snapshot > header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dart-lab-section-nav {

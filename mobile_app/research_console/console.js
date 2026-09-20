@@ -8,6 +8,7 @@
   refreshDartFilingWatch,
   fetchDartAnnualReportLabStatus,
   refreshDartAnnualReportLab,
+  refreshDartAnnualReportGovernance,
   reportBackendHealthAlert,
   fetchTickerDashboard,
   fetchResearchManifest,
@@ -134,7 +135,7 @@
   saveMarketCloseReview,
   assessResearchChecklist,
   exportResultXlsx,
-} from "./api.js?v=f8d4afc3c8c4";
+} from "./api.js?v=7810081d89c6";
 
 const elements = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
@@ -186,6 +187,7 @@ const elements = {
   dartAnnualLabContent: document.querySelector("#dartAnnualLabContent"),
   dartAnnualLabStatusButton: document.querySelector("#dartAnnualLabStatusButton"),
   dartAnnualLabRunButton: document.querySelector("#dartAnnualLabRunButton"),
+  dartAnnualLabGovernanceRunButton: document.querySelector("#dartAnnualLabGovernanceRunButton"),
   macroForm: document.querySelector("#macroForm"),
   kcifReportsWatchButton: document.querySelector("#kcifReportsWatchButton"),
   kcifReportsRefreshButton: document.querySelector("#kcifReportsRefreshButton"),
@@ -12984,6 +12986,7 @@ function renderDartAnnualReportLab(payload) {
   const environment = payload.environment || {};
   const quota = payload.quota || {};
   const coverage = payload.coverage || {};
+  const governance = payload.governance || {};
   const policies = Array.isArray(payload.policy_checks) ? payload.policy_checks : [];
   const activity = Array.isArray(payload.activity_30d) ? payload.activity_30d : [];
   const failures = Array.isArray(payload.recent_failures) ? payload.recent_failures : [];
@@ -13057,6 +13060,92 @@ function renderDartAnnualReportLab(payload) {
       <p>${escapeHtml(item.detail || fallbackDetail)}</p>
     </section>`;
   };
+  const governanceFact = (...values) =>
+    values
+      .filter((value) => value != null && String(value).trim())
+      .map((value) => String(value).trim())
+      .join(" · ") || "확인 필요";
+  const governanceRows = (rows, formatter, emptyText) => {
+    if (!Array.isArray(rows) || !rows.length) return `<p>${escapeHtml(emptyText)}</p>`;
+    return `<ul>${rows
+      .map((row) => `<li>${escapeHtml(formatter(row || {}))}</li>`)
+      .join("")}</ul>`;
+  };
+  const governanceSnapshots = Array.isArray(governance.recent_snapshots)
+    ? governance.recent_snapshots
+    : [];
+  const governanceCard = (() => {
+    const item = milestoneByKey.governance || {};
+    const active = item.state === "active";
+    const snapshots = governanceSnapshots.length
+      ? governanceSnapshots
+          .map((snapshot) => {
+            const summary = snapshot.summary || {};
+            const holder = (summary.largest_holders || [])[0] || {};
+            const holderChange = (summary.largest_holder_changes || [])[0] || {};
+            const executiveRows = governanceRows(
+              (summary.executives || []).slice(0, 4),
+              (row) => governanceFact(row.name, row.position, row.role, row.registered),
+              "공개 임원 현황 없음"
+            );
+            const employeeRows = governanceRows(
+              (summary.employees || []).slice(0, 3),
+              (row) => governanceFact(row.business_unit, row.gender, row.total && `합계 ${row.total}`, row.average_salary && `1인평균 ${row.average_salary}`),
+              "공개 직원 현황 없음"
+            );
+            const shareRows = governanceRows(
+              (summary.share_structure || []).slice(0, 3),
+              (row) => governanceFact(row.class, row.issued && `발행 ${row.issued}`, row.treasury && `자기주식 ${row.treasury}`, row.float && `유통 ${row.float}`),
+              "공개 주식총수 현황 없음"
+            );
+            const dividendRows = governanceRows(
+              (summary.dividends || []).slice(0, 3),
+              (row) => governanceFact(row.category, row.stock_kind, row.current && `당기 ${row.current}`, row.prior && `전기 ${row.prior}`),
+              "공개 배당 현황 없음"
+            );
+            const remunerationRows = governanceRows(
+              [
+                ...(summary.board_remuneration || []).slice(0, 2),
+                ...(summary.individual_remuneration || []).slice(0, 3),
+              ],
+              (row) => governanceFact(row.category || row.name, row.position, row.people && `인원 ${row.people}`, row.approved_amount && `승인 ${row.approved_amount}`, row.total_amount && `보수 ${row.total_amount}`),
+              "공개 보수 현황 없음"
+            );
+            const endpointStates = Array.isArray(snapshot.endpoint_statuses)
+              ? snapshot.endpoint_statuses
+              : [];
+            return `<article class="dart-governance-snapshot">
+              <header>
+                <div><span>${escapeHtml(snapshot.business_year || governance.business_year || "사업연도 확인 필요")} · ${escapeHtml(snapshot.report_code || "11011")}</span><h4>${escapeHtml(snapshot.corp_name || snapshot.ticker || "회사명 확인 필요")} <small>${escapeHtml(snapshot.ticker || "")}</small></h4></div>
+                <b class="dart-lab-state ${escapeHtml(snapshot.status || "empty")}">${escapeHtml(snapshot.status || "확인 필요")}</b>
+              </header>
+              <div class="dart-governance-fact-grid">
+                <section><strong>최대주주</strong><p>${escapeHtml(governanceFact(holder.name, holder.relationship, holder.shares && `보유 ${holder.shares}`, holder.ownership_pct && `지분 ${holder.ownership_pct}%`))}</p></section>
+                <section><strong>최근 최대주주 변동</strong><p>${escapeHtml(governanceFact(holderChange.date, holderChange.name, holderChange.ownership_pct && `지분 ${holderChange.ownership_pct}%`, holderChange.cause))}</p></section>
+                <section><strong>수집 시각(KST)</strong><p>${escapeHtml(snapshot.captured_at_kst || "확인 필요")}</p></section>
+              </div>
+              <div class="dart-governance-detail-grid">
+                <section><strong>임원</strong>${executiveRows}</section>
+                <section><strong>직원·급여</strong>${employeeRows}</section>
+                <section><strong>주식총수</strong>${shareRows}</section>
+                <section><strong>배당</strong>${dividendRows}</section>
+                <section><strong>이사·감사 보수</strong>${remunerationRows}</section>
+                <section><strong>공식 근거</strong><p>${snapshot.source_url ? `<a href="${escapeHtml(snapshot.source_url)}" target="_blank" rel="noreferrer">사업보고서 원문</a>` : "접수번호 확인 필요"}</p><p class="dart-governance-endpoints">${escapeHtml(endpointStates.map((endpoint) => `${endpoint.label || endpoint.key}: ${endpoint.state || "확인 필요"}`).join(" · ") || "API 상태 확인 필요")}</p></section>
+              </div>
+            </article>`;
+          })
+          .join("")
+      : `<p class="dart-lab-empty">아직 지배구조 스냅샷이 없습니다. 순환 점검은 가족 보유·관심 한국 종목에서 최신 사업연도 사업보고서를 2개씩 확인합니다.</p>`;
+    return `<section id="dartLabGovernance" class="dart-lab-milestone ${active ? "active" : "planned"}">
+      <div class="dart-lab-section-heading">
+        <div><span>MILESTONE 2 · NORMALIZED FACTS</span><h3>${escapeHtml(item.label || "지배구조·주주·보수")}</h3></div>
+        <b>${active ? "활성" : "다음 마일스톤"}</b>
+      </div>
+      <p>${escapeHtml(item.detail || "최대주주·임원·직원·보수·배당·주식총수를 정규화된 공개 사실로만 보관합니다.")}</p>
+      <p class="dart-governance-policy">${escapeHtml(governance.storage_policy || "원문과 원본 API 응답은 저장하지 않으며, 같은 내용은 content hash로 중복 보관하지 않습니다.")}</p>
+      <div class="dart-governance-snapshots">${snapshots}</div>
+    </section>`;
+  })();
 
   elements.dartAnnualLabContent.innerHTML = `
     <section id="dartLabCollection" class="dart-lab-section">
@@ -13115,7 +13204,7 @@ function renderDartAnnualReportLab(payload) {
       </article>
     </section>
 
-    ${milestoneCard("governance", "dartLabGovernance", "MILESTONE 2", "지배구조·주주·보수", "최대주주 변동, 임원 현황, 직원수·1인평균급여, 이사·감사 보수, 배당, 주식총수를 다룹니다.")}
+    ${governanceCard}
     ${milestoneCard("business_text", "dartLabBusiness", "MILESTONE 3", "사업의 내용 분석", "원문 파싱 후 연도 간 문구 diff와 위험 키워드 추이를 제공합니다.")}
     ${milestoneCard("screening", "dartLabScreening", "MILESTONE 4", "스크리닝", "불리언 필터만 제공하며 종합 점수와 랭킹은 만들지 않습니다.")}
     <div class="dart-lab-screening-rule"><strong>스크리닝 설계 결정</strong><p>명시적 조건의 참·거짓만 비교합니다. 사후 검증 수단이 없는 종합 점수와 랭킹은 산출하지 않습니다.</p></div>
@@ -13162,6 +13251,32 @@ elements.dartAnnualLabRunButton?.addEventListener("click", async () => {
     await loadDartAnnualReportLab({ showOutput: false });
     setOutput(result);
     await runSecondaryRefresh("저장 보고서 수 새로고침", () => refreshStatus(false));
+  } catch (error) {
+    renderDartAnnualReportLabError(error);
+    setError(error);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+elements.dartAnnualLabGovernanceRunButton?.addEventListener("click", async () => {
+  const button = elements.dartAnnualLabGovernanceRunButton;
+  syncApiBaseUrl();
+  button.disabled = true;
+  startOutputLoading("DART 지배구조·주주·보수 순환 점검 중", [
+    "가족 보유·관심 한국 종목 중 최대 2개 선택",
+    "최대주주·임원·직원·주식총수·배당·보수 정형 API 확인",
+    "HTTP와 DART 본문 status를 각각 기록",
+    "원문 응답 없이 정규화 스냅샷·content hash 갱신",
+  ]);
+  try {
+    const result = await refreshDartAnnualReportGovernance(token(), {
+      maxTickers: 2,
+      force: false,
+    });
+    dartAnnualLabLoaded = false;
+    await loadDartAnnualReportLab({ showOutput: false });
+    setOutput(result);
   } catch (error) {
     renderDartAnnualReportLabError(error);
     setError(error);

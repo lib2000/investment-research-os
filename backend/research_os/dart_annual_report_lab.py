@@ -8,6 +8,8 @@ body status is recorded independently from the HTTP status.
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
+import json
 import re
 import sqlite3
 from pathlib import Path
@@ -24,7 +26,7 @@ from research_os.state_store import (
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ANNUAL_REPORT_DETAIL_TYPE = "A001"
 ANNUAL_REPORT_CODE = "11011"
 DART_SUCCESS_STATUSES = frozenset({"000"})
@@ -33,7 +35,23 @@ DEFAULT_PROVIDER_LIMIT_REFERENCE = 20_000
 DEFAULT_DAILY_SELF_CAP = 15_000
 MAX_RECENT_FAILURES = 30
 MAX_BATCH_TICKERS = 50
+MAX_GOVERNANCE_BATCH_TICKERS = 12
+DEFAULT_GOVERNANCE_BATCH_TICKERS = 2
 LEDGER_FILE_NAME = "dart_annual_report_lab.sqlite3"
+
+# Keep this registry in lockstep with OpenDartClient's request bundle.  It is
+# intentionally a compact public-research subset, not an archive of raw DART
+# response bodies or annual-report text.
+GOVERNANCE_ENDPOINT_KEYS = (
+    "largest_holders",
+    "largest_holder_changes",
+    "executives",
+    "employees",
+    "share_structure",
+    "dividends",
+    "board_remuneration",
+    "individual_remuneration",
+)
 
 DISCLAIMER = (
     "출처: 금융감독원 전자공시시스템(DART) 오픈API. 금융감독원은 공시정보의 "
@@ -119,6 +137,24 @@ def _connect(settings: Settings) -> sqlite3.Connection:
             value TEXT NOT NULL,
             updated_at_kst TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS dart_governance_snapshot (
+            snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            corp_code TEXT,
+            corp_name TEXT,
+            business_year TEXT NOT NULL,
+            report_code TEXT NOT NULL,
+            source_receipt_no TEXT,
+            source_url TEXT,
+            content_hash TEXT NOT NULL,
+            captured_at_kst TEXT NOT NULL,
+            status TEXT NOT NULL,
+            summary_json TEXT NOT NULL,
+            UNIQUE(ticker, business_year, report_code, content_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dart_governance_latest
+            ON dart_governance_snapshot(ticker, business_year, report_code, captured_at_kst DESC);
         """
     )
     return connection
@@ -308,6 +344,488 @@ def _write_meta(settings: Settings, key: str, value: object) -> None:
         connection.close()
 
 
+def _snapshot_value(row: dict, *keys: str, limit: int = 120) -> str | None:
+    """Return the first compact public field from an official row."""
+
+    for key in keys:
+        value = _compact_text(row.get(key), limit=limit)
+        if value:
+            return value
+    return None
+
+
+def _snapshot_rows(
+    endpoint_rows: dict[str, list[dict]],
+    key: str,
+    fields: tuple[tuple[str, tuple[str, ...]], ...],
+    *,
+    limit: int,
+) -> list[dict[str, str]]:
+    """Project raw endpoint rows into the documented, minimized data contract."""
+
+    projected: list[dict[str, str]] = []
+    for row in endpoint_rows.get(key, [])[:limit]:
+        if not isinstance(row, dict):
+            continue
+        item = {
+            label: value
+            for label, source_keys in fields
+            if (value := _snapshot_value(row, *source_keys)) is not None
+        }
+        if item:
+            projected.append(item)
+    return projected
+
+
+def _governance_snapshot_from_payload(
+    ticker: str,
+    corp: dict,
+    payload: dict,
+) -> dict[str, Any]:
+    """Build a compact, public research snapshot without retaining raw bodies."""
+
+    endpoints = [item for item in payload.get("endpoints", []) if isinstance(item, dict)]
+    endpoint_rows = {
+        str(item.get("key") or ""): [row for row in item.get("rows", []) if isinstance(row, dict)]
+        for item in endpoints
+    }
+    endpoint_statuses: list[dict[str, str | None]] = []
+    receipt_numbers: list[str] = []
+    states: list[str] = []
+    for item in endpoints:
+        key = _compact_text(item.get("key"), limit=60)
+        if not key:
+            continue
+        rows = endpoint_rows.get(key, [])
+        receipt_no = next(
+            (
+                _snapshot_value(row, "rcept_no", limit=20)
+                for row in rows
+                if _snapshot_value(row, "rcept_no", limit=20)
+            ),
+            None,
+        )
+        if receipt_no:
+            receipt_numbers.append(receipt_no)
+        state = _compact_text(item.get("state"), limit=20) or "error"
+        states.append(state)
+        endpoint_statuses.append(
+            {
+                "key": key,
+                "label": _compact_text(item.get("label"), limit=80) or key,
+                "api_name": _compact_text(item.get("api_name"), limit=100) or None,
+                "state": state,
+                "dart_status": _compact_text(item.get("dart_status"), limit=12) or None,
+                "receipt_no": receipt_no,
+            }
+        )
+
+    error_count = sum(1 for state in states if state == "error")
+    usable_count = sum(1 for state in states if state in {"ok", "empty"})
+    if error_count and usable_count:
+        status = "partial_success"
+    elif error_count:
+        status = "failed"
+    elif any(state == "ok" for state in states):
+        status = "success"
+    else:
+        status = "empty"
+
+    summary = {
+        "largest_holders": _snapshot_rows(
+            endpoint_rows,
+            "largest_holders",
+            (
+                ("name", ("nm", "mxmm_shrholdr_nm")),
+                ("relationship", ("relate", "mxmm_shrholdr_relate")),
+                ("stock_kind", ("stock_knd",)),
+                ("shares", ("trmend_posesn_stock_co", "posesn_stock_co", "stock_co")),
+                ("ownership_pct", ("trmend_posesn_stock_qota_rt", "qota_rt", "posesn_stock_qota_rt")),
+            ),
+            limit=6,
+        ),
+        "largest_holder_changes": _snapshot_rows(
+            endpoint_rows,
+            "largest_holder_changes",
+            (
+                ("date", ("change_on",)),
+                ("name", ("mxmm_shrholdr_nm", "nm")),
+                ("shares", ("posesn_stock_co", "trmend_posesn_stock_co")),
+                ("ownership_pct", ("qota_rt", "trmend_posesn_stock_qota_rt")),
+                ("cause", ("change_cause",)),
+            ),
+            limit=6,
+        ),
+        "executives": _snapshot_rows(
+            endpoint_rows,
+            "executives",
+            (
+                ("name", ("nm",)),
+                ("position", ("ofcps",)),
+                ("registered", ("rgist_exctv_at",)),
+                ("full_time", ("fte_at",)),
+                ("role", ("chrg_job",)),
+                ("largest_holder_relation", ("mxmm_shrholdr_relate",)),
+                ("tenure_end", ("tenure_end_on",)),
+            ),
+            limit=12,
+        ),
+        "employees": _snapshot_rows(
+            endpoint_rows,
+            "employees",
+            (
+                ("business_unit", ("fo_bbm",)),
+                ("gender", ("sexdstn",)),
+                ("regular", ("rgllbr_co",)),
+                ("contract", ("cnttk_co",)),
+                ("total", ("sm",)),
+                ("average_tenure", ("avrg_cnwk_sdytrn",)),
+                ("average_salary", ("jan_salary_am",)),
+            ),
+            limit=12,
+        ),
+        "share_structure": _snapshot_rows(
+            endpoint_rows,
+            "share_structure",
+            (
+                ("class", ("se",)),
+                ("issued", ("istc_totqy",)),
+                ("treasury", ("tesstk_co",)),
+                ("float", ("distb_stock_co",)),
+            ),
+            limit=6,
+        ),
+        "dividends": _snapshot_rows(
+            endpoint_rows,
+            "dividends",
+            (
+                ("category", ("se",)),
+                ("stock_kind", ("stock_knd",)),
+                ("current", ("thstrm",)),
+                ("prior", ("frmtrm",)),
+                ("two_years_prior", ("lwfr",)),
+            ),
+            limit=8,
+        ),
+        "board_remuneration": _snapshot_rows(
+            endpoint_rows,
+            "board_remuneration",
+            (
+                ("category", ("se",)),
+                ("people", ("nmpr",)),
+                ("approved_amount", ("gmtsck_confm_amount",)),
+            ),
+            limit=8,
+        ),
+        "individual_remuneration": _snapshot_rows(
+            endpoint_rows,
+            "individual_remuneration",
+            (
+                ("name", ("nm",)),
+                ("position", ("ofcps",)),
+                ("total_amount", ("mendng_totamt",)),
+                ("stock_compensation_amount", ("stk_bsd_pd_mendng_totamt_amt",)),
+                ("stock_option_price", ("stk_opt_exrc_pr",)),
+            ),
+            limit=5,
+        ),
+    }
+    source_receipt_no = next(iter(dict.fromkeys(receipt_numbers)), None)
+    source_url = (
+        f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={source_receipt_no}"
+        if source_receipt_no
+        else None
+    )
+    payload_for_hash = {
+        "ticker": _compact_text(ticker, limit=12),
+        "corp_code": _compact_text(corp.get("corp_code"), limit=12),
+        "business_year": _compact_text(payload.get("business_year"), limit=8),
+        "report_code": _compact_text(payload.get("report_code"), limit=12),
+        "endpoint_statuses": endpoint_statuses,
+        "summary": summary,
+    }
+    content_hash = hashlib.sha256(
+        json.dumps(payload_for_hash, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        "ticker": _compact_text(ticker, limit=12),
+        "corp_code": _compact_text(corp.get("corp_code"), limit=12) or None,
+        "corp_name": _compact_text(corp.get("corp_name"), limit=120) or None,
+        "business_year": _compact_text(payload.get("business_year"), limit=8),
+        "report_code": _compact_text(payload.get("report_code"), limit=12),
+        "source_receipt_no": source_receipt_no,
+        "source_url": source_url,
+        "content_hash": content_hash,
+        "captured_at_kst": current_storage_timestamp(),
+        "status": status,
+        "summary": summary,
+        "endpoint_statuses": endpoint_statuses,
+    }
+
+
+def _store_governance_snapshot(settings: Settings, snapshot: dict[str, Any]) -> bool:
+    """Persist only normalized facts; unchanged content remains immutable once."""
+
+    summary_json = json.dumps(
+        {
+            "summary": snapshot.get("summary") or {},
+            "endpoint_statuses": snapshot.get("endpoint_statuses") or [],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    connection = _connect(settings)
+    try:
+        cursor = connection.execute(
+            """
+            INSERT OR IGNORE INTO dart_governance_snapshot(
+                ticker, corp_code, corp_name, business_year, report_code,
+                source_receipt_no, source_url, content_hash, captured_at_kst,
+                status, summary_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot.get("ticker"),
+                snapshot.get("corp_code"),
+                snapshot.get("corp_name"),
+                snapshot.get("business_year"),
+                snapshot.get("report_code"),
+                snapshot.get("source_receipt_no"),
+                snapshot.get("source_url"),
+                snapshot.get("content_hash"),
+                snapshot.get("captured_at_kst"),
+                snapshot.get("status"),
+                summary_json,
+            ),
+        )
+        connection.commit()
+        return bool(cursor.rowcount)
+    finally:
+        connection.close()
+
+
+def _latest_governance_snapshots(
+    settings: Settings,
+    *,
+    business_year: str | None = None,
+    limit: int = 24,
+) -> list[dict[str, Any]]:
+    connection = _connect(settings)
+    try:
+        if business_year:
+            rows = connection.execute(
+                """
+                SELECT ticker, corp_code, corp_name, business_year, report_code,
+                       source_receipt_no, source_url, captured_at_kst, status, summary_json
+                  FROM dart_governance_snapshot
+                 WHERE business_year = ? AND report_code = ?
+                 ORDER BY captured_at_kst DESC, snapshot_id DESC
+                 LIMIT ?
+                """,
+                (business_year, ANNUAL_REPORT_CODE, max(1, limit)),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT ticker, corp_code, corp_name, business_year, report_code,
+                       source_receipt_no, source_url, captured_at_kst, status, summary_json
+                  FROM dart_governance_snapshot
+                 ORDER BY captured_at_kst DESC, snapshot_id DESC
+                 LIMIT ?
+                """,
+                (max(1, limit),),
+            ).fetchall()
+    finally:
+        connection.close()
+    snapshots: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        item = dict(row)
+        ticker = str(item.get("ticker") or "").strip()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        try:
+            stored = json.loads(str(item.pop("summary_json") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            stored = {}
+        item["summary"] = stored.get("summary") if isinstance(stored, dict) else {}
+        item["endpoint_statuses"] = (
+            stored.get("endpoint_statuses") if isinstance(stored, dict) else []
+        )
+        snapshots.append(item)
+    return snapshots
+
+
+def _governance_covered_tickers(settings: Settings, *, business_year: str) -> set[str]:
+    connection = _connect(settings)
+    try:
+        rows = connection.execute(
+            """
+            SELECT DISTINCT ticker
+              FROM dart_governance_snapshot
+             WHERE business_year = ?
+               AND report_code = ?
+               AND status IN ('success', 'partial_success', 'empty')
+            """,
+            (business_year, ANNUAL_REPORT_CODE),
+        ).fetchall()
+    finally:
+        connection.close()
+    return {str(row["ticker"]).strip() for row in rows if str(row["ticker"]).strip()}
+
+
+def build_dart_governance_status(
+    settings: Settings,
+    *,
+    target_universe: dict | None,
+) -> dict[str, Any]:
+    """Return the secret-free M2 readiness and latest normalized snapshots."""
+
+    universe = target_universe if isinstance(target_universe, dict) else {}
+    business_year = str(current_storage_date().year - 1)
+    targets = [
+        str(ticker).strip()
+        for ticker in universe.get("target_tickers") or []
+        if re.fullmatch(r"\d{6}", str(ticker).strip())
+    ]
+    covered = _governance_covered_tickers(settings, business_year=business_year)
+    snapshots = _latest_governance_snapshots(settings, business_year=business_year, limit=48)
+    return {
+        "state": "active",
+        "business_year": business_year,
+        "report_code": ANNUAL_REPORT_CODE,
+        "scope": "가족 보유·관심 한국 종목의 최신 사업보고서 정형 API",
+        "storage_policy": "원문·원본 응답·요청 URL 없이 정규화된 공개 사실과 content hash만 저장",
+        "target_count": len(targets),
+        "covered_tickers": sorted(covered),
+        "missing_tickers": [ticker for ticker in targets if ticker not in covered],
+        "coverage_rate": round(len(covered) / len(targets), 4) if targets else 1.0,
+        "recent_snapshots": snapshots[:12],
+        "endpoint_keys": list(GOVERNANCE_ENDPOINT_KEYS),
+        "default_batch_tickers": DEFAULT_GOVERNANCE_BATCH_TICKERS,
+        "max_batch_tickers": MAX_GOVERNANCE_BATCH_TICKERS,
+    }
+
+
+def refresh_dart_annual_report_governance(
+    settings: Settings,
+    *,
+    target_universe: dict,
+    client: Any,
+    normalize_ticker: Callable[[str], str],
+    tickers: list[str] | None = None,
+    max_tickers: int = DEFAULT_GOVERNANCE_BATCH_TICKERS,
+    business_year: int | str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Refresh a small, current-year governance bundle without raw retention."""
+
+    started_at = current_storage_timestamp()
+    year = str(business_year or current_storage_date().year - 1).strip()
+    if not re.fullmatch(r"\d{4}", year):
+        raise ValueError("business_year는 네 자리 사업연도여야 합니다.")
+    limit = max(1, min(int(max_tickers or DEFAULT_GOVERNANCE_BATCH_TICKERS), MAX_GOVERNANCE_BATCH_TICKERS))
+    explicit = bool(tickers)
+    raw_candidates = tickers if explicit else list(target_universe.get("target_tickers") or [])
+    candidates = list(
+        dict.fromkeys(
+            normalized
+            for raw in raw_candidates
+            if re.fullmatch(r"\d{6}", normalized := normalize_ticker(str(raw)))
+        )
+    )
+    already_covered = _governance_covered_tickers(settings, business_year=year)
+    eligible = candidates if force else [ticker for ticker in candidates if ticker not in already_covered]
+    selected = eligible[:limit]
+    skipped: list[dict[str, str]] = [
+        {"ticker": ticker, "reason": "동일 사업연도 정규화 스냅샷이 이미 저장됨"}
+        for ticker in candidates
+        if ticker not in eligible
+    ]
+    saved: list[dict[str, str]] = []
+    unchanged: list[dict[str, str]] = []
+    failed: list[dict[str, str]] = []
+
+    if not getattr(client, "is_configured", False):
+        status = "skipped"
+        skipped.append({"reason": "DART_API_KEY가 설정되지 않아 외부 호출을 실행하지 않았습니다."})
+    elif not selected:
+        status = "skipped"
+        skipped.append({"reason": "현재 사업연도 대상의 지배구조 스냅샷이 모두 저장되어 있습니다."})
+    else:
+        status = "success"
+        for ticker in selected:
+            try:
+                corp, payload = client.fetch_annual_report_governance(
+                    ticker,
+                    business_year=year,
+                    report_code=ANNUAL_REPORT_CODE,
+                )
+                snapshot = _governance_snapshot_from_payload(ticker, corp, payload)
+                if snapshot["status"] == "failed":
+                    failed.append({"ticker": ticker, "category": "provider_error", "error": "지배구조 API 묶음이 모두 실패했습니다."})
+                    continue
+                if _store_governance_snapshot(settings, snapshot):
+                    saved.append({"ticker": ticker, "status": str(snapshot["status"])})
+                else:
+                    unchanged.append({"ticker": ticker, "reason": "공개 정형 사실이 이전 스냅샷과 동일함"})
+            except DartQuotaExceeded as exc:
+                failed.append(
+                    {
+                        "ticker": ticker,
+                        "category": "quota_stopped",
+                        "error": sanitize_dart_event_text(exc, secret=str(settings.dart_api_key or "")),
+                    }
+                )
+                status = "quota_stopped"
+                break
+            except Exception as exc:
+                failed.append(
+                    {
+                        "ticker": ticker,
+                        "category": "provider_error",
+                        "error": sanitize_dart_event_text(exc, secret=str(settings.dart_api_key or "")),
+                    }
+                )
+        if failed and status == "success":
+            status = "partial_success" if saved or unchanged else "failed"
+
+    run_id = record_dart_lab_run(
+        settings,
+        started_at_kst=started_at,
+        job_name="dart_annual_report_governance",
+        status=status,
+        selected_count=len(selected),
+        saved_count=len(saved),
+        skipped_count=len(skipped) + len(unchanged),
+        failed_count=len(failed),
+    )
+    governance = build_dart_governance_status(settings, target_universe=target_universe)
+    return {
+        "status": status,
+        "module": "dart_annual_report_governance_refresh",
+        "run_id": run_id,
+        "business_year": year,
+        "report_code": ANNUAL_REPORT_CODE,
+        "candidate_count": len(candidates),
+        "selected_count": len(selected),
+        "selected_tickers": selected,
+        "saved_count": len(saved),
+        "unchanged_count": len(unchanged),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "saved": saved[:30],
+        "unchanged": unchanged[:30],
+        "skipped": skipped[:30],
+        "failed": failed[:30],
+        "governance": governance,
+        "quota": _quota_status(settings),
+        "disclaimer": DISCLAIMER,
+        "safety": {"orders": False, "messages": False, "account_changes": False},
+    }
+
+
 def record_dart_lab_run(
     settings: Settings,
     *,
@@ -481,13 +999,34 @@ def _policy_checks(settings: Settings) -> list[dict[str, Any]]:
     path = dart_lab_db_path(settings)
     connection = _connect(settings)
     try:
-        columns = {
+        event_columns = {
             str(row["name"])
             for row in connection.execute("PRAGMA table_info(dart_request_event)").fetchall()
         }
+        governance_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(dart_governance_snapshot)").fetchall()
+        }
     finally:
         connection.close()
-    forbidden_columns = {"crtfc_key", "api_key", "request_params", "request_url"}
+    forbidden_columns = {
+        "crtfc_key",
+        "api_key",
+        "request_params",
+        "request_url",
+        "raw_response",
+        "response_body",
+        "raw_document",
+    }
+    required_governance_columns = {
+        "ticker",
+        "business_year",
+        "report_code",
+        "content_hash",
+        "captured_at_kst",
+        "status",
+        "summary_json",
+    }
     configured_key = str(settings.dart_api_key or "").strip()
     key_absent = True
     if configured_key:
@@ -528,8 +1067,14 @@ def _policy_checks(settings: Settings) -> list[dict[str, Any]]:
         ),
         (
             "secret_free_schema",
-            not (columns & forbidden_columns),
-            "인증키·전체 URL·요청 파라미터 컬럼 없음",
+            not (event_columns & forbidden_columns),
+            "요청 원장에 인증키·전체 URL·요청 파라미터 컬럼 없음",
+        ),
+        (
+            "governance_snapshot_schema",
+            required_governance_columns <= governance_columns
+            and not (governance_columns & forbidden_columns),
+            "지배구조 스냅샷은 content hash·KST 시각·정규화 JSON만 저장하고 원문 응답은 저장하지 않음",
         ),
         (
             "secret_absent_from_ledger",
@@ -581,6 +1126,7 @@ def build_dart_annual_report_lab_status(
     quota = _quota_status(settings)
     activity = _recent_activity(settings, days=30)
     failures = _recent_failures(settings)
+    governance = build_dart_governance_status(settings, target_universe=universe)
     configured = bool(str(settings.dart_api_key or "").strip())
     if any(not item["passed"] for item in policies):
         overall = "degraded"
@@ -636,6 +1182,7 @@ def build_dart_annual_report_lab_status(
             ],
             "cache_updated_at": cache.get("updated_at"),
         },
+        "governance": governance,
         "milestones": [
             {
                 "key": "collection",
@@ -646,8 +1193,8 @@ def build_dart_annual_report_lab_status(
             {
                 "key": "governance",
                 "label": "지배구조·주주·보수",
-                "state": "planned",
-                "detail": "최대주주 변동, 임원, 직원·급여, 보수, 배당, 주식총수",
+                "state": governance.get("state") or "active",
+                "detail": "최대주주·임원·직원·보수·배당·주식총수의 정규화 스냅샷(원문 응답 미저장)",
             },
             {
                 "key": "business_text",

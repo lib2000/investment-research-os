@@ -15,17 +15,21 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from research_os.dart_annual_report_lab import (
+    GOVERNANCE_ENDPOINT_KEYS,
     DartQuotaExceeded,
     begin_dart_request,
     build_dart_annual_report_lab_status,
+    build_dart_governance_status,
     classify_dart_response,
     complete_dart_request,
     dart_lab_db_path,
+    refresh_dart_annual_report_governance,
     refresh_dart_annual_report_index,
 )
 from research_os import dart_filing_watch
 from research_os.opendart_data_provider import OpenDartClient
 from research_os.settings import Settings
+from research_os.state_store import current_storage_date
 
 
 def _settings(tmp_path: Path, *, cap: int = 15_000, reference: int = 20_000) -> Settings:
@@ -366,6 +370,202 @@ def test_bounded_refresh_rotates_family_universe_and_marks_a001(tmp_path: Path) 
     assert result["safety"] == {"orders": False, "messages": False, "account_changes": False}
 
 
+def test_governance_snapshot_keeps_normalized_public_facts_without_raw_response(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    business_year = str(current_storage_date().year - 1)
+
+    class FakeClient:
+        is_configured = True
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str]] = []
+
+        def fetch_annual_report_governance(self, ticker: str, *, business_year: str, report_code: str):
+            self.calls.append((ticker, business_year, report_code))
+            return (
+                {"corp_code": "00126380", "corp_name": "삼성전자"},
+                {
+                    "business_year": business_year,
+                    "report_code": report_code,
+                    "endpoints": [
+                        {
+                            "key": "largest_holders",
+                            "label": "최대주주 현황",
+                            "api_name": "hyslrSttus.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [
+                                {
+                                    "rcept_no": "20260331001234",
+                                    "nm": "최대주주A",
+                                    "relate": "본인",
+                                    "trmend_posesn_stock_co": "100",
+                                    "trmend_posesn_stock_qota_rt": "10.0",
+                                }
+                            ],
+                        },
+                        {
+                            "key": "largest_holder_changes",
+                            "label": "최대주주 변동현황",
+                            "api_name": "hyslrChgSttus.json",
+                            "state": "empty",
+                            "dart_status": "013",
+                            "rows": [],
+                        },
+                        {
+                            "key": "executives",
+                            "label": "임원 현황",
+                            "api_name": "exctvSttus.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [
+                                {
+                                    "nm": "임원A",
+                                    "ofcps": "대표이사",
+                                    "rgist_exctv_at": "등기임원",
+                                    "birth_ym": "197001",
+                                    "main_career": "원문 상세경력은 저장하지 않아야 함",
+                                }
+                            ],
+                        },
+                        {
+                            "key": "employees",
+                            "label": "직원 현황",
+                            "api_name": "empSttus.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [{"fo_bbm": "반도체", "sm": "1000", "jan_salary_am": "5000"}],
+                        },
+                        {
+                            "key": "share_structure",
+                            "label": "주식의 총수 현황",
+                            "api_name": "stockTotqySttus.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [{"se": "합계", "istc_totqy": "10000", "tesstk_co": "10"}],
+                        },
+                        {
+                            "key": "dividends",
+                            "label": "배당에 관한 사항",
+                            "api_name": "alotMatter.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [{"se": "현금배당", "stock_knd": "보통주", "thstrm": "100"}],
+                        },
+                        {
+                            "key": "board_remuneration",
+                            "label": "이사·감사 전체 보수",
+                            "api_name": "drctrAdtAllMendngSttusGmtsckConfmAmount.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [{"se": "이사", "nmpr": "3", "gmtsck_confm_amount": "1000"}],
+                        },
+                        {
+                            "key": "individual_remuneration",
+                            "label": "개인별 보수 V2",
+                            "api_name": "hmvAuditIndvdlBySttusV2.json",
+                            "state": "ok",
+                            "dart_status": "000",
+                            "rows": [{"nm": "임원A", "ofcps": "대표이사", "mendng_totamt": "300"}],
+                        },
+                    ],
+                },
+            )
+
+    client = FakeClient()
+    universe = {"target_tickers": ["005930", "000660"], "target_count": 2}
+    result = refresh_dart_annual_report_governance(
+        settings,
+        target_universe=universe,
+        client=client,
+        normalize_ticker=lambda value: value.strip(),
+        max_tickers=1,
+        business_year=business_year,
+    )
+
+    assert result["status"] == "success"
+    assert result["selected_tickers"] == ["005930"]
+    assert result["saved_count"] == 1
+    assert client.calls == [("005930", business_year, "11011")]
+    governance = build_dart_governance_status(settings, target_universe=universe)
+    assert governance["state"] == "active"
+    snapshot = governance["recent_snapshots"][0]
+    assert snapshot["summary"]["largest_holders"][0]["name"] == "최대주주A"
+    assert snapshot["summary"]["executives"][0]["position"] == "대표이사"
+    assert snapshot["summary"]["employees"][0]["average_salary"] == "5000"
+    ledger_bytes = dart_lab_db_path(settings).read_bytes()
+    assert b"197001" not in ledger_bytes
+    assert "원문 상세경력은 저장하지 않아야 함".encode("utf-8") not in ledger_bytes
+    assert settings.dart_api_key.encode("utf-8") not in ledger_bytes
+
+    repeat = refresh_dart_annual_report_governance(
+        settings,
+        target_universe=universe,
+        client=client,
+        normalize_ticker=lambda value: value.strip(),
+        max_tickers=1,
+        business_year=business_year,
+    )
+    assert repeat["selected_tickers"] == ["000660"]
+
+
+def test_governance_client_uses_official_annual_report_endpoint_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    Path(settings.dart_corp_code_cache_file).write_text(
+        json.dumps(
+            {
+                "by_stock_code": {
+                    "005930": {
+                        "corp_code": "00126380",
+                        "corp_name": "삼성전자",
+                        "stock_code": "005930",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls: list[dict] = []
+
+    def fake_get(url, *, params, timeout, trust_env):
+        calls.append({"url": url, "params": params, "timeout": timeout, "trust_env": trust_env})
+        if url.endswith("hyslrSttus.json"):
+            return _Response({"status": "000", "list": [{"rcept_no": "20260331001234"}]})
+        return _Response({"status": "013", "message": "조회된 데이타가 없습니다."})
+
+    monkeypatch.setattr("research_os.opendart_data_provider.httpx.get", fake_get)
+    _, payload = OpenDartClient(settings, job_name="governance_test").fetch_annual_report_governance(
+        "005930",
+        business_year=2025,
+    )
+
+    assert [item["key"] for item in payload["endpoints"]] == list(GOVERNANCE_ENDPOINT_KEYS)
+    assert all(call["params"]["corp_code"] == "00126380" for call in calls)
+    assert all(call["params"]["bsns_year"] == "2025" for call in calls)
+    assert all(call["params"]["reprt_code"] == "11011" for call in calls)
+    assert {call["url"].rsplit("/", 1)[-1] for call in calls} == {
+        "hyslrSttus.json",
+        "hyslrChgSttus.json",
+        "exctvSttus.json",
+        "empSttus.json",
+        "stockTotqySttus.json",
+        "alotMatter.json",
+        "drctrAdtAllMendngSttusGmtsckConfmAmount.json",
+        "hmvAuditIndvdlBySttusV2.json",
+    }
+    status = build_dart_annual_report_lab_status(
+        settings,
+        dart_cache={"entries": {}},
+        target_universe={"target_tickers": ["005930"], "target_count": 1},
+    )
+    assert status["quota"]["recorded_requests"] == len(calls)
+    assert status["activity_30d"][-1]["empty_count"] == len(calls) - 1
+
+
 def test_console_and_daily_pipeline_contracts() -> None:
     html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(
         encoding="utf-8"
@@ -381,10 +581,15 @@ def test_console_and_daily_pipeline_contracts() -> None:
     )
     assert 'data-tab="dartAnnualLab"' in html
     assert 'id="dartAnnualLabContent"' in html
+    assert 'id="dartAnnualLabGovernanceRunButton"' in html
     assert "투자 권유나 매매 신호가 아닙니다" in html
     assert "fetchDartAnnualReportLabStatus" in api
     assert "refreshDartAnnualReportLab" in api
+    assert "refreshDartAnnualReportGovernance" in api
     assert "renderDartAnnualReportLab" in console
+    assert "dart-governance-snapshot" in console
     assert "NO RUN" in console
     assert "SkipDartAnnualReportLab" in daily
+    assert "SkipDartAnnualReportGovernance" in daily
     assert "/api/v1/dart/annual-report-lab/refresh" in daily
+    assert "/api/v1/dart/annual-report-lab/governance/refresh" in daily

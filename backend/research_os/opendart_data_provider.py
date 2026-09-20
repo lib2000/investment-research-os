@@ -36,6 +36,28 @@ _CORP_CODE_DOWNLOAD_LOCK = threading.Lock()
 
 class OpenDartClient:
     REPORT_CODE_BY_PRIORITY = ["11011", "11014", "11012", "11013"]
+    # The annual-report lab stores a deliberately small, normalized subset of
+    # these responses.  Keeping the official endpoint registry next to the
+    # client avoids parallel standalone DART clients with different error or
+    # quota behaviour.
+    ANNUAL_REPORT_GOVERNANCE_ENDPOINTS = (
+        ("largest_holders", "최대주주 현황", "hyslrSttus.json"),
+        ("largest_holder_changes", "최대주주 변동현황", "hyslrChgSttus.json"),
+        ("executives", "임원 현황", "exctvSttus.json"),
+        ("employees", "직원 현황", "empSttus.json"),
+        ("share_structure", "주식의 총수 현황", "stockTotqySttus.json"),
+        ("dividends", "배당에 관한 사항", "alotMatter.json"),
+        (
+            "board_remuneration",
+            "이사·감사 전체 보수(주주총회 승인금액)",
+            "drctrAdtAllMendngSttusGmtsckConfmAmount.json",
+        ),
+        (
+            "individual_remuneration",
+            "이사·감사 개인별 보수(5억원 이상) V2",
+            "hmvAuditIndvdlBySttusV2.json",
+        ),
+    )
 
     def __init__(self, settings: Settings, *, job_name: str = "opendart_client") -> None:
         self.settings = settings
@@ -365,6 +387,80 @@ class OpenDartClient:
                 }
             )
         return corp, normalized
+
+    def fetch_annual_report_governance(
+        self,
+        stock_code: str,
+        *,
+        business_year: int | str,
+        report_code: str = "11011",
+    ) -> tuple[dict, dict]:
+        """Fetch the bounded, annual-report governance API bundle.
+
+        The caller is responsible for normalizing and persisting only its
+        public research fields.  Raw response bodies and request parameters
+        intentionally remain outside the annual-report ledger.
+        """
+
+        corp = self.find_corp_by_stock_code(stock_code)
+        if not corp:
+            raise RuntimeError(f"OpenDART corp_code를 찾지 못했습니다: {stock_code}")
+        year = str(business_year).strip()
+        if not year.isdigit() or len(year) != 4:
+            raise ValueError("business_year는 네 자리 사업연도여야 합니다.")
+        normalized_report_code = str(report_code).strip()
+        if normalized_report_code != "11011":
+            raise ValueError("지배구조 스냅샷은 사업보고서 코드 11011만 허용합니다.")
+
+        endpoints: list[dict] = []
+        for key, label, api_name in self.ANNUAL_REPORT_GOVERNANCE_ENDPOINTS:
+            try:
+                payload = self._get_json(
+                    api_name,
+                    params={
+                        "crtfc_key": self.api_key,
+                        "corp_code": corp["corp_code"],
+                        "bsns_year": year,
+                        "reprt_code": normalized_report_code,
+                    },
+                    target=stock_code,
+                )
+            except DartQuotaExceeded:
+                raise
+            except Exception:
+                # The request has already been recorded in the secret-free
+                # ledger.  Do not return exception text because a transport
+                # library can include a complete request URL in that text.
+                endpoints.append(
+                    {
+                        "key": key,
+                        "label": label,
+                        "api_name": api_name,
+                        "state": "error",
+                        "dart_status": None,
+                        "rows": [],
+                    }
+                )
+                continue
+
+            dart_status = str(payload.get("status") or "").strip() or None
+            rows = payload.get("list")
+            normalized_rows = [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+            endpoints.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "api_name": api_name,
+                    "state": "ok" if dart_status == "000" else "empty" if dart_status == "013" else "error",
+                    "dart_status": dart_status,
+                    "rows": normalized_rows,
+                }
+            )
+        return corp, {
+            "business_year": year,
+            "report_code": normalized_report_code,
+            "endpoints": endpoints,
+        }
 
     def fetch_insider_ownership(self, stock_code: str) -> tuple[dict, dict]:
         """Return official executive/major-shareholder ownership reports.

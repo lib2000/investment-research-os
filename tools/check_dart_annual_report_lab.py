@@ -46,6 +46,11 @@ def build_check_payload(*, require_configured: bool = False) -> dict:
             "detail": "FastAPI A001 순환 점검 엔드포인트",
         },
         {
+            "key": "backend_governance_refresh_route",
+            "passed": '"/api/v1/dart/annual-report-lab/governance/refresh"' in main_source,
+            "detail": "FastAPI 지배구조 정형 스냅샷 엔드포인트",
+        },
+        {
             "key": "console_panel",
             "passed": all(
                 marker in html
@@ -62,7 +67,11 @@ def build_check_payload(*, require_configured: bool = False) -> dict:
             "key": "console_api",
             "passed": all(
                 marker in api
-                for marker in ("fetchDartAnnualReportLabStatus", "refreshDartAnnualReportLab")
+                for marker in (
+                    "fetchDartAnnualReportLabStatus",
+                    "refreshDartAnnualReportLab",
+                    "refreshDartAnnualReportGovernance",
+                )
             ),
             "detail": "콘솔 API 클라이언트",
         },
@@ -75,9 +84,10 @@ def build_check_payload(*, require_configured: bool = False) -> dict:
                     "NO RUN",
                     "실패 10%↑",
                     "종합 점수와 랭킹은 산출하지 않습니다",
+                    "dart-governance-snapshot",
                 )
             ),
-            "detail": "30일 원장·실패·스크리닝 정책 렌더링",
+            "detail": "30일 원장·실패·지배구조 스냅샷·스크리닝 정책 렌더링",
         },
         *lab.get("policy_checks", []),
     ]

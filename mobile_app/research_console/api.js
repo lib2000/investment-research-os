@@ -1371,6 +1371,26 @@ export async function refreshDartAnnualReportLab(accessToken, options = {}) {
   });
 }
 
+/**
+ * DART 사업보고서의 지배구조·주주·보수 정형 스냅샷을 작은 묶음으로 갱신합니다.
+ * 원문 응답과 요청 URL은 로컬 원장에 저장하지 않습니다.
+ */
+export async function refreshDartAnnualReportGovernance(accessToken, options = {}) {
+  return request("/api/v1/dart/annual-report-lab/governance/refresh", {
+    method: "POST",
+    accessToken,
+    timeoutMs: 300000,
+    body: JSON.stringify({
+      max_tickers: options.maxTickers || 2,
+      force: options.force === true,
+      ...(options.businessYear ? { business_year: options.businessYear } : {}),
+      ...(Array.isArray(options.tickers) && options.tickers.length
+        ? { tickers: options.tickers }
+        : {}),
+    }),
+  });
+}
+
 export async function fetchInsiderTradingStatus(accessToken) {
   return request("/api/v1/insider-trading/status", {
     method: "GET",

@@ -82,7 +82,9 @@ from research_os.nps_portfolio_changes import (
 from research_os.opendart_data_provider import OpenDartClient
 from research_os.dart_annual_report_lab import (
     MAX_BATCH_TICKERS as DART_ANNUAL_REPORT_MAX_BATCH_TICKERS,
+    MAX_GOVERNANCE_BATCH_TICKERS as DART_ANNUAL_REPORT_GOVERNANCE_MAX_BATCH_TICKERS,
     build_dart_annual_report_lab_status,
+    refresh_dart_annual_report_governance,
     refresh_dart_annual_report_index,
 )
 from research_os.dossier_text import (
@@ -15526,6 +15528,54 @@ def run_dart_annual_report_lab_refresh(
         max_tickers=max_tickers,
         save_result=bool(payload.get("save_result", True)),
     )
+
+
+@app.post(
+    "/api/v1/dart/annual-report-lab/governance/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def run_dart_annual_report_governance_refresh(
+    request: dict = Body(default_factory=dict),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Refresh a bounded, normalized DART governance snapshot batch."""
+
+    payload = request if isinstance(request, dict) else {}
+    raw_tickers = payload.get("tickers")
+    if isinstance(raw_tickers, str):
+        raw_tickers = [item.strip() for item in raw_tickers.split(",") if item.strip()]
+    if raw_tickers is not None and not isinstance(raw_tickers, list):
+        raise HTTPException(status_code=422, detail="tickers는 문자열 배열이어야 합니다.")
+    try:
+        max_tickers = int(payload.get("max_tickers", 2))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="max_tickers는 정수여야 합니다.") from exc
+    if not 1 <= max_tickers <= DART_ANNUAL_REPORT_GOVERNANCE_MAX_BATCH_TICKERS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "max_tickers는 1~"
+                f"{DART_ANNUAL_REPORT_GOVERNANCE_MAX_BATCH_TICKERS} 범위여야 합니다."
+            ),
+        )
+    raw_year = payload.get("business_year")
+    if raw_year is not None and not str(raw_year).strip().isdigit():
+        raise HTTPException(status_code=422, detail="business_year는 네 자리 사업연도여야 합니다.")
+    target_universe = dart_watch_universe(settings)
+    client = OpenDartClient(settings, job_name="dart_annual_report_governance")
+    try:
+        return refresh_dart_annual_report_governance(
+            settings,
+            target_universe=target_universe,
+            client=client,
+            normalize_ticker=normalize_ticker,
+            tickers=[str(item) for item in raw_tickers] if raw_tickers else None,
+            max_tickers=max_tickers,
+            business_year=raw_year,
+            force=bool(payload.get("force", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post(

@@ -67,6 +67,7 @@ POST /api/v1/dart/filings/refresh
 ```text
 GET  /api/v1/dart/annual-report-lab/status
 POST /api/v1/dart/annual-report-lab/refresh
+POST /api/v1/dart/annual-report-lab/governance/refresh
 ```
 
 - OpenDART `list.json`에 `pblntf_detail_ty=A001`, `last_reprt_at=Y`를 적용합니다.
@@ -77,6 +78,7 @@ POST /api/v1/dart/annual-report-lab/refresh
 - 최근 30일 동안 실행 기록이 없는 날은 `NO RUN`으로 명시합니다.
 - 백엔드 재기동 시 같은 날 완료된 전체 DART 점검과 스케줄 주기 안의 실적 일정 캐시는 다시 조회하지 않습니다.
 - 전체 `corpCode.xml`은 24시간 캐시하며, 캐시에 없는 ETF·비상장 코드도 같은 기간 음성 캐시로 처리해 화면 조회마다 전체 목록을 다시 받지 않습니다.
-- 지배구조·주주·보수, 사업의 내용 원문 diff, 불리언 스크리닝은 후속 마일스톤이며 현재 화면은 이를 활성 기능으로 오인시키지 않습니다.
+- 지배구조·주주·보수는 최신 사업연도 사업보고서(`11011`)를 기준으로 최대 2개 종목씩 순환합니다. 최대주주/변동, 임원, 직원, 주식총수, 배당, 이사·감사 보수 API를 확인하고 원문 응답 대신 정규화된 공개 사실·content hash만 보관합니다.
+- 사업의 내용 원문 diff와 불리언 스크리닝은 후속 마일스톤이며 현재 화면은 이를 활성 기능으로 오인시키지 않습니다.
 
-일일 운영에서는 `tools/run_daily_research_operations.ps1`의 기존 단일 작업 안에서 실행됩니다. 별도 스케줄을 추가하지 않아 중복 호출과 쿼터 낭비를 막습니다.
+일일 운영에서는 `tools/run_daily_research_operations.ps1`의 기존 단일 작업 안에서 A001 색인 뒤 지배구조 스냅샷을 실행합니다. 별도 스케줄을 추가하지 않아 중복 호출과 쿼터 낭비를 막습니다.

@@ -20,6 +20,7 @@
   [switch]$SkipKisGlobalResearch,
   [switch]$SkipInsiderTradingResearch,
   [switch]$SkipDartAnnualReportLab,
+  [switch]$SkipDartAnnualReportGovernance,
   [switch]$SkipDartFilingDuplicateCleanup,
   [switch]$SkipResearchSourceStoreCheck,
   [switch]$SkipPortfolioAnalysisCoverage,
@@ -373,6 +374,35 @@ if (-not $SkipInsiderTradingResearch.IsPresent) {
       --max-tickers 8 `
       --max-filings 24 `
       --json
+  }
+}
+
+if (-not $SkipDartAnnualReportGovernance.IsPresent) {
+  Invoke-DailyResearchStep "DART 지배구조·주주·보수 순환 점검" {
+    # Reuse this daily task rather than adding another scheduler.  The endpoint
+    # processes only a two-ticker bounded batch and records every DART body
+    # status in the existing secret-free KST ledger.
+    $headers = @{
+      Authorization = "Bearer $DevUserToken"
+      "Content-Type" = "application/json"
+    }
+    $uri = "$($BaseUrl.TrimEnd('/'))/api/v1/dart/annual-report-lab/governance/refresh"
+    $body = @{ max_tickers = 2; force = $false } | ConvertTo-Json -Compress
+    $result = Invoke-RestMethod `
+      -Method Post `
+      -Uri $uri `
+      -Headers $headers `
+      -Body $body `
+      -TimeoutSec $ResearchAutomationTimeoutSeconds
+    Write-Host (
+      "상태={0}; 선택={1}; 저장={2}; 동일={3}; 실패={4}; 사업연도={5}" -f
+      $result.status,
+      $result.selected_count,
+      $result.saved_count,
+      $result.unchanged_count,
+      $result.failed_count,
+      $result.business_year
+    )
   }
 }
 
