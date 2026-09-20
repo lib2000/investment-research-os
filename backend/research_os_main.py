@@ -206,6 +206,11 @@ from research_os.kcif_reports import (
     match_kcif_reports_to_targets,
     should_refresh_kcif_cache,
 )
+from research_os.kis_global_research import (
+    fetch_kis_global_research_items,
+    kis_global_research_copyright_policy,
+    should_refresh_kis_global_research_cache,
+)
 from research_os.market_journal import naver_market_close_source_metadata
 from research_os.domestic_market_hours import build_domestic_market_hours_status
 import research_os.naver_market_close_automation as naver_market_close_automation
@@ -2719,6 +2724,256 @@ def start_shinhan_research_scheduler() -> None:
     )
     thread.start()
 
+
+def kis_global_research_cache_path(settings: Settings) -> Path:
+    return user_state_dir(settings) / "kis_global_research_cache.json"
+
+
+def read_kis_global_research_cache(settings: Settings) -> dict:
+    return read_json_store(
+        kis_global_research_cache_path(settings),
+        {"updated_at": None, "status": "not_run", "entries": {}},
+    )
+
+
+def write_kis_global_research_cache(settings: Settings, payload: dict) -> None:
+    write_json_store(kis_global_research_cache_path(settings), payload)
+
+
+def _trim_kis_global_research_entries(entries: dict, limit: int = 300) -> dict:
+    rows = [row for row in entries.values() if isinstance(row, dict)]
+    rows.sort(
+        key=lambda row: str(row.get("ingested_at") or row.get("published_at") or ""),
+        reverse=True,
+    )
+    trimmed: dict[str, dict] = {}
+    for row in rows[: max(int(limit), 1)]:
+        item_id = str(row.get("item_id") or "").strip()
+        if item_id:
+            trimmed[item_id] = row
+    return trimmed
+
+
+def infer_kis_global_research_storage_target(item: dict, settings: Settings) -> tuple[str, str, str]:
+    title = str(item.get("title") or "").strip()
+    category = str(item.get("category") or "").strip()
+    us_symbol_match = search(r"\(([A-Z][A-Z0-9.\-]{0,9})\s+(?:USA|US)\)", title.upper())
+    if us_symbol_match:
+        try:
+            verified = ensure_verified_ticker(us_symbol_match.group(1), settings)
+            return (
+                verified,
+                "kis_global_us_symbol",
+                analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT),
+            )
+        except HTTPException:
+            # A listing title can mention an unverified symbol. Keep it as
+            # global context instead of creating an arbitrary ticker folder.
+            pass
+    context = "\n".join(
+        value
+        for value in [
+            "한국투자증권 독점 글로벌 리서치",
+            f"분류: {category}",
+            f"제목: {title}",
+        ]
+        if value
+    )
+    target, source_hint = infer_capture_ticker(context, settings)
+    if target not in SPECIAL_RESEARCH_KEYS:
+        return (
+            target,
+            f"kis_global_{source_hint}",
+            analysis_labels.enum_or_str_value(DataSourceType.ANALYST_REPORT),
+        )
+    target, source_type = infer_non_ticker_research_key(context)
+    if target == "INBOX":
+        target = "MARKET-GLOBAL"
+        source_type = "market_research"
+    return target, "kis_global_listing_metadata", source_type
+
+
+def build_kis_global_research_capture_content(item: dict, target: str, source_hint: str) -> str:
+    return "\n".join(
+        [
+            "[한국투자증권 독점 글로벌 리서치 자동 수집]",
+            f"분류: {item.get('category') or '독점 글로벌 리서치'}",
+            f"제목: {item.get('title') or '제목 미확인'}",
+            f"작성 주체: {item.get('author') or '미확인'}",
+            f"발행일: {item.get('published_at') or '미확인'}",
+            f"저장 범위: {target}",
+            f"분류 근거: {source_hint}",
+            f"목록 링크: {item.get('source_url') or '미확인'}",
+            "",
+            "활용 지침:",
+            "- 이 항목은 한국투자증권 공개 목록에서 확인한 메타데이터입니다.",
+            "- 목록 요약, 원문, PDF, 로그인 뒤 상세 페이지는 수집·저장하지 않습니다.",
+            "- 투자 판단 전 링크의 공식 원문과 발행일을 사용자가 직접 확인합니다.",
+            "- 이 기록은 투자 권유나 매매 신호가 아닙니다.",
+        ]
+    )
+
+
+def save_kis_global_research_item(
+    item: dict,
+    settings: Settings,
+    save_result: bool = True,
+) -> ResearchCaptureResponse:
+    target, source_hint, source_type = infer_kis_global_research_storage_target(item, settings)
+    request = ResearchCaptureRequest(
+        ticker=target,
+        title=f"한국투자증권 글로벌 리서치 - {item.get('title') or '제목 미확인'}",
+        raw_content=build_kis_global_research_capture_content(item, target, source_hint),
+        source_type=source_type,
+        source_url=item.get("source_url"),
+        as_of=item.get("published_at") or current_storage_date().isoformat(),
+        confidence=0.75,
+        tags=merge_research_tags(
+            [
+                "kis_global_research",
+                "listing_metadata_only",
+                "auto_ingested",
+                f"kis_category:{item.get('category') or 'unknown'}",
+            ],
+            classification_system_tags(target, source_type, source_hint),
+        ),
+        run_thesis_impact=target not in SPECIAL_RESEARCH_KEYS,
+        save_result=save_result,
+    )
+    return save_capture_request(request, settings)
+
+
+def refresh_kis_global_research_cache(
+    settings: Settings,
+    limit: int | None = None,
+    force: bool = False,
+    save_result: bool = True,
+) -> dict:
+    """Ingest public KIS listing metadata without requesting protected content."""
+
+    if not settings.kis_global_research_enabled:
+        return {
+            "status": "disabled",
+            "module": "kis_global_research_ingest",
+            "message": "KIS_GLOBAL_RESEARCH_ENABLED=false 상태입니다.",
+            "cache_path": str(kis_global_research_cache_path(settings)),
+        }
+
+    cache = read_kis_global_research_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    warnings: list[str] = []
+    try:
+        max_items = limit if limit is not None else settings.kis_global_research_max_items
+        items, parser_warnings = fetch_kis_global_research_items(
+            list_url=settings.kis_global_research_list_url,
+            timeout_seconds=settings.kis_global_research_timeout_seconds,
+            user_agent=settings.kis_global_research_user_agent,
+            limit=max(1, int(max_items or 1)),
+        )
+        warnings.extend(parser_warnings)
+    except Exception as exc:
+        error = f"한국투자증권 공개 리서치 목록 조회 실패: {exc}"
+        failed_cache = {
+            **cache,
+            "last_attempt_at": current_storage_timestamp(),
+            "status": "failed",
+            "last_error": error,
+            "source_url": settings.kis_global_research_list_url,
+            "source_policy": kis_global_research_copyright_policy(),
+            "entries": entries,
+        }
+        write_kis_global_research_cache(settings, failed_cache)
+        return {
+            "status": "failed",
+            "module": "kis_global_research_ingest",
+            "requested_count": 0,
+            "saved_count": 0,
+            "skipped_count": 0,
+            "failed_count": 1,
+            "warnings": warnings,
+            "errors": [error],
+            "cache_path": str(kis_global_research_cache_path(settings)),
+        }
+
+    saved: list[dict] = []
+    skipped: list[dict] = []
+    failed: list[dict] = []
+    for item in items:
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_id:
+            failed.append({"title": item.get("title"), "error": "item_id 누락"})
+            continue
+        if item_id in entries and not force:
+            skipped.append({"item_id": item_id, "title": item.get("title"), "reason": "already_ingested"})
+            continue
+        try:
+            response = save_kis_global_research_item(item, settings, save_result=save_result)
+            entry = {
+                "item_id": item_id,
+                "title": item.get("title"),
+                "category": item.get("category"),
+                "author": item.get("author"),
+                "published_at": item.get("published_at"),
+                "source": "korea_investment_securities",
+                "source_url": settings.kis_global_research_list_url,
+                "access_scope": "listing_metadata_only",
+                "ingested_at": current_storage_timestamp(),
+                "ticker": response.captured_item.ticker,
+                "source_type": analysis_labels.enum_or_str_value(response.captured_item.source_type),
+                "storage": response.storage.model_dump(mode="json") if response.storage else None,
+            }
+            entries[item_id] = entry
+            saved.append(entry)
+        except Exception as exc:
+            failed.append({"item_id": item_id, "title": item.get("title"), "error": str(exc)})
+
+    status = "success" if not failed else "partial_success"
+    cache = {
+        "updated_at": current_storage_timestamp(),
+        "last_attempt_at": current_storage_timestamp(),
+        "status": status,
+        "last_error": None if not failed else f"저장 실패 {len(failed)}건",
+        "source_url": settings.kis_global_research_list_url,
+        "source_policy": kis_global_research_copyright_policy(),
+        "entries": _trim_kis_global_research_entries(entries),
+    }
+    write_kis_global_research_cache(settings, cache)
+    return {
+        "status": status,
+        "module": "kis_global_research_ingest",
+        "requested_count": len(items),
+        "saved_count": len(saved),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "saved": saved,
+        "skipped": skipped,
+        "failed": failed,
+        "warnings": warnings,
+        "errors": [],
+        "source_policy": cache["source_policy"],
+        "cache_path": str(kis_global_research_cache_path(settings)),
+    }
+
+
+def compact_kis_global_research_status_entry(entry: dict) -> dict:
+    """Return a dashboard-safe metadata view without capture/RAG content."""
+
+    return {
+        key: entry.get(key)
+        for key in [
+            "item_id",
+            "title",
+            "category",
+            "author",
+            "published_at",
+            "source",
+            "source_url",
+            "access_scope",
+            "ingested_at",
+            "ticker",
+            "source_type",
+        ]
+    }
 
 
 def naver_research_cache_path(settings: Settings) -> Path:
@@ -10557,6 +10812,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         read_dart_filing_cache=read_dart_filing_cache,
         read_json_store=read_json_store,
         read_kcif_reports_watch=read_kcif_reports_watch,
+        read_kis_global_research_cache=read_kis_global_research_cache,
         read_latest_daily_brief=read_latest_daily_brief,
         read_manifest=read_manifest,
         read_naver_research_cache=read_naver_research_cache,
@@ -10565,6 +10821,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         read_policy_sources_watch=read_policy_sources_watch,
         read_regional_business_sources_watch=read_regional_business_sources_watch,
         read_shinhan_research_cache=read_shinhan_research_cache,
+        refresh_kis_global_research_cache=refresh_kis_global_research_cache,
         refresh_naver_research_cache=refresh_naver_research_cache,
         refresh_shinhan_research_cache=refresh_shinhan_research_cache,
         research_automation_status_path=research_automation_status_path,
@@ -10572,6 +10829,7 @@ def _automation_status_runtime() -> SimpleNamespace:
         save_daily_brief=save_daily_brief,
         should_refresh_company_ir_cache=should_refresh_company_ir_cache,
         should_refresh_kcif_cache=should_refresh_kcif_cache,
+        should_refresh_kis_global_research_cache=should_refresh_kis_global_research_cache,
         should_refresh_policy_sources_cache=should_refresh_policy_sources_cache,
         should_refresh_regional_business_cache=should_refresh_regional_business_cache,
         should_run_daily_recommendations=should_run_daily_recommendations,
@@ -13594,6 +13852,61 @@ def refresh_shinhan_research(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return refresh_shinhan_research_cache(
+        settings,
+        limit=limit,
+        force=force,
+        save_result=save_result,
+    )
+
+
+
+@app.get(
+    "/api/v1/kis-global-research/status",
+    dependencies=[Depends(verify_user_token)],
+)
+def get_kis_global_research_status(settings: Settings = Depends(get_settings)) -> dict:
+    cache = read_kis_global_research_cache(settings)
+    entries = cache.get("entries") if isinstance(cache.get("entries"), dict) else {}
+    recent_entries = sorted(
+        (entry for entry in entries.values() if isinstance(entry, dict)),
+        key=lambda item: str(item.get("ingested_at") or item.get("published_at") or ""),
+        reverse=True,
+    )[:10]
+    return {
+        "status": "success",
+        "module": "kis_global_research_ingest",
+        "enabled": settings.kis_global_research_enabled,
+        "auto_refresh": settings.kis_global_research_auto_refresh,
+        "refresh_hours": settings.kis_global_research_refresh_hours,
+        "schedule_owner": "InvestmentResearchOS-DailyResearchOperations-2020",
+        "source_url": settings.kis_global_research_list_url,
+        "updated_at": cache.get("updated_at"),
+        "last_attempt_at": cache.get("last_attempt_at"),
+        "due": should_refresh_kis_global_research_cache(
+            cache,
+            refresh_hours=settings.kis_global_research_refresh_hours,
+        ),
+        "source_status": cache.get("status") or "not_run",
+        "entry_count": len(entries),
+        "recent_entries": [
+            compact_kis_global_research_status_entry(entry) for entry in recent_entries
+        ],
+        "source_policy": cache.get("source_policy") or kis_global_research_copyright_policy(),
+        "cache_path": str(kis_global_research_cache_path(settings)),
+    }
+
+
+@app.post(
+    "/api/v1/kis-global-research/refresh",
+    dependencies=[Depends(verify_user_token)],
+)
+def refresh_kis_global_research(
+    limit: int | None = None,
+    force: bool = False,
+    save_result: bool = True,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return refresh_kis_global_research_cache(
         settings,
         limit=limit,
         force=force,

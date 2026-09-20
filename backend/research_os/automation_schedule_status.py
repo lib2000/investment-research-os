@@ -29,6 +29,7 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
     company_ir_watch = runtime.read_company_ir_sources_watch(settings)
     naver_cache = runtime.read_naver_research_cache(settings)
     shinhan_cache = runtime.read_shinhan_research_cache(settings)
+    kis_global_cache = runtime.read_kis_global_research_cache(settings)
     dart_cache = runtime.read_dart_filing_cache(settings)
     telegram_favorite_state = runtime.read_json_store(runtime.telegram_favorite_posts_state_path(settings), {})
     telegram_channel_count = _configured_telegram_channel_count(settings)
@@ -117,6 +118,22 @@ def build_external_source_schedule_status(runtime, settings) -> list[dict]:
             "related_count": len(shinhan_cache.get("entries") or {}) if isinstance(shinhan_cache, dict) else 0,
             "source_status": shinhan_cache.get("status") if isinstance(shinhan_cache, dict) else "not_checked",
             "policy": "metadata_and_derived_signals_only",
+        },
+        {
+            "key": "kis_global_research",
+            "label": "한국투자증권 독점 글로벌 리서치",
+            "enabled": settings.kis_global_research_enabled,
+            "auto_refresh": settings.kis_global_research_auto_refresh,
+            "refresh_hours": settings.kis_global_research_refresh_hours,
+            "last_checked_at": kis_global_cache.get("updated_at") if isinstance(kis_global_cache, dict) else None,
+            "due": runtime.should_refresh_kis_global_research_cache(
+                kis_global_cache,
+                refresh_hours=settings.kis_global_research_refresh_hours,
+            ),
+            "related_count": len(kis_global_cache.get("entries") or {}) if isinstance(kis_global_cache, dict) else 0,
+            "source_status": kis_global_cache.get("status") if isinstance(kis_global_cache, dict) else "not_checked",
+            "schedule_owner": "InvestmentResearchOS-DailyResearchOperations-2020",
+            "policy": "listing_metadata_and_derived_signals_only",
         },
         {
             "key": "dart_filing_watch",

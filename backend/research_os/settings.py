@@ -162,6 +162,13 @@ class Settings(BaseModel):
     shinhan_research_timeout_seconds: float = 12.0
     shinhan_research_max_items: int = 20
     shinhan_research_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    kis_global_research_enabled: bool = True
+    kis_global_research_auto_refresh: bool = True
+    kis_global_research_refresh_hours: float = 24.0
+    kis_global_research_list_url: str = "https://securities.koreainvestment.com/main/research/research/Strategy.jsp?jkGubun=7"
+    kis_global_research_timeout_seconds: float = 12.0
+    kis_global_research_max_items: int = 10
+    kis_global_research_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
     naver_research_enabled: bool = True
     naver_research_auto_refresh: bool = True
     naver_research_refresh_hours: float = 24.0
@@ -444,6 +451,25 @@ class Settings(BaseModel):
             shinhan_research_max_items=int(os.getenv("SHINHAN_RESEARCH_MAX_ITEMS", "20")),
             shinhan_research_user_agent=os.getenv(
                 "SHINHAN_RESEARCH_USER_AGENT",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
+            ),
+            kis_global_research_enabled=_read_bool("KIS_GLOBAL_RESEARCH_ENABLED", True),
+            kis_global_research_auto_refresh=_read_bool("KIS_GLOBAL_RESEARCH_AUTO_REFRESH", True),
+            kis_global_research_refresh_hours=float(
+                os.getenv("KIS_GLOBAL_RESEARCH_REFRESH_HOURS", "24")
+            ),
+            kis_global_research_list_url=os.getenv(
+                "KIS_GLOBAL_RESEARCH_LIST_URL",
+                "https://securities.koreainvestment.com/main/research/research/Strategy.jsp?jkGubun=7",
+            ),
+            kis_global_research_timeout_seconds=float(
+                os.getenv("KIS_GLOBAL_RESEARCH_TIMEOUT_SECONDS", "12")
+            ),
+            kis_global_research_max_items=int(
+                os.getenv("KIS_GLOBAL_RESEARCH_MAX_ITEMS", "10")
+            ),
+            kis_global_research_user_agent=os.getenv(
+                "KIS_GLOBAL_RESEARCH_USER_AGENT",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36",
             ),
             naver_research_enabled=_read_bool("NAVER_RESEARCH_ENABLED", True),

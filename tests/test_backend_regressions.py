@@ -8672,6 +8672,7 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
             patch.object(main, "read_company_ir_sources_watch", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "related_items": [{"id": "j", "ticker": "JOBY"}], "source_status": "cached"}),
             patch.object(main, "read_naver_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"a": {}}, "status": "success"}),
             patch.object(main, "read_shinhan_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"b": {}}, "status": "success"}),
+            patch.object(main, "read_kis_global_research_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"c": {}}, "status": "success"}),
             patch.object(main, "read_dart_filing_cache", return_value={"updated_at": "2026-05-27T09:00:00+09:00", "entries": {"d1": {}, "d2": {}}, "status": "success"}),
             patch.object(main, "dart_daily_check_status", return_value={"due": False, "checked_count": 2, "current_target_count": 2}),
         ):
@@ -8690,6 +8691,9 @@ class ExternalSourceScheduleStatusTests(unittest.TestCase):
         self.assertEqual(by_key["company_ir_sources_watch"]["label"], "Joby IR 보도자료")
         self.assertEqual(by_key["company_ir_sources_watch"]["related_count"], 1)
         self.assertEqual(by_key["company_ir_sources_watch"]["policy"], "public_company_ir_capture_and_rag")
+        self.assertIn("kis_global_research", by_key)
+        self.assertEqual(by_key["kis_global_research"]["related_count"], 1)
+        self.assertEqual(by_key["kis_global_research"]["policy"], "listing_metadata_and_derived_signals_only")
         self.assertEqual(by_key["dart_filing_watch"]["related_count"], 2)
         self.assertEqual(by_key["kcif_reports_watch"]["policy"], "metadata_and_derived_signals_only")
 
@@ -16398,6 +16402,9 @@ class AutomationStatusModuleTests(unittest.TestCase):
             shinhan_research_enabled=True,
             shinhan_research_auto_refresh=True,
             shinhan_research_refresh_hours=24,
+            kis_global_research_enabled=True,
+            kis_global_research_auto_refresh=True,
+            kis_global_research_refresh_hours=24,
             policy_sources_enabled=True,
             policy_sources_auto_refresh=True,
             policy_sources_refresh_hours=24,
@@ -16417,8 +16424,10 @@ class AutomationStatusModuleTests(unittest.TestCase):
             read_policy_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
             read_regional_business_sources_watch=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "related_items": [{}], "source_status": "cached"},
             read_shinhan_research_cache=lambda _settings: {"entries": {"a": {}, "b": {}}, "status": "success"},
+            read_kis_global_research_cache=lambda _settings: {"updated_at": "2026-06-18T06:00:00+09:00", "entries": {"c": {}}, "status": "success"},
             should_refresh_company_ir_cache=lambda _watch, refresh_hours=24: False,
             should_refresh_kcif_cache=lambda _watch: False,
+            should_refresh_kis_global_research_cache=lambda _cache, refresh_hours=24: False,
             should_refresh_policy_sources_cache=lambda _watch, refresh_hours=24: False,
             should_refresh_regional_business_cache=lambda _watch: False,
             should_run_telegram_favorite_posts=lambda _settings: False,
@@ -16428,11 +16437,13 @@ class AutomationStatusModuleTests(unittest.TestCase):
         rows = automation_schedule_status.build_external_source_schedule_status(runtime, settings)
         by_key = {row["key"]: row for row in rows}
 
-        self.assertEqual(len(rows), 8)
+        self.assertEqual(len(rows), 9)
         self.assertEqual(by_key["kcif_reports_watch"]["related_count"], 2)
         self.assertEqual(by_key["policy_sources_watch"]["related_count"], 1)
         self.assertFalse(by_key["policy_sources_watch"]["due"])
         self.assertTrue(by_key["shinhan_research"]["due"])
+        self.assertEqual(by_key["kis_global_research"]["related_count"], 1)
+        self.assertFalse(by_key["kis_global_research"]["due"])
         self.assertEqual(by_key["dart_filing_watch"]["related_count"], 3)
         self.assertTrue(by_key["dart_filing_watch"]["due"])
         self.assertEqual(by_key["telegram_favorite_posts"]["related_count"], 4)
@@ -16489,6 +16500,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
             read_manifest=lambda _vault_dir: [],
             read_news_inbox=lambda _settings: {"items": []},
             read_regional_business_sources_watch=lambda _settings: {"related_items": [], "updated_at": "2026-06-13T08:00:00+09:00"},
+            refresh_kis_global_research_cache=refresh_source("kis_global"),
             refresh_naver_research_cache=refresh_source("naver"),
             refresh_shinhan_research_cache=refresh_source("shinhan"),
             research_automation_status_path=lambda _settings: "automation_status",
@@ -16506,7 +16518,7 @@ class AutomationStatusModuleTests(unittest.TestCase):
 
         result = automation_status.run_research_automation_pipeline(runtime, settings, limit=2, save_result=False)
 
-        self.assertEqual(calls[:2], ["shinhan", "naver"])
+        self.assertEqual(calls[:3], ["shinhan", "naver", "kis_global"])
         self.assertIn("write_status", calls)
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["automation_digest"]["daily_brief_date"], "2026-06-13")

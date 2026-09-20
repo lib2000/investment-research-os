@@ -17,6 +17,7 @@
   [switch]$SkipPortfolioReportAlert,
   [switch]$SubmitPortfolioReportAlert,
   [switch]$SkipResearchAutomationRefresh,
+  [switch]$SkipKisGlobalResearch,
   [switch]$SkipInsiderTradingResearch,
   [switch]$SkipDartAnnualReportLab,
   [switch]$SkipDartFilingDuplicateCleanup,
@@ -284,6 +285,55 @@ if (-not $SkipResearchAutomationRefresh.IsPresent) {
         return
       }
     }
+  }
+}
+
+if (-not $SkipKisGlobalResearch.IsPresent) {
+  Invoke-DailyResearchStep "한국투자증권 글로벌 리서치 목록 반영" {
+    # Public-listing metadata only. This never requests a KIS account session,
+    # report PDF, source summary, or order endpoint.
+    $headers = @{
+      Authorization = "Bearer $DevUserToken"
+      "Content-Type" = "application/json"
+    }
+    $sourceBaseUri = "$($BaseUrl.TrimEnd('/'))/api/v1/kis-global-research"
+    $sourceStatus = Invoke-RestMethod `
+      -Method Get `
+      -Uri "$sourceBaseUri/status" `
+      -Headers $headers `
+      -TimeoutSec $ResearchAutomationTimeoutSeconds
+    if (-not $sourceStatus.enabled) {
+      Write-Host "KIS 글로벌 리서치 수집이 비활성화되어 건너뜁니다."
+      return
+    }
+    if (-not $sourceStatus.auto_refresh) {
+      Write-Host "KIS 글로벌 리서치 자동 갱신이 비활성화되어 건너뜁니다."
+      return
+    }
+    if ($sourceStatus.due) {
+      $result = Invoke-RestMethod `
+        -Method Post `
+        -Uri "$sourceBaseUri/refresh?save_result=true" `
+        -Headers $headers `
+        -TimeoutSec $ResearchAutomationTimeoutSeconds
+      if ($result.status -notin @("success", "partial_success")) {
+        throw "KIS 글로벌 리서치 반영 실패: 상태=$($result.status)"
+      }
+      Write-Host (
+        "상태={0}; 요청={1}; 저장={2}; 중복건너뜀={3}; 실패={4}" -f
+        $result.status,
+        $result.requested_count,
+        $result.saved_count,
+        $result.skipped_count,
+        $result.failed_count
+      )
+    } else {
+      # The preceding research-automation pipeline already refreshed this
+      # source today. Avoid a second external listing request and validate the
+      # metadata cache instead.
+      Write-Host "KIS 글로벌 리서치 캐시가 최신이므로 목록 재조회는 생략하고 저장 상태만 확인합니다."
+    }
+    python tools\check_kis_global_research_store.py --strict --max-age-hours 30 --json
   }
 }
 

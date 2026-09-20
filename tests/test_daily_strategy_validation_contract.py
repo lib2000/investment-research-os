@@ -68,6 +68,20 @@ def test_daily_operations_uses_exit_codes_when_capturing_native_diagnostics() ->
     assert "$stepExitCode = $LASTEXITCODE" in source
 
 
+def test_daily_operations_runs_kis_listing_metadata_refresh_without_orders() -> None:
+    source = read_script("run_daily_research_operations.ps1")
+
+    assert "[switch]$SkipKisGlobalResearch" in source
+    assert "한국투자증권 글로벌 리서치 목록 반영" in source
+    assert "/api/v1/kis-global-research" in source
+    assert '"$sourceBaseUri/status"' in source
+    assert '"$sourceBaseUri/refresh?save_result=true"' in source
+    assert "if ($sourceStatus.due)" in source
+    assert "목록 재조회는 생략" in source
+    assert "check_kis_global_research_store.py --strict" in source
+    assert "/api/order" not in source
+
+
 def test_verify_console_uses_exit_codes_when_capturing_native_diagnostics() -> None:
     source = read_script("verify_research_console.ps1")
 

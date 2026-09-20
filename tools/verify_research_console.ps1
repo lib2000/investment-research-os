@@ -189,6 +189,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     backend\research_os\daily_recommendations.py `
     backend\research_os\investment_insight_hub.py `
     backend\research_os\investment_calendar.py `
+    backend\research_os\kis_global_research.py `
     backend\research_os\kcif_reports.py `
     backend\research_os\market_journal.py `
     backend\research_os\portfolio_import.py `
@@ -203,6 +204,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
     tools\check_daily_recommendation_candidate_policy.py `
     tools\check_interest_summary_render_layout.py `
     tools\check_investment_insight_hub.py `
+    tools\check_kis_global_research_store.py `
     tools\check_research_source_store.py `
     tools\check_investment_calendar_store.py `
     tools\check_portfolio_store.py `
@@ -212,7 +214,7 @@ Invoke-VerifyStep "리서치 OS Python 문법 확인" {
 }
 
 Invoke-VerifyStep "백엔드 회귀 테스트" {
-  python -m unittest tests.test_backend_regressions tests.test_daily_recommendations
+  python -m unittest tests.test_backend_regressions tests.test_daily_recommendations tests.test_kis_global_research
 }
 
 Invoke-VerifyStep "QA 쓰기 액션 정리" {

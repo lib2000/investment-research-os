@@ -467,6 +467,7 @@ def run_research_automation_pipeline(
     for name, refresh_func in [
         ("shinhan_research", runtime.refresh_shinhan_research_cache),
         ("naver_research", runtime.refresh_naver_research_cache),
+        ("kis_global_research", runtime.refresh_kis_global_research_cache),
     ]:
         try:
             source_results.append(
