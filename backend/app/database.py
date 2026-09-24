@@ -1706,12 +1706,14 @@ def get_journal_analytics(
     known_rule_count = rule_followed_count + rule_broken_count
     ticker_counts: dict[str, int] = {}
     profit_loss_values: list[int] = []
+    closed_trade_profit_loss_values: list[int] = []
     profit_rate_values: list[float] = []
     r_multiple_values: list[float] = []
     entry_slippage_amount_values: list[float] = []
     entry_slippage_rate_values: list[float] = []
     planned_reward_risk_ratios: list[float] = []
     entry_profit_pairs: list[tuple[dict, int]] = []
+    closed_trade_profit_pairs: list[tuple[dict, int]] = []
     rule_profit_loss_totals = {
         "followed": 0,
         "broken": 0,
@@ -1753,6 +1755,8 @@ def get_journal_analytics(
         if profit_loss_value is not None:
             profit_loss_values.append(profit_loss_value)
             entry_profit_pairs.append((entry, profit_loss_value))
+            closed_trade_profit_loss_values.append(profit_loss_value)
+            closed_trade_profit_pairs.append((entry, profit_loss_value))
             event = _journal_entry_analytics_event(entry, profit_loss_value)
             brokerage_dedup_keys.update(event.get("dedup_keys", []))
             analytics_events.append(event)
@@ -1804,6 +1808,7 @@ def get_journal_analytics(
 
     for transaction in manual_transactions:
         manual_profit_loss = _manual_transaction_net_profit_krw(transaction)
+        counts_as_closed_trade = _manual_transaction_counts_as_closed_trade(transaction)
         manual_dedup_key = transaction.get("dedup_key")
         is_duplicate_manual = (
             transaction.get("dedup_status") == "duplicate_kiwoom"
@@ -1816,13 +1821,21 @@ def get_journal_analytics(
         if _manual_transaction_requires_fx(transaction) and manual_profit_loss is None:
             fx_unconverted_count += 1
             continue
-        if manual_profit_loss != 0:
+        if manual_profit_loss is not None and (
+            manual_profit_loss != 0 or counts_as_closed_trade
+        ):
             profit_loss_values.append(manual_profit_loss)
             entry_profit_pairs.append((_manual_transaction_entry_summary(transaction), manual_profit_loss))
+            if counts_as_closed_trade:
+                closed_trade_profit_loss_values.append(manual_profit_loss)
+                closed_trade_profit_pairs.append(
+                    (_manual_transaction_entry_summary(transaction), manual_profit_loss)
+                )
         if float(transaction.get("split_adjustment_ratio") or 1) != 1:
             corporate_action_adjusted_count += 1
-        ticker = transaction.get("ticker") or "UNKNOWN"
-        ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
+        ticker = transaction.get("ticker") or ""
+        if ticker:
+            ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
         buy_amount_value = transaction.get("buy_amount_krw")
         sell_amount_value = transaction.get("sell_amount_krw")
         if buy_amount_value is not None:
@@ -1841,9 +1854,9 @@ def get_journal_analytics(
     realized_profit_loss_total = sum(profit_loss_values)
     gross_profit_total = sum(value for value in profit_loss_values if value > 0)
     gross_loss_total = sum(value for value in profit_loss_values if value < 0)
-    win_count = sum(1 for value in profit_loss_values if value > 0)
-    loss_count = sum(1 for value in profit_loss_values if value < 0)
-    breakeven_count = sum(1 for value in profit_loss_values if value == 0)
+    win_count = sum(1 for value in closed_trade_profit_loss_values if value > 0)
+    loss_count = sum(1 for value in closed_trade_profit_loss_values if value < 0)
+    breakeven_count = sum(1 for value in closed_trade_profit_loss_values if value == 0)
     closed_count = win_count + loss_count + breakeven_count
     positive_r_count = sum(1 for value in r_multiple_values if value > 0)
     negative_r_count = sum(1 for value in r_multiple_values if value < 0)
@@ -1851,9 +1864,13 @@ def get_journal_analytics(
     r_closed_count = positive_r_count + negative_r_count + breakeven_r_count
     best_entry = None
     worst_entry = None
-    if entry_profit_pairs:
-        best_entry = _analytics_entry_summary(max(entry_profit_pairs, key=lambda item: item[1]))
-        worst_entry = _analytics_entry_summary(min(entry_profit_pairs, key=lambda item: item[1]))
+    if closed_trade_profit_pairs:
+        best_entry = _analytics_entry_summary(
+            max(closed_trade_profit_pairs, key=lambda item: item[1])
+        )
+        worst_entry = _analytics_entry_summary(
+            min(closed_trade_profit_pairs, key=lambda item: item[1])
+        )
     chronological_profit_pairs = sorted(
         entry_profit_pairs,
         key=lambda item: (
@@ -1861,8 +1878,15 @@ def get_journal_analytics(
             item[0].get("id") or 0,
         ),
     )
+    chronological_closed_trade_pairs = sorted(
+        closed_trade_profit_pairs,
+        key=lambda item: (
+            item[0].get("updated_at") or "",
+            item[0].get("id") or 0,
+        ),
+    )
     curve_stats = _build_cumulative_profit_stats(chronological_profit_pairs)
-    streak_stats = _build_streak_stats(chronological_profit_pairs)
+    streak_stats = _build_streak_stats(chronological_closed_trade_pairs)
     dividend_total = sum(int(event["dividend_amount"]) for event in analytics_events)
     tax_total = sum(int(event["tax_amount"]) for event in analytics_events)
     commission_total = sum(int(event.get("commission_amount") or 0) for event in analytics_events)
@@ -1891,8 +1915,8 @@ def get_journal_analytics(
             else None
         ),
         "expectancy_per_trade": (
-            round(realized_profit_loss_total / len(profit_loss_values), 2)
-            if profit_loss_values
+            round(realized_profit_loss_total / closed_count, 2)
+            if closed_count
             else None
         ),
         "planned_risk_amount_total": planned_risk_amount_total,
@@ -1934,8 +1958,8 @@ def get_journal_analytics(
             else None
         ),
         "average_profit_loss": (
-            round(realized_profit_loss_total / len(profit_loss_values), 2)
-            if profit_loss_values
+            round(realized_profit_loss_total / closed_count, 2)
+            if closed_count
             else None
         ),
         "average_profit_rate": (
@@ -1963,7 +1987,10 @@ def get_journal_analytics(
         "cumulative_profit_curve": curve_stats["curve"],
         "max_drawdown_amount": curve_stats["max_drawdown_amount"],
         "max_drawdown_rate": curve_stats["max_drawdown_rate"],
-        "monthly_performance": _build_monthly_performance(chronological_profit_pairs),
+        "monthly_performance": _build_monthly_performance(
+            chronological_closed_trade_pairs,
+            chronological_profit_pairs,
+        ),
         "annual_profit": _build_period_profit(analytics_events, "year"),
         "quarterly_profit": _build_period_profit(analytics_events, "quarter"),
         "monthly_profit": _build_period_profit(analytics_events, "month"),
@@ -2072,6 +2099,14 @@ def _manual_transaction_net_profit(transaction: dict) -> int:
         + int(transaction.get("dividend_amount") or 0)
         - int(transaction.get("tax_amount") or 0)
         - int(transaction.get("commission_amount") or 0)
+    )
+
+
+def _manual_transaction_counts_as_closed_trade(transaction: dict) -> bool:
+    transaction_type = str(transaction.get("transaction_type") or "trade").strip().lower()
+    return (
+        transaction_type in {"trade", "sell"}
+        and transaction.get("profit_loss_amount") is not None
     )
 
 
@@ -2616,7 +2651,10 @@ def _build_cumulative_profit_stats(entry_pairs: list[tuple[dict, int]]) -> dict:
     }
 
 
-def _build_monthly_performance(entry_pairs: list[tuple[dict, int]]) -> list[dict]:
+def _build_monthly_performance(
+    entry_pairs: list[tuple[dict, int]],
+    profit_total_pairs: list[tuple[dict, int]] | None = None,
+) -> list[dict]:
     monthly: dict[str, dict[str, int]] = {}
     for entry, profit_loss_value in entry_pairs:
         month_key = (entry.get("updated_at") or "")[:7] or "UNKNOWN"
@@ -2638,6 +2676,23 @@ def _build_monthly_performance(entry_pairs: list[tuple[dict, int]]) -> list[dict
             current["loss_count"] += 1
         else:
             current["breakeven_count"] += 1
+
+    if profit_total_pairs is not None:
+        for values in monthly.values():
+            values["profit_loss_total"] = 0
+        for entry, profit_loss_value in profit_total_pairs:
+            month_key = (entry.get("updated_at") or "")[:7] or "UNKNOWN"
+            current = monthly.setdefault(
+                month_key,
+                {
+                    "entries_count": 0,
+                    "profit_loss_total": 0,
+                    "win_count": 0,
+                    "loss_count": 0,
+                    "breakeven_count": 0,
+                },
+            )
+            current["profit_loss_total"] += profit_loss_value
 
     rows = []
     for month, values in sorted(monthly.items()):

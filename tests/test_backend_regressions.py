@@ -19811,6 +19811,72 @@ class InvestmentJournalManualImportTests(unittest.TestCase):
             finally:
                 backend_main.app.dependency_overrides.pop(get_settings, None)
 
+    def test_standalone_fee_reduces_net_profit_without_counting_as_losing_trade(self):
+        from app.database import create_manual_transaction, get_journal_analytics, init_db
+
+        with self.temp_database_dir() as temp_dir:
+            settings = self.make_settings(temp_dir)
+            init_db(settings)
+            trades = [
+                ("0117V0", "TIGER 코리아AI전력기기TOP3플러스", 870490),
+                ("395160", "KODEX AI반도체TOP2플러스", 3176814),
+                ("404650", "SOL KRX기후변화솔루션", 2100572),
+            ]
+            for ticker, name, profit_loss_amount in trades:
+                create_manual_transaction(
+                    settings=settings,
+                    trade_date="2026-09-22",
+                    broker="미래에셋증권",
+                    account_name="연금저축(신)",
+                    transaction_type="trade",
+                    ticker=ticker,
+                    name=name,
+                    profit_loss_amount=profit_loss_amount,
+                    currency="KRW",
+                )
+            create_manual_transaction(
+                settings=settings,
+                trade_date="2026-09-22",
+                broker="미래에셋증권",
+                account_name="연금저축(신)",
+                transaction_type="fee",
+                ticker="",
+                name="당일 매매비용",
+                commission_amount=565,
+                currency="KRW",
+            )
+
+            analytics = get_journal_analytics(
+                settings,
+                start_date="2026-09-22",
+                end_date="2026-09-22",
+            )
+
+            self.assertEqual(analytics["manual_transactions_count"], 4)
+            self.assertEqual(analytics["realized_profit_loss_total"], 6147311)
+            self.assertEqual(analytics["commission_total"], 565)
+            self.assertEqual(analytics["win_count"], 3)
+            self.assertEqual(analytics["loss_count"], 0)
+            self.assertEqual(analytics["win_rate"], 100.0)
+            self.assertEqual(analytics["expectancy_per_trade"], 2049103.67)
+            self.assertEqual(analytics["best_entry"]["ticker"], "395160")
+            self.assertEqual(analytics["worst_entry"]["ticker"], "0117V0")
+            self.assertEqual(analytics["current_win_streak"], 3)
+            self.assertEqual(analytics["longest_win_streak"], 3)
+            self.assertFalse(any(row["ticker"] == "UNKNOWN" for row in analytics["top_tickers"]))
+            self.assertEqual(analytics["monthly_performance"][0]["entries_count"], 3)
+            self.assertEqual(analytics["monthly_performance"][0]["win_rate"], 100.0)
+            self.assertEqual(
+                analytics["monthly_performance"][0]["profit_loss_total"],
+                6147311,
+            )
+            self.assertEqual(analytics["monthly_profit"][0]["profit_loss_total"], 6147311)
+            self.assertEqual(analytics["monthly_profit"][0]["commission_total"], 565)
+            self.assertEqual(
+                analytics["cumulative_profit_curve"][-1]["cumulative_profit_loss"],
+                6147311,
+            )
+
     def test_manual_csv_import_accepts_korean_headers_and_cp949(self):
         import main as backend_main
         from app.database import init_db
