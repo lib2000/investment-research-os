@@ -123,6 +123,10 @@ def test_boot_catchup_uses_explicit_project_python_for_family_audit() -> None:
     assert '$ProjectPython = Join-Path $ProjectRootPath ".venv-win\\Scripts\\python.exe"' in source
     assert "& $ProjectPython $FamilyAggregateAudit --write-state --strict --json" in source
     assert "Task Scheduler does not guarantee that a global Python PATH is present." in source
+    assert "$validatedRecommendationDate = [string]$state.target.recommendation_date" in source
+    assert "$validatedRecommendationDate -eq $TargetRunDate" in source
+    assert '$ResearchEvidenceChecker = Join-Path $ProjectRootPath "tools\\check_research_evidence_pipeline.py"' in source
+    assert "& $ProjectPython $ResearchEvidenceChecker --write-state --json --strict | Out-Host" in source
 
 
 def test_scheduled_task_catches_up_and_does_not_expose_token() -> None:

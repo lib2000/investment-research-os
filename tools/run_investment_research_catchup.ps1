@@ -25,6 +25,7 @@ $FamilyAggregateAudit = Join-Path $ProjectRootPath "tools\check_family_portfolio
 $StrategyValidationRunner = Join-Path $ProjectRootPath "tools\run_daily_strategy_validation.ps1"
 $StrategyValidationStatePath = Join-Path $ProjectRootPath "tmp\daily_strategy_validation_state.json"
 $ResearchAutomationStatusPath = Join-Path $ProjectRootPath "research_vault\_system\research_automation_status.json"
+$ResearchEvidenceChecker = Join-Path $ProjectRootPath "tools\check_research_evidence_pipeline.py"
 $ProjectPython = Join-Path $ProjectRootPath ".venv-win\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $ProjectPython)) {
   $pythonCommand = Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -98,7 +99,18 @@ function Test-StrategyValidationDue {
   if (-not (Test-Path -LiteralPath $StateFile)) { return $true }
   try {
     $state = [IO.File]::ReadAllText($StateFile, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
-    return -not ($state.status -eq "success" -and [string]$state.run_date -eq $TargetRunDate)
+    $validatedRecommendationDate = ""
+    if ($state.target -and $state.target.PSObject.Properties.Name -contains "recommendation_date") {
+      $validatedRecommendationDate = [string]$state.target.recommendation_date
+    }
+    # A scheduled run can happen after midnight for the prior business day's
+    # recommendation. Treat either the execution date or the validated
+    # recommendation date as completion so boot catch-up does not duplicate it.
+    $completed = $state.status -eq "success" -and (
+      [string]$state.run_date -eq $TargetRunDate -or
+      $validatedRecommendationDate -eq $TargetRunDate
+    )
+    return -not $completed
   } catch {
     return $true
   }
@@ -306,6 +318,16 @@ $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_po
   $ranAny = @($operations | Where-Object { $_.action -eq "ran" }).Count -gt 0
   $syncAction = "skipped"
   if ($ranAny -and -not $DryRun) {
+    if (-not (Test-Path -LiteralPath $ResearchEvidenceChecker)) {
+      throw "리서치 증거 상태 점검 도구를 찾지 못했습니다: $ResearchEvidenceChecker"
+    }
+    # DART's timed refresh can recover after the previous stored pipeline
+    # snapshot. Refresh the local, token-safe status before exporting the
+    # OpenClaw context so boot catch-up does not retain a stale failure.
+    & $ProjectPython $ResearchEvidenceChecker --write-state --json --strict | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      throw "리서치 증거 상태 기록 갱신에 실패했습니다."
+    }
     & $Sync | Out-Host
     $syncAction = "ran"
   } elseif ($DryRun -and @($operations | Where-Object { $_.action -eq "would_run" }).Count -gt 0) {
