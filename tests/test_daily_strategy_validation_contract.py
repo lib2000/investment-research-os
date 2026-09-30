@@ -42,6 +42,9 @@ def test_runner_recovers_docker_and_requires_lean_image() -> None:
     assert "quantconnect/lean:latest" in source
     assert '"--format", "{{.Id}}"' in source
     assert "-WindowStyle Hidden" in source
+    assert "foreach ($socketPath in $socketPaths)" in source
+    assert '$description.Replace("/", "\\")' in source
+    assert '$description.Replace("/", "\\\\")' not in source
 
 
 def test_runner_retries_only_transient_backtester_transport_failures() -> None:
@@ -57,6 +60,28 @@ def test_runner_retries_only_transient_backtester_transport_failures() -> None:
     assert "System.Net.Http.HttpRequestException" in source
     assert "$backtestAttempt = Invoke-BacktestWithRetry" in source
     assert '"$BacktesterApiBase/api/strategies"' in source
+
+
+def test_runner_starts_only_required_analysis_apis_with_bounded_waits() -> None:
+    source = read_script("run_daily_strategy_validation.ps1")
+
+    assert "start-investment-analysis-apis.ps1" in source
+    assert "ensure-research-backend.ps1" in source
+    assert "[int]$ResearchBackendStartupTimeoutSeconds = 90" in source
+    assert "[int]$ServiceStartupTimeoutSeconds = 180" in source
+    assert "start-integrated-investment-workbench.ps1" not in source
+    assert "Analysis services did not become ready within" in source
+
+
+def test_analysis_api_launcher_does_not_start_frontends_or_order_endpoints() -> None:
+    source = (ROOT / "scripts" / "start-investment-analysis-apis.ps1").read_text(encoding="utf-8")
+
+    assert 'Name = "strategy-backend"' in source
+    assert 'Name = "backtester-backend"' in source
+    assert "backend.main:app" in source
+    assert "3100" not in source
+    assert "3200" not in source
+    assert "/api/order" not in source
 
 
 def test_daily_operations_uses_exit_codes_when_capturing_native_diagnostics() -> None:

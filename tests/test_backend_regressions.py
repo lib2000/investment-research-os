@@ -924,6 +924,9 @@ class ConsoleSmokeToolTests(unittest.TestCase):
         self.assertIn("-RepetitionInterval", register_source)
         self.assertIn("ensure-research-backend.ps1", register_source)
         self.assertIn("InvestmentJournalApp Research Backend Watchdog", register_source)
+        self.assertIn('[int]$WaitSeconds = 90', ensure_source)
+        self.assertIn('"-WaitSeconds"', register_source)
+        self.assertIn('-WorkingDirectory $ProjectRootPath', register_source)
         self.assertIn("check_research_backend_watchdog_task_status.py", offline_source)
 
     def test_research_backend_watchdog_task_status_detects_bad_scheduler_state(self):

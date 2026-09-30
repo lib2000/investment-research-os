@@ -18,7 +18,7 @@ if (-not (Test-Path -LiteralPath $TradingLauncher)) {
 }
 
 Write-Host "Investment Research OS 백엔드를 시작합니다."
-& (Join-Path $ProjectRoot "scripts\restart-research-backend.ps1") -Port 8001 -WaitSeconds 30
+& (Join-Path $ProjectRoot "scripts\restart-research-backend.ps1") -Port 8001 -WaitSeconds 90
 
 Write-Host "전략 빌더와 백테스터를 시작합니다."
 & $TradingLauncher start

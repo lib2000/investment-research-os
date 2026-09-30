@@ -22,12 +22,12 @@ $arguments = @(
   "-StartServicesIfNeeded",
   "-StartDockerIfNeeded"
 ) -join " "
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $ProjectRootPath
 $trigger = New-ScheduledTaskTrigger -Daily -At $At
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
   -MultipleInstances IgnoreNew `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 60) `
   -RestartCount 2 `
   -RestartInterval (New-TimeSpan -Minutes 15) `
   -AllowStartIfOnBatteries `

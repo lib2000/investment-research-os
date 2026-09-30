@@ -5,6 +5,8 @@ param(
   [string]$StrategyValidationTime = "08:45",
   [string]$ResearchOperationsTime = "20:20",
   [int]$DockerStartupTimeoutSeconds = 180,
+  [int]$BackendStartupTimeoutSeconds = 90,
+  [int]$StrategyServiceStartupTimeoutSeconds = 180,
   [switch]$DryRun
 )
 
@@ -134,7 +136,7 @@ $operations = @()
 $token = $null
 try {
   if (-not $DryRun) {
-    & $Watchdog -ProjectRoot $ProjectRootPath -Port $Port | Out-Host
+    & $Watchdog -ProjectRoot $ProjectRootPath -Port $Port -WaitSeconds $BackendStartupTimeoutSeconds | Out-Host
   }
 
   $token = Get-InvestmentResearchCredentialSecret -Target $CredentialTarget
@@ -283,7 +285,9 @@ $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_po
           -RunDate $strategyRunDate `
           -StartServicesIfNeeded `
           -StartDockerIfNeeded `
-          -DockerStartupTimeoutSeconds $DockerStartupTimeoutSeconds
+          -DockerStartupTimeoutSeconds $DockerStartupTimeoutSeconds `
+          -ResearchBackendStartupTimeoutSeconds $BackendStartupTimeoutSeconds `
+          -ServiceStartupTimeoutSeconds $StrategyServiceStartupTimeoutSeconds
         if ($LASTEXITCODE -ne 0) {
           throw "daily strategy validation runner exited with code $LASTEXITCODE"
         }

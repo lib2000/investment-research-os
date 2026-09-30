@@ -15,9 +15,9 @@ if (-not (Test-InvestmentResearchCredential -Target $CredentialTarget)) {
 }
 
 $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$runner`"", "-Port", "8001", "-CredentialTarget", "`"$CredentialTarget`"", "-StartBackendIfNeeded") -join " "
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $ProjectRootPath
 $trigger = New-ScheduledTaskTrigger -Daily -At $At
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 20)
 $settings.DisallowStartIfOnBatteries = $false
 $settings.StopIfGoingOnBatteries = $false
 $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited

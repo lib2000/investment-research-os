@@ -22,14 +22,16 @@ $argumentParts = @(
   "-ProjectRoot",
   "`"$ProjectRootPath`"",
   "-Port",
-  "$Port"
+  "$Port",
+  "-WaitSeconds",
+  "90"
 )
 
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($argumentParts -join " ")
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($argumentParts -join " ") -WorkingDirectory $ProjectRootPath
 $trigger = New-ScheduledTaskTrigger -Once -At $At `
   -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) `
   -RepetitionDuration (New-TimeSpan -Days 3650)
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 3)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 $settings.DisallowStartIfOnBatteries = $false
 $settings.StopIfGoingOnBatteries = $false
 

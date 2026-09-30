@@ -16,10 +16,10 @@ $arguments = @(
   "-ProjectRoot", "`"$ProjectRootPath`"",
   "-CredentialTarget", "`"$CredentialTarget`""
 ) -join " "
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $ProjectRootPath
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Environment]::UserName)
 $trigger.Delay = "PT$([Math]::Max($DelayMinutes, 0))M"
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 60)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3)
 $settings.DisallowStartIfOnBatteries = $false
 $settings.StopIfGoingOnBatteries = $false
 $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited

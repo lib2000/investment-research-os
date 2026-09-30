@@ -20,12 +20,12 @@ $arguments = @(
   "-ProjectRoot", "`"$ProjectRootPath`"",
   "-CredentialTarget", "`"$CredentialTarget`""
 ) -join " "
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $ProjectRootPath
 $trigger = New-ScheduledTaskTrigger -Daily -At $At
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
   -MultipleInstances IgnoreNew `
-  -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+  -ExecutionTimeLimit (New-TimeSpan -Hours 3) `
   -RestartCount 2 `
   -RestartInterval (New-TimeSpan -Minutes 20) `
   -AllowStartIfOnBatteries `

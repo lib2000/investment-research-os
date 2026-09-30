@@ -12,6 +12,8 @@ param(
   [switch]$StartServicesIfNeeded,
   [switch]$StartDockerIfNeeded,
   [int]$DockerStartupTimeoutSeconds = 180,
+  [int]$ResearchBackendStartupTimeoutSeconds = 90,
+  [int]$ServiceStartupTimeoutSeconds = 180,
   [ValidateRange(1, 3)]
   [int]$BacktestRetryCount = 2
 )
@@ -28,7 +30,8 @@ $RuntimeDir = Join-Path $ProjectRootPath "tmp"
 $RecommendationPath = Join-Path $SystemDir "daily_recommendations.json"
 $StatePath = Join-Path $RuntimeDir "daily_strategy_validation_state.json"
 $LogPath = Join-Path $RuntimeDir "daily_strategy_validation.log"
-$Launcher = Join-Path $ProjectRootPath "scripts\start-integrated-investment-workbench.ps1"
+$BackendWatchdog = Join-Path $ProjectRootPath "scripts\ensure-research-backend.ps1"
+$ApiLauncher = Join-Path $ProjectRootPath "scripts\start-investment-analysis-apis.ps1"
 if ([string]::IsNullOrWhiteSpace($RunDate)) {
   $RunDate = Get-Date -Format "yyyy-MM-dd"
 } elseif ($RunDate -notmatch "^\d{4}-\d{2}-\d{2}$") {
@@ -154,14 +157,23 @@ function Test-DockerRuntimeSocketFailure {
   }
   if ($description -notmatch "The file cannot be accessed by the system") { return $false }
 
-  $normalizedDescription = $description.Replace("/", "\\")
+  # PowerShell does not treat backslash as an escape character. Keep one
+  # Windows separator so the listener path matches the local runtime path.
+  $normalizedDescription = $description.Replace("/", "\")
   $socketPaths = @(
     (Join-Path $env:LOCALAPPDATA "Docker\run\dockerInference"),
     (Join-Path $env:LOCALAPPDATA "Docker\run\dockerEthernetVfkit"),
     (Join-Path $env:LOCALAPPDATA "Docker\run\userAnalyticsOtlpHttp.sock"),
     (Join-Path $env:LOCALAPPDATA "docker-secrets-engine\engine.sock")
   )
-  return [bool]($socketPaths | Where-Object { $normalizedDescription -like "*$_*" })
+  # Avoid pipeline truthiness here: scheduled Windows PowerShell instances can
+  # otherwise miss a matching string when the listener path contains a colon.
+  foreach ($socketPath in $socketPaths) {
+    if ($normalizedDescription -like "*$socketPath*") {
+      return $true
+    }
+  }
+  return $false
 }
 
 function Move-DockerRuntimeSocketDirectories {
@@ -229,15 +241,22 @@ function Start-RequiredServices {
   if (-not $StartServicesIfNeeded) {
     throw "One or more analysis services are unavailable. Use -StartServicesIfNeeded or start the integrated workbench first."
   }
-  if (-not (Test-Path -LiteralPath $Launcher)) {
-    throw "Integrated workbench launcher not found: $Launcher"
+  if (-not (Test-Path -LiteralPath $BackendWatchdog)) {
+    throw "Research backend watchdog not found: $BackendWatchdog"
+  }
+  if (-not (Test-Path -LiteralPath $ApiLauncher)) {
+    throw "Analysis API launcher not found: $ApiLauncher"
   }
 
   Write-TaskLog "service_start_requested"
-  $launcherArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Launcher`""
-  Start-Process -FilePath "powershell.exe" -ArgumentList $launcherArguments -WorkingDirectory $ProjectRootPath -WindowStyle Hidden
+  & $BackendWatchdog `
+    -ProjectRoot $ProjectRootPath `
+    -WaitSeconds $ResearchBackendStartupTimeoutSeconds | Out-Host
+  & $ApiLauncher `
+    -ProjectRoot $ProjectRootPath `
+    -WaitSeconds $ServiceStartupTimeoutSeconds | Out-Host
 
-  $deadline = (Get-Date).AddMinutes(4)
+  $deadline = (Get-Date).AddSeconds([Math]::Max($ServiceStartupTimeoutSeconds, 30))
   while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 5
     if (Test-AllServices) {
@@ -251,7 +270,7 @@ function Start-RequiredServices {
       }
     }
   }
-  throw "Integrated workbench services did not become ready within four minutes."
+  throw "Analysis services did not become ready within $ServiceStartupTimeoutSeconds seconds."
 }
 
 function Invoke-BacktestWithRetry {
