@@ -2,7 +2,7 @@ param(
   [string]$ProjectRoot = "",
   [string]$TaskName = "InvestmentResearchOS Boot Catch-up",
   [string]$CredentialTarget = "InvestmentResearchOS/DEV_USER_TOKEN",
-  [int]$DelayMinutes = 2
+  [int]$DelayMinutes = 5
 )
 
 $ErrorActionPreference = "Stop"

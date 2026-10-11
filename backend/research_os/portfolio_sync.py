@@ -21,6 +21,15 @@ from research_os.settings import Settings
 
 MIN_PLAUSIBLE_KRW_FX_RATE = 100.0
 MAX_PLAUSIBLE_KRW_FX_RATE = 10_000.0
+MANUAL_PROTECTED_SYNC_SOURCES = frozenset(
+    {
+        "manual_quantity_protected",
+        "manual_execution_notice",
+        "kb_trade_execution_notice",
+        "user_account_statement",
+        "portfolio_state_guard",
+    }
+)
 
 
 def _current_sync_timestamp() -> str:
@@ -62,6 +71,17 @@ def _portfolio_usd_krw_fx_rate(portfolio: SavedPortfolio) -> float | None:
         and (rate := _holding_krw_fx_rate(holding)) is not None
     ]
     return float(median(rates)) if rates else None
+
+
+def _has_authoritative_manual_sync_evidence(holding: PortfolioHolding) -> bool:
+    """Return whether a holding has explicit non-Kiwoom quantity evidence."""
+    source = str(holding.sync_source or "").strip().lower()
+    status = str(holding.sync_status or "").strip().lower()
+    return source in MANUAL_PROTECTED_SYNC_SOURCES or status in {
+        "manual",
+        "manual_domestic_protected",
+        "manual_or_overseas_protected",
+    }
 
 
 def _convert_toss_usd_valuation(
@@ -244,22 +264,29 @@ def apply_kiwoom_domestic_balance_to_portfolio(
             )
             continue
 
+        domestic_missing = holding_currency == "KRW" and is_domestic_sync_like_ticker(ticker)
+        manual_domestic = domestic_missing and _has_authoritative_manual_sync_evidence(holding)
         reason = (
-            "kiwoom_domestic_missing"
-            if holding_currency == "KRW" and is_domestic_sync_like_ticker(ticker)
+            "manual_domestic_protected"
+            if manual_domestic
+            else "kiwoom_domestic_missing"
+            if domestic_missing
             else "manual_or_overseas_protected"
         )
         message = (
-            "키움 국내 잔고에서 찾지 못해 기존 수량을 유지했습니다."
-            if reason == "kiwoom_domestic_missing"
+            "키움 계좌에는 없지만 타 증권사 또는 사용자 확인 근거가 있어 기존 수량을 보호했습니다."
+            if manual_domestic
+            else "키움 국내 잔고에서 찾지 못해 기존 수량을 유지했습니다."
+            if domestic_missing
             else "해외주식 또는 수동 관리 종목이라 기존 수량을 보호했습니다."
         )
+        sync_source = holding.sync_source if manual_domestic else "kiwoom_domestic_balance"
         synced_holdings.append(
             holding.model_copy(
                 update={
                     "currency": holding_currency,
                     "sync_status": reason,
-                    "sync_source": "kiwoom_domestic_balance",
+                    "sync_source": sync_source,
                     "sync_checked_at": checked_at,
                     "sync_message": message,
                 }
@@ -585,6 +612,7 @@ def portfolio_sync_status_summary(
     counts = {
         "account_synced": 0,
         "manual_or_overseas_protected": 0,
+        "manual_domestic_protected": 0,
         "kiwoom_domestic_missing": 0,
         "kiwoom_not_configured": 0,
         "toss_missing": 0,

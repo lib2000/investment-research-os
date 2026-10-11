@@ -107,6 +107,7 @@ def build_nps_domestic_equity_allocation_monitor(
     target_weight: float = DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     warn_tolerance: float = DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
     checked_at: str | None = None,
+    source_freshness: dict[str, Any] | None = None,
 ) -> dict:
     holding_rows = list(holdings)
     classified: list[dict] = []
@@ -152,8 +153,21 @@ def build_nps_domestic_equity_allocation_monitor(
     gap_pct_points = gap_weight * 100
     gap_value = gap_weight * total_value
     tolerance = max(float(warn_tolerance), 0.0)
+    freshness = source_freshness if isinstance(source_freshness, dict) else {}
+    freshness_status = str(freshness.get("freshness_status") or "").strip()
+    source_stale = bool(freshness) and (
+        bool(freshness.get("large_holding_stale_for_as_of"))
+        or freshness_status not in {"", "current_for_as_of"}
+    )
 
-    if total_value <= 0 or not holding_rows:
+    if source_stale:
+        status = "source_stale"
+        severity = "high"
+        action = (
+            "국민연금 공개자료의 최신성이 확인되지 않아 구체적인 증액·축소 금액 제안을 중단했습니다. "
+            "최신 공시 기준일을 확인한 뒤 다시 계산하세요."
+        )
+    elif total_value <= 0 or not holding_rows:
         status = "needs_data"
         severity = "medium"
         action = "보유 종목 평가금액을 먼저 동기화한 뒤 국민연금 국내주식 14% 기준을 다시 확인하세요."
@@ -191,7 +205,7 @@ def build_nps_domestic_equity_allocation_monitor(
         "current_domestic_equity_weight": round(current_weight, 6),
         "gap_weight": round(gap_weight, 6),
         "gap_pct_points": round(gap_pct_points, 4),
-        "gap_value": round(gap_value, 2),
+        "gap_value": None if source_stale else round(gap_value, 2),
         "domestic_equity_value": round(domestic_value, 2),
         "total_portfolio_value": round(total_value, 2),
         "holding_count": len(holding_rows),
@@ -199,6 +213,8 @@ def build_nps_domestic_equity_allocation_monitor(
         "excluded_count": excluded_count,
         "severity": severity,
         "recommended_action": action,
+        "source_freshness": freshness or None,
+        "monetary_guidance_suppressed": source_stale,
         "checked_at": checked_at or datetime.now(timezone.utc).isoformat(),
         "top_domestic_equity_holdings": top_included,
         "top_excluded_holdings": top_excluded,
@@ -257,6 +273,7 @@ def build_nps_domestic_equity_monitor_from_saved_portfolios(
     target_weight: float = DEFAULT_NPS_DOMESTIC_EQUITY_TARGET,
     warn_tolerance: float = DEFAULT_NPS_DOMESTIC_EQUITY_TOLERANCE,
     checked_at: str | None = None,
+    source_freshness: dict[str, Any] | None = None,
 ) -> dict:
     holdings: list[PortfolioHolding] = []
     total_value = 0.0
@@ -273,6 +290,7 @@ def build_nps_domestic_equity_monitor_from_saved_portfolios(
         target_weight=target_weight,
         warn_tolerance=warn_tolerance,
         checked_at=checked_at,
+        source_freshness=source_freshness,
     )
 
 
@@ -406,6 +424,34 @@ def build_nps_domestic_equity_rebalance_plan(
     monitor: dict,
     evidence_by_ticker: dict[str, dict] | None = None,
 ) -> dict:
+    source_freshness = monitor.get("source_freshness") if isinstance(monitor, dict) else None
+    if monitor.get("status") == "source_stale" or bool(monitor.get("monetary_guidance_suppressed")):
+        return {
+            "status": "source_stale",
+            "module": "nps_domestic_equity_rebalance_plan",
+            "portfolio_name": monitor.get("portfolio_name"),
+            "policy_source": monitor.get("policy_source"),
+            "source_freshness": source_freshness,
+            "target_domestic_equity_weight": monitor.get("target_domestic_equity_weight"),
+            "current_domestic_equity_weight": monitor.get("current_domestic_equity_weight"),
+            "total_portfolio_value": monitor.get("total_portfolio_value"),
+            "domestic_equity_value": monitor.get("domestic_equity_value"),
+            "target_domestic_equity_value": None,
+            "reduction_needed_value": None,
+            "increase_needed_value": None,
+            "candidate_count": 0,
+            "candidates": {"reduce": [], "review": [], "keep": []},
+            "scenarios": [],
+            "monetary_guidance_suppressed": True,
+            "summary": (
+                "국민연금 공개자료가 오래되어 구체적인 리밸런싱 금액과 종목별 축소 시나리오를 표시하지 않습니다."
+            ),
+            "next_actions": [
+                "국민연금 또는 공시 포털의 최신 기준일을 먼저 확인하세요.",
+                "최신성이 회복되기 전에는 현재 비중을 관찰 정보로만 사용하고 금액 제안으로 해석하지 마세요.",
+                "이 기능은 주문을 실행하지 않습니다.",
+            ],
+        }
     evidence_lookup = {str(key).upper(): value for key, value in (evidence_by_ticker or {}).items()}
     domestic_rows = [
         _rebalance_candidate(

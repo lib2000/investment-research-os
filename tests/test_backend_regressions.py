@@ -9537,11 +9537,43 @@ class NaverResearchIngestTests(unittest.TestCase):
         }
 
         with patch.object(main, "latest_naver_domestic_market_close_report", return_value=item), \
+            patch.object(main, "current_storage_date", return_value=main.date(2026, 5, 23)), \
             patch.object(main, "read_json_store", return_value=state), \
+            patch.object(main, "write_json_store") as write_store, \
             patch.object(main, "save_market_close_review") as save_review:
             result = main.refresh_naver_market_close_journal(settings, force=False)
 
         self.assertEqual(result["status"], "skipped")
+        self.assertEqual(write_store.call_count, 1)
+        save_review.assert_not_called()
+
+    def test_market_close_refresh_rejects_stale_source_after_forced_cache_refresh(self):
+        import research_os_main as main
+        from research_os.settings import Settings
+
+        settings = Settings(
+            research_vault_dir="../research_vault",
+            naver_market_close_max_source_age_days=5,
+        )
+        item = {
+            "item_id": "stale-source",
+            "category": "시황정보",
+            "title": "오래된 국내 주식 마감 시황",
+            "published_at": "2026-05-22",
+        }
+
+        with patch.object(main, "latest_naver_domestic_market_close_report", return_value=item), \
+            patch.object(main, "refresh_naver_research_cache") as refresh_cache, \
+            patch.object(main, "read_json_store", return_value={}), \
+            patch.object(main, "write_json_store") as write_store, \
+            patch.object(main, "save_market_close_review") as save_review:
+            result = main.refresh_naver_market_close_journal(settings, force=False)
+
+        self.assertEqual(result["status"], "stale_source")
+        self.assertGreater(result["source_age_days"], 5)
+        refresh_cache.assert_called_once_with(settings, force=True, save_result=True)
+        written_state = write_store.call_args.args[1]
+        self.assertEqual(written_state["status"], "stale_source")
         save_review.assert_not_called()
 
     def test_market_close_refresh_marks_auto_source(self):
@@ -9555,7 +9587,7 @@ class NaverResearchIngestTests(unittest.TestCase):
             "category": "시황정보",
             "title": "국내 주식 마감 시황",
             "summary": "코스피 마감 점검",
-            "published_at": "2026-05-22",
+            "published_at": date.today().isoformat(),
         }
         response = MarketCloseReviewResponse(
             entry=MarketCloseEntry(
@@ -19351,6 +19383,43 @@ class PortfolioPerformanceTests(unittest.TestCase):
         self.assertEqual(summary["updated_count"], 0)
         self.assertEqual(summary["skipped"][0]["reason"], "manual_or_overseas_protected")
 
+    def test_kiwoom_domestic_sync_preserves_other_broker_manual_evidence(self):
+        import research_os_main as main
+        from research_os.models import PortfolioHolding, SavedPortfolio
+        from research_os.settings import Settings
+
+        settings = Settings(research_vault_dir="../research_vault")
+        portfolio = SavedPortfolio(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(
+                    ticker="253450",
+                    name="스튜디오드래곤",
+                    quantity=36,
+                    average_cost=27500,
+                    current_price=20950,
+                    market_value=754200,
+                    cost_basis=990000,
+                    currency="KRW",
+                    sync_status="manual",
+                    sync_source="kb_trade_execution_notice",
+                    sync_checked_at="2026-08-11T19:12:15+09:00",
+                )
+            ],
+        )
+
+        synced, summary = main.sync_saved_portfolio_with_kiwoom_domestic(
+            portfolio,
+            {"api_id": "kt00018", "holdings": []},
+            settings,
+        )
+
+        holding = synced.holdings[0]
+        self.assertEqual(holding.quantity, 36)
+        self.assertEqual(holding.sync_status, "manual_domestic_protected")
+        self.assertEqual(holding.sync_source, "kb_trade_execution_notice")
+        self.assertEqual(summary["skipped"][0]["reason"], "manual_domestic_protected")
+
     def test_portfolio_import_infers_krw_for_domestic_ticker(self):
         import research_os_main as main
 
@@ -20981,6 +21050,37 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
         self.assertTrue(plan["candidates"]["review"][0]["evidence"]["latest_recommendation"])
         self.assertEqual(plan["scenarios"][0]["title"], "ETF/테마 우선 축소")
         self.assertGreater(plan["scenarios"][0]["suggested_reduction_value"], 0)
+
+    def test_nps_stale_source_suppresses_monetary_rebalance_guidance(self):
+        from research_os.models import PortfolioHolding
+        from research_os.nps_allocation_monitor import (
+            build_nps_domestic_equity_allocation_monitor,
+            build_nps_domestic_equity_rebalance_plan,
+        )
+
+        monitor = build_nps_domestic_equity_allocation_monitor(
+            portfolio_name="테스트",
+            holdings=[
+                PortfolioHolding(ticker="003230", name="삼양식품", market_value=500, currency="KRW"),
+                PortfolioHolding(ticker="360750", name="TIGER 미국S&P500", market_value=500, currency="KRW"),
+            ],
+            portfolio_value=1000,
+            source_freshness={
+                "large_holding_latest_base_date": "2022-07-01",
+                "large_holding_stale_for_as_of": True,
+                "large_holding_staleness_days": 1461,
+                "freshness_status": "source_stale_after_successful_refresh",
+            },
+        )
+        plan = build_nps_domestic_equity_rebalance_plan(monitor)
+
+        self.assertEqual(monitor["status"], "source_stale")
+        self.assertIsNone(monitor["gap_value"])
+        self.assertTrue(monitor["monetary_guidance_suppressed"])
+        self.assertEqual(plan["status"], "source_stale")
+        self.assertIsNone(plan["reduction_needed_value"])
+        self.assertEqual(plan["scenarios"], [])
+        self.assertEqual(plan["candidates"]["reduce"], [])
 
     def test_nps_portfolio_change_snapshot_uses_cached_large_holding_rows(self):
         from tempfile import TemporaryDirectory

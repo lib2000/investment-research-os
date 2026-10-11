@@ -127,6 +127,7 @@ def test_boot_catchup_uses_explicit_project_python_for_family_audit() -> None:
     assert "$validatedRecommendationDate -eq $TargetRunDate" in source
     assert '$ResearchEvidenceChecker = Join-Path $ProjectRootPath "tools\\check_research_evidence_pipeline.py"' in source
     assert "& $ProjectPython $ResearchEvidenceChecker --write-state --json --strict | Out-Host" in source
+    assert '$_.id -ne "family_portfolio_aggregate_integrity"' in source
 
 
 def test_scheduled_task_catches_up_and_does_not_expose_token() -> None:

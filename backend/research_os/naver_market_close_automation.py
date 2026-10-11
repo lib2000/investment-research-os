@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from re import search
 from typing import Any, Callable
@@ -183,14 +183,39 @@ def naver_market_close_report_summary(item: dict) -> str:
     return "\n".join(lines)
 
 
+def naver_market_close_source_age_days(
+    runtime: NaverMarketCloseAutomationRuntime,
+    item: dict | None,
+) -> int | None:
+    if not item:
+        return None
+    normalized = runtime.normalize_naver_research_date(item.get("published_at"))
+    if not normalized:
+        return None
+    try:
+        published_date = date.fromisoformat(normalized[:10])
+    except ValueError:
+        return None
+    return max((runtime.current_storage_date() - published_date).days, 0)
+
+
 def refresh_naver_market_close_journal(
     runtime: NaverMarketCloseAutomationRuntime,
     settings: Settings,
     force: bool = False,
 ) -> dict:
     item = runtime.latest_naver_domestic_market_close_report(settings)
-    if not item or force:
-        runtime.refresh_naver_research_cache(settings, force=force, save_result=True)
+    max_source_age_days = max(int(settings.naver_market_close_max_source_age_days), 0)
+    source_age_days = naver_market_close_source_age_days(runtime, item)
+    source_is_stale = source_age_days is None or source_age_days > max_source_age_days
+    if not item or force or source_is_stale:
+        # A recently refreshed cache can still contain an old market-close
+        # report. Force one metadata refresh before declaring the source stale.
+        runtime.refresh_naver_research_cache(
+            settings,
+            force=bool(force or source_is_stale),
+            save_result=True,
+        )
         item = runtime.latest_naver_domestic_market_close_report(settings)
     state_path = runtime.naver_market_close_journal_state_path(settings)
     if not item:
@@ -206,6 +231,34 @@ def refresh_naver_market_close_journal(
             "status": "not_found",
             "module": "naver_market_close_journal",
             "message": "네이버 시황정보에서 국내 마감 시황 리포트를 찾지 못했습니다.",
+            "state_path": str(state_path),
+        }
+    source_age_days = naver_market_close_source_age_days(runtime, item)
+    if source_age_days is None or source_age_days > max_source_age_days:
+        run_at = runtime.current_storage_timestamp()
+        run_date = runtime.current_storage_date().isoformat()
+        state = {
+            **runtime.read_json_store(state_path, {}),
+            "status": "stale_source",
+            "last_attempt_at": run_at,
+            "last_attempt_date": run_date,
+            "last_attempt_message": (
+                "국내 마감 시황 원자료가 최신성 기준을 초과해 시장일지에 저장하지 않았습니다."
+            ),
+            "source_item_id": item.get("item_id"),
+            "source_title": item.get("title"),
+            "source_published_at": item.get("published_at"),
+            "source_age_days": source_age_days,
+            "max_source_age_days": max_source_age_days,
+        }
+        runtime.write_json_store(state_path, state)
+        return {
+            "status": "stale_source",
+            "module": "naver_market_close_journal",
+            "message": state["last_attempt_message"],
+            "source": item,
+            "source_age_days": source_age_days,
+            "max_source_age_days": max_source_age_days,
             "state_path": str(state_path),
         }
     published_at = runtime.normalize_naver_research_date(item.get("published_at")) or runtime.current_storage_date().isoformat()
@@ -351,6 +404,12 @@ def build_naver_market_close_task_status(
     elif runtime.should_run_naver_market_close_journal_fn(settings):
         next_action = "오늘 자동 반영이 아직 실행되지 않았습니다. 스케줄러 또는 수동 반영을 확인하세요."
         status = "due"
+    elif state.get("status") == "stale_source":
+        next_action = (
+            "국내 마감 시황 원자료가 최신성 기준을 초과했습니다. "
+            "네이버 수집 경로를 복구하거나 검증된 대체 소스를 연결하세요."
+        )
+        status = "needs_attention_stale_source"
     elif state.get("status") == "skipped_duplicate":
         next_action = "오늘 자동 점검이 실행됐고 같은 원본은 중복 저장하지 않았습니다."
         status = "ok_duplicate_skipped"

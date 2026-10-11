@@ -18,6 +18,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $StatePath) | Out-
 $startedAt = (Get-Date).ToString("o")
 $token = $null
 $credentialLoaded = $false
+$localStackReady = $false
 $wslKeepaliveReady = $false
 $openClawGatewayReady = $false
 $status = "failed"
@@ -31,6 +32,21 @@ try {
   }
   $credentialLoaded = $true
   $env:DEV_USER_TOKEN = $token
+
+  # Bring up the local research stack before waiting on WSL/OpenClaw.  A slow
+  # systemd user session must not leave the web console unavailable or make the
+  # delayed catch-up task race a backend that has not started yet.
+  $output = & $Launcher start 2>&1
+  $launcherSucceeded = $?
+  $outputText = ($output | Out-String -Width 240).Trim()
+  if ($outputText) {
+    "[$((Get-Date).ToString('o'))]`n$outputText" | Add-Content -LiteralPath $LogPath -Encoding UTF8
+  }
+  if (-not $launcherSucceeded) {
+    throw "통합 실행기가 로컬 투자 리서치 스택을 시작하지 못했습니다."
+  }
+  $localStackReady = $true
+
   # In this Windows/WSL setup the distro is stopped after the final wsl.exe
   # client exits, even with an enabled user service. Keep one hidden client
   # attached so OpenClaw remains reachable after this scheduled task ends.
@@ -83,12 +99,13 @@ try {
   if (-not $userBusReady) {
     throw "WSL systemd 사용자 세션이 준비되지 않았습니다. 로그인 직후 사용자 버스가 늦게 올라왔을 수 있습니다."
   }
-  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine start openclaw-gateway.service 2>$null
+  & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine reset-failed openclaw-gateway.service 2>$null | Out-Null
+  $openClawOutput = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine restart openclaw-gateway.service 2>$null
   if ($LASTEXITCODE -ne 0) {
     throw "WSL OpenClaw 게이트웨이 사용자 서비스를 시작하지 못했습니다."
   }
   $listenerProbe = "import socket; s=socket.socket(); s.settimeout(0.5); r=s.connect_ex(('127.0.0.1',18789)); s.close(); print(1 if r == 0 else 0)"
-  for ($attempt = 1; $attempt -le 18; $attempt++) {
+  for ($attempt = 1; $attempt -le 30; $attempt++) {
     $openClawState = & wsl.exe -d $OpenClawWslDistro --user root --exec systemctl --user --machine=$userMachine is-active openclaw-gateway.service 2>$null
     $serviceActive = $LASTEXITCODE -eq 0 -and "$openClawState" -match "(?m)^active\s*$"
     $listenerState = & wsl.exe -d $OpenClawWslDistro --user root --exec python3 -c $listenerProbe 2>$null
@@ -100,18 +117,9 @@ try {
     Start-Sleep -Seconds 5
   }
   if (-not $openClawGatewayReady) {
-    throw "WSL OpenClaw 게이트웨이가 90초 안에 실제 18789 리스너를 열지 못했습니다."
+    throw "WSL OpenClaw 게이트웨이가 150초 안에 실제 18789 리스너를 열지 못했습니다. 로컬 투자 콘솔은 별도로 시작된 상태입니다."
   }
-  $output = & $Launcher start 2>&1
-  $launcherSucceeded = $?
-  $exitCode = if ($launcherSucceeded) { 0 } else { 1 }
-  $outputText = ($output | Out-String -Width 240).Trim()
-  if ($outputText) {
-    "[$((Get-Date).ToString('o'))]`n$outputText" | Add-Content -LiteralPath $LogPath -Encoding UTF8
-  }
-  if ($exitCode -ne 0) {
-    throw "통합 실행기가 종료 코드 $exitCode`을 반환했습니다."
-  }
+  $exitCode = 0
   $status = "success"
   $message = "투자 리서치 OS 통합 작업대 자동 시작을 확인했습니다."
 } catch {
@@ -127,6 +135,7 @@ try {
     exit_code = $exitCode
     credential_target = $CredentialTarget
     credential_configured = $credentialLoaded
+    local_stack_ready = $localStackReady
     wsl_keepalive_ready = $wslKeepaliveReady
     wsl_keepalive_mode = if ($existingKeepalive.Count -gt 0) { "existing" } else { "direct_root_sleep" }
     openclaw_gateway_ready = $openClawGatewayReady

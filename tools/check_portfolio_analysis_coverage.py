@@ -25,6 +25,8 @@ from research_os.portfolio_analysis_coverage import (  # noqa: E402
     portfolio_analysis_module_state,
     portfolio_analysis_next_action,
     portfolio_analysis_review_state,
+    portfolio_human_review_packet,
+    portfolio_review_priority_queue,
     portfolio_vault_entries,
 )
 
@@ -83,6 +85,7 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
         documented_state = module_state(entries)
         reviewed_state = review_state(entries)
         checklist_status = portfolio_analysis_checklist_status(entries)
+        human_review_packet = portfolio_human_review_packet(entries)
         completed = sum(1 for value in documented_state.values() if value)
         reviewed = sum(1 for value in reviewed_state.values() if value)
         missing = missing_portfolio_analysis_labels(documented_state)
@@ -93,10 +96,12 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
                 "ticker": ticker,
                 "company_name": holding.get("name") or ticker,
                 "portfolio_name": portfolio_name,
+                "portfolios": [portfolio_name],
                 "market_value": holding.get("market_value"),
                 "module_state": documented_state,
                 "review_state": reviewed_state,
                 "checklist_status": checklist_status,
+                "human_review_packet": human_review_packet,
                 "completed_count": completed,
                 "reviewed_count": reviewed,
                 "required_count": len(REQUIRED_PORTFOLIO_ANALYSIS_MODULES),
@@ -113,6 +118,7 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
     review_average = sum(item["review_completion_rate"] for item in rows) / len(rows) if rows else 0.0
     ready_count = sum(1 for item in rows if item["completion_rate"] >= 1.0)
     review_ready_count = sum(1 for item in rows if item["review_completion_rate"] >= 1.0)
+    review_priority_queue = portfolio_review_priority_queue(rows)
     return {
         "portfolio_name": portfolio_name,
         "holding_count": len(rows),
@@ -121,6 +127,8 @@ def coverage_for_portfolio(portfolio_name: str, holdings: list[dict[str, Any]], 
         "review_ready_count": review_ready_count,
         "average_completion": round(average, 4),
         "average_review_completion": round(review_average, 4),
+        "review_priority_queue_count": len(review_priority_queue),
+        "review_priority_queue": review_priority_queue,
         "items": rows,
     }
 
@@ -236,6 +244,13 @@ def main() -> int:
         f"| 문서 완료 {ready}개 | 문서 커버리지 {average:.1%} "
         f"| 검토 게이트 통과 {review_ready}개 | 검토 충족률 {review_average:.1%}"
     )
+    if result["review_priority_queue"]:
+        print("사람 검토 우선 큐:")
+        for item in result["review_priority_queue"][: max(0, args.limit)]:
+            print(
+                f"- {item.get('company_name') or item.get('ticker')} ({item.get('ticker')}): "
+                f"{item.get('reason')} | 다음: {item.get('next_action')}"
+            )
     for item in result["items"][: max(0, args.limit)]:
         missing = ", ".join(item["missing_modules"]) if item["missing_modules"] else "문서 누락 없음"
         review_missing = ", ".join(item["review_missing_modules"]) if item["review_missing_modules"] else "검토 게이트 통과"

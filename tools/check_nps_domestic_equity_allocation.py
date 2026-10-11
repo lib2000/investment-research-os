@@ -25,6 +25,7 @@ from research_os.nps_allocation_monitor import (  # noqa: E402
 
 
 DEFAULT_STORE = Path("research_vault/_system/user_portfolios.json")
+DEFAULT_SOURCE_SNAPSHOT = Path("research_vault/_system/nps_portfolio_change_snapshot.json")
 
 
 def project_root(start: Path) -> Path:
@@ -45,6 +46,18 @@ def load_portfolios(path: Path) -> dict[str, Any]:
     if not isinstance(portfolios, dict):
         raise SystemExit("포트폴리오 저장 파일에 portfolios 객체가 없습니다.")
     return portfolios
+
+
+def load_source_freshness(root: Path) -> dict[str, Any] | None:
+    path = root / DEFAULT_SOURCE_SNAPSHOT
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    freshness = payload.get("source_freshness") if isinstance(payload, dict) else None
+    return freshness if isinstance(freshness, dict) else None
 
 
 def main() -> int:
@@ -73,6 +86,7 @@ def main() -> int:
         target_weight=args.target_weight,
         warn_tolerance=args.warn_tolerance,
         checked_at=datetime.now().isoformat(timespec="seconds"),
+        source_freshness=load_source_freshness(root),
     )
     output_payload = build_nps_domestic_equity_rebalance_plan(monitor) if args.rebalance_plan else monitor
 
@@ -80,6 +94,9 @@ def main() -> int:
         print(json.dumps(output_payload, ensure_ascii=False, indent=2))
     elif args.rebalance_plan:
         print(output_payload["summary"])
+        if output_payload.get("monetary_guidance_suppressed"):
+            print("국민연금 공개자료 최신성 미확인으로 금액·종목별 시나리오를 표시하지 않습니다.")
+            return 2 if args.fail_on_breach else 0
         print(f"현재 국내주식: {output_payload['domestic_equity_value']:,.0f}")
         print(f"목표 국내주식: {output_payload['target_domestic_equity_value']:,.0f}")
         print(f"축소 필요: {output_payload['reduction_needed_value']:,.0f}")

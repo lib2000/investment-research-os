@@ -95,6 +95,7 @@ $items = foreach ($check in $expectedChecks) {
   $accountSyncSources = @("toss_holdings", "kiwoom_holdings", "kis_holdings")
   $syncProtected =
     $syncStatus -eq "manual_or_overseas_protected" -or
+    ($syncStatus -eq "manual_domestic_protected" -and $protectedSources -contains $syncSource) -or
     ($syncStatus -eq "account_synced" -and $accountSyncSources -contains $syncSource) -or
     ($syncStatus -eq "manual" -and $protectedSources -contains $syncSource) -or
     $protectedSources -contains $syncSource

@@ -181,6 +181,7 @@ class Settings(BaseModel):
     naver_research_pdf_snippet_max_chars: int = 900
     naver_market_close_auto_journal: bool = True
     naver_market_close_journal_time: str = "20:10"
+    naver_market_close_max_source_age_days: int = 5
     telegram_market_close_auto_journal: bool = True
     telegram_market_close_journal_time: str = "07:20"
     telegram_market_close_channel_username: str = "ehdwl"

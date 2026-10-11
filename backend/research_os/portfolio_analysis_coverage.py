@@ -437,7 +437,13 @@ def portfolio_review_priority_queue(items: list[dict[str, Any]]) -> list[dict[st
                 "action_mode": "read_only",
                 "automatic_completion": False,
                 "review_gate_effect": "none" if packet else "read_only",
-                "_priority": 0 if quantity_confirmation_required else 1,
+                "_priority": {
+                    "quantity_confirmation": 0,
+                    "document_gap": 1,
+                    "checklist_review": 2,
+                    "review_gate": 3,
+                }.get(queue_kind, 3),
+                "_completion_rate": completion_rate,
                 "_market_value": market_value,
             }
         )
@@ -445,12 +451,14 @@ def portfolio_review_priority_queue(items: list[dict[str, Any]]) -> list[dict[st
     queue.sort(
         key=lambda item: (
             item["_priority"],
+            item["_completion_rate"],
             -item["_market_value"],
             str(item.get("ticker") or ""),
         )
     )
     for item in queue:
         item.pop("_priority", None)
+        item.pop("_completion_rate", None)
         item.pop("_market_value", None)
     return queue
 

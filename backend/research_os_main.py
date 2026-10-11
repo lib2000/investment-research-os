@@ -13421,6 +13421,7 @@ def read_nps_domestic_equity_allocation(
         target_weight=target_weight,
         warn_tolerance=warn_tolerance,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+        source_freshness=_nps_public_source_freshness(settings),
     )
 
 
@@ -13448,6 +13449,12 @@ def read_nps_portfolio_changes(
     return snapshot
 
 
+def _nps_public_source_freshness(settings: Settings) -> dict | None:
+    snapshot = read_nps_portfolio_change_snapshot(settings)
+    freshness = snapshot.get("source_freshness") if isinstance(snapshot, dict) else None
+    return freshness if isinstance(freshness, dict) else None
+
+
 def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_name: str = "__all__") -> dict:
     resolved_name, holdings, portfolio_value = _load_saved_portfolios_for_nps_allocation(portfolio_name, settings)
     return build_nps_domestic_equity_allocation_monitor(
@@ -13455,6 +13462,7 @@ def build_nps_domestic_equity_allocation_status(settings: Settings, portfolio_na
         holdings=holdings,
         portfolio_value=portfolio_value,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+        source_freshness=_nps_public_source_freshness(settings),
     )
 
 
@@ -13553,6 +13561,7 @@ def read_nps_domestic_equity_rebalance_plan(
         target_weight=target_weight,
         warn_tolerance=warn_tolerance,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+        source_freshness=_nps_public_source_freshness(settings),
     )
     evidence = _nps_rebalance_evidence_context(holdings, settings)
     return build_nps_domestic_equity_rebalance_plan(monitor, evidence_by_ticker=evidence)
@@ -13584,6 +13593,7 @@ def read_portfolio_nps_institutional_flow(
         target_weight=target_weight,
         warn_tolerance=warn_tolerance,
         checked_at=current_storage_datetime().isoformat(timespec="seconds"),
+        source_freshness=_nps_public_source_freshness(settings),
     )
     signals: list[dict] = []
     matched_count = 0

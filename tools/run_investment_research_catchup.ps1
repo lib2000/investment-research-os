@@ -315,7 +315,15 @@ $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_po
   }
   $operations += [pscustomobject]$strategyOperation
 
-  $ranAny = @($operations | Where-Object { $_.action -eq "ran" }).Count -gt 0
+  # The family aggregate audit is read-only and always runs. Do not let that
+  # maintenance-only check trigger the expensive evidence/OpenClaw refresh when
+  # every data-producing catch-up step is already fresh.
+  $contextRelevantRuns = @(
+    $operations | Where-Object {
+      $_.action -eq "ran" -and $_.id -ne "family_portfolio_aggregate_integrity"
+    }
+  )
+  $ranAny = $contextRelevantRuns.Count -gt 0
   $syncAction = "skipped"
   if ($ranAny -and -not $DryRun) {
     if (-not (Test-Path -LiteralPath $ResearchEvidenceChecker)) {
@@ -330,7 +338,11 @@ $portfolioStorePath = Join-Path $ProjectRootPath "research_vault\_system\user_po
     }
     & $Sync | Out-Host
     $syncAction = "ran"
-  } elseif ($DryRun -and @($operations | Where-Object { $_.action -eq "would_run" }).Count -gt 0) {
+  } elseif ($DryRun -and @(
+      $operations | Where-Object {
+        $_.action -eq "would_run" -and $_.id -ne "family_portfolio_aggregate_integrity"
+      }
+    ).Count -gt 0) {
     $syncAction = "would_run"
   }
 

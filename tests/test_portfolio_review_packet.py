@@ -138,7 +138,7 @@ class PortfolioReviewPacketTests(unittest.TestCase):
             self.assertEqual(queue[0]["reason"], "계좌 동기화 미검출로 보유 수량 확인 필요")
             self.assertEqual(queue[0]["review_gate_effect"], "none")
 
-    def test_review_priority_queue_is_read_only_and_uses_quantity_then_market_value(self):
+    def test_review_priority_queue_is_read_only_and_uses_quantity_then_document_gap(self):
         queue = portfolio_review_priority_queue(
             [
                 {
@@ -178,10 +178,10 @@ class PortfolioReviewPacketTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual([item["ticker"] for item in queue], ["COMPLETE", "HIGH", "LOW"])
+        self.assertEqual([item["ticker"] for item in queue], ["COMPLETE", "LOW", "HIGH"])
         self.assertEqual(queue[0]["queue_kind"], "quantity_confirmation")
-        self.assertEqual(queue[1]["queue_kind"], "checklist_review")
-        self.assertEqual(queue[2]["queue_kind"], "document_gap")
+        self.assertEqual(queue[1]["queue_kind"], "document_gap")
+        self.assertEqual(queue[2]["queue_kind"], "checklist_review")
         self.assertTrue(all(item["action_mode"] == "read_only" for item in queue))
         self.assertTrue(all(item["automatic_completion"] is False for item in queue))
         self.assertEqual(queue[0]["review_gate_effect"], "none")
