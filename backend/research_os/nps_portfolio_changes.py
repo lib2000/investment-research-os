@@ -150,7 +150,7 @@ def _read_cache_records(settings: Settings) -> tuple[list[dict], list[dict], lis
                 continue
             if "보고서 작성기준일" in row or "발행기관명" in row:
                 large_rows.append(row)
-            elif "연도" in row:
+            elif "연도" in row or ("종목명" in row and ("평가액(억 원)" in row or "자산군 내 비중(퍼센트)" in row)):
                 domestic_rows.append(row)
     cache_updated_at = (
         datetime.fromtimestamp(newest_ts, timezone.utc).isoformat(timespec="seconds") if newest_ts else None
@@ -230,7 +230,7 @@ def build_nps_portfolio_change_snapshot(
     as_of_date = as_of if isinstance(as_of, date) else datetime.strptime(str(as_of), "%Y-%m-%d").date()
     refresh_attempted = False
     refresh_warnings: list[str] = []
-    if settings.nps_odcloud_api_key:
+    if settings.nps_odcloud_enabled and (settings.nps_odcloud_api_key or settings.nps_official_large_holding_page_url):
         refresh_attempted = True
         try:
             client = NpsOdcloudClient(settings)
@@ -255,9 +255,10 @@ def build_nps_portfolio_change_snapshot(
     latest_events = [item for item in dated_events if item.get("base_date") == latest_event_date] if latest_event_date else []
     portfolio_label, holdings = _portfolio_holdings(settings, portfolio_name)
     matches = _match_holdings(dated_events, holdings)
-    stale = bool(latest_event_date and latest_event_date < as_of_date.isoformat())
     latest_event_dt = _parse_date(latest_event_date)
     staleness_days = (as_of_date - latest_event_dt).days if latest_event_dt else None
+    max_staleness_days = 120
+    stale = bool(staleness_days is not None and staleness_days > max_staleness_days)
     if not latest_event_date:
         freshness_status = "no_large_holding_source"
     elif stale and refresh_attempted:
@@ -286,15 +287,17 @@ def build_nps_portfolio_change_snapshot(
         "large_holding_latest_base_date": latest_event_date,
         "large_holding_stale_for_as_of": stale,
         "large_holding_staleness_days": staleness_days,
+        "large_holding_max_staleness_days": max_staleness_days,
+        "large_holding_release_cadence": "quarterly",
         "freshness_status": freshness_status,
         "staleness_reason": (
-            "공공데이터포털 API 호출은 가능하지만 원천 대량보유 공개자료의 최신 기준일이 요청 기준일보다 오래되었습니다."
+            "공식 분기 공시 최신 기준일이 허용 최신성 120일을 초과했습니다."
             if freshness_status == "source_stale_after_successful_refresh"
             else "API 키가 없어 기존 캐시 기준으로만 최신성을 판단했습니다."
             if freshness_status == "cache_stale_refresh_not_attempted"
             else "요청 기준일 이하 대량보유 공개자료가 없습니다."
             if freshness_status == "no_large_holding_source"
-            else "요청 기준일 기준 공개 대량보유 자료가 최신입니다."
+            else "분기 공시 주기(최대 120일) 안의 공개 대량보유 자료입니다."
         ),
         "trusted_use": (
             "public_disclosure_pressure_only"

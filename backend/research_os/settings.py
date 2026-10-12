@@ -264,10 +264,11 @@ class Settings(BaseModel):
     nps_odcloud_enabled: bool = True
     nps_odcloud_api_key: str = Field(default="")
     nps_odcloud_base_url: str = "https://api.odcloud.kr/api"
-    nps_domestic_stock_docs_url: str = "https://infuser.odcloud.kr/oas/docs?namespace=3070507/v1"
+    nps_domestic_stock_docs_url: str = "https://www.data.go.kr/data/3070507/fileData.do"
     nps_large_holding_docs_url: str = "https://infuser.odcloud.kr/oas/docs?namespace=15106890/v1"
-    nps_domestic_stock_api_url: str = "https://api.odcloud.kr/api/3070507/v1/uddi:1eaca842-2152-4546-9144-a6d9d0fa3a19_201709281515"
+    nps_domestic_stock_api_url: str = "https://api.odcloud.kr/api/3070507/v1/uddi:b32185ed-8e1a-4468-9222-892713bab04a"
     nps_large_holding_api_url: str = "https://api.odcloud.kr/api/15106890/v1/uddi:1bcc0415-377e-44fd-9f08-aa1e813a286c"
+    nps_official_large_holding_page_url: str = "https://fund.nps.or.kr/impa/edwmpblnt/getOHEF0006M0.do?tmpltdataSn=5955"
     nps_odcloud_timeout_seconds: float = 4.0
     nps_odcloud_max_pages: int = 1
     customs_trade_enabled: bool = True
@@ -692,7 +693,7 @@ class Settings(BaseModel):
             ),
             nps_domestic_stock_docs_url=os.getenv(
                 "NPS_DOMESTIC_STOCK_DOCS_URL",
-                "https://infuser.odcloud.kr/oas/docs?namespace=3070507/v1",
+                "https://www.data.go.kr/data/3070507/fileData.do",
             ),
             nps_large_holding_docs_url=os.getenv(
                 "NPS_LARGE_HOLDING_DOCS_URL",
@@ -700,11 +701,15 @@ class Settings(BaseModel):
             ),
             nps_domestic_stock_api_url=os.getenv(
                 "NPS_DOMESTIC_STOCK_API_URL",
-                "https://api.odcloud.kr/api/3070507/v1/uddi:1eaca842-2152-4546-9144-a6d9d0fa3a19_201709281515",
+                "https://api.odcloud.kr/api/3070507/v1/uddi:b32185ed-8e1a-4468-9222-892713bab04a",
             ),
             nps_large_holding_api_url=os.getenv(
                 "NPS_LARGE_HOLDING_API_URL",
                 "https://api.odcloud.kr/api/15106890/v1/uddi:1bcc0415-377e-44fd-9f08-aa1e813a286c",
+            ),
+            nps_official_large_holding_page_url=os.getenv(
+                "NPS_OFFICIAL_LARGE_HOLDING_PAGE_URL",
+                "https://fund.nps.or.kr/impa/edwmpblnt/getOHEF0006M0.do?tmpltdataSn=5955",
             ),
             nps_odcloud_timeout_seconds=float(os.getenv("NPS_ODCLOUD_TIMEOUT_SECONDS", "4")),
             nps_odcloud_max_pages=int(os.getenv("NPS_ODCLOUD_MAX_PAGES", "1")),

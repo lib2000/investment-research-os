@@ -21,6 +21,7 @@ class NaverMarketCloseAutomationRuntime:
     write_json_store: Callable[[Path, Any], None]
     refresh_naver_research_cache: Callable[..., dict]
     latest_naver_domestic_market_close_report: Callable[[Settings], dict | None]
+    latest_naver_index_close_report: Callable[[Settings], dict | None]
     normalize_naver_research_date: Callable[[Any], str | None]
     naver_market_close_source_metadata: Callable[[str | None], dict]
     save_market_close_review: Callable[[MarketCloseReviewRequest, Settings], Any]
@@ -163,15 +164,22 @@ def archive_duplicate_naver_market_close_reports(
 
 def naver_market_close_report_summary(item: dict) -> str:
     pdf_analysis = item.get("pdf_analysis") if isinstance(item.get("pdf_analysis"), dict) else {}
-    snippets = pdf_analysis.get("snippets") if isinstance(pdf_analysis.get("snippets"), list) else []
+    source_analysis = item.get("source_analysis") if isinstance(item.get("source_analysis"), dict) else {}
+    snippets = (
+        source_analysis.get("snippets")
+        if isinstance(source_analysis.get("snippets"), list)
+        else pdf_analysis.get("snippets")
+        if isinstance(pdf_analysis.get("snippets"), list)
+        else []
+    )
     lines = [
         "[네이버 금융 시황정보 자동 반영]",
         f"제목: {item.get('title') or '제목 미확인'}",
         f"증권사: {item.get('broker') or '미확인'}",
         f"발행일: {item.get('published_at') or '미확인'}",
         f"원문 링크: {item.get('url') or '미확인'}",
-        f"PDF 링크: {item.get('pdf_url') or '미확인'}",
-        f"PDF 분석 상태: {pdf_analysis.get('status') or '미확인'}",
+        f"자료 유형: {item.get('source_kind') or 'research_report'}",
+        f"검증 상태: {source_analysis.get('status') or pdf_analysis.get('status') or '미확인'}",
         "",
         "활용 정책:",
         "- 네이버 금융 시황정보의 원문 전체는 저장하지 않고 메타데이터, 구조화 신호, 짧은 검증 스니펫만 시장일지에 반영합니다.",
@@ -217,6 +225,15 @@ def refresh_naver_market_close_journal(
             save_result=True,
         )
         item = runtime.latest_naver_domestic_market_close_report(settings)
+    source_age_days = naver_market_close_source_age_days(runtime, item)
+    if not item or source_age_days is None or source_age_days > max_source_age_days:
+        try:
+            fallback_item = runtime.latest_naver_index_close_report(settings)
+        except Exception:
+            fallback_item = None
+        fallback_age_days = naver_market_close_source_age_days(runtime, fallback_item)
+        if fallback_item and fallback_age_days is not None and fallback_age_days <= max_source_age_days:
+            item = fallback_item
     state_path = runtime.naver_market_close_journal_state_path(settings)
     if not item:
         state = {

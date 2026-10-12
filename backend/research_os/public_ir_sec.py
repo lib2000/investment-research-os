@@ -8,9 +8,11 @@ safe metadata/extracted text into research memory for RAG reuse.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from re import findall, sub
+import json
+from pathlib import Path
+from re import DOTALL, IGNORECASE, findall, search, sub
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -21,6 +23,7 @@ from research_os.firecrawl_monitor_events import (
 )
 from research_os.firecrawl_monitor_collector import build_firecrawl_monitor_readiness_status
 from research_os.rag_memory import upsert_research_memory_document
+from research_os.rag_memory_utils import resolve_manifest_file
 from research_os.research_memory import (
     read_manifest,
     resolve_vault_dir,
@@ -34,6 +37,7 @@ from research_os.web_capture import (
     render_source_url_context,
     render_url_only_capture_context,
 )
+from research_os.web_fetch import fetch_url_with_retry
 
 PUBLIC_IR_SEC_KEY = "PUBLIC_IR_SEC"
 PUBLIC_IR_SEC_REPORT_TYPE = "public-ir-sec"
@@ -591,6 +595,141 @@ def _sec_exhibit_followup_hint(entry: dict[str, Any]) -> dict[str, Any]:
     if exhibit_labels:
         hint["expected_exhibits"] = exhibit_labels[:10]
     return hint
+
+
+def find_sec_exhibit_99_1_url(index_url: str) -> dict[str, Any]:
+    """Resolve an official Exhibit 99.1 URL from an SEC filing index."""
+    parsed_index = urlparse(index_url)
+    if parsed_index.scheme != "https" or not (parsed_index.hostname or "").lower().endswith("sec.gov"):
+        return {"status": "invalid_index_url", "index_url": index_url, "exhibit_url": None}
+    response, attempts = fetch_url_with_retry(index_url)
+    if response is None:
+        return {"status": "fetch_failed", "index_url": index_url, "exhibit_url": None, "attempts": attempts}
+    html = response.text
+    candidate_rows = findall(r"<tr\b[^>]*>.*?</tr>", html, flags=IGNORECASE | DOTALL)
+    for row in candidate_rows:
+        plain = sub(r"<[^>]+>", " ", row)
+        if not search(r"\bEX-?99\.1\b|\b99\.1\b", plain, flags=IGNORECASE):
+            continue
+        href_match = search(r"href=[\"']([^\"']+)[\"']", row, flags=IGNORECASE)
+        if not href_match:
+            continue
+        exhibit_url = urljoin(index_url, href_match.group(1))
+        parsed_exhibit = urlparse(exhibit_url)
+        if (parsed_exhibit.hostname or "").lower().endswith("sec.gov"):
+            return {
+                "status": "success",
+                "index_url": index_url,
+                "exhibit_url": exhibit_url,
+                "attempts": attempts,
+            }
+    return {"status": "not_found", "index_url": index_url, "exhibit_url": None, "attempts": attempts}
+
+
+def _mark_sec_wrapper_resolved(vault_dir: Path, entry: dict[str, Any], exhibit_url: str) -> dict[str, Any]:
+    updated = {**entry}
+    updated["tags"] = sorted(
+        set(
+            tag
+            for tag in [*(updated.get("tags") or []), "sec_exhibit_backfilled"]
+            if tag != "needs_body_copy"
+        )
+    )
+    quality = dict(updated.get("capture_quality") or {})
+    quality.update(
+        {
+            "status": "보강 완료",
+            "needs_body_copy": False,
+            "resolved_by_official_exhibit": True,
+            "official_exhibit_url": exhibit_url,
+            "recommended_action": "공식 SEC Exhibit 99.1 본문을 별도 저장해 분석에 연결했습니다.",
+        }
+    )
+    updated["capture_quality"] = quality
+    updated["capture_quality_status"] = "보강 완료"
+    updated["sec_exhibit_url"] = exhibit_url
+    updated["sec_exhibit_backfilled_at"] = _utc_now_iso()
+    update_manifest(vault_dir=vault_dir, entry=updated)
+    json_relative_path = str(updated.get("json_relative_path") or "").strip()
+    if json_relative_path:
+        json_path = resolve_manifest_file(vault_dir, json_relative_path)
+        if json_path and json_path.exists():
+            try:
+                payload = json.loads(json_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict):
+                    payload["capture_quality"] = quality
+                    payload["sec_exhibit_url"] = exhibit_url
+                    payload["sec_exhibit_backfilled_at"] = updated["sec_exhibit_backfilled_at"]
+                    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            except (OSError, json.JSONDecodeError):
+                pass
+    return updated
+
+
+def backfill_public_ir_sec_exhibits(settings: Any, limit: int = 20) -> dict[str, Any]:
+    """Collect official SEC Exhibit 99.1 bodies and resolve short 6-K wrappers."""
+    vault_dir = resolve_vault_dir(settings.research_vault_dir)
+    candidates = [
+        entry
+        for entry in read_manifest(vault_dir)
+        if (entry.get("capture_quality") or {}).get("needs_body_copy")
+        and _body_followup_reason(entry).get("reason") == "sec_exhibit_followup"
+    ][: max(1, min(limit, 50))]
+    repaired: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for entry in candidates:
+        hint = _sec_exhibit_followup_hint(entry)
+        index_url = str(hint.get("sec_filing_index_url") or "")
+        resolved = find_sec_exhibit_99_1_url(index_url) if index_url else {"status": "missing_index_url"}
+        exhibit_url = str(resolved.get("exhibit_url") or "")
+        if not exhibit_url:
+            errors.append({"file_name": entry.get("file_name"), "status": resolved.get("status"), "index_url": index_url})
+            continue
+        request = PublicIrSecCollectRequest(
+            url=exhibit_url,
+            target_key=str(entry.get("ticker") or PUBLIC_IR_SEC_KEY),
+            source_title=f"{entry.get('title') or 'SEC filing'} - Exhibit 99.1",
+            source_provider="SEC EDGAR",
+            source_type="official_filing",
+            source_category=str(entry.get("source_category") or "공개 IR/SEC 자료"),
+            filing_form="EX-99.1",
+            filing_group=str(entry.get("filing_group") or "sec_exhibit"),
+            published_at=str(entry.get("published_at") or ""),
+            save_result=True,
+        )
+        result = collect_public_ir_sec_url(
+            request,
+            settings,
+            ticker_verification=entry.get("ticker_verification"),
+        )
+        result_quality = result.get("capture_quality") if isinstance(result.get("capture_quality"), dict) else {}
+        existing_quality = (
+            (result.get("existing_entry") or {}).get("capture_quality")
+            if isinstance(result.get("existing_entry"), dict)
+            else {}
+        )
+        usable = (
+            int(result.get("body_chars") or 0) >= 500
+            or (isinstance(existing_quality, dict) and existing_quality.get("needs_body_copy") is False)
+            or result_quality.get("needs_body_copy") is False
+        )
+        if not usable:
+            skipped.append({"file_name": entry.get("file_name"), "exhibit_url": exhibit_url, "status": result.get("status")})
+            continue
+        _mark_sec_wrapper_resolved(vault_dir, entry, exhibit_url)
+        repaired.append({"file_name": entry.get("file_name"), "exhibit_url": exhibit_url, "status": result.get("status")})
+    return {
+        "status": "success" if not errors and not skipped else "partial_success",
+        "module": "public_ir_sec_exhibit_backfill",
+        "candidate_count": len(candidates),
+        "repaired_count": len(repaired),
+        "skipped_count": len(skipped),
+        "error_count": len(errors),
+        "repaired": repaired,
+        "skipped": skipped,
+        "errors": errors,
+    }
 
 
 def _needs_body_entry_preview(entry: dict[str, Any]) -> dict[str, Any]:

@@ -9537,6 +9537,7 @@ class NaverResearchIngestTests(unittest.TestCase):
         }
 
         with patch.object(main, "latest_naver_domestic_market_close_report", return_value=item), \
+            patch.object(main, "fetch_naver_korea_index_close_report", return_value=None), \
             patch.object(main, "current_storage_date", return_value=main.date(2026, 5, 23)), \
             patch.object(main, "read_json_store", return_value=state), \
             patch.object(main, "write_json_store") as write_store, \
@@ -9563,6 +9564,7 @@ class NaverResearchIngestTests(unittest.TestCase):
         }
 
         with patch.object(main, "latest_naver_domestic_market_close_report", return_value=item), \
+            patch.object(main, "fetch_naver_korea_index_close_report", return_value=None), \
             patch.object(main, "refresh_naver_research_cache") as refresh_cache, \
             patch.object(main, "read_json_store", return_value={}), \
             patch.object(main, "write_json_store") as write_store, \
@@ -21137,7 +21139,11 @@ class NpsDomesticEquityAllocationMonitorTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            settings = Settings(research_vault_dir=str(vault), nps_odcloud_api_key="")
+            settings = Settings(
+                research_vault_dir=str(vault),
+                nps_odcloud_api_key="",
+                nps_official_large_holding_page_url="",
+            )
 
             snapshot = build_nps_portfolio_change_snapshot(settings, as_of="2026-07-01")
             self.assertEqual(snapshot["module"], "nps_portfolio_change_snapshot")

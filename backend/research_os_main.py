@@ -64,6 +64,10 @@ from research_os.nps_allocation_monitor import (
     build_nps_domestic_equity_rebalance_plan,
     select_saved_portfolios_for_nps_allocation,
 )
+from research_os.naver_index_close import (
+    fetch_naver_korea_index_close_report,
+    render_naver_korea_index_lines,
+)
 from research_os.pension_rebalancing import (
     build_pension_rebalancing_calendar_plan,
     build_pension_rebalancing_status,
@@ -249,6 +253,7 @@ from research_os.portfolio_import import (
 )
 from research_os.public_ir_sec import (
     PublicIrSecCollectRequest,
+    backfill_public_ir_sec_exhibits,
     collect_public_ir_sec_url as _collect_public_ir_sec_url,
     public_ir_sec_status_payload,
 )
@@ -4077,6 +4082,7 @@ def _naver_market_close_automation_runtime() -> naver_market_close_automation.Na
         write_json_store=write_json_store,
         refresh_naver_research_cache=refresh_naver_research_cache,
         latest_naver_domestic_market_close_report=latest_naver_domestic_market_close_report,
+        latest_naver_index_close_report=fetch_naver_korea_index_close_report,
         normalize_naver_research_date=normalize_naver_research_date,
         naver_market_close_source_metadata=naver_market_close_source_metadata,
         save_market_close_review=save_market_close_review,
@@ -4399,6 +4405,10 @@ def company_ir_sources_scheduler_loop() -> None:
                 limit=settings.company_ir_sources_max_items,
                 force=False,
                 save_result=True,
+            )
+            backfill_public_ir_sec_exhibits(
+                settings,
+                limit=settings.company_ir_sources_max_items,
             )
         except Exception:
             pass
@@ -6372,49 +6382,13 @@ def market_research_key(market: str) -> str:
     }.get(market, f"MARKET-{market}")
 
 
-NAVER_KOREA_INDEX_CODES = ("KOSPI", "KOSDAQ")
-
-
 def fetch_naver_korea_index_snapshot(settings: Settings) -> list[str]:
-    if not settings.naver_finance_enabled:
-        return []
-
-    base_url = settings.naver_finance_base_url.rstrip("/")
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-        ),
-        "Accept": "application/json,text/plain,*/*",
-    }
-    snapshot: list[str] = []
     try:
-        with httpx.Client(
-            timeout=settings.naver_finance_timeout_seconds,
-            headers=headers,
-            trust_env=False,
-        ) as client:
-            for code in NAVER_KOREA_INDEX_CODES:
-                response = client.get(f"{base_url}/api/index/{code}/basic")
-                response.raise_for_status()
-                payload = response.json()
-                name = payload.get("stockName") or code
-                close_price = payload.get("closePrice") or "n/a"
-                diff = payload.get("compareToPreviousClosePrice") or "n/a"
-                ratio = payload.get("fluctuationsRatio") or "n/a"
-                direction = (payload.get("compareToPreviousPrice") or {}).get("text") or "n/a"
-                market_status = payload.get("marketStatus") or "n/a"
-                traded_at = payload.get("localTradedAt") or current_storage_timestamp()
-                sign = "+" if direction == "상승" and not str(diff).startswith("-") else ""
-                ratio_sign = "+" if direction == "상승" and not str(ratio).startswith("-") else ""
-                snapshot.append(
-                    f"{name}: {close_price}p ({sign}{diff}, {ratio_sign}{ratio}%, {direction}, {market_status}, {traded_at})"
-                )
+        return render_naver_korea_index_lines(fetch_naver_korea_index_close_report(settings))
     except Exception as exc:
-        snapshot.append(
+        return [
             f"네이버 증권 보조 데이터 경고: KOSPI/KOSDAQ 자동 수집 실패 - {_safe_display_error(exc)}"
-        )
-    return snapshot
+        ]
 
 
 def normalize_kr_stock_code(value: str) -> str:
@@ -11588,12 +11562,18 @@ def refresh_company_ir_sources_watch(
     save_result: bool = True,
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    return build_company_ir_sources_watch_payload(
+    payload = build_company_ir_sources_watch_payload(
         settings,
         limit=limit,
         force=True,
         save_result=save_result,
     )
+    if save_result:
+        payload["sec_exhibit_backfill"] = backfill_public_ir_sec_exhibits(
+            settings,
+            limit=limit,
+        )
+    return payload
 
 
 @app.get(
@@ -14999,6 +14979,17 @@ def get_public_ir_sec_status(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     return public_ir_sec_status_payload(settings, limit=limit)
+
+
+@app.post(
+    "/api/v1/public-ir-sec/sec-exhibits/backfill",
+    dependencies=[Depends(verify_user_token)],
+)
+def backfill_public_ir_sec_exhibits_endpoint(
+    limit: int = Query(20, ge=1, le=50),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return backfill_public_ir_sec_exhibits(settings, limit=limit)
 
 
 @app.post(

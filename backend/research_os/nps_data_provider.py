@@ -20,6 +20,7 @@ from research_os.data_provider_utils import (
     _safe_provider_error,
 )
 from research_os.models import DataSourceType, InjectedDataPoint
+from research_os.nps_official_disclosure import fetch_nps_large_holding_disclosure
 from research_os.settings import Settings
 
 _NPS_ODCLOUD_CACHE_LOCK = threading.Lock()
@@ -40,6 +41,7 @@ class NpsOdcloudClient:
         self.large_holding_docs_url = settings.nps_large_holding_docs_url
         self.domestic_api_url = settings.nps_domestic_stock_api_url.strip()
         self.large_holding_api_url = settings.nps_large_holding_api_url.strip()
+        self.official_large_holding_page_url = settings.nps_official_large_holding_page_url.strip()
         self.timeout_seconds = settings.nps_odcloud_timeout_seconds
         self.max_pages = max(1, settings.nps_odcloud_max_pages)
         vault_dir = (Path(__file__).resolve().parents[1] / settings.research_vault_dir).resolve()
@@ -47,13 +49,21 @@ class NpsOdcloudClient:
 
     @property
     def is_configured(self) -> bool:
+        return self.enabled and (
+            self.odcloud_configured or bool(self.official_large_holding_page_url)
+        )
+
+    @property
+    def odcloud_configured(self) -> bool:
         return self.enabled and _is_configured_secret(self.api_key)
 
     def status_message(self) -> str:
         if not self.enabled:
             return "국민연금 공공데이터포털 연동이 비활성화되어 있습니다."
+        if not self.odcloud_configured and self.official_large_holding_page_url:
+            return "국민연금 공식 분기 대량보유 공시는 사용 가능하며, 연도말 국내주식 데이터는 NPS_ODCLOUD_API_KEY 설정 전까지 건너뜁니다."
         if not self.is_configured:
-            return "NPS_ODCLOUD_API_KEY가 없어 국민연금 보유/대량보유 데이터를 건너뜁니다."
+            return "NPS_ODCLOUD_API_KEY와 국민연금 공식 공시 URL이 없어 국민연금 데이터를 건너뜁니다."
         return (
             "국민연금 공공데이터포털 API가 설정되었습니다. 국내주식 투자정보(연간)와 "
             "대량보유 보고내역(분기)을 기관 수급 보조 신호로 사용합니다."
@@ -61,9 +71,9 @@ class NpsOdcloudClient:
 
     def _candidate_urls(self, explicit_url: str, namespace: str, docs_url: str) -> list[str]:
         urls = []
+        discovered_urls: list[str] = []
         if explicit_url:
             urls.append(explicit_url)
-            return urls
         namespace = namespace.strip("/")
         urls.extend(
             [
@@ -79,7 +89,9 @@ class NpsOdcloudClient:
                 response.raise_for_status()
                 text = response.text
             for match in re.findall(r"https://api\.odcloud\.kr/api/[^\"'\\\s<>]+", text):
-                urls.append(match)
+                discovered_urls.append(match)
+            for match in re.findall(r"uddi:[0-9a-fA-F-]+", text):
+                discovered_urls.append(f"{self.base_url}/{namespace}/{match}")
             for match in re.findall(r"(/api/[^\"'\\\s<>]+)", text):
                 urls.append("https://api.odcloud.kr" + match)
             for match in re.findall(rf"(/?{re.escape(namespace)}/[^\"'\\\s<>]+)", text):
@@ -87,7 +99,7 @@ class NpsOdcloudClient:
         except Exception:
             pass
         deduped = []
-        for url in urls:
+        for url in [*discovered_urls, *urls]:
             clean = str(url).strip().rstrip("?")
             if clean and clean not in deduped:
                 deduped.append(clean)
@@ -134,7 +146,7 @@ class NpsOdcloudClient:
             return
 
     def _fetch_rows(self, *, explicit_url: str, namespace: str, docs_url: str) -> tuple[list[dict], list[str], str | None]:
-        if not self.is_configured:
+        if not self.odcloud_configured:
             return [], [self.status_message()], None
         cache_key = "|".join([explicit_url, namespace, docs_url, self.api_key[-8:]])
         persistent_cached: dict | None = None
@@ -218,11 +230,28 @@ class NpsOdcloudClient:
         )
 
     def fetch_large_holding_rows(self) -> tuple[list[dict], list[str], str | None]:
-        return self._fetch_rows(
+        official_rows, official_errors, official_url = fetch_nps_large_holding_disclosure(
+            self.official_large_holding_page_url,
+            timeout_seconds=max(self.timeout_seconds, 8.0),
+        )
+        if official_rows:
+            cache_key = "official_large_holding|" + self.official_large_holding_page_url
+            cache_record = {
+                "ts": datetime.now(timezone.utc).timestamp(),
+                "rows": official_rows,
+                "errors": official_errors,
+                "used_url": official_url,
+            }
+            with _NPS_ODCLOUD_CACHE_LOCK:
+                _NPS_ODCLOUD_ROW_CACHE[cache_key] = cache_record
+                self._write_persistent_cache(cache_key, cache_record)
+            return official_rows, official_errors, official_url
+        rows, errors, used_url = self._fetch_rows(
             explicit_url=self.large_holding_api_url,
             namespace=self.LARGE_HOLDING_NAMESPACE,
             docs_url=self.large_holding_docs_url,
         )
+        return rows, [*official_errors, *errors], used_url
 
     def _row_matches(self, row: dict, ticker: str, company_name: str | None) -> bool:
         ticker_code = _normalize_korean_stock_code(ticker)

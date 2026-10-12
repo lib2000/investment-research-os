@@ -87,8 +87,10 @@ def supplement_research_memory_file(
         if isinstance(capture_quality, dict):
             capture_quality["status"] = "정상"
             capture_quality["body_supplemented"] = True
+            capture_quality["needs_body_copy"] = False
             capture_quality["supplemented_at"] = supplemented_at
             capture_quality["readiness"] = "사용자 보강 본문으로 분석 활용 가능"
+            capture_quality["recommended_action"] = "보강 본문이 저장되어 분석에 활용할 수 있습니다."
         json_path.write_text(
             json.dumps(json_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -104,7 +106,13 @@ def supplement_research_memory_file(
     )
     if manifest_entry:
         updated_entry = {**manifest_entry}
-        tags = list(dict.fromkeys([*(updated_entry.get("tags") or []), "body_supplemented"]))
+        tags = list(
+            dict.fromkeys(
+                tag
+                for tag in [*(updated_entry.get("tags") or []), "body_supplemented"]
+                if tag != "needs_body_copy"
+            )
+        )
         updated_entry["tags"] = tags
         updated_entry["body_supplemented_at"] = supplemented_at
         updated_entry["body_supplement_count"] = int(updated_entry.get("body_supplement_count") or 0) + 1
@@ -114,8 +122,10 @@ def supplement_research_memory_file(
             capture_quality = {**capture_quality}
             capture_quality["status"] = "정상"
             capture_quality["body_supplemented"] = True
+            capture_quality["needs_body_copy"] = False
             capture_quality["supplemented_at"] = supplemented_at
             capture_quality["readiness"] = "사용자 보강 본문으로 분석 활용 가능"
+            capture_quality["recommended_action"] = "보강 본문이 저장되어 분석에 활용할 수 있습니다."
             updated_entry["capture_quality"] = capture_quality
         runtime.update_manifest(vault_dir=vault_dir, entry=updated_entry)
         runtime.upsert_research_memory_document(
