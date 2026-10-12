@@ -1,7 +1,7 @@
 # Research Console Workstation Shell
 
 - Author: Codex
-- Status: Implementing
+- Status: Implemented
 - Created: 2026-10-12
 - Updated: 2026-10-12
 - Authority: `D:\workspace\InvestmentJournalApp\docs\design\research-console-workstation-shell.md`
@@ -15,6 +15,7 @@ Turn the classic research console from a long control page into a compact analys
 - Keep the selected ticker global and reachable with `Ctrl/Cmd+K`.
 - Group the existing twenty modules into stable research, analysis, operations, and data navigation groups.
 - Keep the active module in the central scroll area and the result stream in a resizable right pane.
+- Keep a sticky module context bar with the active workflow, purpose, selected ticker, and research-only boundary visible.
 - Move connection credentials out of the primary workspace into an explicit settings dialog.
 - Compress service health into a persistent status bar without hiding detailed status text.
 - Preserve every existing element ID, form contract, API call, and safety boundary.

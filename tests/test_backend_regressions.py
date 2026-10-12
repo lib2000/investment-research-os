@@ -17402,6 +17402,8 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('class="workstation-shell"', html)
         self.assertIn('id="workspaceNavigation"', html)
         self.assertIn('id="workspaceOutput"', html)
+        self.assertIn('id="workspaceModuleTitle"', html)
+        self.assertIn('id="workspaceTickerContext"', html)
         self.assertIn('id="settingsDialog"', html)
         self.assertIn(
             'id="globalTickerInput" name="ticker" form="dashboardForm"',
@@ -17411,6 +17413,8 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn('id="output" class="markdown-output plain-mode"', html)
         self.assertIn("event.metaKey || event.ctrlKey", workstation_js)
         self.assertIn("setOutputWidth", workstation_js)
+        self.assertIn("MODULE_META", workstation_js)
+        self.assertIn("updateWorkspaceContext", workstation_js)
 
     def test_console_result_templates_keep_company_name_first_display(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(
