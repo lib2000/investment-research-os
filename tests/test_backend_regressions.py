@@ -17368,12 +17368,14 @@ class ConsoleAssetHashTests(unittest.TestCase):
         versions = {
             "styles.css": "stylehash123",
             "console.js": "consolehash1",
+            "workstation.js": "workstationhash",
             "api.js": "apihash12345",
         }
 
         html = (
             '<link rel="stylesheet" href="./styles.css" />\n'
             '<script type="module" src="./console.js?v=manual-version"></script>\n'
+            '<script type="module" src="./workstation.js?v=manual-version"></script>\n'
         )
         js = 'import { request } from "./api.js?v=manual-version";\n'
 
@@ -17382,11 +17384,33 @@ class ConsoleAssetHashTests(unittest.TestCase):
 
         self.assertIn('href="./styles.css?v=stylehash123"', updated_html)
         self.assertIn('src="./console.js?v=consolehash1"', updated_html)
+        self.assertIn('src="./workstation.js?v=workstationhash"', updated_html)
         self.assertNotIn("manual-version", updated_html)
         self.assertEqual(
             updated_js,
             'import { request } from "./api.js?v=apihash12345";\n',
         )
+
+    def test_console_uses_workstation_shell_without_breaking_form_contracts(self):
+        html = (PROJECT_ROOT / "mobile_app" / "research_console" / "index.html").read_text(
+            encoding="utf-8"
+        )
+        workstation_js = (
+            PROJECT_ROOT / "mobile_app" / "research_console" / "workstation.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('class="workstation-shell"', html)
+        self.assertIn('id="workspaceNavigation"', html)
+        self.assertIn('id="workspaceOutput"', html)
+        self.assertIn('id="settingsDialog"', html)
+        self.assertIn(
+            'id="globalTickerInput" name="ticker" form="dashboardForm"',
+            html,
+        )
+        self.assertIn('id="backendStatus"', html)
+        self.assertIn('id="output" class="markdown-output plain-mode"', html)
+        self.assertIn("event.metaKey || event.ctrlKey", workstation_js)
+        self.assertIn("setOutputWidth", workstation_js)
 
     def test_console_result_templates_keep_company_name_first_display(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(

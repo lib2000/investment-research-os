@@ -180,6 +180,7 @@ Invoke-VerifyStep "클래식 콘솔 자산 해시 확인" {
 
 Invoke-VerifyStep "클래식 콘솔 JavaScript 문법 확인" {
   node --check mobile_app\research_console\console.js
+  node --check mobile_app\research_console\workstation.js
 }
 
 Invoke-VerifyStep "리서치 OS Python 문법 확인" {

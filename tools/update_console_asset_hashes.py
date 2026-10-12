@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 CONSOLE_DIR = Path("mobile_app") / "research_console"
-ASSET_FILES = ("styles.css", "console.js", "api.js")
+ASSET_FILES = ("styles.css", "console.js", "workstation.js", "api.js")
 MAX_UPDATE_PASSES = 5
 
 
@@ -30,7 +30,7 @@ def versioned_ref(asset_name: str, version: str) -> str:
 
 def update_html_content(content: str, versions: dict[str, str]) -> str:
     updated = content
-    for asset_name in ("styles.css", "console.js"):
+    for asset_name in ("styles.css", "console.js", "workstation.js"):
         versioned = versioned_ref(asset_name, versions[asset_name])
         updated = re.sub(
             rf'((?:href|src)=["\'])\./{re.escape(asset_name)}(?:\?v=[^"\']*)?(["\'])',

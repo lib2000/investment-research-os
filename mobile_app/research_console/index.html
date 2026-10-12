@@ -5,90 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>투자 리서치 콘솔</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f766e'/%3E%3Cpath d='M18 43V21h7v22zm11 0V29h7v14zm11 0V16h7v27z' fill='white'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css?v=0febaac618dc" />
+    <link rel="stylesheet" href="./styles.css?v=3a7322fb0eb1" />
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">투자 리서치 OS</p>
-          <h1>리서치 콘솔</h1>
+    <a class="skip-link" href="#workspaceMain">본문으로 건너뛰기</a>
+    <div class="workstation-shell">
+      <header class="topbar workstation-topbar">
+        <div class="workstation-brand">
+          <button id="navigationToggle" class="icon-button navigation-toggle" type="button" aria-label="탐색 메뉴 열기" aria-controls="workspaceNavigation" aria-expanded="false">☰</button>
+          <div>
+            <p class="eyebrow">INVESTMENT RESEARCH OS</p>
+            <h1>리서치 콘솔</h1>
+          </div>
         </div>
-        <div class="connection-panel">
-          <label>
-            API 주소
-            <input id="apiBaseUrl" type="url" value="http://127.0.0.1:8001" />
-          </label>
-          <label>
-            개발 토큰
-            <input id="accessToken" type="text" value="dev-local-token" />
-          </label>
-          <button id="statusButton" type="button">상태 확인</button>
+        <div class="global-omnibox" role="search">
+          <span class="omnibox-symbol" aria-hidden="true">⌕</span>
+          <label class="sr-only" for="globalTickerInput">티커 또는 회사명</label>
+          <input id="globalTickerInput" name="ticker" form="dashboardForm" list="dashboardTickerOptions" placeholder="티커 또는 회사명 검색" autocomplete="off" />
+          <datalist id="dashboardTickerOptions"></datalist>
+          <kbd>⌘ K</kbd>
+          <button class="omnibox-submit" type="submit" form="dashboardForm">조회</button>
+        </div>
+        <div class="topbar-actions">
+          <button id="outputPaneToggle" class="icon-button" type="button" aria-label="결과 패널 접기" aria-controls="workspaceOutput" aria-expanded="true">▥</button>
+          <button id="settingsOpenButton" class="icon-button" type="button" aria-label="환경설정 열기" aria-controls="settingsDialog">⚙</button>
         </div>
       </header>
 
-      <section class="status-grid" aria-live="polite">
-        <div>
-          <span>백엔드</span>
-          <strong id="backendStatus">대기</strong>
-        </div>
-        <div>
-          <span>데이터 프로바이더</span>
-          <strong id="providerStatus">대기</strong>
-        </div>
-        <div>
-          <span>저장된 보고서</span>
-          <strong id="manifestStatus">대기</strong>
-        </div>
-        <div>
-          <span>OpenClaw</span>
-          <strong id="openClawStatus">대기</strong>
-        </div>
-        <div class="domestic-market-status-card">
-          <span>국내 주식 세션</span>
-          <strong id="domesticMarketStatus">확인 중</strong>
-          <small id="domesticMarketHours">KRX·NXT 거래시간을 불러오는 중입니다.</small>
-        </div>
-      </section>
+      <aside id="workspaceNavigation" class="workstation-sidebar" aria-label="리서치 도구 탐색">
+        <nav class="tabs" aria-label="리서치 모듈">
+          <div class="nav-group">
+            <span class="nav-group-label">오늘</span>
+            <button class="tab active" data-tab="dashboard" type="button"><span aria-hidden="true">⌂</span><b>대시보드</b></button>
+            <button class="tab" data-tab="team" type="button"><span aria-hidden="true">▤</span><b>팀 리포트</b></button>
+            <button class="tab" data-tab="news" type="button"><span aria-hidden="true">◫</span><b>뉴스</b></button>
+            <button class="tab" data-tab="marketClose" type="button"><span aria-hidden="true">◷</span><b>시장 일지</b></button>
+            <button class="tab" data-tab="investmentCalendar" type="button"><span aria-hidden="true">□</span><b>투자 캘린더</b></button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">분석</span>
+            <button class="tab" data-tab="trade" type="button"><span aria-hidden="true">⇄</span><b>매매 전략</b></button>
+            <button class="tab" data-tab="chart" type="button"><span aria-hidden="true">⌁</span><b>차트 분석</b></button>
+            <button class="tab" data-tab="earnings" type="button"><span aria-hidden="true">▥</span><b>실적 분석</b></button>
+            <button class="tab" data-tab="insider" type="button"><span aria-hidden="true">◎</span><b>내부자 거래</b></button>
+            <button class="tab" data-tab="dartAnnualLab" type="button"><span aria-hidden="true">▧</span><b>사업보고서 랩</b></button>
+            <button class="tab" data-tab="macro" type="button"><span aria-hidden="true">◉</span><b>매크로 분석</b></button>
+            <button class="tab" data-tab="sector" type="button"><span aria-hidden="true">◇</span><b>섹터 발굴</b></button>
+            <button class="tab" data-tab="compounder" type="button"><span aria-hidden="true">↗</span><b>복리 성장주</b></button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">자산</span>
+            <button class="tab" data-tab="portfolio" type="button"><span aria-hidden="true">▦</span><b>포트폴리오</b></button>
+            <button class="tab" data-tab="interests" type="button"><span aria-hidden="true">☆</span><b>관심종목/섹터</b></button>
+            <button class="tab" data-tab="checklist" type="button"><span aria-hidden="true">✓</span><b>체크리스트</b></button>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-label">운영</span>
+            <button class="tab" data-tab="capture" type="button"><span aria-hidden="true">＋</span><b>정보 입력</b></button>
+            <button class="tab" data-tab="llmBridge" type="button"><span aria-hidden="true">⌘</span><b>LLM 연동</b></button>
+            <button class="tab" data-tab="reportAutomation" type="button"><span aria-hidden="true">↻</span><b>보고 자동화</b></button>
+            <button class="tab" data-tab="memory" type="button"><span aria-hidden="true">▱</span><b>저장 데이터</b></button>
+          </div>
+        </nav>
+        <button id="navigationCollapse" class="navigation-collapse" type="button" aria-label="사이드바 접기">‹ <span>메뉴 접기</span></button>
+      </aside>
 
-      <nav class="tabs" aria-label="Research modules">
-        <button class="tab active" data-tab="dashboard" type="button">대시보드</button>
-        <button class="tab" data-tab="team" type="button">팀 리포트</button>
-        <button class="tab" data-tab="trade" type="button">매매 전략</button>
-        <button class="tab" data-tab="chart" type="button">차트 분석</button>
-        <button class="tab" data-tab="earnings" type="button">실적 분석</button>
-        <button class="tab" data-tab="insider" type="button">내부자 거래</button>
-        <button class="tab" data-tab="dartAnnualLab" type="button">사업보고서 랩</button>
-        <button class="tab" data-tab="macro" type="button">매크로 분석</button>
-        <button class="tab" data-tab="sector" type="button">섹터 발굴</button>
-        <button class="tab" data-tab="compounder" type="button">복리 성장주</button>
-        <button class="tab" data-tab="capture" type="button">정보 입력</button>
-        <button class="tab" data-tab="news" type="button">뉴스</button>
-        <button class="tab" data-tab="llmBridge" type="button">LLM 연동</button>
-        <button class="tab" data-tab="reportAutomation" type="button">보고 자동화</button>
-        <button class="tab" data-tab="marketClose" type="button">시장 일지</button>
-        <button class="tab" data-tab="investmentCalendar" type="button">투자 캘린더</button>
-        <button class="tab" data-tab="portfolio" type="button">포트폴리오</button>
-        <button class="tab" data-tab="interests" type="button">관심종목/섹터</button>
-        <button class="tab" data-tab="checklist" type="button">체크리스트</button>
-        <button class="tab" data-tab="memory" type="button">저장 데이터</button>
-      </nav>
+      <main id="workspaceMain" class="app-shell workstation-main" tabindex="-1">
       <div id="actionFeedback" class="action-feedback" aria-live="assertive" hidden></div>
 
       <section id="dashboard" class="panel active">
         <form id="dashboardForm" class="dashboard-form">
           <div class="dashboard-inputs">
             <label>
-              티커 또는 회사명
-              <input name="ticker" list="dashboardTickerOptions" placeholder="선택하거나 직접 입력" autocomplete="off" />
-              <datalist id="dashboardTickerOptions"></datalist>
-            </label>
-            <label>
               최근 사용 10개
               <select id="dashboardTickerSelect">
                 <option value="">최근 사용 종목 선택</option>
               </select>
             </label>
+            <p class="dashboard-context-note">상단 검색창의 종목이 모든 분석 패널에 함께 적용됩니다.</p>
           </div>
           <div class="dashboard-command-bar" aria-label="대시보드 실행 메뉴">
             <button type="submit">대시보드 조회</button>
@@ -1468,22 +1462,89 @@
         </article>
       </section>
 
-      <section class="output-panel">
-        <div class="output-header">
-          <div class="output-title">
-            <h2>결과</h2>
-            <span id="outputStatus" class="output-status" hidden>처리 중</span>
+      </main>
+
+      <aside id="workspaceOutput" class="workstation-output" aria-label="실행 결과">
+        <div id="outputResizeHandle" class="output-resize-handle" role="separator" aria-label="결과 패널 너비 조절" aria-orientation="vertical" tabindex="0"></div>
+        <section class="output-panel">
+          <div class="output-header">
+            <div class="output-title">
+              <span class="eyebrow">EVIDENCE STREAM</span>
+              <h2>결과</h2>
+              <span id="outputStatus" class="output-status" hidden>처리 중</span>
+            </div>
+            <div class="output-actions">
+              <button id="exportResultExcel" type="button">엑셀</button>
+              <button id="clearOutput" type="button">지우기</button>
+              <button id="outputPaneClose" class="icon-button" type="button" aria-label="결과 패널 접기">×</button>
+            </div>
           </div>
-          <div class="output-actions">
-            <button id="exportResultExcel" type="button">엑셀 다운로드</button>
-            <button id="clearOutput" type="button">지우기</button>
-          </div>
+          <div id="output" class="markdown-output plain-mode">대기 중입니다.</div>
+        </section>
+      </aside>
+
+      <footer class="status-grid workstation-statusbar" aria-label="시스템 상태" aria-live="polite">
+        <button class="statusbar-settings" type="button" data-open-settings aria-label="연결 설정 열기">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>백엔드</span>
+          <strong id="backendStatus">대기</strong>
+        </button>
+        <div>
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>데이터</span>
+          <strong id="providerStatus">대기</strong>
         </div>
-        <div id="output" class="markdown-output plain-mode">대기 중입니다.</div>
-      </section>
-    </main>
+        <div>
+          <span>보고서</span>
+          <strong id="manifestStatus">대기</strong>
+        </div>
+        <div>
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>OpenClaw</span>
+          <strong id="openClawStatus">대기</strong>
+        </div>
+        <div class="domestic-market-status-card">
+          <span>국내 세션</span>
+          <strong id="domesticMarketStatus">확인 중</strong>
+          <small id="domesticMarketHours">KRX·NXT 거래시간을 불러오는 중입니다.</small>
+        </div>
+        <button id="statusRefreshCompact" class="statusbar-refresh" type="button" aria-label="전체 상태 새로고침">↻ 상태 새로고침</button>
+      </footer>
+
+      <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+        <form method="dialog" class="settings-dialog-shell">
+          <header>
+            <div>
+              <span class="eyebrow">WORKSPACE SETTINGS</span>
+              <h2 id="settingsTitle">환경설정</h2>
+              <p>연결 정보는 이 브라우저의 현재 콘솔 세션에서만 사용합니다.</p>
+            </div>
+            <button id="settingsCloseButton" class="icon-button" value="cancel" aria-label="환경설정 닫기">×</button>
+          </header>
+          <div class="connection-panel">
+            <label>
+              API 주소
+              <input id="apiBaseUrl" type="url" value="http://127.0.0.1:8001" autocomplete="url" />
+            </label>
+            <label>
+              개발 토큰
+              <input id="accessToken" type="password" value="dev-local-token" autocomplete="off" />
+            </label>
+            <button id="statusButton" type="button">연결 확인</button>
+          </div>
+          <section class="settings-note">
+            <strong>안전 경계</strong>
+            <p>이 설정은 리서치 API 조회용입니다. 실거래 주문과 계좌 변경은 이 콘솔에서 자동 실행하지 않습니다.</p>
+          </section>
+          <footer>
+            <button class="secondary" value="cancel">닫기</button>
+          </footer>
+        </form>
+      </dialog>
+    </div>
 
   <script type="module" src="./console.js?v=826c5596a27a"></script>
+  <script type="module" src="./workstation.js?v=d72b1df9a6d3"></script>
   <script type="module" src="./domestic-market-hours.js?v=736ac1b180f9"></script>
 </body>
 </html>
