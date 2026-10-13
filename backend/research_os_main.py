@@ -17,7 +17,7 @@ from urllib.parse import urljoin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -557,6 +557,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def prevent_research_console_asset_mismatch(request: Request, call_next):
+    """Keep the console document and versioned assets from drifting apart.
+
+    The workstation shell is a static app whose HTML points at content-hashed
+    JavaScript and CSS.  Browsers must revalidate the entry document so an old
+    DOM never runs against a newer shell module.  Assets with an explicit
+    ``?v=`` hash can be cached immutably; unversioned assets are revalidated.
+    """
+
+    response = await call_next(request)
+    path = request.url.path.rstrip("/")
+    if path not in {"/console", "/console/index.html"} and not path.startswith("/console/"):
+        return response
+
+    if path in {"/console", "/console/index.html"}:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif request.query_params.get("v"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
 
 CONSOLE_DIR = Path(__file__).resolve().parents[1] / "mobile_app" / "research_console"
 if CONSOLE_DIR.exists():

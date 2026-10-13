@@ -108,19 +108,30 @@ function setOutputCollapsed(collapsed, { persist = true } = {}) {
 
 function openSettings() {
   if (!settingsDialog) return;
-  if (typeof settingsDialog.showModal === "function") {
-    settingsDialog.showModal();
-  } else {
-    settingsDialog.setAttribute("open", "");
+  if (!settingsDialog.open) {
+    try {
+      if (typeof settingsDialog.showModal === "function") {
+        settingsDialog.showModal();
+      } else {
+        settingsDialog.setAttribute("open", "");
+      }
+    } catch {
+      settingsDialog.setAttribute("open", "");
+    }
   }
   window.requestAnimationFrame(() => document.querySelector("#apiBaseUrl")?.focus());
 }
 
 function closeSettings() {
   if (!settingsDialog) return;
-  if (typeof settingsDialog.close === "function") {
-    settingsDialog.close();
-  } else {
+  if (!settingsDialog.open) return;
+  try {
+    if (typeof settingsDialog.close === "function") {
+      settingsDialog.close();
+    } else {
+      settingsDialog.removeAttribute("open");
+    }
+  } catch {
     settingsDialog.removeAttribute("open");
   }
   settingsOpenButton?.focus();
@@ -161,8 +172,26 @@ navigationCollapse?.addEventListener("click", () => {
   setSidebarCollapsed(!shell?.classList.contains("sidebar-collapsed"));
 });
 
+function activateWorkspacePanel(button) {
+  const tabName = button?.dataset.tab;
+  if (!tabName) return false;
+  const panel = document.getElementById(tabName);
+  if (!panel) return false;
+  document.querySelectorAll(".tab[data-tab]").forEach((item) => {
+    const active = item === button;
+    item.classList.toggle("active", active);
+    item.setAttribute("aria-current", active ? "page" : "false");
+  });
+  document.querySelectorAll(".panel").forEach((item) => {
+    item.classList.toggle("active", item === panel);
+  });
+  updateWorkspaceContext();
+  return true;
+}
+
 navigation?.querySelectorAll(".tab").forEach((button) => {
   button.addEventListener("click", () => {
+    activateWorkspacePanel(button);
     if (isCompactViewport()) setNavigationOpen(false);
     window.requestAnimationFrame(updateWorkspaceContext);
   });

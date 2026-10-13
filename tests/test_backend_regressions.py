@@ -17415,6 +17415,22 @@ class ConsoleAssetHashTests(unittest.TestCase):
         self.assertIn("setOutputWidth", workstation_js)
         self.assertIn("MODULE_META", workstation_js)
         self.assertIn("updateWorkspaceContext", workstation_js)
+        self.assertIn("activateWorkspacePanel", workstation_js)
+
+    def test_console_cache_policy_prevents_html_and_asset_version_drift(self):
+        from fastapi.testclient import TestClient
+        import research_os_main as main
+
+        client = TestClient(main.app)
+        document = client.get("/console/")
+        versioned_asset = client.get("/console/workstation.js?v=testhash")
+        unversioned_asset = client.get("/console/workstation.js")
+
+        self.assertEqual(document.status_code, 200)
+        self.assertEqual(document.headers["cache-control"], "no-cache, no-store, must-revalidate")
+        self.assertEqual(document.headers["pragma"], "no-cache")
+        self.assertEqual(versioned_asset.headers["cache-control"], "public, max-age=31536000, immutable")
+        self.assertEqual(unversioned_asset.headers["cache-control"], "no-cache, must-revalidate")
 
     def test_console_result_templates_keep_company_name_first_display(self):
         console_js = (PROJECT_ROOT / "mobile_app" / "research_console" / "console.js").read_text(

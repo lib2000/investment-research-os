@@ -94,10 +94,15 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                   await waitFor(() => document.readyState === "complete", 15000, "page load");
                   await waitFor(() => document.querySelector("#statusButton") && document.querySelector("#dashboardForm"), 15000, "console controls");
                   await sleep(800);
+                  const settingsDialog = document.querySelector("#settingsDialog");
+                  document.querySelector("#settingsOpenButton")?.click();
+                  await waitFor(() => settingsDialog?.open, 5000, "settings dialog open");
                   document.querySelector("#apiBaseUrl").value = "http://127.0.0.1:8001";
                   document.querySelector("#accessToken").value = "dev-local-token";
                   document.querySelector("#statusButton").click();
                   await waitFor(() => /정상|kis|활성|완료/.test(document.querySelector("#backendStatus")?.textContent || ""), 15000, "backend status");
+                  document.querySelector("#settingsCloseButton")?.click();
+                  await waitFor(() => !settingsDialog?.open, 5000, "settings dialog close");
 
                   const tabs = [...document.querySelectorAll("button.tab[data-tab]")].map((button) => ({{
                     key: button.dataset.tab,
@@ -129,7 +134,8 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                   const setDashboardTicker = async () => {{
                     document.querySelector('button.tab[data-tab="dashboard"]').click();
                     await waitFor(() => document.querySelector("#dashboard")?.classList.contains("active"), 5000, "dashboard active");
-                    const tickerInput = document.querySelector('#dashboard input[name="ticker"]');
+                    const tickerInput = document.querySelector('#globalTickerInput, #dashboard input[name="ticker"]');
+                    if (!tickerInput) throw new Error("Global ticker input is unavailable");
                     tickerInput.value = "삼양식품";
                     tickerInput.dispatchEvent(new Event("input", {{ bubbles: true }}));
                     tickerInput.dispatchEvent(new Event("change", {{ bubbles: true }}));
@@ -289,6 +295,7 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                     dashboardCommandLayout: initialDashboardCommandLayout,
                     clippedDashboardCommands,
                     runtimeErrors,
+                    settingsDialogOk: Boolean(settingsDialog && !settingsDialog.open),
                   }};
                 }})()
                 """,
@@ -304,6 +311,8 @@ def run_menu_smoke(url: str, include_write_actions: bool = False) -> dict:
                 raise AssertionError(f"대시보드 카드 버튼 실패: {result['failedCardActions']}")
             if result["runtimeErrors"]:
                 raise AssertionError(f"브라우저 런타임 오류: {result['runtimeErrors']}")
+            if not result.get("settingsDialogOk"):
+                raise AssertionError("환경설정 모달 열기/닫기 실패")
             return result
         finally:
             if client:
