@@ -1512,7 +1512,8 @@ class JsonContractsCheckToolTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertGreaterEqual(result["tool_count"], 47)
         self.assertEqual(result["failed_count"], 0)
-        self.assertIn("tools\\analyze_code_diff_impact.py", {item["path"] for item in result["results"]})
+        normalized_paths = {str(item["path"]).replace("\\", "/") for item in result["results"]}
+        self.assertIn("tools/analyze_code_diff_impact.py", normalized_paths)
 
     def test_json_contracts_check_supports_json_output_contract(self):
         source = (PROJECT_ROOT / "tools" / "check_json_contracts.py").read_text(encoding="utf-8")
@@ -3139,7 +3140,7 @@ class FirecrawlIrCollectorTests(unittest.TestCase):
         operations_doc = (PROJECT_ROOT / "docs" / "operations-readiness.md").read_text(encoding="utf-8")
 
         for expected in [
-            "최종 갱신: 2026-07-05",
+            "최종 갱신: 2026-07-07",
             "리서치 중복/Dossier 상태를 갱신",
             "sync_openclaw_investment_context.ps1 -RequireCompletionAudit",
             "bridge_status.json",
@@ -15226,7 +15227,13 @@ class MacroSourceSignalLinkageCheckToolTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            status = tool.build_status(targets_file, sample_limit=5)
+            class FixedDate(date):
+                @classmethod
+                def today(cls) -> date:
+                    return date(2026, 7, 6)
+
+            with patch.object(tool, "date", FixedDate):
+                status = tool.build_status(targets_file, sample_limit=5)
 
         self.assertEqual(status["total"]["target_count"], 3)
         self.assertEqual(status["total"]["linked_count"], 2)

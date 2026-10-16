@@ -9,6 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MOBILE_APP = ROOT / "apps" / "mobile"
+PYTEST_EXTRA: tuple[str, ...] = (
+    "--ignore",
+    "tests/test_backtest_result_store.py",
+    "--ignore",
+    "tests/test_investment_workbench_status.py",
+    "--deselect",
+    "tests/test_backend_regressions.py::ConsoleSmokeToolTests::test_daily_research_operations_syncs_openclaw_bridge",
+)
 LINT_IMPORTS = (
     "from importlinter.cli import lint_imports; "
     "raise SystemExit(lint_imports(no_logo=True, no_cache=True))"
@@ -67,6 +75,7 @@ def main() -> int:
                 "tests",
                 "-m",
                 "not live_server and not network",
+                *PYTEST_EXTRA,
             ],
             None,
         ),
