@@ -1,0 +1,315 @@
+# Ruff and mypy ratchets for unattended verification.
+# Modules absent from the mypy legacy list are checked with strict = true.
+# BLE001 per-file ignores hold existing blind-except hits. E722 has no ignores.
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["research_vault", "tessdata"]
+
+[tool.ruff.lint]
+select = ["E722", "BLE001"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/main.py" = ["BLE001"]  # 1
+"backend/research_os/agent_operating_foundation.py" = ["BLE001"]  # 1
+"backend/research_os/alpha_vantage_data_provider.py" = ["BLE001"]  # 1
+"backend/research_os/analysis_context.py" = ["BLE001"]  # 3
+"backend/research_os/analysis_module_storage.py" = ["BLE001"]  # 1
+"backend/research_os/automation_status.py" = ["BLE001"]  # 11
+"backend/research_os/capture_storage.py" = ["BLE001"]  # 1
+"backend/research_os/company_ir_sources.py" = ["BLE001"]  # 1
+"backend/research_os/company_ir_watch.py" = ["BLE001"]  # 2
+"backend/research_os/customs_data_provider.py" = ["BLE001"]  # 3
+"backend/research_os/customs_trade.py" = ["BLE001"]  # 2
+"backend/research_os/daily_brief.py" = ["BLE001"]  # 2
+"backend/research_os/dart_filing_watch.py" = ["BLE001"]  # 2
+"backend/research_os/dart_watch_universe.py" = ["BLE001"]  # 2
+"backend/research_os/deepseek_ir_analysis.py" = ["BLE001"]  # 1
+"backend/research_os/dossier_queue.py" = ["BLE001"]  # 3
+"backend/research_os/earnings_transcript_collector.py" = ["BLE001"]  # 1
+"backend/research_os/file_extraction.py" = ["BLE001"]  # 9
+"backend/research_os/file_spreadsheet_extraction.py" = ["BLE001"]  # 3
+"backend/research_os/financial_datasets_data_provider.py" = ["BLE001"]  # 1
+"backend/research_os/finnhub_data_provider.py" = ["BLE001"]  # 3
+"backend/research_os/firecrawl_earnings_collector.py" = ["BLE001"]  # 1
+"backend/research_os/firecrawl_ir_collector.py" = ["BLE001"]  # 1
+"backend/research_os/fmp_data_provider.py" = ["BLE001"]  # 2
+"backend/research_os/interest_automation.py" = ["BLE001"]  # 1
+"backend/research_os/kcif_reports.py" = ["BLE001"]  # 3
+"backend/research_os/kcif_watch.py" = ["BLE001"]  # 1
+"backend/research_os/kis_data_provider.py" = ["BLE001"]  # 5
+"backend/research_os/kiwoom_interest.py" = ["BLE001"]  # 1
+"backend/research_os/llm_bridge_status.py" = ["BLE001"]  # 1
+"backend/research_os/local_ai_survival.py" = ["BLE001"]  # 1
+"backend/research_os/market_signal_graph_pipeline_contract.py" = ["BLE001"]  # 1
+"backend/research_os/naver_market_close_automation.py" = ["BLE001"]  # 2
+"backend/research_os/nps_data_provider.py" = ["BLE001"]  # 5
+"backend/research_os/nps_portfolio_changes.py" = ["BLE001"]  # 2
+"backend/research_os/opendart_data_provider.py" = ["BLE001"]  # 4
+"backend/research_os/policy_sources.py" = ["BLE001"]  # 1
+"backend/research_os/policy_sources_watch.py" = ["BLE001"]  # 1
+"backend/research_os/provider_usage.py" = ["BLE001"]  # 1
+"backend/research_os/recent_activity.py" = ["BLE001"]  # 3
+"backend/research_os/regional_business_watch.py" = ["BLE001"]  # 1
+"backend/research_os/regional_sources.py" = ["BLE001"]  # 1
+"backend/research_os/research_memory_files.py" = ["BLE001"]  # 1
+"backend/research_os/research_memory_ocr.py" = ["BLE001"]  # 1
+"backend/research_os/telegram_favorite_posts.py" = ["BLE001"]  # 2
+"backend/research_os/telegram_market_close_automation.py" = ["BLE001"]  # 4
+"backend/research_os/text_repair.py" = ["BLE001"]  # 1
+"backend/research_os/thesis_impact.py" = ["BLE001"]  # 1
+"backend/research_os/ticker_registry.py" = ["BLE001"]  # 1
+"backend/research_os/tiingo_data_provider.py" = ["BLE001"]  # 1
+"backend/research_os/web_fetch.py" = ["BLE001"]  # 2
+"backend/research_os/web_search_data_provider.py" = ["BLE001"]  # 2
+"backend/research_os/web_text_extraction.py" = ["BLE001"]  # 2
+"backend/research_os/workbench_recovery.py" = ["BLE001"]  # 1
+"backend/research_os_main.py" = ["BLE001"]  # 60
+"tools/check_daily_recommendation_candidate_policy.py" = ["BLE001"]  # 1
+"tools/check_daily_recommendations_store.py" = ["BLE001"]  # 2
+"tools/check_firecrawl_ir_collector.py" = ["BLE001"]  # 1
+"tools/check_firecrawl_monitor_collector.py" = ["BLE001"]  # 2
+"tools/check_llm_bridge_store.py" = ["BLE001"]  # 1
+"tools/check_openclaw_quick_health.py" = ["BLE001"]  # 1
+"tools/check_rag_synthesis_store.py" = ["BLE001"]  # 1
+"tools/check_storage_quality_store.py" = ["BLE001"]  # 1
+"tools/cleanup_duplicate_market_journals.py" = ["BLE001"]  # 2
+"tools/collect_nps_portfolio_changes.py" = ["BLE001"]  # 1
+"tools/evaluate_daily_recommendation_accuracy.py" = ["BLE001"]  # 2
+"tools/export_openclaw_investment_context.py" = ["BLE001"]  # 3
+"tools/smoke_research_console_clicks.py" = ["BLE001"]  # 1
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "backend"
+ignore_missing_imports = true
+warn_unused_configs = true
+show_error_codes = true
+files = [
+    "backend",
+    "tools/verify.py",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "app.application_models",  # 29
+    "app.backup",  # 4
+    "app.brokerage",  # 2
+    "app.database",  # 74
+    "app.kiwoom_account",  # 3
+    "app.kiwoom_balance",  # 2
+    "app.kiwoom_order_execution",  # 2
+    "app.kiwoom_trade_journal",  # 2
+    "app.privacy",  # 1
+    "app.settings",  # 2
+    "main",  # 15
+    "research_os.agent_operating_foundation",  # 2
+    "research_os.analysis_context",  # 2
+    "research_os.analysis_data_provider",  # 1
+    "research_os.analysis_labels",  # 3
+    "research_os.analysis_module_storage",  # 17
+    "research_os.automation_digest_helpers",  # 16
+    "research_os.automation_schedule_status",  # 3
+    "research_os.automation_status",  # 84
+    "research_os.brokerage",  # 2
+    "research_os.capture_attachment",  # 14
+    "research_os.capture_auto",  # 30
+    "research_os.capture_storage",  # 34
+    "research_os.capture_ticker_inference",  # 10
+    "research_os.classification",  # 1
+    "research_os.code_knowledge",  # 11
+    "research_os.company_ir_config",  # 7
+    "research_os.company_ir_sec",  # 6
+    "research_os.company_ir_sources",  # 13
+    "research_os.company_ir_watch",  # 30
+    "research_os.customs_data_provider",  # 14
+    "research_os.customs_trade",  # 21
+    "research_os.daily_brief",  # 47
+    "research_os.daily_recommendation_candidates",  # 6
+    "research_os.daily_recommendation_evidence",  # 3
+    "research_os.daily_recommendation_policy",  # 11
+    "research_os.daily_recommendation_quality",  # 1
+    "research_os.daily_recommendation_ranking",  # 9
+    "research_os.daily_recommendation_recent",  # 18
+    "research_os.daily_recommendation_store",  # 16
+    "research_os.daily_recommendation_tracking",  # 25
+    "research_os.daily_recommendations",  # 55
+    "research_os.dart_filing_metadata",  # 3
+    "research_os.dart_filing_storage",  # 3
+    "research_os.dart_filing_watch",  # 29
+    "research_os.dart_watch_exclusions",  # 4
+    "research_os.dart_watch_universe",  # 9
+    "research_os.dashboard_helpers",  # 15
+    "research_os.data_provider_core",  # 1
+    "research_os.data_provider_utils",  # 2
+    "research_os.data_providers",  # 1
+    "research_os.dossier_capture_quality",  # 4
+    "research_os.dossier_queue",  # 69
+    "research_os.dossier_synthesis",  # 11
+    "research_os.dossier_text",  # 18
+    "research_os.export_routes",  # 2
+    "research_os.export_utils",  # 9
+    "research_os.file_extraction",  # 5
+    "research_os.file_extraction_profile",  # 1
+    "research_os.file_image_metadata",  # 1
+    "research_os.file_ocr_runtime",  # 1
+    "research_os.file_spreadsheet_extraction",  # 3
+    "research_os.financial_datasets_data_provider",  # 2
+    "research_os.finnhub_data_provider",  # 3
+    "research_os.firecrawl_ir_collector",  # 2
+    "research_os.firecrawl_monitor_collector",  # 2
+    "research_os.firecrawl_monitor_events",  # 25
+    "research_os.fmp_data_provider",  # 2
+    "research_os.interest_automation",  # 42
+    "research_os.investment_calendar",  # 6
+    "research_os.investment_insight_hub",  # 21
+    "research_os.kcif_report_parsing",  # 6
+    "research_os.kcif_reports",  # 16
+    "research_os.kcif_watch",  # 25
+    "research_os.kis_data_provider",  # 3
+    "research_os.kiwoom_interest",  # 3
+    "research_os.llm_bridge_status",  # 6
+    "research_os.local_ai_survival",  # 3
+    "research_os.market_journal_patterns",  # 2
+    "research_os.market_journal_rendering",  # 1
+    "research_os.market_signal_graph_pipeline_contract",  # 11
+    "research_os.models",  # 35
+    "research_os.naver_market_close_automation",  # 30
+    "research_os.news_actions",  # 5
+    "research_os.news_builder",  # 22
+    "research_os.news_inbox",  # 36
+    "research_os.news_market_focus",  # 2
+    "research_os.news_market_journal",  # 48
+    "research_os.nps_allocation_monitor",  # 16
+    "research_os.nps_data_provider",  # 12
+    "research_os.nps_portfolio_changes",  # 25
+    "research_os.opendart_data_provider",  # 7
+    "research_os.policy_sources",  # 15
+    "research_os.policy_sources_watch",  # 35
+    "research_os.portfolio_import",  # 1
+    "research_os.portfolio_intelligent_table",  # 4
+    "research_os.portfolio_performance",  # 16
+    "research_os.portfolio_policy",  # 1
+    "research_os.portfolio_report_alert_status",  # 8
+    "research_os.portfolio_risk_storage",  # 4
+    "research_os.portfolio_sync",  # 11
+    "research_os.public_ir_sec",  # 9
+    "research_os.rag_query_synthesis_storage",  # 4
+    "research_os.rag_synthesis",  # 2
+    "research_os.recent_activity",  # 42
+    "research_os.recent_activity_groups",  # 11
+    "research_os.recent_activity_navigation",  # 8
+    "research_os.recent_activity_public_ir",  # 8
+    "research_os.regional_business_watch",  # 26
+    "research_os.regional_sources",  # 12
+    "research_os.research_memory_files",  # 6
+    "research_os.research_memory_ocr",  # 38
+    "research_os.research_memory_quality_rebuild",  # 29
+    "research_os.research_memory_supplement",  # 7
+    "research_os.research_workflow_files",  # 19
+    "research_os.research_workflow_rendering",  # 4
+    "research_os.settings",  # 2
+    "research_os.source_url_preview",  # 2
+    "research_os.state_store",  # 5
+    "research_os.storage_quality",  # 19
+    "research_os.system_health",  # 6
+    "research_os.target_price_memory",  # 24
+    "research_os.telegram_authenticated_collector",  # 4
+    "research_os.telegram_brief_sender",  # 11
+    "research_os.telegram_favorite_posts",  # 9
+    "research_os.telegram_market_close_automation",  # 11
+    "research_os.telegram_market_journal",  # 1
+    "research_os.text_repair",  # 3
+    "research_os.thesis_impact",  # 1
+    "research_os.ticker_registry",  # 8
+    "research_os.web_capture",  # 9
+    "research_os.web_capture_fallbacks",  # 1
+    "research_os.web_capture_translation",  # 2
+    "research_os.web_text_extraction",  # 1
+    "research_os.workbench_recovery",  # 9
+    "research_os_main",  # 641
+]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live_server: test needs a running backend process and is excluded from python -m tools.verify",
+    "network: test needs outbound network access and is excluded from python -m tools.verify",
+]
+
+[tool.importlinter]
+root_packages = ["app", "research_os"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "DTO, schema, and client modules must not import infra or DB modules"
+type = "forbidden"
+unmatched_ignore_imports_alerting = "error"
+source_modules = [
+    "app.application_models",
+    "app.models",
+    "research_os.earnings_transcript_collector",
+    "research_os.firecrawl_earnings_collector",
+    "research_os.market_signal_graph_pipeline_contract",
+    "research_os.models",
+    "research_os.portfolio_brief_contract",
+    "app.brokerage",
+    "app.kiwoom_account",
+    "app.kiwoom_auth",
+    "app.kiwoom_balance",
+    "app.kiwoom_order_execution",
+    "app.kiwoom_trade_journal",
+    "research_os.alpha_vantage_data_provider",
+    "research_os.analysis_data_provider",
+    "research_os.brokerage",
+    "research_os.company_ir_sources",
+    "research_os.customs_data_provider",
+    "research_os.data_providers",
+    "research_os.financial_datasets_data_provider",
+    "research_os.finnhub_data_provider",
+    "research_os.firecrawl_ir_collector",
+    "research_os.firecrawl_monitor_collector",
+    "research_os.fmp_data_provider",
+    "research_os.kcif_reports",
+    "research_os.kis_data_provider",
+    "research_os.kiwoom_auth",
+    "research_os.kiwoom_interest",
+    "research_os.nps_data_provider",
+    "research_os.opendart_data_provider",
+    "research_os.policy_sources",
+    "research_os.regional_sources",
+    "research_os.telegram_authenticated_collector",
+    "research_os.telegram_brief_delivery",
+    "research_os.telegram_market_journal",
+    "research_os.ticker_registry",
+    "research_os.tiingo_data_provider",
+    "research_os.web_capture",
+    "research_os.web_fetch",
+    "research_os.web_search_data_provider",
+]
+forbidden_modules = [
+    "sqlite3",
+    "app.backup",
+    "app.database",
+    "research_os.analysis_module_storage",
+    "research_os.capture_storage",
+    "research_os.daily_recommendation_store",
+    "research_os.dart_filing_storage",
+    "research_os.portfolio_risk_storage",
+    "research_os.portfolio_store",
+    "research_os.rag_memory",
+    "research_os.rag_query_synthesis_storage",
+    "research_os.research_memory",
+    "research_os.research_memory_files",
+    "research_os.research_memory_ocr",
+    "research_os.research_memory_quality_rebuild",
+    "research_os.research_memory_supplement",
+    "research_os.state_store",
+]
+ignore_imports = [
+    "app.kiwoom_auth -> app.database",
+    "research_os.kiwoom_interest -> research_os.research_memory",
+    "research_os.models -> research_os.research_memory",
+]
